@@ -1,0 +1,19 @@
+---
+description: Cómo proponer e instalar dependencias en Apps Script (sin npm)
+alwaysApply: true
+---
+
+# Dependencias y «librerías» en Apps Script
+
+Cuando el usuario pida **incorporar una librería** o funcionalidad que en otros ecosistemas sería un paquete:
+
+1. **Aclarar que no existe `npm install` en el servidor Apps Script.** Las opciones reales son:
+   - **Librería de Apps Script** (otro proyecto de Script publicado): ID de script + versión en el editor → *Bibliotecas*; en clasp reflejada en `appsscript.json` → `dependencies` / `enabledAdvancedServices` según aplique. Guía: [Libraries](https://developers.google.com/apps-script/guides/libraries).
+   - **Vendor / copiar código** en este repo (p. ej. `gas/vendor/<nombre>/`) con **LICENSE** del proyecto original y comentario de origen + commit/version.
+   - **Solo usar APIs HTTP**: implementar cliente fino con `UrlFetchApp` + `BearerHttp` (o equivalente interno), sin añadir dependencias si el proveedor es REST.
+
+2. **Antes de recomendar**, **buscar** (web / GitHub) variantes compatibles con Apps Script: palabras clave `Google Apps Script`, `clasp`, `UrlFetchApp`, `GAS`. Preferir repos con licencia clara (MIT, Apache-2.0) y mantenimiento reciente.
+
+3. **En la respuesta**, el agente debe **proponer** librería candidata (nombre, repo o doc, por qué encaja), **cómo instalarla en GAS** (ID de script si es librería oficial/comunitaria, o qué archivos copiar y dónde), y **qué añadir al manifiesto** (`oauthScopes`, `urlFetchWhitelist` si hay nuevos hosts).
+
+4. **OAuth2 a terceros** en GAS suele usar el patrón de librería **OAuth2 for Apps Script** (proyecto de Andrew Roberts / comunidad); verificar en búsqueda actual el **Script ID** y pasos, no citar versiones obsoletas a ciegas.

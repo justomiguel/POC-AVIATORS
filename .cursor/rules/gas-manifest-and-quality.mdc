@@ -1,0 +1,13 @@
+---
+description: Manifiesto, seguridad y calidad para Apps Script (Globant, UrlFetch, secretos)
+alwaysApply: true
+---
+
+# Manifiesto, seguridad y calidad (Apps Script)
+
+- **Scopes**: mínimos necesarios — [OAuth scopes](https://developers.google.com/apps-script/concepts/scopes). Mantener `oauthScopes` en `appsscript.json` alineados con lo que el código realmente usa.
+- **UrlFetch**: lista blanca de hosts en `urlFetchWhitelist` cuando aplica al proyecto; cada host nuevo a integración (p. ej. Globant) debe **añadirse ahí** y justificarse.
+- **Peticiones HTTP**: `muteHttpExceptions: true`, validar código HTTP y cuerpo; no exponer tokens en logs ni en respuestas al cliente.
+- **Secretos**: `PropertiesService.getScriptProperties()` (o Secret Manager si el flujo lo permite); **nunca** API keys en el repo ni en historiales de chat.
+- **Globant / Enterprise AI**: usar clientes y base URL ya acordados en `gas/infrastructure/globant/` y configuración centralizada; no duplicar URLs sueltas en muchos archivos.
+- **Clasp / Git**: archivos en `gas/` como fuente de verdad; tras cambiar manifiesto recordar que hace falta **nueva versión desplegada** y a veces re-autorización de scopes.

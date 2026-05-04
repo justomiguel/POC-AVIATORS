@@ -1,0 +1,285 @@
+/**
+ * @fileoverview Adaptador Globant: RAG Search (/v1/search/*) o Assistant Chat (legacy AssistantProvider).
+ */
+
+/**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {boolean}
+ */
+function LlmProviderGlobant_isAssistantMode(props) {
+  var m = (props.getProperty(LLM_PROP.GLOBANT_API_MODE) || 'rag')
+    .trim()
+    .toLowerCase();
+  return m === 'assistant';
+}
+
+/**
+ * @param {GoogleAppsScript.Properties.Properties} p
+ * @return {number}
+ */
+function LlmProviderGlobant_readExecuteMaxRetries(p) {
+  var raw = (p.getProperty(LLM_PROP.GLOBANT_EXECUTE_MAX_RETRIES) || '').trim();
+  if (!raw) return LLM_DEFAULTS.GLOBANT_EXECUTE_MAX_RETRIES;
+  var n = parseInt(raw, 10);
+  if (isNaN(n) || n < 0) return LLM_DEFAULTS.GLOBANT_EXECUTE_MAX_RETRIES;
+  return Math.min(n, 15);
+}
+
+/**
+ * Perfil RAG o nombre de asistente (misma propiedad para no duplicar).
+ * En modo `assistant` no se llama a createProfile; debe existir **GLOBANT_RAG_PROFILE_NAME**.
+ *
+ * @param {Object|null} ragApi — GlobantRagApiClient_create (null en modo assistant-only)
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {string} profileName / assistantName
+ */
+function LlmProviderGlobant_resolveProfileName(ragApi, props) {
+  var existing = (props.getProperty(LLM_PROP.GLOBANT_PROFILE) || '').trim();
+  var skipAuto =
+    (props.getProperty(LLM_PROP.GLOBANT_SKIP_AUTO_PROFILE) || '')
+      .toLowerCase()
+      .trim() === 'true';
+  var assistantMode = LlmProviderGlobant_isAssistantMode(props);
+
+  if (assistantMode && !existing) {
+    throw new Error(
+      'GLOBANT_API_MODE=assistant exige GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).',
+    );
+  }
+  if (skipAuto && !existing) {
+    throw new Error(
+      'GLOBANT_RAG_SKIP_AUTO_PROFILE=true exige GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).',
+    );
+  }
+  if (existing) return existing;
+  if (assistantMode) {
+    throw new Error(
+      'GLOBANT_API_MODE=assistant requiere GLOBANT_RAG_PROFILE_NAME.',
+    );
+  }
+  if (!ragApi) {
+    throw new Error('LlmProviderGlobant_resolveProfileName: falta cliente RAG.');
+  }
+
+  var name = 'aviators-' + Utilities.getUuid().replace(/-/g, '').substring(0, 12);
+  var body = GlobantRagDefaults_buildCreateProfileBody(
+    name,
+    'Perfil creado por Aviators (Apps Script).',
+  );
+  ragApi.createProfile(body);
+  props.setProperty(LLM_PROP.GLOBANT_PROFILE, name);
+  return name;
+}
+
+/**
+ * @param {LlmConsultationCommand} cmd
+ * @return {LlmConsultationAnswer}
+ */
+function LlmProviderGlobant_consult(cmd) {
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) {
+    throw new Error('Falta GLOBANT_AGENTS_API_KEY en Propiedades del script.');
+  }
+
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+
+  var q = (cmd.question || '').trim();
+  if (!q) throw new Error('Escribí una pregunta.');
+
+  var ids = cmd.driveFileIds || [];
+  if (ids.length === 0) {
+    throw new Error('Seleccioná al menos un documento.');
+  }
+
+  if (LlmProviderGlobant_isAssistantMode(p)) {
+    return LlmProviderGlobant_consultAssistantWithDriveApi(
+      apiKey,
+      baseUrl,
+      p,
+      q,
+      ids,
+    );
+  }
+
+  var client = GlobantRagApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  var profileName = LlmProviderGlobant_resolveProfileName(client, p);
+  var skipUpload =
+    (p.getProperty(LLM_PROP.GLOBANT_SKIP_UPLOAD) || '').toLowerCase() === 'true';
+  var staticDocId = (p.getProperty(LLM_PROP.GLOBANT_STATIC_DOC_ID) || '').trim();
+
+  var documentId;
+
+  if (skipUpload && staticDocId) {
+    documentId = staticDocId;
+  } else {
+    var lastId = '';
+    ids.forEach(function (fid) {
+      var blob = DriveDocuments_getPdfBlobForGlobant(fid);
+      var up = client.uploadPdfDocument(profileName, blob);
+      lastId = up.id;
+      var ok = GlobantRagApiClient_waitIndexed(client, profileName, lastId);
+      if (!ok) {
+        throw new Error(
+          'Indexación Globant incompleta o fallida para el documento.',
+        );
+      }
+    });
+    documentId = lastId;
+  }
+
+  var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
+
+  var text = GlobantRagApiClient_executeWithRetry(
+    client,
+    profileName,
+    q,
+    documentId,
+    maxRetries,
+  );
+
+  /** @type {LlmConsultationAnswer} */
+  return {
+    answer: text,
+    model: 'globant-rag',
+    providerLabel: 'Globant Agents RAG (/v1/search)',
+    filesUsed: ids.length,
+  };
+}
+
+/**
+ * @param {string} apiKey
+ * @param {string} baseUrl
+ * @param {GoogleAppsScript.Properties.Properties} p
+ * @param {string} q
+ * @param {string[]} ids
+ * @return {LlmConsultationAnswer}
+ */
+function LlmProviderGlobant_consultAssistantWithDriveApi(
+  apiKey,
+  baseUrl,
+  p,
+  q,
+  ids,
+) {
+  var assistant = GlobantAssistantApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  var assistantName = LlmProviderGlobant_resolveProfileName(null, p);
+  var skipUpload =
+    (p.getProperty(LLM_PROP.GLOBANT_SKIP_UPLOAD) || '').toLowerCase() ===
+    'true';
+
+  if (!skipUpload) {
+    ids.forEach(function (fid) {
+      var blob = DriveDocuments_getPdfBlobForGlobant(fid);
+      assistant.uploadFile(blob, assistantName);
+    });
+    Utilities.sleep(1500);
+  }
+
+  var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
+  var detail = GlobantAssistantApiClient_sendChatWithRetry(
+    assistant,
+    assistantName,
+    q,
+    maxRetries,
+  );
+
+  return {
+    answer: detail.text,
+    model: 'globant-assistant',
+    providerLabel: 'Globant /v1/assistant/chat',
+    filesUsed: ids.length,
+  };
+}
+
+/**
+ * Ejecuta sólo texto: RAG `/v1/search/execute` ó Assistant `/v1/assistant/chat`.
+ *
+ * @param {string} prompt
+ * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string }}
+ */
+function LlmProviderGlobant_consultPromptOnly(prompt) {
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) {
+    throw new Error('Falta GLOBANT_AGENTS_API_KEY en Propiedades del script.');
+  }
+
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var q = (prompt || '').trim();
+  if (!q) throw new Error('Escribí un prompt.');
+
+  var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
+
+  if (LlmProviderGlobant_isAssistantMode(p)) {
+    var ast = GlobantAssistantApiClient_create({
+      apiKey: apiKey,
+      baseUrl: baseUrl || undefined,
+    });
+    var aname = LlmProviderGlobant_resolveProfileName(null, p);
+    var chatOut = GlobantAssistantApiClient_sendChatWithRetry(
+      ast,
+      aname,
+      q,
+      maxRetries,
+    );
+
+    var rawA = JSON.stringify(chatOut.parsed, null, 2);
+    if (rawA.length > 6000) {
+      rawA = rawA.substring(0, 6000) + '\n…[truncado]';
+    }
+
+    return {
+      answer: chatOut.text,
+      model: 'globant-assistant',
+      providerLabel: 'Globant /v1/assistant/chat',
+      rawJson: rawA,
+      filterLabel: 'modo Assistant (sin filtro documento RAG)',
+    };
+  }
+
+  var client = GlobantRagApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  var profileName = LlmProviderGlobant_resolveProfileName(client, p);
+  var docId = (p.getProperty(LLM_PROP.GLOBANT_STATIC_DOC_ID) || '').trim();
+
+  /** @type {Error|null} */
+  var lastErr = null;
+  /** @type {{ text: string, parsed: Object }|null} */
+  var detail = null;
+
+  for (var i = 0; i <= maxRetries; i++) {
+    try {
+      detail = client.executeQueryDetailed(profileName, q, docId);
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (i < maxRetries) Utilities.sleep(500);
+    }
+  }
+  if (!detail) throw lastErr;
+
+  var rawStr = JSON.stringify(detail.parsed, null, 2);
+  if (rawStr.length > 6000) {
+    rawStr = rawStr.substring(0, 6000) + '\n…[truncado]';
+  }
+
+  return {
+    answer: detail.text,
+    model: 'globant-rag',
+    providerLabel: 'Globant /v1/search/execute',
+    rawJson: rawStr,
+    filterLabel: docId ? 'id = ' + docId : 'sin filtro (perfil completo)',
+  };
+}

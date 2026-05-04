@@ -1,0 +1,12 @@
+---
+description: Internacionalización obligatoria en UI y mensajes (Apps Script / HtmlService)
+alwaysApply: true
+---
+
+# i18n en Aviators (obligatorio)
+
+- **Cualquier texto visible** (HTML, `textContent`, placeholders, mensajes de error al usuario) debe pasar por **un catálogo de mensajes** (clave estable → string), no cadenas sueltas mezcladas en la vista.
+- **Mínimo**: soporte **es** y **en** (o los locales que defina el proyecto en un solo lugar). Detección típica en cliente: `navigator.language` / `Accept-Language`; opcionalmente el servidor pasa `locale` en `doGet` / bootstrap.
+- **Formato**: funciones `t(key)` o `messages[locale][key]`; errores del servidor idealmente como **código estable** (`ERR_*`) mapeado a texto en el cliente para no duplicar traducciones en GAS, salvo mensajes solo-servidor documentados.
+- **Fechas y números**: `Intl.DateTimeFormat` / `Intl.NumberFormat` con el locale activo.
+- Al tocar `index.html` o strings de usuario, **añadir o actualizar claves** en todos los idiomas soportados del catálogo del proyecto (no dejar solo un idioma).
