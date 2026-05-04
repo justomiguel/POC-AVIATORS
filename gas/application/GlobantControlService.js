@@ -12,15 +12,21 @@ function GlobantControl_fetchSnapshot() {
     return {
       ok: false,
       mode: 'off',
-      message:
-        'Este panel requiere proveedor Globant (definí GLOBANT_AGENTS_API_KEY y no sólo Gemini).',
+      message: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'globant_snapshot_requires_provider',
+      ),
     };
   }
 
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
   if (!apiKey) {
-    return { ok: false, mode: 'off', message: 'Falta GLOBANT_AGENTS_API_KEY.' };
+    return {
+      ok: false,
+      mode: 'off',
+      message: UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'),
+    };
   }
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
 
@@ -39,8 +45,10 @@ function GlobantControl_fetchSnapshot() {
         projectId: ids.projectId,
         fileCount: files.length,
         files: files,
-        hint:
-          'Modo Assistant: los archivos no son los documentos indexados del RAG; se listan vía GET /v1/files/all.',
+        hint: UiStrings_t(
+          UiStrings_activeLocale_(),
+          'globant_assistant_files_list_hint',
+        ),
       };
     } catch (e) {
       return {
@@ -83,15 +91,24 @@ function GlobantControl_fetchSnapshot() {
 function GlobantControl_listRagDocuments(profileName, skip, count) {
   AdminAuth_requireAdmin();
   var pn = ('' + (profileName || '')).trim();
-  if (!pn) throw new Error('Indicá el nombre del perfil RAG.');
+  if (!pn)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_profile_name_required'),
+    );
 
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
 
   if (LlmProviderGlobant_isAssistantMode(p)) {
-    throw new Error('Este listado sólo aplica con GLOBANT_API_MODE vacío o rag.');
+    throw new Error(
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_rag_list_mode_only',
+      ),
+    );
   }
 
   var client = GlobantRagApiClient_create({
@@ -107,13 +124,22 @@ function GlobantControl_listRagDocuments(profileName, skip, count) {
 function GlobantControl_deleteRagProfile(profileName) {
   AdminAuth_requireAdmin();
   var pn = ('' + (profileName || '')).trim();
-  if (!pn) throw new Error('Indicá el nombre del perfil RAG.');
+  if (!pn)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_profile_name_required'),
+    );
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   if (LlmProviderGlobant_isAssistantMode(p)) {
-    throw new Error('Eliminar perfil RAG sólo en modo rag (no Assistant).');
+    throw new Error(
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_delete_profile_rag_only',
+      ),
+    );
   }
   GlobantRagApiClient_create({
     apiKey: apiKey,
@@ -128,13 +154,19 @@ function GlobantControl_deleteRagProfile(profileName) {
 function GlobantControl_deleteRagProfileDocuments(profileName) {
   AdminAuth_requireAdmin();
   var pn = ('' + (profileName || '')).trim();
-  if (!pn) throw new Error('Indicá el nombre del perfil RAG.');
+  if (!pn)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_profile_name_required'),
+    );
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   if (LlmProviderGlobant_isAssistantMode(p)) {
-    throw new Error('Acción válida sólo en modo rag.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_rag_action_only'),
+    );
   }
   GlobantRagApiClient_create({
     apiKey: apiKey,
@@ -151,13 +183,22 @@ function GlobantControl_deleteRagDocument(profileName, documentId) {
   AdminAuth_requireAdmin();
   var pn = ('' + (profileName || '')).trim();
   var doc = ('' + (documentId || '')).trim();
-  if (!pn || !doc) throw new Error('Perfil RAG y document id requeridos.');
+  if (!pn || !doc)
+    throw new Error(
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_profile_doc_required',
+      ),
+    );
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   if (LlmProviderGlobant_isAssistantMode(p)) {
-    throw new Error('Sólo en modo rag.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_rag_only_short'),
+    );
   }
   GlobantRagApiClient_create({
     apiKey: apiKey,
@@ -172,15 +213,25 @@ function GlobantControl_deleteRagDocument(profileName, documentId) {
 function GlobantControl_deleteAssistantFileAdmin(fileId) {
   AdminAuth_requireAdmin();
   var fid = ('' + (fileId || '')).trim();
-  if (!fid) throw new Error('Indicá el id del archivo en Globant Files.');
+  if (!fid)
+    throw new Error(
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_assistant_file_id_required',
+      ),
+    );
   var p = PropertiesService.getScriptProperties();
   if (!LlmProviderGlobant_isAssistantMode(p)) {
     throw new Error(
-      'Eliminar archivo /v1/files sólo tiene sentido en GLOBANT_API_MODE=assistant.',
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_delete_file_assistant_only',
+      ),
     );
   }
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   GlobantAssistantApiClient_create({
     apiKey: apiKey,

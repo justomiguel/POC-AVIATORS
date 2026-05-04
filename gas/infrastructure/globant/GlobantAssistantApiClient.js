@@ -144,7 +144,13 @@ function GlobantAssistantApiClient_create(config) {
     var code = r.getResponseCode();
     var text = r.getContentText() || '';
     if (!BearerHttp_isSuccess(code)) {
-      throw new Error('Globant files/all ' + code + ': ' + text.slice(0, 600));
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/files/all',
+          code: String(code),
+          detail: text.slice(0, 600),
+        }),
+      );
     }
     var parsed = JSON.parse(text);
     return normalizeDataFilesPayload_(parsed);
@@ -157,7 +163,12 @@ function GlobantAssistantApiClient_create(config) {
   function uploadFile(blob, folderAssistantName) {
     var ids = getOrganizationAndProjectIds();
     if (!blob || !blob.getBytes().length) {
-      throw new Error('Archivo vacío para Globant Assistant upload.');
+      throw new Error(
+        UiStrings_t(
+          UiStrings_activeLocale_(),
+          'err_globant_assistant_empty_file',
+        ),
+      );
     }
     var fileName = blob.getName() || 'document.pdf';
 
@@ -180,7 +191,13 @@ function GlobantAssistantApiClient_create(config) {
     var code = r.getResponseCode();
     var text = r.getContentText() || '';
     if (!BearerHttp_isSuccess(code)) {
-      throw new Error('Globant files upload ' + code + ': ' + text.slice(0, 800));
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/files',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
     }
     var parsed = JSON.parse(text);
     var fid =
@@ -216,7 +233,11 @@ function GlobantAssistantApiClient_create(config) {
     var text = r.getContentText() || '';
     if (!BearerHttp_isSuccess(code)) {
       throw new Error(
-        'Globant files delete ' + code + ': ' + text.slice(0, 500),
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/files/{id}',
+          code: String(code),
+          detail: text.slice(0, 500),
+        }),
       );
     }
   }
@@ -239,12 +260,21 @@ function GlobantAssistantApiClient_create(config) {
     var code = r.getResponseCode();
     var text = r.getContentText() || '';
     if (!BearerHttp_isSuccess(code)) {
-      throw new Error('Globant assistant chat ' + code + ': ' + text.slice(0, 800));
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/assistant/chat',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
     }
     var result = JSON.parse(text);
     if (!result || !result.success) {
       throw new Error(
-        'Globant assistant lógico: ' + JSON.stringify(result).slice(0, 800),
+        UiStrings_fmt_('err_globant_api_logical', {
+          path: '/v1/assistant/chat',
+          detail: JSON.stringify(result).slice(0, 800),
+        }),
       );
     }
     return { text: result.text || '', parsed: result };
@@ -295,6 +325,11 @@ function GlobantAssistantApiClient_sendChatWithRetry(
   }
   throw (
     lastErr ||
-    new Error('GlobantAssistantApiClient_sendChatWithRetry: error desconocido')
+    new Error(
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'err_globant_chat_retry_unknown',
+      ),
+    )
   );
 }

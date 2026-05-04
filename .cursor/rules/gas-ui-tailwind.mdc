@@ -1,0 +1,12 @@
+---
+description: UI web en gas/ — Tailwind, pantallas y calidad visual
+globs: gas/**/*.html,gas/tailwind-input.css
+alwaysApply: false
+---
+
+# UI (Aviators / HtmlService)
+
+- **Tailwind** vive en `gas/tailwind-input.css` (`@layer components` para bloques reutilizables: login, shell, sidebar). Tras cambiar clases en HTML o componentes, ejecutar **`npm run build:css`** en la raíz del repo para actualizar `gas/tailwind-include.html` antes de `clasp push`.
+- **No inventar clases sueltas** tipo `card`, `cta`, `sub` sin definirlas: o son utilidades Tailwind explícitas, o entran en `tailwind-input.css`.
+- **OAuth en Web App**: no hay popup de Google aparte; el usuario pulsa el botón y **`google.script.run` dispara la autorización**. Los textos deben aclarar “Iniciar sesión con Google” / permisos del manifiesto, sin prometer un widget OAuth distinto.
+- **Coherencia**: tipografía, espaciado y estados vacíos/err/load alineados con el resto de la app (sidebar, badges, `role="status"` donde aplique).

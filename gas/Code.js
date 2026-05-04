@@ -3,7 +3,15 @@
  * Despliegue: «Ejecutar como: usuario que accede».
  */
 function doGet() {
-  return HtmlService.createTemplateFromFile('index')
+  var tpl = HtmlService.createTemplateFromFile('index');
+  tpl.cssInclude = HtmlService.createHtmlOutputFromFile('tailwind-include')
+    .getContent();
+  tpl.legacyStyles = HtmlService.createHtmlOutputFromFile(
+    'app-legacy-styles',
+  ).getContent();
+  tpl.i18nEmbed = JSON.stringify(UiStrings_getClientPack_());
+  tpl.clientScript = HtmlService.createHtmlOutputFromFile('app-client').getContent();
+  return tpl
     .evaluate()
     .setTitle('Aviators')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -21,7 +29,18 @@ function getBootstrap() {
     session: getSessionInfo(),
     llm: LlmOrchestrator_getUiConfig(),
     admin: AdminKnowledge_getBootstrapSlice(),
+    i18n: UiStrings_getClientPack_(),
   };
+}
+
+/**
+ * Diagnóstico de roles (planilla): en el editor Apps Script, elegí esta función y «Ejecutar».
+ * Revisa acceso, pestaña `data`, encabezados y si tu email aparece en una fila.
+ *
+ * @return {Object}
+ */
+function debugRoleDirectory() {
+  return RoleDirectory_diagnostic();
 }
 
 /**
@@ -58,7 +77,10 @@ function driveBrowseFolder(parentId, pageToken) {
   var email = Session.getActiveUser().getEmail();
   if (!email) {
     throw new Error(
-      'Sin email de usuario: ejecutá la web como «usuario que accede» y autorizá de nuevo.',
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'session_email_no_capture',
+      ),
     );
   }
   return DriveExplorer_listChildren(parentId || '', pageToken || '');
@@ -101,6 +123,7 @@ function adminGlobantDeleteAssistantFileCtrl(fileId) {
 }
 
 function getSessionInfo() {
+  var locale = UiStrings_activeLocale_();
   var user = Session.getActiveUser();
   var email = user.getEmail();
   var files = [];
@@ -109,8 +132,8 @@ function getSessionInfo() {
     return {
       email: '',
       files: [],
-      note:
-        'Sin email: usá «Ejecutar como: usuario que accede» y volvé a autorizar.',
+      note: UiStrings_t(locale, 'note_no_email'),
+      showNoRoleBanner: false,
     };
   }
 
@@ -139,13 +162,64 @@ function getSessionInfo() {
     });
   }
 
+  var note =
+    files.length === 0 ? UiStrings_t(locale, 'note_no_docs') : '';
+
+  var roleRec = null;
+  var roleLookupError = false;
+  try {
+    roleRec = RoleDirectory_lookupRole(email);
+  } catch (eRole) {
+    roleLookupError = true;
+    var errMsg = eRole && eRole.message ? String(eRole.message) : '';
+    var roleNoteKey = 'session_no_role_line';
+    if (errMsg === 'ERR_ROLE_LOOKUP_OPEN') roleNoteKey = 'session_role_err_open';
+    else if (errMsg === 'ERR_ROLE_LOOKUP_TAB') roleNoteKey = 'session_role_err_tab';
+    else if (errMsg === 'ERR_ROLE_LOOKUP_COLS')
+      roleNoteKey = 'session_role_err_cols';
+    note += (note ? ' ' : '') + UiStrings_t(locale, roleNoteKey);
+    /* La UI muestra error pero la ejecución sigue siendo «Completada»: el catch evita re-lanzar. */
+    var logLine =
+      '[getSessionInfo] RoleDirectory threw message=' +
+      errMsg +
+      ' i18nKey=' +
+      roleNoteKey +
+      ' sessionEmail=' +
+      email;
+    Logger.log(logLine);
+    try {
+      console.error(logLine);
+      console.warn(logLine);
+      console.info(logLine);
+      console.log(logLine);
+    } catch (ignore) {}
+    if (eRole && eRole.stack) {
+      var st = '[getSessionInfo] stack=' + String(eRole.stack).slice(0, 2000);
+      Logger.log(st);
+      try {
+        console.error(st);
+        console.warn(st);
+      } catch (ignore2) {}
+    }
+  }
+
+  var card = SessionProfile_getGoogleCard_();
+  var localPart = email.split('@')[0] || email;
+
+  var isVisitor = !roleRec;
+
   return {
     email: email,
     files: files,
-    note:
-      files.length === 0
-        ? 'No encontramos Docs ni archivos .txt/.md recientes en tu unidad. Creá uno o revisá los permisos de Drive.'
-        : '',
+    note: note,
+    displayName: card.displayName || localPart,
+    photoUrl: card.photoUrl || '',
+    roleLabel: roleRec
+      ? roleRec.label
+      : UiStrings_t(locale, 'role_label_visitor'),
+    roleKey: roleRec ? roleRec.key : 'visitante',
+    isVisitor: isVisitor,
+    showNoRoleBanner: roleLookupError,
   };
 }
 
@@ -173,7 +247,7 @@ function askAboutDocuments(question, fileIds) {
 function globantAskDirect(prompt) {
   if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
     throw new Error(
-      'La prueba directa Globant solo aplica cuando el proveedor activo es Globant (GLOBANT_AGENTS_API_KEY u opcional LLM_PROVIDER=globant).',
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_direct'),
     );
   }
   var r = LlmProviderGlobant_consultPromptOnly(prompt);
@@ -194,16 +268,21 @@ function globantAskDirect(prompt) {
  */
 function globantAssistantDeleteFile(fileId) {
   if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
-    throw new Error('Solo disponible con proveedor Globant.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_only_feature'),
+    );
   }
   var p = PropertiesService.getScriptProperties();
   if (!LlmProviderGlobant_isAssistantMode(p)) {
     throw new Error(
-      'globantAssistantDeleteFile solo aplica con GLOBANT_API_MODE=assistant.',
+      UiStrings_t(UiStrings_activeLocale_(), 'err_assistant_delete_mode'),
     );
   }
   var fid = (fileId || '').trim();
-  if (!fid) throw new Error('Indicá fileId del documento en Globant.');
+  if (!fid)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_file_id'),
+    );
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   var client = GlobantAssistantApiClient_create({

@@ -18,6 +18,12 @@ disable-model-invocation: false
 4. **Errors**: Prefer **stable error codes** from the server (`ERR_*`) mapped to translated strings on the client, unless the message is server-only and internal.
 5. **Dates and numbers**: Use `Intl.DateTimeFormat` and `Intl.NumberFormat` with the active locale.
 
+## Catálogo del repo
+
+- **Archivo**: `gas/i18n/UiStrings.js`
+- **Idioma por defecto**: editá **`APP_UI_LOCALE`** (`'es'` \| `'en'`). Eso controla textos del servidor (`UiStrings_t`) y el pack `i18n` que envía `getBootstrap()` al cliente (`applyClientI18n`).
+- **Claves**: `login_h1`, `login_lead`, `visitor_body`, `dashboard_lead`, `session_no_role_line`, `note_no_docs`, etc. Añadí la misma entrada en `es` y `en`.
+
 ## Agent workflow
 
 When changing UI copy:

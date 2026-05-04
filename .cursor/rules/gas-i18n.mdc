@@ -5,6 +5,7 @@ alwaysApply: true
 
 # i18n en Aviators (obligatorio)
 
+- **Sin literales de interfaz en código**: no hardcodear mensajes visibles al usuario en `index.html`, `app-client.html`, ni en GAS salvo el **catálogo único** `gas/i18n/UiStrings.js` (claves `es` / `en`). Cualquier texto nuevo: nueva clave en ambos idiomas y uso desde plantilla (`data-i18n*`), cliente (`i18n` / `i18nFmt`) o servidor (`UiStrings_t` / `UiStrings_fmt_`).
 - **Cualquier texto visible** (HTML, `textContent`, placeholders, mensajes de error al usuario) debe pasar por **un catálogo de mensajes** (clave estable → string), no cadenas sueltas mezcladas en la vista.
 - **Mínimo**: soporte **es** y **en** (o los locales que defina el proyecto en un solo lugar). Detección típica en cliente: `navigator.language` / `Accept-Language`; opcionalmente el servidor pasa `locale` en `doGet` / bootstrap.
 - **Formato**: funciones `t(key)` o `messages[locale][key]`; errores del servidor idealmente como **código estable** (`ERR_*`) mapeado a texto en el cliente para no duplicar traducciones en GAS, salvo mensajes solo-servidor documentados.

@@ -1,6 +1,6 @@
 # Aviators — guía para agentes (Cursor / IA)
 
-Este repo es **Google Apps Script** con **clasp** (`gas/`, despliegue a un proyecto Script). Las reglas detalladas están en **`.cursor/rules/*.mdc`** (stack, dependencias, i18n, manifiesto).
+Este repo es **Google Apps Script** con **clasp** (`gas/`, despliegue a un proyecto Script). Las reglas detalladas están en **`.cursor/rules/*.mdc`** (stack, dependencias, i18n, manifiesto, convención de commits sin marcas de IDE).
 
 ## Prompts tipo “quiero que la app / el sistema…”
 

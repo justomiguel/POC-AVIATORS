@@ -13,6 +13,8 @@ disable-model-invocation: false
 
 - **clasp** config lives at repo root: `.clasp.json` sets `"rootDir": "gas"` — all pushed sources are under `gas/`.
 - **Manifest**: `gas/appsscript.json` (not at repository root).
+- **Tailwind**: if you changed Tailwind classes or `gas/tailwind-input.css`, run **`npm run build:css`** at repo root so `gas/tailwind-include.html` is updated before `clasp push`.
+- **HTML includes**: `Code.js` `doGet` wires `tailwind-include`, `app-legacy-styles`, and `app-client` into the `index` template — ensure new UI fragments stay listed in `doGet` if you split further files.
 
 ## Before / after `clasp push`
 

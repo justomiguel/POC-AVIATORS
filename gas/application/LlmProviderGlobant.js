@@ -43,28 +43,30 @@ function LlmProviderGlobant_resolveProfileName(ragApi, props) {
 
   if (assistantMode && !existing) {
     throw new Error(
-      'GLOBANT_API_MODE=assistant exige GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).',
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_prof_assistant'),
     );
   }
   if (skipAuto && !existing) {
     throw new Error(
-      'GLOBANT_RAG_SKIP_AUTO_PROFILE=true exige GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).',
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_prof_skipauto'),
     );
   }
   if (existing) return existing;
   if (assistantMode) {
     throw new Error(
-      'GLOBANT_API_MODE=assistant requiere GLOBANT_RAG_PROFILE_NAME.',
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_prof_req'),
     );
   }
   if (!ragApi) {
-    throw new Error('LlmProviderGlobant_resolveProfileName: falta cliente RAG.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_rag_missing'),
+    );
   }
 
   var name = 'aviators-' + Utilities.getUuid().replace(/-/g, '').substring(0, 12);
   var body = GlobantRagDefaults_buildCreateProfileBody(
     name,
-    'Perfil creado por Aviators (Apps Script).',
+    UiStrings_t(UiStrings_activeLocale_(), 'llm_auto_created_profile_desc'),
   );
   ragApi.createProfile(body);
   props.setProperty(LLM_PROP.GLOBANT_PROFILE, name);
@@ -79,17 +81,24 @@ function LlmProviderGlobant_consult(cmd) {
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
   if (!apiKey) {
-    throw new Error('Falta GLOBANT_AGENTS_API_KEY en Propiedades del script.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'),
+    );
   }
 
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
 
   var q = (cmd.question || '').trim();
-  if (!q) throw new Error('Escribí una pregunta.');
+  if (!q)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_question_required'),
+    );
 
   var ids = cmd.driveFileIds || [];
   if (ids.length === 0) {
-    throw new Error('Seleccioná al menos un documento.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_select_doc'),
+    );
   }
 
   if (LlmProviderGlobant_isAssistantMode(p)) {
@@ -125,7 +134,10 @@ function LlmProviderGlobant_consult(cmd) {
       var ok = GlobantRagApiClient_waitIndexed(client, profileName, lastId);
       if (!ok) {
         throw new Error(
-          'Indexación Globant incompleta o fallida para el documento.',
+          UiStrings_t(
+            UiStrings_activeLocale_(),
+            'err_globant_indexing_failed',
+          ),
         );
       }
     });
@@ -146,7 +158,10 @@ function LlmProviderGlobant_consult(cmd) {
   return {
     answer: text,
     model: 'globant-rag',
-    providerLabel: 'Globant Agents RAG (/v1/search)',
+    providerLabel: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'meta_provider_globant_rag',
+    ),
     filesUsed: ids.length,
   };
 }
@@ -195,7 +210,10 @@ function LlmProviderGlobant_consultAssistantWithDriveApi(
   return {
     answer: detail.text,
     model: 'globant-assistant',
-    providerLabel: 'Globant /v1/assistant/chat',
+    providerLabel: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'meta_provider_globant_assistant',
+    ),
     filesUsed: ids.length,
   };
 }
@@ -210,12 +228,17 @@ function LlmProviderGlobant_consultPromptOnly(prompt) {
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
   if (!apiKey) {
-    throw new Error('Falta GLOBANT_AGENTS_API_KEY en Propiedades del script.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'),
+    );
   }
 
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   var q = (prompt || '').trim();
-  if (!q) throw new Error('Escribí un prompt.');
+  if (!q)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_prompt_required'),
+    );
 
   var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
 
@@ -234,15 +257,21 @@ function LlmProviderGlobant_consultPromptOnly(prompt) {
 
     var rawA = JSON.stringify(chatOut.parsed, null, 2);
     if (rawA.length > 6000) {
-      rawA = rawA.substring(0, 6000) + '\n…[truncado]';
+      rawA = rawA.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
     }
 
     return {
       answer: chatOut.text,
       model: 'globant-assistant',
-      providerLabel: 'Globant /v1/assistant/chat',
+      providerLabel: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'meta_provider_globant_assistant',
+      ),
       rawJson: rawA,
-      filterLabel: 'modo Assistant (sin filtro documento RAG)',
+      filterLabel: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'meta_filter_assistant_no_rag',
+      ),
     };
   }
 
@@ -272,14 +301,22 @@ function LlmProviderGlobant_consultPromptOnly(prompt) {
 
   var rawStr = JSON.stringify(detail.parsed, null, 2);
   if (rawStr.length > 6000) {
-    rawStr = rawStr.substring(0, 6000) + '\n…[truncado]';
+    rawStr = rawStr.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
   }
 
   return {
     answer: detail.text,
     model: 'globant-rag',
-    providerLabel: 'Globant /v1/search/execute',
+    providerLabel: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'meta_provider_globant_execute',
+    ),
     rawJson: rawStr,
-    filterLabel: docId ? 'id = ' + docId : 'sin filtro (perfil completo)',
+    filterLabel: docId
+      ? UiStrings_fmt_('meta_filter_rag_doc_id', { id: docId })
+      : UiStrings_t(
+          UiStrings_activeLocale_(),
+          'meta_filter_rag_full_profile',
+        ),
   };
 }

@@ -12,6 +12,7 @@ client_secret*.json
 # Logs & deps (if added later)
 *.log
 node_modules/
+gas/tailwind-built.css
 
 # Optional: deployment metadata (uncomment if you do not want deployment IDs in git)
 # gas/deploy.json

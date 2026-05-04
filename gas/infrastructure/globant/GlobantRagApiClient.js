@@ -58,12 +58,21 @@ function GlobantRagApiClient_create(config) {
       payload: JSON.stringify(payload),
     });
     if (!BearerHttp_isSuccess(r.code)) {
-      throw new Error('Globant execute ' + r.code + ': ' + r.text);
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/search/execute',
+          code: String(r.code),
+          detail: r.text,
+        }),
+      );
     }
     var result = JSON.parse(r.text);
     if (!result.result || !result.result.success) {
       throw new Error(
-        'Globant execute lógico: ' + JSON.stringify(result).slice(0, 600),
+        UiStrings_fmt_('err_globant_api_logical', {
+          path: '/v1/search/execute',
+          detail: JSON.stringify(result).slice(0, 600),
+        }),
       );
     }
     return { text: result.text || '', parsed: result };
@@ -178,7 +187,13 @@ function GlobantRagApiClient_create(config) {
         },
       });
       if (!BearerHttp_isSuccess(r.code)) {
-        throw new Error('Globant listProfiles ' + r.code + ': ' + r.text.slice(0, 800));
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: '/v1/search/profiles',
+            code: String(r.code),
+            detail: r.text.slice(0, 800),
+          }),
+        );
       }
       var parsed = JSON.parse(r.text || '{}');
       return normalizeSearchProfilesResponse_(parsed);
@@ -189,12 +204,14 @@ function GlobantRagApiClient_create(config) {
       var r = getProfileDocumentsRequest(profileName, skip, count);
       if (!BearerHttp_isSuccess(r.code)) {
         throw new Error(
-          'Globant listDocs ' +
-            profileName +
-            ' ' +
-            r.code +
-            ': ' +
-            r.text.slice(0, 800),
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/documents',
+            code: String(r.code),
+            detail: r.text.slice(0, 800),
+          }),
         );
       }
       var parsed = JSON.parse(r.text || '{}');
@@ -215,7 +232,14 @@ function GlobantRagApiClient_create(config) {
       var r = request('delete', path, {});
       if (!BearerHttp_isSuccess(r.code)) {
         throw new Error(
-          'Globant deleteAllDocs ' + r.code + ': ' + r.text.slice(0, 800),
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/documents',
+            code: String(r.code),
+            detail: r.text.slice(0, 800),
+          }),
         );
       }
     },
@@ -227,7 +251,13 @@ function GlobantRagApiClient_create(config) {
         payload: JSON.stringify(body),
       });
       if (!BearerHttp_isSuccess(r.code)) {
-        throw new Error('Globant createProfile ' + r.code + ': ' + r.text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: '/v1/search/profile',
+            code: String(r.code),
+            detail: r.text,
+          }),
+        );
       }
     },
 
@@ -237,7 +267,14 @@ function GlobantRagApiClient_create(config) {
         '/v1/search/profile/' + encodeURIComponent(profileName);
       var r = request('delete', path, {});
       if (!BearerHttp_isSuccess(r.code)) {
-        throw new Error('Globant deleteProfile ' + r.code + ': ' + r.text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' + encodeURIComponent(profileName),
+            code: String(r.code),
+            detail: r.text,
+          }),
+        );
       }
     },
 
@@ -265,11 +302,28 @@ function GlobantRagApiClient_create(config) {
       var code = r.getResponseCode();
       var text = r.getContentText() || '';
       if (!BearerHttp_isSuccess(code)) {
-        throw new Error('Globant uploadPdf ' + code + ': ' + text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/document',
+            code: String(code),
+            detail: text,
+          }),
+        );
       }
       var parsed = JSON.parse(text);
       if (!parsed.id) {
-        throw new Error('Globant upload: respuesta sin id: ' + text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_logical', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/document',
+            detail: text,
+          }),
+        );
       }
       return { id: parsed.id };
     },
@@ -286,7 +340,17 @@ function GlobantRagApiClient_create(config) {
         encodeURIComponent(documentId);
       var r = request('delete', path, {});
       if (!BearerHttp_isSuccess(r.code)) {
-        throw new Error('Globant deleteDocument ' + r.code + ': ' + r.text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/document/' +
+              encodeURIComponent(documentId),
+            code: String(r.code),
+            detail: r.text,
+          }),
+        );
       }
     },
 
@@ -303,7 +367,17 @@ function GlobantRagApiClient_create(config) {
         encodeURIComponent(documentId);
       var r = request('get', path, {});
       if (!BearerHttp_isSuccess(r.code)) {
-        throw new Error('Globant getDocument ' + r.code + ': ' + r.text);
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/document/' +
+              encodeURIComponent(documentId),
+            code: String(r.code),
+            detail: r.text,
+          }),
+        );
       }
       var result = JSON.parse(r.text);
       return result.indexStatus;

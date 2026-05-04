@@ -1,0 +1,12 @@
+{
+  "name": "aviators",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./gas/tailwind-input.css -o ./gas/tailwind-built.css --minify && node ./scripts/wrap-css-include.mjs"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}

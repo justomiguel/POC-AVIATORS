@@ -73,7 +73,10 @@ function AdminKnowledge_loadSources(props) {
 
   var outF = [];
   for (var x = 0; x < ids.length; x++) {
-    outF.push({ id: ids[x], name: 'Carpeta' });
+    outF.push({
+      id: ids[x],
+      name: UiStrings_t(UiStrings_activeLocale_(), 'generic_folder_name'),
+    });
   }
   return { folders: outF, files: [] };
 }
@@ -122,7 +125,7 @@ function AdminKnowledge_saveConfiguration(sourcesJson, profileName) {
 
   if (!text) {
     throw new Error(
-      'Vacío: usá el buscador arriba o pegá `{ "folders":[],"files":[] }`.',
+      UiStrings_t(UiStrings_activeLocale_(), 'admin_sources_empty_input'),
     );
   }
 
@@ -135,7 +138,9 @@ function AdminKnowledge_saveConfiguration(sourcesJson, profileName) {
           if (fe && typeof fe.id === 'string' && fe.id.trim()) {
             folders.push({
               id: fe.id.trim(),
-              name: ('' + (fe.name || 'Carpeta')).trim() || fe.id,
+              name:
+                ('' + (fe.name || UiStrings_t(UiStrings_activeLocale_(), 'generic_folder_name'))).trim() ||
+                fe.id,
             });
           }
         }
@@ -146,32 +151,51 @@ function AdminKnowledge_saveConfiguration(sourcesJson, profileName) {
           if (ge && typeof ge.id === 'string' && ge.id.trim()) {
             files.push({
               id: ge.id.trim(),
-              name: ('' + (ge.name || 'Archivo')).trim() || ge.id,
+              name:
+                ('' + (ge.name || UiStrings_t(UiStrings_activeLocale_(), 'generic_file_name'))).trim() ||
+                ge.id,
             });
           }
         }
       }
     } catch (ep) {
-      throw new Error('JSON inválido: ' + ep.message);
+      throw new Error(
+        UiStrings_fmt_('err_json_invalid_detail', { message: ep.message }),
+      );
     }
   } else if (text.charAt(0) === '[') {
     var arr = JSON.parse(text);
     if (!Array.isArray(arr))
-      throw new Error('Array de IDs de carpeta debe ser JSON string[].');
+      throw new Error(
+        UiStrings_t(
+          UiStrings_activeLocale_(),
+          'admin_sources_folder_ids_not_array',
+        ),
+      );
     for (var k = 0; k < arr.length; k++) {
       var cid = ('' + arr[k]).trim();
-      if (cid) folders.push({ id: cid, name: 'Carpeta' });
+      if (cid)
+        folders.push({
+          id: cid,
+          name: UiStrings_t(UiStrings_activeLocale_(), 'generic_folder_name'),
+        });
     }
   } else {
     var bits = text.split(/[\s,;\n\r]+/);
     for (var b = 0; b < bits.length; b++) {
       var lid = ('' + bits[b]).trim();
-      if (lid) folders.push({ id: lid, name: 'Carpeta' });
+      if (lid)
+        folders.push({
+          id: lid,
+          name: UiStrings_t(UiStrings_activeLocale_(), 'generic_folder_name'),
+        });
     }
   }
 
   if (folders.length === 0 && files.length === 0) {
-    throw new Error('Agregá al menos una carpeta o un archivo (PDF/Google).');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_sources_need_one'),
+    );
   }
 
   for (var vf = 0; vf < folders.length; vf++) {
@@ -179,19 +203,18 @@ function AdminKnowledge_saveConfiguration(sourcesJson, profileName) {
       var fev = DriveApp.getFileById(folders[vf].id);
       if (fev.getMimeType() !== MimeType.FOLDER) {
         throw new Error(
-          '«' +
-            folders[vf].name +
-            '» no es carpeta (tipo ' +
-            fev.getMimeType() +
-            '). Usá solo carpetas aquí.',
+          UiStrings_fmt_('admin_folder_not_a_folder_type', {
+            name: folders[vf].name,
+            mime: fev.getMimeType(),
+          }),
         );
       }
     } catch (verr) {
       throw new Error(
-        'No se accede a la carpeta «' +
-          folders[vf].name +
-          '»: ' +
-          (verr.message || verr),
+        UiStrings_fmt_('admin_folder_access_denied', {
+          name: folders[vf].name,
+          reason: verr.message || String(verr),
+        }),
       );
     }
   }
@@ -273,16 +296,16 @@ function AdminKnowledge_saveRootFolderOnlyAndSync(rootFolderInput, profileName) 
     rootFo = DriveApp.getFolderById(fid);
   } catch (e) {
     throw new Error(
-      'No hay acceso a la carpeta (…' +
-        fid.slice(-8) +
-        '): ' +
-        (e && e.message ? e.message : e),
+      UiStrings_fmt_('admin_root_folder_access_denied', {
+        tail: fid.slice(-8),
+        reason: e && e.message ? e.message : String(e),
+      }),
     );
   }
 
   AdminKnowledge_saveConfiguration(
     JSON.stringify({
-      folders: [{ id: fid, name: rootFo.getName() || 'Raíz' }],
+      folders: [{ id: fid, name: rootFo.getName() || UiStrings_t(UiStrings_activeLocale_(), 'label_root_short') }],
       files: [],
     }),
     profileName,
@@ -303,24 +326,27 @@ function AdminKnowledge_syncCorpusFromDrive() {
   AdminAuth_requireAdmin();
 
   if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
-    throw new Error('El corpus admin solo aplica con proveedor Globant.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_corpus_globant_only'),
+    );
   }
 
   var props = PropertiesService.getScriptProperties();
   if (LlmProviderGlobant_isAssistantMode(props)) {
     throw new Error(
-      'Modo Assistant (GLOBANT_API_MODE=assistant) no usa /v1/search.',
+      UiStrings_t(UiStrings_activeLocale_(), 'admin_corpus_assistant_no_search'),
     );
   }
 
   var apiKey = (props.getProperty(_GLOBANT_KEY) || '').trim();
-  if (!apiKey) throw new Error('Falta GLOBANT_AGENTS_API_KEY.');
+  if (!apiKey)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
 
   var bootstrap = AdminKnowledge_getBootstrapSlice();
   var docIds = AdminKnowledge_buildSyncFileIds(props, bootstrap.maxFiles);
   if (docIds.length === 0) {
     throw new Error(
-      'Nada que indexar (PDF/Google Doc/Sheet/Slide). Sumá desde el buscador.',
+      UiStrings_t(UiStrings_activeLocale_(), 'admin_corpus_nothing_to_index'),
     );
   }
 
@@ -341,7 +367,10 @@ function AdminKnowledge_syncCorpusFromDrive() {
   client.createProfile(
     GlobantRagDefaults_buildCreateProfileBody(
       profileName,
-      'Corpus Aviators (Drive picker + carpetas).',
+      UiStrings_t(
+        UiStrings_activeLocale_(),
+        'admin_rag_default_profile_description',
+      ),
     ),
   );
 
@@ -353,7 +382,10 @@ function AdminKnowledge_syncCorpusFromDrive() {
     var ok = GlobantRagApiClient_waitIndexed(client, profileName, up.id, 14, 4000);
     if (!ok) {
       throw new Error(
-        'Indexación fallida ' + (idx + 1) + '/' + docIds.length + '.',
+        UiStrings_fmt_('admin_corpus_index_failed', {
+          current: String(idx + 1),
+          total: String(docIds.length),
+        }),
       );
     }
     uploaded++;
@@ -367,7 +399,9 @@ function AdminKnowledge_syncCorpusFromDrive() {
     profileName: profileName,
     docCount: docIds.length,
     uploaded: uploaded,
-    note:
-      'Consultá con «Preguntar al agente». Tipos admitidos sync: PDF, Docs, Sheets, Slides, Draw.',
+    note: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'admin_corpus_sync_return_note',
+    ),
   };
 }

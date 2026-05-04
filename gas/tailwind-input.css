@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Pantalla de login / OAuth (HtmlService no usa OAuth popup; el clic dispara autorización vía script.run) */
+  .login-root {
+    @apply flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50 to-indigo-100 px-4 py-12;
+  }
+  .login-card {
+    @apply w-full max-w-md rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl shadow-slate-900/10 backdrop-blur-sm;
+  }
+  .login-logo-wrap {
+    @apply mb-6 flex justify-center;
+  }
+  .login-logo-wrap img {
+    @apply h-24 w-auto max-w-[220px] object-contain drop-shadow-sm md:h-28;
+  }
+  .login-title {
+    @apply text-center text-2xl font-bold tracking-tight text-slate-900 md:text-3xl;
+  }
+  .login-lead {
+    @apply mt-3 text-center text-base leading-relaxed text-slate-600;
+  }
+  .login-status {
+    @apply mt-4 min-h-[1.5rem] text-center text-sm text-slate-500;
+  }
+  .login-status.err {
+    @apply font-medium text-red-600;
+  }
+  .btn-google {
+    @apply mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-[15px] font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .login-footnote {
+    @apply mt-6 text-center text-xs leading-relaxed text-slate-500;
+  }
+
+  .app-shell {
+    @apply max-w-full;
+  }
+  .app-layout {
+    @apply flex flex-col gap-4 md:flex-row md:gap-6 md:items-stretch;
+  }
+  .app-sidebar {
+    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:w-64;
+  }
+  .app-content {
+    @apply min-w-0 flex-1;
+  }
+  .role-badge {
+    @apply inline-flex max-w-full items-center rounded-full bg-aviators-primary/10 px-3 py-1 text-sm font-medium text-aviators-primary;
+  }
+  .user-avatar-wrap {
+    @apply relative mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full border-2 border-white shadow-md ring-2 ring-slate-200;
+  }
+  .user-avatar-placeholder {
+    @apply flex h-full w-full items-center justify-center bg-slate-200 text-lg font-semibold text-slate-600;
+  }
+  .session-banner {
+    @apply mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 empty:hidden;
+  }
+  .session-banner.err {
+    @apply border-amber-200 bg-amber-50 text-amber-950;
+  }
+}

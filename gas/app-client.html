@@ -1,0 +1,1962 @@
+<script>
+      (function () {
+        var viewLogin = document.getElementById('view-login');
+        var viewApp = document.getElementById('view-app');
+        var loginBtn = document.getElementById('login-btn');
+        var loginStatus = document.getElementById('login-status');
+        var emailEl = document.getElementById('email');
+        var userAvatar = document.getElementById('user-avatar');
+        var userAvatarPlaceholder = document.getElementById('user-avatar-placeholder');
+        var userDisplayName = document.getElementById('user-display-name');
+        var sidebarRole = document.getElementById('sidebar-role');
+        var homeVisitante = document.getElementById('home-visitante');
+        var homeMember = document.getElementById('home-member');
+        var filesUl = document.getElementById('files');
+        var sessionNote = document.getElementById('session-note');
+        var backLogin = document.getElementById('logout-toolbar');
+        var logoutFooter = document.getElementById('logout-footer');
+        var llmHintBox = document.getElementById('llm-hint-box');
+        var llmMeta = document.getElementById('llm-meta');
+        var askBtn = document.getElementById('ask-btn');
+        var questionEl = document.getElementById('question');
+        var askStatus = document.getElementById('ask-status');
+        var answerEl = document.getElementById('answer');
+        var answerMeta = document.getElementById('answer-meta');
+        var consultHeadingEl = document.getElementById('consult-heading');
+        var driveFilesHeadingEl = document.getElementById('drive-files-heading');
+        var globantAgentRow = document.getElementById('globant-agent-row');
+        var askAgentBtn = document.getElementById('ask-agent-btn');
+        var adminPanel = document.getElementById('admin-panel');
+        var adminProfileName = document.getElementById('admin-profile-name');
+        var adminSaveBtn = document.getElementById('admin-save-btn');
+        var adminClearBtn = document.getElementById('admin-clear-btn');
+        var adminSyncBtn = document.getElementById('admin-sync-btn');
+        var adminStatus = document.getElementById('admin-status');
+        var adminDriveSearchQ = document.getElementById('admin-drive-search-q');
+        var adminDriveSearchFull = document.getElementById(
+          'admin-drive-search-fulltext',
+        );
+        var adminDriveSearchBtn = document.getElementById(
+          'admin-drive-search-btn',
+        );
+        var adminDriveMoreBtn = document.getElementById('admin-drive-more-btn');
+        var adminDriveMoreWrap = document.getElementById(
+          'admin-drive-more-wrap',
+        );
+        var adminDriveResults = document.getElementById('admin-drive-results');
+        var adminSelectionSummary = document.getElementById(
+          'admin-selection-summary',
+        );
+        var adminSourcesDump = document.getElementById('admin-sources-dump');
+        var adminRootFolderInput = document.getElementById(
+          'admin-root-folder-input',
+        );
+        var adminRootSyncBtn = document.getElementById('admin-root-sync-btn');
+        var globantPanelRefresh = document.getElementById(
+          'globant-panel-refresh',
+        );
+        var globantPanelBody = document.getElementById('globant-panel-body');
+        var globantPanelStatus = document.getElementById(
+          'globant-panel-status',
+        );
+        var globantPanelSpinner = document.getElementById(
+          'globant-panel-spinner',
+        );
+        var globantPanelHint = document.getElementById('globant-panel-hint');
+        var adminRootFolderPickerBtn = document.getElementById(
+          'admin-root-folder-picker-btn',
+        );
+        var adminDrivePickerModal = document.getElementById(
+          'admin-drive-picker-modal',
+        );
+        var adminDrivePickerBackdrop = document.getElementById(
+          'admin-drive-picker-backdrop',
+        );
+        var adminDrivePickerClose = document.getElementById(
+          'admin-drive-picker-close',
+        );
+        var adminPickRoot = document.getElementById('admin-pick-root');
+        var adminPickBack = document.getElementById('admin-pick-back');
+        var adminPickMore = document.getElementById('admin-pick-more');
+        var adminPickMoreWrap = document.getElementById('admin-pick-more-wrap');
+        var adminPickList = document.getElementById('admin-pick-list');
+        var adminPickStatus = document.getElementById('admin-pick-status');
+        var adminPickBread = document.getElementById('admin-pick-breadcrumb');
+        var adminPickCancel = document.getElementById('admin-pick-cancel');
+        var adminPickConfirm = document.getElementById('admin-pick-confirm');
+
+        var loginTitleEl = document.getElementById('login-title');
+        var loginLeadEl = document.getElementById('login-lead');
+        var loginButtonLabelEl = document.getElementById('login-button-label');
+        var loginFootnoteEl = document.getElementById('login-footnote');
+        var visitorTitleEl = document.getElementById('visitor-title');
+        var visitorBodyEl = document.getElementById('visitor-body');
+        var dashboardTitleEl = document.getElementById('dashboard-title');
+        var dashboardLeadEl = document.getElementById('dashboard-lead');
+
+        var driveExpList = document.getElementById('drive-exp-list');
+        var driveExpBack = document.getElementById('drive-exp-back');
+        var driveExpRoot = document.getElementById('drive-exp-root');
+        var driveExpMore = document.getElementById('drive-exp-more');
+        var driveExpMoreWrap = document.getElementById('drive-exp-more-wrap');
+        var driveExpStatus = document.getElementById('drive-exp-status');
+        var driveExpBread = document.getElementById('drive-exp-breadcrumb');
+
+        /** @type {Array<{id:string,name:string}>} */
+        var driveExpStack = [];
+        var driveExpNextToken = '';
+        var MIME_FOLDER = 'application/vnd.google-apps.folder';
+        /** @type {{folders: Array<{id:string,name:string}>, files: Array<{id:string,name:string}>}} */
+        var adminSourcesState = { folders: [], files: [] };
+        var adminSearchNextPageToken = '';
+
+        /** @type {Array<{id:string,name:string}>} */
+        var adminPickStack = [];
+        var adminPickNextToken = '';
+        /** @type {Object<string, {id:string,name:string,kind:string,mimeType:string}>} */
+        var adminPickSelection = {};
+
+        var MAX_SELECTION = 5;
+
+        /** @type {Object<string,string>|null} */
+        var cachedI18n =
+          typeof window !== 'undefined' && window.__AVIATORS_I18N_INITIAL
+            ? window.__AVIATORS_I18N_INITIAL
+            : null;
+
+        /**
+         * @param {Object<string,string>|null|undefined} pack
+         */
+        function applyClientI18n(pack) {
+          if (!pack) return;
+          cachedI18n = pack;
+          if (pack._locale) document.documentElement.lang = pack._locale;
+          if (pack.app_title) document.title = pack.app_title;
+          if (loginTitleEl && pack.login_h1) loginTitleEl.textContent = pack.login_h1;
+          if (loginLeadEl && pack.login_lead) loginLeadEl.textContent = pack.login_lead;
+          if (loginButtonLabelEl && pack.login_button)
+            loginButtonLabelEl.textContent = pack.login_button;
+          if (loginFootnoteEl) {
+            var ft = pack.login_footnote != null ? pack.login_footnote : '';
+            loginFootnoteEl.textContent = ft;
+            loginFootnoteEl.classList.toggle('hidden', !ft);
+            loginFootnoteEl.setAttribute('aria-hidden', ft ? 'false' : 'true');
+          }
+          if (visitorTitleEl && pack.visitor_title)
+            visitorTitleEl.textContent = pack.visitor_title;
+          if (visitorBodyEl && pack.visitor_body)
+            visitorBodyEl.textContent = pack.visitor_body;
+          if (dashboardTitleEl && pack.dashboard_title)
+            dashboardTitleEl.textContent = pack.dashboard_title;
+          if (dashboardLeadEl && pack.dashboard_lead)
+            dashboardLeadEl.textContent = pack.dashboard_lead;
+
+          var els = document.querySelectorAll('[data-i18n]');
+          var ii;
+          for (ii = 0; ii < els.length; ii++) {
+            var n = els[ii];
+            var dk = n.getAttribute('data-i18n');
+            if (dk && pack[dk] != null) n.textContent = pack[dk];
+          }
+          els = document.querySelectorAll('[data-i18n-html]');
+          for (ii = 0; ii < els.length; ii++) {
+            var nh = els[ii];
+            var dkh = nh.getAttribute('data-i18n-html');
+            if (dkh && pack[dkh] != null) nh.innerHTML = pack[dkh];
+          }
+          els = document.querySelectorAll('[data-i18n-placeholder]');
+          for (ii = 0; ii < els.length; ii++) {
+            var np = els[ii];
+            var pk = np.getAttribute('data-i18n-placeholder');
+            if (pk && pack[pk] != null) np.setAttribute('placeholder', pack[pk]);
+          }
+          els = document.querySelectorAll('[data-i18n-title]');
+          for (ii = 0; ii < els.length; ii++) {
+            var nt = els[ii];
+            var tk = nt.getAttribute('data-i18n-title');
+            if (tk && pack[tk] != null) nt.setAttribute('title', pack[tk]);
+          }
+          els = document.querySelectorAll('[data-i18n-aria-label]');
+          for (ii = 0; ii < els.length; ii++) {
+            var na = els[ii];
+            var ak = na.getAttribute('data-i18n-aria-label');
+            if (ak && pack[ak] != null) na.setAttribute('aria-label', pack[ak]);
+          }
+          els = document.querySelectorAll('[data-i18n-alt]');
+          for (ii = 0; ii < els.length; ii++) {
+            var nim = els[ii];
+            var ik = nim.getAttribute('data-i18n-alt');
+            if (ik && pack[ik] != null) nim.setAttribute('alt', pack[ik]);
+          }
+          if (
+            adminSelectionSummary &&
+            adminSelectionSummary.classList.contains('empty') &&
+            pack.admin_selection_empty
+          ) {
+            adminSelectionSummary.textContent = pack.admin_selection_empty;
+          }
+        }
+
+        /**
+         * @param {string} key
+         * @return {string}
+         */
+        function i18n(key) {
+          if (cachedI18n && cachedI18n[key] != null && cachedI18n[key] !== '')
+            return /** @type {string} */ (cachedI18n[key]);
+          return key;
+        }
+
+        /**
+         * @param {string} key
+         * @param {Object<string, string|number>=} vars
+         * @return {string}
+         */
+        function i18nFmt(key, vars) {
+          var s = i18n(key);
+          if (!vars) return s;
+          for (var vk in vars) {
+            if (Object.prototype.hasOwnProperty.call(vars, vk)) {
+              s = s.split('{' + vk + '}').join(String(vars[vk]));
+            }
+          }
+          return s;
+        }
+
+        applyClientI18n(cachedI18n);
+
+        function mimeShortLabel(mt) {
+          if (mt === MIME_FOLDER) return i18n('mime_folder');
+          if (
+            mt === 'application/pdf' ||
+            mt === 'application/vnd.google-apps.document'
+          )
+            return i18n('mime_doc_pdf');
+          if (mt === 'application/vnd.google-apps.spreadsheet') return i18n('mime_sheet');
+          if (mt === 'application/vnd.google-apps.presentation') return i18n('mime_slides');
+          if (mt === 'application/vnd.google-apps.drawing') return i18n('mime_drawing');
+          if (
+            mt &&
+            mt.indexOf('vnd.google-apps') !== -1
+          )
+            return i18n('mime_google');
+          var cut = (mt || '').split('/').pop() || mt || i18n('mime_file');
+          return cut.length > 18 ? cut.substring(0, 16) + i18n('mime_trunc') : cut;
+        }
+
+        /**
+         * Debe coincidir con DriveDocuments_isGlobantRagIndexedMime_ (gas/infrastructure/drive/DriveDocuments.js).
+         * @param {string} mime
+         * @return {boolean}
+         */
+        function corpusMimeEligibleForRag(mime) {
+          var m = mime || '';
+          return (
+            m === 'application/pdf' ||
+            m === 'application/vnd.google-apps.document' ||
+            m === 'application/vnd.google-apps.spreadsheet' ||
+            m === 'application/vnd.google-apps.presentation' ||
+            m === 'application/vnd.google-apps.drawing'
+          );
+        }
+
+        function driveExpOpenHref(id, mimeType) {
+          if (mimeType === MIME_FOLDER)
+            return (
+              'https://drive.google.com/drive/folders/' +
+              encodeURIComponent(id)
+            );
+          return (
+            'https://drive.google.com/file/d/' +
+            encodeURIComponent(id) +
+            '/view'
+          );
+        }
+
+        function driveExpUpdateCrumb() {
+          if (!driveExpBread) return;
+          var parts = [i18n('drive_breadcrumb_root')];
+          for (var i = 0; i < driveExpStack.length; i++) {
+            parts.push(driveExpStack[i].name || '…');
+          }
+          driveExpBread.textContent = parts.join(i18n('drive_breadcrumb_sep'));
+        }
+
+        function driveExpAppendRows(items) {
+          if (!driveExpList) return;
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            var li = document.createElement('li');
+            var isFolder = it.mimeType === MIME_FOLDER;
+            if (isFolder) {
+              var bt = document.createElement('button');
+              bt.type = 'button';
+              bt.className = 'drive-exp-folder-btn';
+              bt.setAttribute('data-id', it.id);
+              bt.setAttribute('data-name', it.name || '');
+              var kf = document.createElement('span');
+              kf.className = 'drive-exp-kind';
+              kf.textContent = i18n('mime_folder');
+              var nf = document.createElement('span');
+              nf.className = 'drive-exp-name';
+              nf.textContent = it.name || it.id;
+              bt.appendChild(kf);
+              bt.appendChild(nf);
+              li.appendChild(bt);
+            } else {
+              var row = document.createElement('div');
+              row.className = 'drive-exp-file-row';
+              var a = document.createElement('a');
+              a.href = driveExpOpenHref(it.id, it.mimeType);
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+              a.className = 'drive-exp-name';
+              a.textContent = it.name || it.id;
+              var kt = document.createElement('span');
+              kt.className = 'drive-exp-kind';
+              kt.textContent = mimeShortLabel(it.mimeType);
+              row.appendChild(a);
+              row.appendChild(kt);
+              li.appendChild(row);
+            }
+            driveExpList.appendChild(li);
+          }
+        }
+
+        /** @param {boolean} resetList limpia lista y pide primera página */
+        function driveExpFetch(resetList) {
+          if (!driveExpList || !driveExpStatus) return;
+          var pageTok = '';
+          if (resetList) {
+            driveExpNextToken = '';
+            driveExpList.innerHTML = '';
+          } else {
+            pageTok = driveExpNextToken;
+            if (!pageTok) return;
+          }
+          var parentId =
+            driveExpStack.length === 0
+              ? ''
+              : driveExpStack[driveExpStack.length - 1].id;
+          driveExpStatus.textContent = i18n('drive_loading');
+          driveExpStatus.classList.remove('err');
+          if (driveExpRoot) driveExpRoot.disabled = true;
+          if (driveExpBack) driveExpBack.disabled = true;
+          if (driveExpMore) driveExpMore.disabled = true;
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (driveExpRoot) driveExpRoot.disabled = false;
+              if (driveExpBack)
+                driveExpBack.disabled = driveExpStack.length === 0;
+              driveExpAppendRows(res.items || []);
+              driveExpNextToken = res.nextPageToken || '';
+              if (driveExpMoreWrap)
+                driveExpMoreWrap.classList.toggle(
+                  'hidden',
+                  !driveExpNextToken,
+                );
+              if (driveExpMore) driveExpMore.disabled = false;
+              var nLi = driveExpList.querySelectorAll('li').length;
+              driveExpStatus.textContent =
+                nLi === 0
+                  ? i18n('drive_status_empty')
+                  : i18nFmt('drive_status_items', { n: nLi }) +
+                    (driveExpNextToken
+                      ? i18n('drive_status_more_hint')
+                      : '');
+            })
+            .withFailureHandler(function (e) {
+              if (driveExpRoot) driveExpRoot.disabled = false;
+              if (driveExpBack)
+                driveExpBack.disabled = driveExpStack.length === 0;
+              if (driveExpMore) driveExpMore.disabled = false;
+              driveExpStatus.textContent =
+                e && e.message ? e.message : i18n('drive_list_error');
+              driveExpStatus.classList.add('err');
+            })
+            .driveBrowseFolder(parentId, pageTok);
+        }
+
+        function driveExplorerBootstrap(session) {
+          driveExpStack = [];
+          driveExpNextToken = '';
+          driveExpUpdateCrumb();
+          if (!driveExpList || !driveExpStatus) return;
+          driveExpList.innerHTML = '';
+          if (driveExpMoreWrap) driveExpMoreWrap.classList.add('hidden');
+          if (!session || !session.email) {
+            driveExpStatus.textContent = i18n('drive_no_session');
+            driveExpStatus.classList.add('err');
+            if (driveExpRoot) driveExpRoot.disabled = true;
+            if (driveExpBack) driveExpBack.disabled = true;
+            return;
+          }
+          if (driveExpRoot) driveExpRoot.disabled = false;
+          driveExpFetch(true);
+        }
+
+        function adminPickUpdateCrumb() {
+          if (!adminPickBread) return;
+          var parts = [i18n('drive_breadcrumb_root')];
+          for (var ai = 0; ai < adminPickStack.length; ai++) {
+            parts.push(adminPickStack[ai].name || '…');
+          }
+          adminPickBread.textContent = parts.join(i18n('drive_breadcrumb_sep'));
+        }
+
+        function adminPickBindCheckbox(chk, meta) {
+          chk.addEventListener('change', function () {
+            if (chk.checked) {
+              adminPickSelection[meta.id] = meta;
+            } else {
+              delete adminPickSelection[meta.id];
+            }
+          });
+        }
+
+        /**
+         * @param {Array<{id:string,name?:string,mimeType:string}>} items
+         */
+        function adminPickAppendRows(items) {
+          if (!adminPickList) return;
+          for (var pi = 0; pi < items.length; pi++) {
+            var it = items[pi];
+            var li = document.createElement('li');
+            var nm = document.createElement('span');
+            nm.className = 'admin-pick-name';
+            nm.textContent = it.name || it.id;
+            nm.title = it.name || it.id;
+            var isFolder = it.mimeType === MIME_FOLDER;
+            var kindLbl = document.createElement('span');
+            kindLbl.className = 'admin-pick-kind';
+            kindLbl.textContent = isFolder
+              ? i18n('mime_folder')
+              : mimeShortLabel(it.mimeType);
+            li.appendChild(kindLbl);
+            if (isFolder) {
+              var chkf = document.createElement('input');
+              chkf.type = 'checkbox';
+              chkf.className = 'admin-pick-chk';
+              chkf.checked = !!adminPickSelection[it.id];
+              adminPickBindCheckbox(chkf, {
+                id: it.id,
+                name: it.name || it.id,
+                kind: 'folder',
+                mimeType: MIME_FOLDER,
+              });
+              li.insertBefore(chkf, kindLbl);
+              li.insertBefore(nm, kindLbl);
+              var openBt = document.createElement('button');
+              openBt.type = 'button';
+              openBt.className = 'admin-pick-open';
+              openBt.textContent = i18n('admin_open');
+              (function (fid, fname) {
+                openBt.addEventListener('click', function (ev) {
+                  ev.preventDefault();
+                  adminPickStack.push({ id: fid, name: fname });
+                  adminPickFetch(true);
+                });
+              })(it.id, it.name || it.id);
+              li.appendChild(openBt);
+            } else {
+              var eligible = corpusMimeEligibleForRag(it.mimeType);
+              if (eligible) {
+                var chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.className = 'admin-pick-chk';
+                chk.checked = !!adminPickSelection[it.id];
+                adminPickBindCheckbox(chk, {
+                  id: it.id,
+                  name: it.name || it.id,
+                  kind: 'file',
+                  mimeType: it.mimeType,
+                });
+                li.insertBefore(chk, kindLbl);
+              } else {
+                var spacer = document.createElement('span');
+                spacer.className = 'admin-pick-chk';
+                spacer.textContent = i18n('char_times');
+                spacer.title = i18n('admin_mime_not_eligible');
+                spacer.style.fontSize = '0.68rem';
+                spacer.style.fontWeight = '700';
+                spacer.style.color = 'var(--muted)';
+                spacer.style.textAlign = 'center';
+                li.insertBefore(spacer, kindLbl);
+              }
+              li.insertBefore(nm, kindLbl);
+            }
+            adminPickList.appendChild(li);
+          }
+        }
+
+        /** @param {boolean} resetList */
+        function adminPickFetch(resetList) {
+          if (!adminPickList || !adminPickStatus) return;
+          var pageTokPick = '';
+          if (resetList) {
+            adminPickNextToken = '';
+            adminPickList.innerHTML = '';
+          } else {
+            pageTokPick = adminPickNextToken;
+            if (!pageTokPick) return;
+          }
+          var parentPickId =
+            adminPickStack.length === 0
+              ? ''
+              : adminPickStack[adminPickStack.length - 1].id;
+          adminPickUpdateCrumb();
+          adminPickStatus.textContent = i18n('drive_loading');
+          adminPickStatus.classList.remove('err');
+          if (adminPickRoot) adminPickRoot.disabled = true;
+          if (adminPickBack)
+            adminPickBack.disabled = adminPickStack.length === 0;
+          if (adminPickMore) adminPickMore.disabled = true;
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (adminPickRoot) adminPickRoot.disabled = false;
+              if (adminPickBack)
+                adminPickBack.disabled = adminPickStack.length === 0;
+              adminPickAppendRows(res.items || []);
+              adminPickNextToken = res.nextPageToken || '';
+              if (adminPickMoreWrap)
+                adminPickMoreWrap.classList.toggle(
+                  'hidden',
+                  !adminPickNextToken,
+                );
+              if (adminPickMore) adminPickMore.disabled = false;
+              var nPick = adminPickList.querySelectorAll('li').length;
+              adminPickStatus.textContent =
+                nPick === 0
+                  ? i18n('drive_status_empty')
+                  : i18nFmt('admin_pick_items', { n: nPick }) +
+                    (adminPickNextToken
+                      ? i18n('admin_pick_more_short')
+                      : '');
+            })
+            .withFailureHandler(function (e) {
+              if (adminPickRoot) adminPickRoot.disabled = false;
+              if (adminPickBack)
+                adminPickBack.disabled = adminPickStack.length === 0;
+              if (adminPickMore) adminPickMore.disabled = false;
+              adminPickStatus.textContent =
+                e && e.message ? e.message : i18n('drive_list_error');
+              adminPickStatus.classList.add('err');
+            })
+            .driveBrowseFolder(parentPickId, pageTokPick);
+        }
+
+        function adminPickOnEscape(ev) {
+          if (ev.key !== 'Escape') return;
+          ev.preventDefault();
+          closeAdminDrivePicker();
+        }
+
+        function closeAdminDrivePicker() {
+          if (!adminDrivePickerModal) return;
+          adminDrivePickerModal.classList.add('hidden');
+          adminDrivePickerModal.setAttribute('aria-hidden', 'true');
+          document.removeEventListener('keydown', adminPickOnEscape);
+          adminPickSelection = {};
+          adminPickStack = [];
+          adminPickNextToken = '';
+          if (adminPickList) adminPickList.innerHTML = '';
+          if (adminPickMoreWrap) adminPickMoreWrap.classList.add('hidden');
+          if (adminPickBread) adminPickBread.textContent = '';
+          if (adminPickStatus) {
+            adminPickStatus.textContent = '\u00a0';
+            adminPickStatus.classList.remove('err');
+          }
+        }
+
+        function openAdminDrivePicker() {
+          if (!adminDrivePickerModal || !adminPickList || !adminPickStatus) {
+            return;
+          }
+          if (!adminDrivePickerModal.classList.contains('hidden')) {
+            return;
+          }
+          if (!emailEl || !(emailEl.textContent || '').trim()) {
+            if (adminStatus) {
+              adminStatus.textContent = i18n('admin_need_email_drive');
+              adminStatus.classList.add('err');
+            }
+            return;
+          }
+          adminPickStack = [];
+          adminPickNextToken = '';
+          adminPickSelection = {};
+          adminPickUpdateCrumb();
+          adminPickList.innerHTML = '';
+          if (adminPickMoreWrap) adminPickMoreWrap.classList.add('hidden');
+          adminPickStatus.textContent = '\u00a0';
+          adminPickStatus.classList.remove('err');
+          adminDrivePickerModal.classList.remove('hidden');
+          adminDrivePickerModal.setAttribute('aria-hidden', 'false');
+          document.addEventListener('keydown', adminPickOnEscape);
+          adminPickFetch(true);
+        }
+
+        function adminPickConfirmSelection() {
+          var keys = Object.keys(adminPickSelection);
+          var folderSingles = [];
+          var fileSingles = [];
+          var ki;
+          for (ki = 0; ki < keys.length; ki++) {
+            var s = adminPickSelection[keys[ki]];
+            if (!s) continue;
+            if (s.kind === 'folder') folderSingles.push(s);
+            else fileSingles.push(s);
+          }
+          for (var fj = 0; fj < folderSingles.length; fj++) {
+            addFolderToState({
+              id: folderSingles[fj].id,
+              name: folderSingles[fj].name,
+            });
+          }
+          for (var fk = 0; fk < fileSingles.length; fk++) {
+            addFileToState({
+              id: fileSingles[fk].id,
+              name: fileSingles[fk].name,
+              mimeType: fileSingles[fk].mimeType,
+            });
+          }
+          if (
+            folderSingles.length === 1 &&
+            fileSingles.length === 0 &&
+            adminRootFolderInput
+          ) {
+            adminRootFolderInput.value =
+              'https://drive.google.com/drive/folders/' +
+              encodeURIComponent(folderSingles[0].id);
+          }
+          if (keys.length && adminStatus) {
+            adminStatus.classList.remove('err');
+            adminStatus.textContent = i18nFmt('admin_pick_added', {
+              folders: folderSingles.length,
+              files: fileSingles.length,
+            });
+          }
+          closeAdminDrivePicker();
+        }
+
+        function stripIdFromLists(id) {
+          var f,
+            i,
+            fid = [],
+            fod = [];
+          for (i = 0; i < adminSourcesState.folders.length; i++) {
+            f = adminSourcesState.folders[i];
+            if (f.id !== id) fod.push(f);
+          }
+          for (i = 0; i < adminSourcesState.files.length; i++) {
+            f = adminSourcesState.files[i];
+            if (f.id !== id) fid.push(f);
+          }
+          adminSourcesState.folders = fod;
+          adminSourcesState.files = fid;
+        }
+
+        function addFolderToState(item) {
+          if (!item || !item.id) return;
+          stripIdFromLists(item.id);
+          var k;
+          for (k = 0; k < adminSourcesState.folders.length; k++) {
+            if (adminSourcesState.folders[k].id === item.id) {
+              renderAdminSelection();
+              return;
+            }
+          }
+          adminSourcesState.folders.push({
+            id: item.id,
+            name: item.name || item.id,
+          });
+          renderAdminSelection();
+        }
+
+        function addFileToState(item) {
+          if (!item || !item.id || item.mimeType === MIME_FOLDER) return;
+          stripIdFromLists(item.id);
+          var k;
+          for (k = 0; k < adminSourcesState.files.length; k++) {
+            if (adminSourcesState.files[k].id === item.id) {
+              renderAdminSelection();
+              return;
+            }
+          }
+          adminSourcesState.files.push({
+            id: item.id,
+            name: item.name || item.id,
+          });
+          renderAdminSelection();
+        }
+
+        function removeFromAdminState(kind, id) {
+          var arr =
+            kind === 'folder'
+              ? adminSourcesState.folders
+              : adminSourcesState.files;
+          for (var i = arr.length - 1; i >= 0; i--) {
+            if (arr[i].id === id) arr.splice(i, 1);
+          }
+          renderAdminSelection();
+        }
+
+        function renderAdminSelection() {
+          var nf = adminSourcesState.folders.length;
+          var na = adminSourcesState.files.length;
+          adminSelectionSummary.innerHTML = '';
+          if (nf === 0 && na === 0) {
+            adminSelectionSummary.textContent = i18n('admin_selection_empty');
+            adminSelectionSummary.classList.add('empty');
+          } else {
+            adminSelectionSummary.classList.remove('empty');
+            var fi;
+            for (fi = 0; fi < adminSourcesState.folders.length; fi++) {
+              adminSelectionSummary.appendChild(
+                adminMakeChip(
+                  'folder',
+                  adminSourcesState.folders[fi],
+                ),
+              );
+            }
+            for (fi = 0; fi < adminSourcesState.files.length; fi++) {
+              adminSelectionSummary.appendChild(
+                adminMakeChip(
+                  'file',
+                  adminSourcesState.files[fi],
+                ),
+              );
+            }
+          }
+          adminSourcesDump.textContent = JSON.stringify(
+            adminSourcesState,
+            null,
+            2,
+          );
+        }
+
+        /**
+         * @param {'folder'|'file'} kind
+         * @param {{id:string,name:string}} entry
+         */
+        function adminMakeChip(kind, entry) {
+          var wrap = document.createElement('span');
+          wrap.className = 'chip';
+          var ty = document.createElement('span');
+          ty.className = 'chip-type';
+          ty.textContent =
+            kind === 'folder' ? i18n('chip_folder') : i18n('chip_file');
+          var nm = document.createElement('span');
+          nm.textContent = entry.name;
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'x';
+          btn.setAttribute('aria-label', i18n('chip_remove_aria'));
+          btn.textContent = '\u00d7';
+          (function (k, eid) {
+            btn.addEventListener('click', function () {
+              removeFromAdminState(k, eid);
+            });
+          })(kind, entry.id);
+          wrap.appendChild(ty);
+          wrap.appendChild(nm);
+          wrap.appendChild(btn);
+          return wrap;
+        }
+
+        function hydrateAdminSourcesFromBootstrap(adm) {
+          adminSourcesState = { folders: [], files: [] };
+          var raw = adm && adm.sources;
+          if (raw && Array.isArray(raw.folders)) {
+            var i;
+            for (i = 0; i < raw.folders.length; i++) {
+              var fo = raw.folders[i];
+              if (fo && fo.id)
+                adminSourcesState.folders.push({
+                  id: fo.id,
+                  name: fo.name || fo.id,
+                });
+            }
+            if (Array.isArray(raw.files)) {
+              for (i = 0; i < raw.files.length; i++) {
+                var fl = raw.files[i];
+                if (fl && fl.id)
+                  adminSourcesState.files.push({
+                    id: fl.id,
+                    name: fl.name || fl.id,
+                  });
+              }
+            }
+          } else if (adm && (adm.folderIds || []).length) {
+            var ids = adm.folderIds;
+            for (var j = 0; j < ids.length; j++) {
+              adminSourcesState.folders.push({
+                id: ids[j],
+                name: i18n('generic_folder_name'),
+              });
+            }
+          }
+          adminSearchNextPageToken = '';
+          adminDriveResults.classList.add('hidden');
+          adminDriveResults.innerHTML = '';
+          adminDriveMoreWrap.classList.add('hidden');
+          renderAdminSelection();
+        }
+
+        function renderAdminSearchResults(items, append) {
+          if (!append) adminDriveResults.innerHTML = '';
+          var idx;
+          for (idx = 0; idx < items.length; idx++) {
+            (function (it) {
+              var li = document.createElement('li');
+              var nm = document.createElement('span');
+              nm.className = 'drive-res-name';
+              nm.textContent = it.name || it.id;
+              var pill = document.createElement('span');
+              pill.className = 'mime-pill';
+              pill.textContent = mimeShortLabel(it.mimeType || '');
+              var actions = document.createElement('span');
+              actions.className = 'drive-res-actions';
+              var isFolder = it.mimeType === MIME_FOLDER;
+              if (isFolder) {
+                var bf = document.createElement('button');
+                bf.type = 'button';
+                bf.textContent = i18n('admin_add_folder');
+                bf.addEventListener('click', function () {
+                  addFolderToState(it);
+                });
+                actions.appendChild(bf);
+              } else {
+                var ba = document.createElement('button');
+                ba.type = 'button';
+                ba.textContent = i18n('admin_add_file');
+                ba.addEventListener('click', function () {
+                  addFileToState(it);
+                });
+                actions.appendChild(ba);
+              }
+              li.appendChild(nm);
+              li.appendChild(pill);
+              li.appendChild(actions);
+              adminDriveResults.appendChild(li);
+            })(items[idx]);
+          }
+          adminDriveResults.classList.toggle('hidden', !adminDriveResults.children.length);
+        }
+
+        function runAdminDriveSearch(append) {
+          var q = (adminDriveSearchQ.value || '').trim();
+          adminStatus.classList.remove('err');
+          var pageTok = '';
+          if (append) {
+            pageTok = adminSearchNextPageToken;
+          } else {
+            adminSearchNextPageToken = '';
+          }
+
+          adminDriveSearchBtn.disabled = true;
+          adminDriveMoreBtn.disabled = true;
+
+          google.script.run
+            .withSuccessHandler(function (res) {
+              adminDriveSearchBtn.disabled = false;
+              adminDriveMoreBtn.disabled = false;
+              adminSearchNextPageToken =
+                res && res.nextPageToken ? res.nextPageToken : '';
+              adminDriveMoreWrap.classList.toggle(
+                'hidden',
+                !adminSearchNextPageToken,
+              );
+              renderAdminSearchResults(res.items || [], !!append);
+              if (!(res.items || []).length && !append) {
+                adminStatus.textContent = i18nFmt('admin_search_no_results', {
+                  q: q,
+                });
+              } else if (!append) {
+                adminStatus.textContent = i18nFmt('admin_search_results', {
+                  count: (res.items || []).length,
+                });
+              }
+            })
+            .withFailureHandler(function (e) {
+              adminDriveSearchBtn.disabled = false;
+              adminDriveMoreBtn.disabled = false;
+              adminStatus.textContent =
+                e && e.message ? e.message : i18n('err_admin_drive_search');
+              adminStatus.classList.add('err');
+            })
+            .adminDriveSearch(
+              q,
+              !!adminDriveSearchFull.checked,
+              pageTok,
+            );
+        }
+
+        function setBusy(busy, msg) {
+          loginBtn.disabled = !!busy;
+          loginStatus.textContent =
+            msg != null && msg !== ''
+              ? msg
+              : busy
+                ? i18n('busy_connecting')
+                : '\u00a0';
+          loginStatus.classList.toggle('err', false);
+        }
+
+        function setLoginError(text) {
+          loginStatus.textContent = text || i18n('err_generic');
+          loginStatus.classList.toggle('err', true);
+          loginBtn.disabled = false;
+        }
+
+        function updateLlmBanner(cfg) {
+          if (cfg.mode === 'globant') {
+            var isAsst = cfg.model === 'globant-assistant';
+            llmMeta.textContent = i18nFmt(
+              isAsst ? 'llm_meta_asst' : 'llm_meta_rag',
+              {
+                hint: cfg.projectHint || i18n('char_times'),
+                loc: cfg.location || '',
+              },
+            );
+            llmHintBox.classList.remove('hidden');
+            llmHintBox.classList.toggle('err', false);
+            llmHintBox.textContent = isAsst
+              ? i18n('llm_hint_asst_long')
+              : i18n('llm_hint_rag_long');
+            return;
+          }
+          if (cfg.mode === 'apiKey') {
+            llmMeta.textContent = i18nFmt('llm_meta_gemini', {
+              model: cfg.model || i18n('char_times'),
+            });
+            llmHintBox.classList.remove('hidden');
+            llmHintBox.classList.toggle('err', false);
+            llmHintBox.textContent = i18n('llm_hint_gemini');
+            return;
+          }
+          llmMeta.textContent = '';
+          llmHintBox.classList.remove('hidden');
+          llmHintBox.classList.toggle('err', true);
+          llmHintBox.textContent = cfg.hint || i18n('llm_hint_config');
+        }
+
+        var gcDocsSkip = {};
+        var gcDocsLoadedOnce = {};
+
+        function gcSlug(pname) {
+          var h = 0;
+          for (var gi = 0; gi < pname.length; gi++)
+            h = ((h << 5) - h + pname.charCodeAt(gi)) | 0;
+          return 'gc' + (h >>> 0);
+        }
+
+        function gcSetPanelBusy(busy, msg) {
+          if (!globantPanelRefresh) return;
+          globantPanelRefresh.disabled = !!busy;
+          if (globantPanelSpinner)
+            globantPanelSpinner.classList.toggle('is-visible', !!busy);
+          if (globantPanelBody) {
+            globantPanelBody.classList.toggle('gc-panel-busy', !!busy);
+            globantPanelBody.setAttribute(
+              'aria-busy',
+              busy ? 'true' : 'false',
+            );
+          }
+          if (globantPanelStatus && msg !== undefined) {
+            globantPanelStatus.textContent = msg || '\u00a0';
+            globantPanelStatus.classList.toggle(
+              'err',
+              !!(
+                msg &&
+                String(msg).toLowerCase().indexOf('error') !== -1
+              ),
+            );
+          }
+        }
+
+        function gcRemoveLoadMoreButton(box) {
+          var m = box.querySelector('[data-gc-act="rag-docs-more"]');
+          if (m && m.parentNode) m.parentNode.removeChild(m);
+        }
+
+        function gcMaybeAddMoreButton(pname, box, totalListed, totalOverall) {
+          gcRemoveLoadMoreButton(box);
+          if (totalListed < totalOverall) {
+            var more = document.createElement('button');
+            more.type = 'button';
+            more.textContent = i18nFmt('gc_load_more', {
+              listed: totalListed,
+              total: totalOverall,
+            });
+            more.setAttribute('data-gc-act', 'rag-docs-more');
+            more.setAttribute('data-pname', pname);
+            box.appendChild(more);
+          }
+        }
+
+        function gcRenderRagDocsRows(tbody, pname, list) {
+          for (var di = 0; di < list.length; di++) {
+            var d = list[di];
+            var dr = document.createElement('tr');
+            var dn = document.createElement('td');
+            dn.textContent = d.name || i18n('label_em_dash');
+            var ds = document.createElement('td');
+            ds.textContent = d.indexStatus || '';
+            var did = document.createElement('td');
+            var wrap = document.createElement('span');
+            wrap.textContent = (d.id || '').substring(0, 14);
+            did.appendChild(wrap);
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = i18n('gc_remove');
+            b.style.marginLeft = '6px';
+            b.className = 'btn-admin';
+            b.setAttribute('data-gc-act', 'rag-doc-del');
+            b.setAttribute('data-pname', pname);
+            b.setAttribute('data-doc', d.id || '');
+            did.appendChild(b);
+            dr.appendChild(dn);
+            dr.appendChild(ds);
+            dr.appendChild(did);
+            tbody.appendChild(dr);
+          }
+        }
+
+        function gcRenderRagDocsIntoBox(pname, box, docsRes, append) {
+          var list = docsRes.documents || [];
+          var tot = docsRes.totalDocuments || list.length;
+          var tbl;
+          var tbody;
+          if (!append) {
+            box.innerHTML = '';
+            if (!list.length) {
+              var e = document.createElement('div');
+              e.textContent =
+                docsRes.totalDocuments === 0
+                  ? i18n('gc_empty_docs_profile')
+                  : i18n('gc_empty_docs_page');
+              box.appendChild(e);
+              return;
+            }
+            tbl = document.createElement('table');
+            tbl.className = 'gc-table';
+            var st = document.createElement('thead');
+            var sr = document.createElement('tr');
+            ['gc_col_file', 'gc_col_index', 'gc_col_id'].forEach(function (
+              hkey,
+            ) {
+              var th = document.createElement('th');
+              th.textContent = i18n(hkey);
+              sr.appendChild(th);
+            });
+            st.appendChild(sr);
+            tbl.appendChild(st);
+            tbody = document.createElement('tbody');
+            tbl.appendChild(tbody);
+            box.appendChild(tbl);
+            gcRenderRagDocsRows(tbody, pname, list);
+            gcMaybeAddMoreButton(pname, box, list.length, tot);
+            return;
+          }
+          tbl = box.querySelector('table.gc-table');
+          if (!tbl) return;
+          tbody = tbl.querySelector('tbody');
+          if (!tbody) return;
+          gcRenderRagDocsRows(tbody, pname, list);
+          var listedSoFar = tbody.querySelectorAll('tr').length;
+          gcMaybeAddMoreButton(pname, box, listedSoFar, tot);
+        }
+
+        function renderGlobantAssistantTable(files) {
+          if (!globantPanelBody) return;
+          globantPanelBody.innerHTML = '';
+          var summary = document.createElement('p');
+          summary.textContent = i18nFmt('gc_asst_summary', {
+            count: files ? files.length : 0,
+          });
+          globantPanelBody.appendChild(summary);
+          var wrap = document.createElement('div');
+          wrap.className = 'gc-table-wrap';
+          var tbl = document.createElement('table');
+          tbl.className = 'gc-table';
+          var thead = document.createElement('thead');
+          var hr = document.createElement('tr');
+          [
+            'gc_col_name',
+            'gc_col_id',
+            'gc_col_ext',
+            'gc_col_size',
+            '',
+          ].forEach(function (hkey) {
+            var th = document.createElement('th');
+            th.textContent = hkey ? i18n(hkey) : '';
+            hr.appendChild(th);
+          });
+          thead.appendChild(hr);
+          tbl.appendChild(thead);
+          var tb = document.createElement('tbody');
+          var fi = 0;
+          for (; fi < (files || []).length; fi++) {
+            var f = files[fi];
+            var tr = document.createElement('tr');
+            var c1 = document.createElement('td');
+            c1.textContent = f.name || i18n('label_em_dash');
+            var c2 = document.createElement('td');
+            c2.textContent = f.id || '';
+            var c3 = document.createElement('td');
+            c3.textContent = f.extension || '';
+            var c4 = document.createElement('td');
+            c4.textContent =
+              f.size != null ? String(f.size) : '';
+            var c5 = document.createElement('td');
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-admin danger';
+            btn.textContent = i18n('gc_btn_delete_file');
+            btn.setAttribute('data-gc-act', 'asst-del');
+            btn.setAttribute('data-fid', f.id);
+            c5.appendChild(btn);
+            tr.appendChild(c1);
+            tr.appendChild(c2);
+            tr.appendChild(c3);
+            tr.appendChild(c4);
+            tr.appendChild(c5);
+            tb.appendChild(tr);
+          }
+          tbl.appendChild(tb);
+          wrap.appendChild(tbl);
+          globantPanelBody.appendChild(wrap);
+        }
+
+        function renderGlobantRagProfiles(meta) {
+          if (!globantPanelBody) return;
+          globantPanelBody.innerHTML = '';
+          var head = document.createElement('p');
+          var intro = i18nFmt('gc_profiles_header', {
+            count: meta.profileCount || 0,
+          });
+          head.appendChild(document.createTextNode(intro));
+          if (meta.projectName) {
+            head.appendChild(
+              document.createTextNode(
+                i18nFmt('gc_project_line', { name: meta.projectName }),
+              ),
+            );
+          }
+          globantPanelBody.appendChild(head);
+
+          var profiles = meta.profiles || [];
+          if (!profiles.length) {
+            var emptyBox = document.createElement('div');
+            emptyBox.className = 'gc-docs-box';
+            emptyBox.innerHTML = i18n('gc_profiles_empty_html');
+            globantPanelBody.appendChild(emptyBox);
+            return;
+          }
+
+          var wrap = document.createElement('div');
+          wrap.className = 'gc-table-wrap';
+          var tbl = document.createElement('table');
+          tbl.className = 'gc-table';
+          var thead = document.createElement('thead');
+          var hr = document.createElement('tr');
+          ['gc_col_agent', 'gc_col_description', 'gc_col_actions'].forEach(
+            function (hkey) {
+              var th = document.createElement('th');
+              th.textContent = i18n(hkey);
+              hr.appendChild(th);
+            },
+          );
+          thead.appendChild(hr);
+          tbl.appendChild(thead);
+          var tb = document.createElement('tbody');
+          var pi = 0;
+          for (; pi < profiles.length; pi++) {
+            var pr = profiles[pi];
+            var pname = pr.name || '';
+            var slug = gcSlug(pname);
+            var tr = document.createElement('tr');
+
+            var tdN = document.createElement('td');
+            tdN.textContent = pname;
+            var tdD = document.createElement('td');
+            tdD.textContent = ((pr.description || '') + '').slice(0, 140);
+
+            var tdA = document.createElement('td');
+            tdA.className = 'gc-row-actions';
+
+            function mkBtn(txt, act) {
+              var x = document.createElement('button');
+              x.type = 'button';
+              x.className = 'btn-admin';
+              if (act === 'rag-profile-del' || act === 'rag-docs-del')
+                x.className += ' danger';
+              x.textContent = txt;
+              x.setAttribute('data-gc-act', act);
+              x.setAttribute('data-pname', pname);
+              return x;
+            }
+
+            tdA.appendChild(mkBtn(i18n('gc_btn_docs'), 'rag-docs'));
+            tdA.appendChild(mkBtn(i18n('gc_btn_clear_docs'), 'rag-docs-del'));
+            tdA.appendChild(
+              mkBtn(i18n('btn_rag_delete_agent'), 'rag-profile-del'),
+            );
+
+            tr.appendChild(tdN);
+            tr.appendChild(tdD);
+            tr.appendChild(tdA);
+            tb.appendChild(tr);
+
+            var trDocs = document.createElement('tr');
+            trDocs.id = 'gc-docs-row-' + slug;
+            trDocs.style.display = 'none';
+            var tdCol = document.createElement('td');
+            tdCol.colSpan = 3;
+            var box = document.createElement('div');
+            box.className = 'gc-docs-box';
+            box.id = 'gc-docs-box-' + slug;
+            tdCol.appendChild(box);
+            trDocs.appendChild(tdCol);
+            tb.appendChild(trDocs);
+          }
+          tbl.appendChild(tb);
+          wrap.appendChild(tbl);
+          globantPanelBody.appendChild(wrap);
+        }
+
+        function fetchGlobantPanel() {
+          if (!globantPanelRefresh) return;
+          gcDocsSkip = {};
+          gcDocsLoadedOnce = {};
+          gcSetPanelBusy(
+            true,
+            i18n('globant_panel_busy_fetch'),
+          );
+          if (globantPanelBody) globantPanelBody.innerHTML = '';
+          google.script.run
+            .withSuccessHandler(function (snap) {
+              gcSetPanelBusy(false, '\u00a0');
+              if (globantPanelStatus) globantPanelStatus.classList.remove('err');
+              if (!snap || snap.ok !== true) {
+                if (globantPanelBody) {
+                  globantPanelBody.textContent =
+                    (snap && snap.message) || i18n('gc_no_info');
+                }
+                return;
+              }
+              if (snap.mode === 'assistant') {
+                if (globantPanelStatus && snap.hint)
+                  globantPanelStatus.textContent = snap.hint;
+                renderGlobantAssistantTable(snap.files || []);
+                return;
+              }
+              if (globantPanelStatus) {
+                globantPanelStatus.textContent =
+                  snap.projectActive === false
+                    ? i18n('globant_project_warn')
+                    : '\u00a0';
+              }
+              renderGlobantRagProfiles(snap);
+            })
+            .withFailureHandler(function (e) {
+              gcSetPanelBusy(false, '');
+              if (globantPanelStatus) {
+                globantPanelStatus.textContent =
+                  e && e.message ? e.message : i18n('err_globant_list');
+                globantPanelStatus.classList.add('err');
+              }
+            })
+            .adminGlobantControlFetch();
+        }
+
+        function gcHandleDocToggle(pname) {
+          var slug = gcSlug(pname);
+          var row = document.getElementById('gc-docs-row-' + slug);
+          var box = document.getElementById('gc-docs-box-' + slug);
+          if (!row || !box) return;
+          var showing = row.style.display !== 'none';
+          row.style.display = showing ? 'none' : '';
+          if (showing) return;
+          if (gcDocsLoadedOnce[pname]) return;
+          gcDocsLoadedOnce[pname] = true;
+          gcDocsSkip[pname] = 0;
+          gcSetPanelBusy(
+            true,
+            i18nFmt('rag_docs_loading', { name: pname }),
+          );
+          google.script.run
+            .withSuccessHandler(function (res) {
+              gcSetPanelBusy(false, '\u00a0');
+              var n = res.documents ? res.documents.length : 0;
+              gcDocsSkip[pname] = n;
+              gcRenderRagDocsIntoBox(pname, box, res, false);
+            })
+            .withFailureHandler(function (e) {
+              gcSetPanelBusy(false, '');
+              box.textContent = e && e.message ? e.message : i18n('err_docs_list');
+            })
+            .adminGlobantRagDocuments(pname, 0, 40);
+        }
+
+        function gcLoadMoreDocs(pname) {
+          var slug = gcSlug(pname);
+          var box = document.getElementById('gc-docs-box-' + slug);
+          if (!box) return;
+          gcRemoveLoadMoreButton(box);
+          var skip = gcDocsSkip[pname] || 0;
+          gcSetPanelBusy(
+            true,
+            i18nFmt('rag_docs_loading_more', { name: pname }),
+          );
+          google.script.run
+            .withSuccessHandler(function (res) {
+              gcSetPanelBusy(false, '\u00a0');
+              var add = res.documents ? res.documents.length : 0;
+              gcDocsSkip[pname] = skip + add;
+              gcRenderRagDocsIntoBox(pname, box, res, true);
+            })
+            .withFailureHandler(function (e) {
+              gcSetPanelBusy(false, '');
+              if (globantPanelStatus) {
+                globantPanelStatus.textContent =
+                  e && e.message ? e.message : i18n('err_globant_paginate');
+                globantPanelStatus.classList.add('err');
+              }
+            })
+            .adminGlobantRagDocuments(pname, skip, 40);
+        }
+
+        function initialsFromDisplayName(name, email) {
+          var s = (name || '').trim();
+          if (!s && email) s = ((email || '').split('@')[0] || '').trim();
+          var parts = s.split(/\s+/).filter(function (x) {
+            return x.length;
+          });
+          if (parts.length >= 2)
+            return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+          return (s.slice(0, 2) || '?').toUpperCase();
+        }
+
+        function showApp(bootstrap) {
+          applyClientI18n(bootstrap.i18n);
+          loginStatus.textContent = '\u00a0';
+          viewLogin.classList.add('hidden');
+          viewApp.classList.remove('hidden');
+
+          var data = bootstrap.session || {};
+          var llmCfg = bootstrap.llm || {};
+
+          sessionNote.textContent = data.note || '';
+          sessionNote.classList.toggle(
+            'err',
+            (!data.email && !!data.note) || !!data.showNoRoleBanner,
+          );
+          emailEl.textContent = data.email || i18n('label_no_email');
+
+          if (userDisplayName)
+            userDisplayName.textContent =
+              data.displayName || data.email || i18n('label_em_dash');
+          if (sidebarRole)
+            sidebarRole.textContent =
+              data.roleLabel || i18n('role_label_visitor');
+
+          var photo = (data.photoUrl || '').trim();
+          if (userAvatar && userAvatarPlaceholder) {
+            userAvatar.referrerPolicy = 'no-referrer';
+            userAvatar.onerror = function Avatar_onerror() {
+              userAvatar.onerror = null;
+              userAvatar.removeAttribute('src');
+              userAvatar.classList.add('hidden');
+              userAvatar.alt = '';
+              userAvatarPlaceholder.classList.remove('hidden');
+              userAvatarPlaceholder.textContent = initialsFromDisplayName(
+                data.displayName,
+                data.email,
+              );
+            };
+            if (photo) {
+              userAvatar.src = photo;
+              userAvatar.classList.remove('hidden');
+              userAvatar.alt = data.displayName || data.email || '';
+              userAvatarPlaceholder.classList.add('hidden');
+            } else {
+              userAvatar.removeAttribute('src');
+              userAvatar.classList.add('hidden');
+              userAvatar.alt = '';
+              userAvatarPlaceholder.classList.remove('hidden');
+              userAvatarPlaceholder.textContent = initialsFromDisplayName(
+                data.displayName,
+                data.email,
+              );
+            }
+          }
+
+          var isVisitor = !!data.isVisitor;
+          if (homeVisitante) homeVisitante.classList.toggle('hidden', !isVisitor);
+          if (homeMember) homeMember.classList.toggle('hidden', isVisitor);
+
+          updateLlmBanner(llmCfg);
+
+          var adm = bootstrap.admin || {};
+          var isAdm = !!adm.isAdmin;
+          adminPanel.classList.toggle('hidden', !isAdm);
+          adminStatus.textContent = '\u00a0';
+          adminStatus.classList.remove('err');
+          if (isAdm) {
+            adminProfileName.value = adm.profileName || '';
+            hydrateAdminSourcesFromBootstrap(adm);
+            var syncTail = '';
+            if (adm.lastSync)
+              syncTail = i18nFmt('last_sync_suffix', { date: adm.lastSync });
+            adminStatus.textContent = i18nFmt('admin_sync_line', {
+              folders: adminSourcesState.folders.length,
+              files: adminSourcesState.files.length,
+              max: adm.maxFiles || 25,
+              last: syncTail,
+            });
+            if (globantPanelHint) {
+              if (llmCfg.mode === 'globant') {
+                globantPanelHint.textContent =
+                  llmCfg.model === 'globant-assistant'
+                    ? i18n('globant_hint_assistant')
+                    : i18n('globant_hint_rag');
+              } else {
+                globantPanelHint.textContent = i18n('globant_hint_no_key');
+              }
+            }
+            if (globantPanelStatus) globantPanelStatus.classList.remove('err');
+          }
+
+          consultHeadingEl.textContent =
+            llmCfg.mode === 'globant'
+              ? i18n('consult_heading_globant')
+              : llmCfg.mode === 'apiKey'
+                ? i18n('consult_heading_gemini')
+                : i18n('consult_heading_none');
+
+          driveFilesHeadingEl.textContent =
+            llmCfg.mode === 'globant'
+              ? i18n('drive_heading_globant')
+              : llmCfg.mode === 'apiKey'
+                ? i18n('drive_heading_gemini')
+                : i18n('drive_heading_plain');
+          globantAgentRow.classList.toggle('hidden', llmCfg.mode !== 'globant');
+          askBtn.textContent =
+            llmCfg.mode === 'globant'
+              ? i18n('btn_consult_drive')
+              : i18n('ask_btn');
+
+          var llmReady = llmCfg.mode === 'globant' || llmCfg.mode === 'apiKey';
+          askBtn.disabled = !llmReady;
+          askAgentBtn.disabled = !llmReady;
+
+          answerEl.textContent =
+            llmCfg.mode === 'globant'
+              ? i18n('answer_placeholder_globant')
+              : llmCfg.mode === 'apiKey'
+                ? i18n('answer_placeholder_gemini')
+                : i18n('answer_placeholder_none');
+          answerEl.classList.add('empty');
+          answerMeta.textContent = '';
+          askStatus.textContent = '';
+          askStatus.classList.toggle('err', false);
+          questionEl.value = '';
+
+          filesUl.innerHTML = '';
+          (data.files || []).forEach(function (f) {
+            var li = document.createElement('li');
+            var lbl = document.createElement('label');
+            var chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.value = f.id;
+            chk.addEventListener('change', function () {
+              if (!chk.checked) return;
+              var n = filesUl.querySelectorAll('input:checked').length;
+              if (n > MAX_SELECTION) {
+                chk.checked = false;
+                askStatus.textContent = i18nFmt('ask_max_docs', {
+                  max: MAX_SELECTION,
+                });
+                askStatus.classList.add('err');
+              }
+            });
+            var a = document.createElement('a');
+            a.href = f.url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = f.name || f.id;
+
+            lbl.appendChild(chk);
+            lbl.appendChild(a);
+            li.appendChild(lbl);
+            filesUl.appendChild(li);
+          });
+
+          driveExplorerBootstrap(data);
+        }
+
+        function getSelectedIds() {
+          var out = [];
+          var nodes = filesUl.querySelectorAll('input[type=checkbox]');
+          for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].checked) out.push(nodes[i].value);
+          }
+          return out;
+        }
+
+        if (driveExpList) {
+          driveExpList.addEventListener('click', function (ev) {
+            var tgt = /** @type {HTMLElement} */ (ev.target);
+            var btnEl =
+              tgt && tgt.closest ? tgt.closest('.drive-exp-folder-btn') : null;
+            var btn = btnEl instanceof Element ? btnEl : null;
+            if (!btn || !driveExpList.contains(btn)) return;
+            var fid = btn.getAttribute('data-id') || '';
+            var fname = btn.getAttribute('data-name') || '';
+            driveExpStack.push({ id: fid, name: fname });
+            driveExpUpdateCrumb();
+            driveExpFetch(true);
+          });
+        }
+        if (driveExpBack) {
+          driveExpBack.addEventListener('click', function () {
+            if (driveExpStack.length === 0) return;
+            driveExpStack.pop();
+            driveExpUpdateCrumb();
+            driveExpFetch(true);
+          });
+        }
+        if (driveExpRoot) {
+          driveExpRoot.addEventListener('click', function () {
+            driveExpStack = [];
+            driveExpUpdateCrumb();
+            driveExpFetch(true);
+          });
+        }
+        if (driveExpMore) {
+          driveExpMore.addEventListener('click', function () {
+            driveExpFetch(false);
+          });
+        }
+
+        askBtn.addEventListener('click', function () {
+          askStatus.textContent = '';
+          askStatus.classList.remove('err');
+
+          var q = questionEl.value;
+          var ids = getSelectedIds();
+
+          google.script.run
+            .withSuccessHandler(function (res) {
+              askBtn.disabled = false;
+              askAgentBtn.disabled = false;
+              answerEl.textContent = res.answer || '';
+              answerEl.classList.toggle('empty', !(res.answer || '').trim());
+              answerMeta.textContent = res.meta
+                ? [
+                    res.meta.model,
+                    res.meta.location,
+                    i18nFmt('meta_files_suffix', {
+                      n: res.meta.filesUsed,
+                    }),
+                  ].join(' · ')
+                : '';
+              askStatus.textContent = '\u00a0';
+            })
+            .withFailureHandler(function (e) {
+              askBtn.disabled = false;
+              askAgentBtn.disabled = false;
+              askStatus.textContent = e && e.message ? e.message : i18n('err_ask');
+              askStatus.classList.add('err');
+            })
+            .askAboutDocuments(q, ids);
+
+          askBtn.disabled = true;
+          askAgentBtn.disabled = true;
+          askStatus.textContent = i18n('busy_consulting');
+        });
+
+        askAgentBtn.addEventListener('click', function () {
+          askStatus.textContent = '';
+          askStatus.classList.remove('err');
+
+          var gp = (questionEl.value || '').trim();
+          if (!gp) {
+            askStatus.textContent = i18n('ask_empty_question');
+            askStatus.classList.add('err');
+            return;
+          }
+
+          google.script.run
+            .withSuccessHandler(function (res) {
+              askAgentBtn.disabled = false;
+              askBtn.disabled = false;
+              answerEl.textContent = res.answer || '';
+              answerEl.classList.toggle('empty', !(res.answer || '').trim());
+              answerMeta.textContent = res.meta
+                ? [
+                    res.meta.model,
+                    res.meta.location,
+                    res.meta.filterNote || '',
+                  ].join(' · ')
+                : '';
+              askStatus.textContent = '\u00a0';
+            })
+            .withFailureHandler(function (e) {
+              askAgentBtn.disabled = false;
+              askBtn.disabled = false;
+              askStatus.textContent =
+                e && e.message ? e.message : i18n('err_ask_agent');
+              askStatus.classList.add('err');
+            })
+            .globantAskDirect(gp);
+
+          askAgentBtn.disabled = true;
+          askBtn.disabled = true;
+          askStatus.textContent = i18n('busy_consulting_agent');
+        });
+
+        function resetToLogin(message) {
+          viewApp.classList.add('hidden');
+          viewLogin.classList.remove('hidden');
+          loginBtn.disabled = false;
+          applyClientI18n(cachedI18n);
+          loginStatus.textContent = message || '\u00a0';
+          loginStatus.classList.toggle('err', !!message);
+        }
+
+        loginBtn.addEventListener('click', function () {
+          setBusy(true, i18n('busy_connecting'));
+          google.script.run
+            .withSuccessHandler(function (bootstrap) {
+              setBusy(false, '\u00a0');
+              showApp(bootstrap);
+            })
+            .withFailureHandler(function (e) {
+              setLoginError(
+                e && e.message ? e.message : i18n('err_login_session'),
+              );
+            })
+            .getBootstrap();
+        });
+
+        function onLogoutClick() {
+          resetToLogin('');
+        }
+
+        backLogin.addEventListener('click', onLogoutClick);
+        logoutFooter.addEventListener('click', onLogoutClick);
+
+        function setAdminBusy(busy, msg) {
+          adminSaveBtn.disabled = !!busy;
+          adminSyncBtn.disabled = !!busy;
+          adminClearBtn.disabled = !!busy;
+          adminRootSyncBtn.disabled = !!busy;
+          adminRootFolderInput.disabled = !!busy;
+          if (adminRootFolderPickerBtn) adminRootFolderPickerBtn.disabled = !!busy;
+          adminDriveSearchBtn.disabled = !!busy;
+          adminDriveMoreBtn.disabled =
+            !!busy || !adminSearchNextPageToken;
+          adminDriveSearchQ.disabled = !!busy;
+          adminDriveSearchFull.disabled = !!busy;
+          if (msg != null) {
+            adminStatus.textContent = msg;
+            adminStatus.classList.toggle('err', false);
+          }
+        }
+
+        adminDriveSearchBtn.addEventListener('click', function () {
+          runAdminDriveSearch(false);
+        });
+        adminRootSyncBtn.addEventListener('click', function () {
+          if (!window.confirm(i18n('confirm_sync_root'))) {
+            return;
+          }
+          adminStatus.classList.remove('err');
+          setAdminBusy(true, i18n('admin_busy_sync_root'));
+          google.script.run
+            .withSuccessHandler(function (res) {
+              setAdminBusy(false);
+              adminDriveMoreBtn.disabled = !adminSearchNextPageToken;
+              adminSourcesState = {
+                folders: [
+                  {
+                    id: res.folderId,
+                    name: res.folderName,
+                  },
+                ],
+                files: [],
+              };
+              renderAdminSelection();
+              if (res.profileName) adminProfileName.value = res.profileName;
+              adminStatus.textContent = i18nFmt('admin_sync_root_done', {
+                folder: res.folderName || res.folderId,
+                profile: res.profileName || '',
+                note: res.note || '',
+                uploaded: res.uploaded,
+                total: res.docCount,
+              });
+            })
+            .withFailureHandler(function (e) {
+              setAdminBusy(false);
+              adminDriveMoreBtn.disabled = !adminSearchNextPageToken;
+              adminStatus.textContent =
+                e && e.message ? e.message : i18n('err_admin_sync_root');
+              adminStatus.classList.add('err');
+            })
+            .adminQuickSyncKnowledgeRoot(
+              adminRootFolderInput.value,
+              adminProfileName.value,
+            );
+        });
+        if (adminRootFolderPickerBtn) {
+          adminRootFolderPickerBtn.addEventListener('click', openAdminDrivePicker);
+        }
+        if (adminRootFolderInput) {
+          adminRootFolderInput.addEventListener('mousedown', function (ev) {
+            var v = (adminRootFolderInput.value || '').trim();
+            if (!v && ev.button === 0) {
+              ev.preventDefault();
+              openAdminDrivePicker();
+            }
+          });
+        }
+        if (adminDrivePickerBackdrop) {
+          adminDrivePickerBackdrop.addEventListener('click', closeAdminDrivePicker);
+        }
+        if (adminDrivePickerClose) {
+          adminDrivePickerClose.addEventListener('click', closeAdminDrivePicker);
+        }
+        if (adminPickCancel) {
+          adminPickCancel.addEventListener('click', closeAdminDrivePicker);
+        }
+        if (adminPickConfirm) {
+          adminPickConfirm.addEventListener('click', adminPickConfirmSelection);
+        }
+        if (adminPickRoot) {
+          adminPickRoot.addEventListener('click', function () {
+            adminPickStack = [];
+            adminPickFetch(true);
+          });
+        }
+        if (adminPickBack) {
+          adminPickBack.addEventListener('click', function () {
+            if (adminPickStack.length) adminPickStack.pop();
+            adminPickFetch(true);
+          });
+        }
+        if (adminPickMore) {
+          adminPickMore.addEventListener('click', function () {
+            adminPickFetch(false);
+          });
+        }
+        adminDriveMoreBtn.addEventListener('click', function () {
+          runAdminDriveSearch(true);
+        });
+        adminDriveSearchQ.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            runAdminDriveSearch(false);
+          }
+        });
+
+        adminClearBtn.addEventListener('click', function () {
+          adminSourcesState = { folders: [], files: [] };
+          adminSearchNextPageToken = '';
+          adminDriveMoreWrap.classList.add('hidden');
+          adminDriveResults.classList.add('hidden');
+          adminDriveResults.innerHTML = '';
+          renderAdminSelection();
+          adminStatus.classList.remove('err');
+          adminStatus.textContent = i18n('admin_selection_cleared');
+        });
+
+        adminSaveBtn.addEventListener('click', function () {
+          adminStatus.classList.remove('err');
+          setAdminBusy(true, i18n('admin_busy_save'));
+          google.script.run
+            .withSuccessHandler(function (res) {
+              setAdminBusy(false);
+              adminDriveMoreBtn.disabled = !adminSearchNextPageToken;
+              adminStatus.textContent = i18nFmt('admin_save_done', {
+                folders: res.folderCount,
+                files: res.fileCount,
+                profile: res.profileName,
+              });
+            })
+            .withFailureHandler(function (e) {
+              setAdminBusy(false);
+              adminDriveMoreBtn.disabled = !adminSearchNextPageToken;
+              adminStatus.textContent =
+                e && e.message ? e.message : i18n('err_admin_save');
+              adminStatus.classList.add('err');
+            })
+            .adminSaveKnowledgeConfig(
+              JSON.stringify(adminSourcesState),
+              adminProfileName.value,
+            );
+        });
+
+        adminSyncBtn.addEventListener('click', function () {
+          var nf = adminSourcesState.folders.length;
+          var na = adminSourcesState.files.length;
+          if (nf === 0 && na === 0) {
+            if (!window.confirm(i18n('confirm_empty_selection'))) {
+              return;
+            }
+          }
+          if (!window.confirm(i18n('confirm_corpus_resync'))) {
+            return;
+          }
+          adminStatus.classList.remove('err');
+          setAdminBusy(true, i18n('admin_busy_sync_long'));
+          google.script.run
+            .withSuccessHandler(function (res) {
+              setAdminBusy(false);
+              adminStatus.textContent = i18nFmt('admin_sync_corpus_done', {
+                note: res.note || '',
+                uploaded: res.uploaded,
+                total: res.docCount,
+              });
+            })
+            .withFailureHandler(function (e) {
+              setAdminBusy(false);
+              adminStatus.textContent =
+                e && e.message ? e.message : i18n('err_admin_sync');
+              adminStatus.classList.add('err');
+            })
+            .adminSyncKnowledgeCorpus();
+        });
+
+        if (globantPanelBody && globantPanelRefresh) {
+          globantPanelBody.addEventListener('click', function (ev) {
+            var tgt = /** @type {HTMLElement} */ (ev.target);
+            var btnEl = tgt && tgt.closest ? tgt.closest('[data-gc-act]') : null;
+            /** @type {HTMLElement|null} */
+            var btn = btnEl instanceof Element ? btnEl : null;
+            if (!btn || !globantPanelBody.contains(btn)) return;
+            var act = btn.getAttribute('data-gc-act');
+            var pname = btn.getAttribute('data-pname') || '';
+            var fid = btn.getAttribute('data-fid') || '';
+            var doc = btn.getAttribute('data-doc') || '';
+            if (act === 'asst-del') {
+              if (!window.confirm(i18nFmt('confirm_globant_del_file', { id: fid })))
+                return;
+              gcSetPanelBusy(true, i18n('gc_delete_busy'));
+              google.script.run
+                .withSuccessHandler(function () {
+                  fetchGlobantPanel();
+                })
+                .withFailureHandler(function (e) {
+                  gcSetPanelBusy(false, '');
+                  if (globantPanelStatus) {
+                    globantPanelStatus.textContent =
+                      e && e.message ? e.message : i18n('err_delete_generic');
+                    globantPanelStatus.classList.add('err');
+                  }
+                })
+                .adminGlobantDeleteAssistantFileCtrl(fid);
+              return;
+            }
+            if (act === 'rag-docs') gcHandleDocToggle(pname);
+            else if (act === 'rag-docs-more') gcLoadMoreDocs(pname);
+            else if (act === 'rag-doc-del') {
+              if (
+                !window.confirm(
+                  i18nFmt('confirm_rag_doc_remove', { name: pname }),
+                )
+              )
+                return;
+              gcSetPanelBusy(
+                true,
+                i18nFmt('gc_busy_rag_doc_del', { name: pname }),
+              );
+              google.script.run
+                .withSuccessHandler(function () {
+                  gcDocsLoadedOnce[pname] = false;
+                  gcSetPanelBusy(false, '\u00a0');
+                  fetchGlobantPanel();
+                })
+                .withFailureHandler(function (e) {
+                  gcSetPanelBusy(false, '');
+                  if (globantPanelStatus) {
+                    globantPanelStatus.textContent =
+                      e && e.message ? e.message : i18n('err_generic');
+                    globantPanelStatus.classList.add('err');
+                  }
+                })
+                .adminGlobantDeleteRagDocument(pname, doc);
+            } else if (act === 'rag-docs-del') {
+              if (!window.confirm(i18nFmt('confirm_rag_clear_all', { name: pname })))
+                return;
+              gcSetPanelBusy(
+                true,
+                i18nFmt('gc_busy_rag_clear_all', { name: pname }),
+              );
+              google.script.run
+                .withSuccessHandler(function () {
+                  fetchGlobantPanel();
+                })
+                .withFailureHandler(function (e) {
+                  gcSetPanelBusy(false, '');
+                  if (globantPanelStatus) {
+                    globantPanelStatus.textContent =
+                      e && e.message ? e.message : i18n('err_generic');
+                    globantPanelStatus.classList.add('err');
+                  }
+                })
+                .adminGlobantDeleteRagProfileDocuments(pname);
+            } else if (act === 'rag-profile-del') {
+              if (
+                !window.confirm(
+                  i18nFmt('confirm_delete_agent_full', { name: pname }),
+                )
+              )
+                return;
+              gcSetPanelBusy(
+                true,
+                i18nFmt('gc_busy_delete_agent', { name: pname }),
+              );
+              google.script.run
+                .withSuccessHandler(function () {
+                  fetchGlobantPanel();
+                })
+                .withFailureHandler(function (e) {
+                  gcSetPanelBusy(false, '');
+                  if (globantPanelStatus) {
+                    globantPanelStatus.textContent =
+                      e && e.message ? e.message : i18n('err_generic');
+                    globantPanelStatus.classList.add('err');
+                  }
+                })
+                .adminGlobantDeleteRagProfile(pname);
+            }
+          });
+          globantPanelRefresh.addEventListener('click', function () {
+            if (globantPanelStatus)
+              globantPanelStatus.classList.remove('err');
+            fetchGlobantPanel();
+          });
+        }
+
+        loginBtn.disabled = true;
+        loginStatus.textContent = i18n('session_check');
+        google.script.run
+          .withSuccessHandler(function (bootstrap) {
+            loginBtn.disabled = false;
+            applyClientI18n(bootstrap.i18n);
+            loginStatus.textContent = '\u00a0';
+            var s = bootstrap.session || {};
+            if (s.email) {
+              showApp(bootstrap);
+            }
+          })
+          .withFailureHandler(function () {
+            loginBtn.disabled = false;
+            loginStatus.textContent = '\u00a0';
+          })
+          .getBootstrap();
+      })();
+</script>

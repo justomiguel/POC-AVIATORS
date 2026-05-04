@@ -1,0 +1,10 @@
+---
+description: Mensajes de git sin marcas de IDE o asistentes comerciales
+alwaysApply: true
+---
+
+# Mensajes de commit
+
+- **No** nombrar marcas comerciales de IDE, agentes o editores en el título ni en el cuerpo del commit.
+- Usar términos neutros: *reglas del repositorio*, *skills del proyecto*, *herramientas de edición*, *asistente de código*, *CI*, etc.
+- El contenido técnico del cambio (Apps Script, Globant, `gas/`, manifiesto, i18n) sí puede ir con nombre.

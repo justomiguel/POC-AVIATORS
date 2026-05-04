@@ -26,7 +26,9 @@ function DriveDocuments_fetchPlainText(fileId, maxChars) {
       encodeURIComponent(fileId) +
       '?alt=media';
   } else {
-    throw new Error('Tipo no soportado para texto: ' + mime);
+    throw new Error(
+      UiStrings_fmt_('drive_mime_not_plain_text', { mime: mime }),
+    );
   }
 
   var res = UrlFetchApp.fetch(url, {
@@ -40,11 +42,16 @@ function DriveDocuments_fetchPlainText(fileId, maxChars) {
   var body = res.getContentText() || '';
 
   if (code < 200 || code >= 300) {
-    throw new Error('Drive ' + code + ': ' + body.substring(0, 400));
+    throw new Error(
+      UiStrings_fmt_('drive_error_fetch_http', {
+        code: String(code),
+        detail: body.substring(0, 400),
+      }),
+    );
   }
 
   if (body.length > maxChars) {
-    body = body.substring(0, maxChars) + '\n…[truncado]';
+    body = body.substring(0, maxChars) + UiStrings_fmt_('drive_text_truncated_suffix');
   }
   return body;
 }
@@ -67,7 +74,8 @@ function DriveDocuments_safeFileStem_(name) {
  */
 function DriveDocuments_parseDriveFolderIdFromInput(raw) {
   var s = ('' + (raw || '')).trim();
-  if (!s) throw new Error('Indicá el ID o el enlace de la carpeta raíz en Drive.');
+  if (!s)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_root_folder_required'));
 
   var m = s.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
@@ -81,7 +89,7 @@ function DriveDocuments_parseDriveFolderIdFromInput(raw) {
   if (/^[a-zA-Z0-9_-]+$/.test(s)) return s;
 
   throw new Error(
-    'No se reconoce una carpeta. Pegá la URL con /folders/… o solo el ID del directorio.',
+    UiStrings_t(UiStrings_activeLocale_(), 'err_drive_folder_not_recognized'),
   );
 }
 
@@ -131,25 +139,18 @@ function DriveDocuments_getPdfBlobForGlobant(fileId) {
     var code = res.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new Error(
-        'Export PDF: ' +
-          code +
-          ' — ' +
-          (res.getContentText() || '').substring(0, 400) +
-          ' (' +
-          stem +
-          ')',
+        UiStrings_fmt_('drive_export_pdf_failed', {
+          code: String(code),
+          detail: (res.getContentText() || '').substring(0, 400),
+          stem: stem,
+        }),
       );
     }
     return res.getBlob().setName(stem + '.pdf');
   }
 
   throw new Error(
-    'Para Globant hace falta PDF o formato Google convertible a PDF ' +
-      '(Doc, Sheets, Slides). Archivo «' +
-      stem +
-      '» MIME: ' +
-      mime +
-      '. Convertilo en Drive a Google Docs/Sheet o subí un PDF.',
+    UiStrings_fmt_('drive_globant_pdf_required', { stem: stem, mime: mime }),
   );
 }
 
@@ -231,10 +232,10 @@ function DriveDocuments_collectGlobantRagSourceIdsFromFolders(
       visitFolder(DriveApp.getFolderById(fid), 0);
     } catch (e) {
       throw new Error(
-        'Carpeta Drive no accesible (…' +
-          fid.slice(-8) +
-          '): ' +
-          (e && e.message ? e.message : e),
+        UiStrings_fmt_('admin_folder_tree_inaccessible', {
+          tail: fid.slice(-8),
+          reason: e && e.message ? e.message : String(e),
+        }),
       );
     }
   }

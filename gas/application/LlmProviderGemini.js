@@ -6,12 +6,13 @@ function LlmProviderGemini_parseGeminiResponse(data) {
   var c = data && data.candidates && data.candidates[0];
   if (!c) {
     throw new Error(
-      'Gemini sin candidates: ' + JSON.stringify(data).slice(0, 500),
+      UiStrings_t(UiStrings_activeLocale_(), 'err_gemini_parse'),
     );
   }
   var cont = c.content;
   var partsArr = cont && cont.parts;
-  if (!partsArr) throw new Error('Gemini sin parts');
+  if (!partsArr)
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_gemini_parse'));
   var out = [];
   partsArr.forEach(function (part) {
     if (part.text) out.push(part.text);
@@ -29,14 +30,21 @@ function LlmProviderGemini_consult(cmd) {
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GEMINI_KEY) || '').trim();
   if (!apiKey) {
-    throw new Error('Falta GEMINI_API_KEY en Propiedades del script.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_gemini'),
+    );
   }
 
   var q = (cmd.question || '').trim();
-  if (!q) throw new Error('Escribí una pregunta.');
+  if (!q)
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_question_required'),
+    );
   var ids = cmd.driveFileIds || [];
   if (ids.length === 0) {
-    throw new Error('Seleccioná al menos un documento.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_select_doc'),
+    );
   }
 
   var blocks = [];
@@ -44,28 +52,33 @@ function LlmProviderGemini_consult(cmd) {
     try {
       var ff = DriveApp.getFileById(fid);
       blocks.push(
-        '### ' +
-          ff.getName() +
-          '\n' +
+        UiStrings_fmt_('llm_gemini_doc_heading', { name: ff.getName() }) +
           DriveDocuments_fetchPlainText(fid, LLM_DEFAULTS.MAX_DOC_CHARS),
       );
     } catch (e) {
       blocks.push(
-        '### id ' + fid + '\n_Error: ' + (e.message || String(e)) + '_',
+        UiStrings_fmt_('llm_gemini_block_read_error', {
+          id: fid,
+          err: e.message || String(e),
+        }),
       );
     }
   });
 
-  var preamble =
-    'Respondé en español usando solo información de los documentos. ' +
-    'Si algo no aparece ahí, decilo claramente. Podés usar viñetas.';
+  var preamble = UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_system_preamble');
 
   var prompt =
     preamble +
-    '\n\n--- PREGUNTA ---\n' +
+    '\n\n' +
+    UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_section_question') +
+    '\n' +
     q +
-    '\n\n--- DOCUMENTOS ---\n' +
-    blocks.join('\n\n---\n');
+    '\n\n' +
+    UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_section_documents') +
+    '\n' +
+    blocks.join(
+      UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_between_docs'),
+    );
 
   var modelLabel =
     p.getProperty(LLM_PROP.GEMINI_MODEL) || LLM_DEFAULTS.GEMINI_MODEL;
@@ -96,7 +109,12 @@ function LlmProviderGemini_consult(cmd) {
   var code = res.getResponseCode();
   var raw = res.getContentText() || '';
   if (code < 200 || code >= 300) {
-    throw new Error('Gemini API ' + code + ': ' + raw.substring(0, 700));
+    throw new Error(
+      UiStrings_fmt_('llm_error_gemini_http', {
+        code: String(code),
+        detail: raw.substring(0, 700),
+      }),
+    );
   }
   var answer = LlmProviderGemini_parseGeminiResponse(JSON.parse(raw));
 
@@ -104,7 +122,10 @@ function LlmProviderGemini_consult(cmd) {
   return {
     answer: answer,
     model: modelLabel,
-    providerLabel: 'Gemini API',
+    providerLabel: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'meta_provider_gemini_api',
+    ),
     filesUsed: ids.length,
   };
 }

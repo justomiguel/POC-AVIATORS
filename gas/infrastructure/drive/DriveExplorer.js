@@ -22,7 +22,9 @@ function DriveExplorer_escapeDriveQuery(fragment) {
 function DriveExplorer_searchDrive(query, includeFullText, pageToken) {
   var qUser = ('' + (query || '')).trim();
   if (qUser.length < 2) {
-    throw new Error('Escribí al menos 2 caracteres para buscar.');
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'drive_search_min_chars'),
+    );
   }
 
   var safe = DriveExplorer_escapeDriveQuery(qUser);
@@ -60,7 +62,12 @@ function DriveExplorer_searchDrive(query, includeFullText, pageToken) {
   var code = res.getResponseCode();
   var text = res.getContentText() || '';
   if (code < 200 || code >= 300) {
-    throw new Error('Drive search ' + code + ': ' + text.substring(0, 400));
+    throw new Error(
+      UiStrings_fmt_('drive_error_search_http', {
+        code: String(code),
+        detail: text.substring(0, 400),
+      }),
+    );
   }
 
   /** @type {{nextPageToken?: string, files?: Array<{id:string,name:string,mimeType:string,modifiedTime?:string}>}} */
@@ -123,7 +130,12 @@ function DriveExplorer_listChildren(parentId, pageToken) {
   var code = res.getResponseCode();
   var text = res.getContentText() || '';
   if (code < 200 || code >= 300) {
-    throw new Error('Drive browse ' + code + ': ' + text.substring(0, 400));
+    throw new Error(
+      UiStrings_fmt_('drive_error_browse_http', {
+        code: String(code),
+        detail: text.substring(0, 400),
+      }),
+    );
   }
 
   /** @type {{nextPageToken?: string, files?: Array<{id:string,name:string,mimeType:string,modifiedTime?:string}>}} */

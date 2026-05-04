@@ -47,11 +47,7 @@ function LlmOrchestrator_consultWithDriveDocuments(question, driveFileIds) {
   }
 
   throw new Error(
-    'No hay proveedor LLM: en este proyecto Apps Script abrí el engranaje ' +
-      '«Configuración del proyecto» → «Propiedades del script» y agregá la propiedad ' +
-      'GLOBANT_AGENTS_API_KEY o GEMINI_API_KEY con tu clave. ' +
-      'El código solo lee esas propiedades (no lee valores pegados en archivos .gs). ' +
-      'Opcional: LLM_PROVIDER=globant|gemini.',
+    UiStrings_t(UiStrings_activeLocale_(), 'err_no_llm_provider'),
   );
 }
 
@@ -67,7 +63,9 @@ function LlmOrchestrator_getUiConfig() {
     return {
       mode: 'globant',
       configured: true,
-      projectHint: prof || '(se creará en la primera consulta)',
+      projectHint:
+        prof ||
+        UiStrings_t(UiStrings_activeLocale_(), 'llm_project_hint_autocreate'),
       location: (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').replace(
         /^https?:\/\//,
         '',
@@ -78,7 +76,10 @@ function LlmOrchestrator_getUiConfig() {
       hint:
         '' +
         (LlmProviderGlobant_isAssistantMode(p)
-          ? 'GLOBANT_API_MODE=assistant: definí GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).'
+          ? UiStrings_t(
+              UiStrings_activeLocale_(),
+              'llm_ui_config_hint_assistant_profile',
+            )
           : ''),
     };
   }
@@ -100,10 +101,6 @@ function LlmOrchestrator_getUiConfig() {
     projectHint: '',
     location: '',
     model: '',
-    hint:
-      'Este despliegue no ve ninguna clave. En el proyecto vinculado a clasp:' +
-      ' Editor → ⚙️ Configuración del proyecto → Propiedades del script →' +
-      ' agregá GLOBANT_AGENTS_API_KEY (valor = tu Bearer token) y guardá;' +
-      ' podés tener que volver a abrir la web app. Opcional: LLM_PROVIDER, GLOBANT_API_MODE.',
+    hint: UiStrings_t(UiStrings_activeLocale_(), 'llm_ui_config_no_keys'),
   };
 }
