@@ -2,6 +2,10 @@
 
 Este repo es **Google Apps Script** con **clasp** (`gas/`, despliegue a un proyecto Script). Las reglas detalladas están en **`.cursor/rules/*.mdc`** (stack, dependencias, i18n, manifiesto, convención de commits sin marcas de IDE).
 
+## Antes de implementar (agente)
+
+Ante pedidos de código o cambios en el repo: primero **refinamiento obligatorio** — objetivo reformulado, **casos borde**, **preguntas** para complementar el pedido y **supuestos**; recién después usar herramientas que editen archivos o alteren el proyecto. Detalle y excepciones: `.cursor/rules/agent-refinement-before-code.mdc`.
+
 ## Prompts tipo “quiero que la app / el sistema…”
 
 Interpretar como cambios en **esta base Apps Script** (HtmlService, `Code.js`, servicios GAS), no como app Node/React desplegada aparte, salvo que el usuario aclare otro repositorio.

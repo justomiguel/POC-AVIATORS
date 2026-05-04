@@ -1,0 +1,33 @@
+---
+description: Ante pedidos de implementación, refinamiento obligatorio (objetivo, casos borde, preguntas) antes de editar código
+alwaysApply: true
+---
+
+# Refinamiento antes de codear (modo agente)
+
+Cuando el usuario pida **cambiar el repo**, **implementar**, **arreglar un bug con código**, **añadir una feature**, o equivalente:
+
+## 1. Orden obligatorio en la respuesta
+
+**Antes** de usar herramientas que **creen, modifiquen o borren archivos**, o ejecuten comandos que alteren el proyecto (instalaciones, migraciones, `clasp push`, etc.), el agente debe incluir **en el mismo turno**, al inicio de su respuesta de usuario, un bloque claro con estos apartados (títulos sugeridos):
+
+1. **Objetivo (reformulado)** — qué se pretende lograr en una o dos frases, alineado al stack del repo (Apps Script / `gas/`, salvo que el usuario indique otro contexto).
+2. **Casos borde** — lista breve de escenarios límite (errores de red, permisos, datos vacíos, concurrencia, i18n, compatibilidad con manifiesto/scopes, Web App vs editor, etc.) que puedan afectar el cambio.
+3. **Preguntas abiertas** — preguntas concretas para complementar lo que falte en el pedido (alcance, UX, prioridades, datos de prueba). Si no hay dudas, indicar explícitamente *«Sin preguntas abiertas»* y el por qué.
+4. **Supuestos** — decisiones provisionales que se tomarán si el usuario no aclara (convenciones del repo, comportamiento razonable por defecto).
+
+Solo **después** de ese bloque puede comenzar el uso de herramientas de implementación.
+
+## 2. Cuándo detenerse sin editar
+
+Si una o más preguntas son **bloqueantes** (riesgo de borrado de datos, cambio de contrato de API, seguridad, o ambigüedad que invalide el diseño), el agente debe **terminar el turno sin editar archivos** y esperar la respuesta del usuario, salvo que el usuario haya dicho explícitamente que continúe con supuestos o que omita el bloque (ver excepciones).
+
+## 3. Excepciones (sin bloque extenso)
+
+Puede **acortarse** el bloque a una sola línea que enlace objetivo + “sin casos borde ni dudas relevantes” cuando el pedido sea **trivial y de bajo riesgo** (p. ej. corrección ortográfica en comentario, rename local obvio, ajuste de formato acordado).
+
+Puede **omitirse por completo** el bloque previo solo si el usuario pide explícitamente **solo análisis/explicación sin cambios**, o indica **omitir refinamiento / implementar ya** con criterios claros.
+
+## 4. Coherencia con el resto de reglas
+
+El refinamiento **no sustituye** i18n, manifiesto, scopes, ni convenciones de commits: solo asegura que el trabajo de código vaya precedido de alineación y consciencia de bordes.
