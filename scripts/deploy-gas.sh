@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy Apps Script:
+#   0) build:css (siempre: el workspace puede tener cambios sin commit)
 #   1) Embebe logo.png en gas/index.html (data URL).
 #   2) clasp push + nueva versión.
 #   3) Borra implementaciones viejas (clasp undeploy), excepto @HEAD.
@@ -9,6 +10,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+echo "→ build:css"
+npm run build:css
 
 CONFIG="$(node <<'NODE'
 const fs = require('fs');

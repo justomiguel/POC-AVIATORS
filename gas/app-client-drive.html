@@ -1,0 +1,174 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var driveExpList = document.getElementById('drive-exp-list');
+  var driveExpBack = document.getElementById('drive-exp-back');
+  var driveExpRoot = document.getElementById('drive-exp-root');
+  var driveExpMore = document.getElementById('drive-exp-more');
+  var driveExpMoreWrap = document.getElementById('drive-exp-more-wrap');
+  var driveExpStatus = document.getElementById('drive-exp-status');
+  var driveExpBread = document.getElementById('drive-exp-breadcrumb');
+
+  function driveExpOpenHref(id, mimeType) {
+    if (mimeType === A.MIME_FOLDER)
+      return 'https://drive.google.com/drive/folders/' + encodeURIComponent(id);
+    return 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view';
+  }
+
+  function driveExpUpdateCrumb() {
+    if (!driveExpBread) return;
+    var stack = S.get('driveExpStack');
+    var parts = [i18n('drive_breadcrumb_root')];
+    for (var i = 0; i < stack.length; i++) {
+      parts.push(stack[i].name || '\u2026');
+    }
+    driveExpBread.textContent = parts.join(i18n('drive_breadcrumb_sep'));
+  }
+
+  function driveExpAppendRows(items) {
+    if (!driveExpList) return;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var li = document.createElement('li');
+      var isFolder = it.mimeType === A.MIME_FOLDER;
+      if (isFolder) {
+        var bt = document.createElement('button');
+        bt.type = 'button';
+        bt.className = 'drive-exp-folder-btn';
+        bt.setAttribute('data-id', it.id);
+        bt.setAttribute('data-name', it.name || '');
+        var kf = document.createElement('span');
+        kf.className = 'drive-exp-kind';
+        kf.textContent = i18n('mime_folder');
+        var nf = document.createElement('span');
+        nf.className = 'drive-exp-name';
+        nf.textContent = it.name || it.id;
+        bt.appendChild(kf);
+        bt.appendChild(nf);
+        li.appendChild(bt);
+      } else {
+        var row = document.createElement('div');
+        row.className = 'drive-exp-file-row';
+        var a = document.createElement('a');
+        a.href = driveExpOpenHref(it.id, it.mimeType);
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'drive-exp-name';
+        a.textContent = it.name || it.id;
+        var kt = document.createElement('span');
+        kt.className = 'drive-exp-kind';
+        kt.textContent = A.mimeShortLabel(it.mimeType);
+        row.appendChild(a);
+        row.appendChild(kt);
+        li.appendChild(row);
+      }
+      driveExpList.appendChild(li);
+    }
+  }
+
+  function driveExpFetch(resetList) {
+    if (!driveExpList || !driveExpStatus) return;
+    var stack = S.get('driveExpStack');
+    var pageTok = '';
+    if (resetList) {
+      S.set('driveExpNextToken', '');
+      driveExpList.innerHTML = '';
+    } else {
+      pageTok = S.get('driveExpNextToken');
+      if (!pageTok) return;
+    }
+    var parentId = stack.length === 0 ? '' : stack[stack.length - 1].id;
+    driveExpStatus.textContent = i18n('drive_loading');
+    driveExpStatus.classList.remove('err');
+    if (driveExpRoot) driveExpRoot.disabled = true;
+    if (driveExpBack) driveExpBack.disabled = true;
+    if (driveExpMore) driveExpMore.disabled = true;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var curStack = S.get('driveExpStack');
+        if (driveExpRoot) driveExpRoot.disabled = false;
+        if (driveExpBack) driveExpBack.disabled = curStack.length === 0;
+        driveExpAppendRows(res.items || []);
+        S.set('driveExpNextToken', res.nextPageToken || '');
+        var nextTok = S.get('driveExpNextToken');
+        if (driveExpMoreWrap)
+          driveExpMoreWrap.classList.toggle('hidden', !nextTok);
+        if (driveExpMore) driveExpMore.disabled = false;
+        var nLi = driveExpList.querySelectorAll('li').length;
+        driveExpStatus.textContent =
+          nLi === 0
+            ? i18n('drive_status_empty')
+            : i18nFmt('drive_status_items', { n: nLi }) +
+              (nextTok ? i18n('drive_status_more_hint') : '');
+      })
+      .withFailureHandler(function (e) {
+        var curStack = S.get('driveExpStack');
+        if (driveExpRoot) driveExpRoot.disabled = false;
+        if (driveExpBack) driveExpBack.disabled = curStack.length === 0;
+        if (driveExpMore) driveExpMore.disabled = false;
+        driveExpStatus.textContent =
+          e && e.message ? e.message : i18n('drive_list_error');
+        driveExpStatus.classList.add('err');
+      })
+      .driveBrowseFolder(parentId, pageTok);
+  }
+
+  function driveExplorerBootstrap(session) {
+    S.set('driveExpStack', []);
+    S.set('driveExpNextToken', '');
+    driveExpUpdateCrumb();
+    if (!driveExpList || !driveExpStatus) return;
+    driveExpList.innerHTML = '';
+    if (driveExpMoreWrap) driveExpMoreWrap.classList.add('hidden');
+    if (!session || !session.email) {
+      driveExpStatus.textContent = i18n('drive_no_session');
+      driveExpStatus.classList.add('err');
+      if (driveExpRoot) driveExpRoot.disabled = true;
+      if (driveExpBack) driveExpBack.disabled = true;
+      return;
+    }
+    if (driveExpRoot) driveExpRoot.disabled = false;
+    driveExpFetch(true);
+  }
+
+  if (driveExpList) {
+    driveExpList.addEventListener('click', function (ev) {
+      var tgt = /** @type {HTMLElement} */ (ev.target);
+      var btnEl = tgt && tgt.closest ? tgt.closest('.drive-exp-folder-btn') : null;
+      var btn = btnEl instanceof Element ? btnEl : null;
+      if (!btn || !driveExpList.contains(btn)) return;
+      var fid = btn.getAttribute('data-id') || '';
+      var fname = btn.getAttribute('data-name') || '';
+      S.get('driveExpStack').push({ id: fid, name: fname });
+      driveExpUpdateCrumb();
+      driveExpFetch(true);
+    });
+  }
+  if (driveExpBack) {
+    driveExpBack.addEventListener('click', function () {
+      var stack = S.get('driveExpStack');
+      if (stack.length === 0) return;
+      stack.pop();
+      driveExpUpdateCrumb();
+      driveExpFetch(true);
+    });
+  }
+  if (driveExpRoot) {
+    driveExpRoot.addEventListener('click', function () {
+      S.set('driveExpStack', []);
+      driveExpUpdateCrumb();
+      driveExpFetch(true);
+    });
+  }
+  if (driveExpMore) {
+    driveExpMore.addEventListener('click', function () {
+      driveExpFetch(false);
+    });
+  }
+
+  A.drive = { bootstrap: driveExplorerBootstrap };
+})(window.Aviators);
+</script>

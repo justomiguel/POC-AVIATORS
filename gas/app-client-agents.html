@@ -1,0 +1,795 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var adminAgentNavList = document.getElementById('admin-agent-nav-list');
+  var adminAgentNewBtn = document.getElementById('admin-agent-new-btn');
+  var adminAgentSeedBtn = document.getElementById('admin-agent-seed-btn');
+  var adminAgentSeedLoader = document.getElementById('admin-agent-seed-loader');
+  var adminAgentSeedLoaderText = document.getElementById('admin-agent-seed-loader-text');
+  var adminAgentEmpty = document.getElementById('admin-agent-empty');
+  var adminAgentEditor = document.getElementById('admin-agent-editor');
+  var adminAgentProfile = document.getElementById('admin-agent-profile');
+  var adminAgentPrompt = document.getElementById('admin-agent-prompt');
+  var adminAgentSources = document.getElementById('admin-agent-sources');
+  var adminAgentSaveBtn = document.getElementById('admin-agent-save-btn');
+  var adminAgentSyncBtn = document.getElementById('admin-agent-sync-btn');
+  var adminAgentDeleteBtn = document.getElementById('admin-agent-delete-btn');
+  var adminAgentDeleteModal = document.getElementById('admin-agent-delete-modal');
+  var adminAgentDeleteModalCancel = document.getElementById('admin-agent-delete-modal-cancel');
+  var adminAgentDeleteModalConfirm = document.getElementById('admin-agent-delete-modal-confirm');
+  var adminAgentMeta = document.getElementById('admin-agent-meta');
+  var adminAgentDocsRefresh = document.getElementById('admin-agent-docs-refresh');
+  var adminAgentDocsBody = document.getElementById('admin-agent-docs-body');
+  var adminAgentStatus = document.getElementById('admin-agent-status');
+  var adminAgentDropzone = document.getElementById('admin-agent-dropzone');
+  var adminAgentBrowseLocalBtn = document.getElementById('admin-agent-browse-local-btn');
+  var adminAgentLocalFilesInput = document.getElementById('admin-agent-local-files-input');
+  var adminAgentProgressWrap = document.getElementById('admin-agent-progress-wrap');
+  var adminAgentProgressMsg = document.getElementById('admin-agent-progress-msg');
+
+  function stripIdFromLists(id) {
+    var src = S.get('adminSourcesState');
+    var f, i, fid = [], fod = [];
+    for (i = 0; i < src.folders.length; i++) {
+      f = src.folders[i];
+      if (f.id !== id) fod.push(f);
+    }
+    for (i = 0; i < src.files.length; i++) {
+      f = src.files[i];
+      if (f.id !== id) fid.push(f);
+    }
+    src.folders = fod;
+    src.files = fid;
+  }
+
+  function addFolderToState(item) {
+    if (!item || !item.id) return;
+    stripIdFromLists(item.id);
+    var src = S.get('adminSourcesState');
+    var k;
+    for (k = 0; k < src.folders.length; k++) {
+      if (src.folders[k].id === item.id) { renderAgentSourceChips(); return; }
+    }
+    src.folders.push({ id: item.id, name: item.name || item.id });
+    renderAgentSourceChips();
+  }
+
+  function addFileToState(item) {
+    if (!item || !item.id || item.mimeType === A.MIME_FOLDER) return;
+    stripIdFromLists(item.id);
+    var src = S.get('adminSourcesState');
+    var k;
+    for (k = 0; k < src.files.length; k++) {
+      if (src.files[k].id === item.id) { renderAgentSourceChips(); return; }
+    }
+    src.files.push({ id: item.id, name: item.name || item.id });
+    renderAgentSourceChips();
+  }
+
+  function removeFromAdminState(kind, id) {
+    var src = S.get('adminSourcesState');
+    var arr = kind === 'folder' ? src.folders : src.files;
+    for (var i = arr.length - 1; i >= 0; i--) {
+      if (arr[i].id === id) arr.splice(i, 1);
+    }
+    renderAgentSourceChips();
+  }
+
+  function renderAgentSourceChips() {
+    var src = S.get('adminSourcesState');
+    var nf = src.folders.length;
+    var na = src.files.length;
+    if (!adminAgentSources) return;
+    adminAgentSources.innerHTML = '';
+    if (nf === 0 && na === 0) {
+      adminAgentSources.textContent = i18n('admin_selection_empty');
+      adminAgentSources.classList.add('empty');
+    } else {
+      adminAgentSources.classList.remove('empty');
+      var fi;
+      for (fi = 0; fi < src.folders.length; fi++) {
+        adminAgentSources.appendChild(adminMakeChip('folder', src.folders[fi]));
+      }
+      for (fi = 0; fi < src.files.length; fi++) {
+        adminAgentSources.appendChild(adminMakeChip('file', src.files[fi]));
+      }
+    }
+  }
+
+  function adminMakeChip(kind, entry) {
+    var wrap = document.createElement('span');
+    wrap.className = 'chip';
+    var ty = document.createElement('span');
+    ty.className = 'chip-type';
+    ty.textContent = kind === 'folder' ? i18n('chip_folder') : i18n('chip_file');
+    var nm = document.createElement('span');
+    nm.textContent = entry.name;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'x';
+    btn.setAttribute('aria-label', i18n('chip_remove_aria'));
+    btn.textContent = '\u00d7';
+    (function (k, eid) {
+      btn.addEventListener('click', function () { removeFromAdminState(k, eid); });
+    })(kind, entry.id);
+    wrap.appendChild(ty);
+    wrap.appendChild(nm);
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  var AGENTS_CACHE_TTL = 120000;
+
+  function loadAdminAgentsListBody_(agents, onDone) {
+    S.set('adminAgentsCache', agents);
+    renderAdminAgentNav();
+    if (!agents.length) {
+      if (adminAgentEmpty) {
+        adminAgentEmpty.classList.remove('hidden');
+        adminAgentEmpty.textContent = i18n('admin_agent_list_empty');
+      }
+      if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
+      S.set('adminSelectedAgentId', null);
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
+    selectAdminAgent(S.get('adminSelectedAgentId') || agents[0].id);
+    if (typeof onDone === 'function') onDone();
+  }
+
+  function loadAdminAgentsList(onDone, skipCache) {
+    if (!adminAgentNavList) return;
+
+    if (!skipCache) {
+      var cached = A.cache.get('agentsList');
+      if (cached) {
+        loadAdminAgentsListBody_(cached, onDone);
+        return;
+      }
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var agents = (res && res.agents) || [];
+        A.cache.set('agentsList', agents, AGENTS_CACHE_TTL);
+        loadAdminAgentsListBody_(agents, onDone);
+      })
+      .withFailureHandler(function (e) {
+        if (adminAgentStatus) {
+          adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
+          adminAgentStatus.classList.add('err');
+        }
+        if (typeof onDone === 'function') onDone();
+      })
+      .adminAgentsList();
+  }
+
+  function renderAdminAgentNav() {
+    if (!adminAgentNavList) return;
+    adminAgentNavList.innerHTML = '';
+    var cache = S.get('adminAgentsCache');
+    var selId = S.get('adminSelectedAgentId');
+    for (var i = 0; i < cache.length; i++) {
+      (function (ag) {
+        var li = document.createElement('li');
+        var bt = document.createElement('button');
+        bt.type = 'button';
+        bt.className = 'admin-agent-nav-btn';
+        if (ag.id === selId) bt.classList.add('is-active');
+        bt.setAttribute('data-agent-id', ag.id);
+        var span = document.createElement('span');
+        span.textContent = ag.profileName || ag.id;
+        bt.appendChild(span);
+        bt.addEventListener('click', function () { selectAdminAgent(ag.id); });
+        li.appendChild(bt);
+        adminAgentNavList.appendChild(li);
+      })(cache[i]);
+    }
+  }
+
+  function fillAdminAgentForm(ag) {
+    if (!ag) return;
+    if (adminAgentProfile) adminAgentProfile.value = ag.profileName || '';
+    if (adminAgentPrompt) adminAgentPrompt.value = ag.systemPrompt || '';
+    S.set('adminSourcesState', {
+      folders: (ag.sources && ag.sources.folders) || [],
+      files: (ag.sources && ag.sources.files) || [],
+    });
+    renderAgentSourceChips();
+    var meta = '';
+    if (ag.lastSync && adminAgentMeta) {
+      meta = i18nFmt('admin_agent_last_sync', { date: ag.lastSync });
+    }
+    if (adminAgentMeta) adminAgentMeta.textContent = meta;
+  }
+
+  function selectAdminAgent(id) {
+    S.set('adminSelectedAgentId', id || null);
+    var cache = S.get('adminAgentsCache');
+    if (!cache.length) {
+      if (adminAgentEmpty) adminAgentEmpty.classList.remove('hidden');
+      if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
+      return;
+    }
+    var ag = null;
+    for (var j = 0; j < cache.length; j++) {
+      if (cache[j].id === id) { ag = cache[j]; break; }
+    }
+    if (!ag) ag = cache[0];
+    S.set('adminSelectedAgentId', ag.id);
+    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
+    if (adminAgentEditor) adminAgentEditor.classList.remove('hidden');
+    fillAdminAgentForm(ag);
+    renderAdminAgentNav();
+    if (adminAgentDocsBody) adminAgentDocsBody.innerHTML = '';
+    S.set('adminAgentDocsSkip', 0);
+    if (adminAgentStatus) {
+      adminAgentStatus.textContent = '\u00a0';
+      adminAgentStatus.classList.remove('err');
+    }
+  }
+
+  function openNewAdminAgent() {
+    S.set('adminSelectedAgentId', null);
+    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
+    if (adminAgentEditor) adminAgentEditor.classList.remove('hidden');
+    if (adminAgentProfile) adminAgentProfile.value = '';
+    if (adminAgentPrompt) adminAgentPrompt.value = '';
+    S.set('adminSourcesState', { folders: [], files: [] });
+    renderAgentSourceChips();
+    if (adminAgentMeta) adminAgentMeta.textContent = '';
+    if (adminAgentDocsBody) adminAgentDocsBody.innerHTML = '';
+    if (adminAgentStatus) {
+      adminAgentStatus.textContent = '\u00a0';
+      adminAgentStatus.classList.remove('err');
+    }
+    var nodes = adminAgentNavList
+      ? adminAgentNavList.querySelectorAll('.admin-agent-nav-btn')
+      : [];
+    for (var ni = 0; ni < nodes.length; ni++) nodes[ni].classList.remove('is-active');
+  }
+
+  function collectAdminAgentPayload() {
+    var src = S.get('adminSourcesState');
+    return {
+      id: S.get('adminSelectedAgentId') || '',
+      profileName: (adminAgentProfile && adminAgentProfile.value) || '',
+      systemPrompt: (adminAgentPrompt && adminAgentPrompt.value) || '',
+      sources: {
+        folders: src.folders.slice(),
+        files: src.files.slice(),
+      },
+    };
+  }
+
+  function setAdminSeedLoader(visible, primaryMsg) {
+    if (!adminAgentSeedLoader) return;
+    adminAgentSeedLoader.classList.toggle('hidden', !visible);
+    adminAgentSeedLoader.setAttribute('aria-busy', visible ? 'true' : 'false');
+    if (adminAgentSeedLoaderText) {
+      adminAgentSeedLoaderText.textContent = visible && primaryMsg ? primaryMsg : '';
+    }
+  }
+
+  function setAdminAgentBusy(busy, msg, opts) {
+    opts = opts || {};
+    var skipProgressWrap = !!opts.skipProgressWrap;
+    if (adminAgentSeedBtn) adminAgentSeedBtn.disabled = !!busy;
+    if (adminAgentNewBtn) adminAgentNewBtn.disabled = !!busy;
+    if (adminAgentSaveBtn) adminAgentSaveBtn.disabled = !!busy;
+    if (adminAgentSyncBtn) adminAgentSyncBtn.disabled = !!busy;
+    if (adminAgentDeleteBtn) adminAgentDeleteBtn.disabled = !!busy;
+    if (adminAgentProfile) adminAgentProfile.disabled = !!busy;
+    if (adminAgentPrompt) adminAgentPrompt.disabled = !!busy;
+    if (adminAgentDocsRefresh) adminAgentDocsRefresh.disabled = !!busy;
+    if (adminAgentBrowseLocalBtn) adminAgentBrowseLocalBtn.disabled = !!busy;
+    if (adminAgentLocalFilesInput) adminAgentLocalFilesInput.disabled = !!busy;
+    if (adminAgentDropzone) {
+      adminAgentDropzone.classList.toggle('pointer-events-none', !!busy);
+      adminAgentDropzone.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+    if (adminAgentProgressWrap) {
+      if (skipProgressWrap) {
+        if (busy) adminAgentProgressWrap.classList.add('hidden');
+      } else {
+        adminAgentProgressWrap.classList.toggle('hidden', !busy);
+      }
+    }
+    if (adminAgentProgressMsg) {
+      adminAgentProgressMsg.textContent = busy && msg != null && msg !== '\u00a0' ? msg : '';
+    }
+    if (adminAgentStatus) {
+      if (!busy && msg != null) {
+        adminAgentStatus.textContent = msg;
+        adminAgentStatus.classList.toggle('err', false);
+      } else if (busy) {
+        adminAgentStatus.textContent = '\u00a0';
+        adminAgentStatus.classList.remove('err');
+      }
+    }
+  }
+
+  var adminAgentDeleteModalEscHandler = null;
+
+  function closeAdminAgentDeleteModal() {
+    if (!adminAgentDeleteModal) return;
+    adminAgentDeleteModal.classList.add('hidden');
+    adminAgentDeleteModal.setAttribute('aria-hidden', 'true');
+    if (adminAgentDeleteModalEscHandler) {
+      document.removeEventListener('keydown', adminAgentDeleteModalEscHandler);
+      adminAgentDeleteModalEscHandler = null;
+    }
+  }
+
+  function openAdminAgentDeleteModal() {
+    if (!adminAgentDeleteModal || !S.get('adminSelectedAgentId')) return;
+    adminAgentDeleteModal.classList.remove('hidden');
+    adminAgentDeleteModal.setAttribute('aria-hidden', 'false');
+    if (adminAgentDeleteModalCancel) adminAgentDeleteModalCancel.focus();
+    adminAgentDeleteModalEscHandler = function (ev) {
+      if (ev.key === 'Escape' || ev.key === 'Esc') {
+        ev.preventDefault();
+        closeAdminAgentDeleteModal();
+      }
+    };
+    document.addEventListener('keydown', adminAgentDeleteModalEscHandler);
+  }
+
+  function runAdminAgentDeleteConfirmed() {
+    var id = S.get('adminSelectedAgentId');
+    if (!id) { closeAdminAgentDeleteModal(); return; }
+    closeAdminAgentDeleteModal();
+    setAdminAgentBusy(true, i18n('admin_busy_agent_delete'));
+    A.cache.invalidate('agentsList');
+    google.script.run
+      .withSuccessHandler(function () {
+        setAdminAgentBusy(false, '\u00a0');
+        S.set('adminSelectedAgentId', null);
+        loadAdminAgentsList(null, true);
+      })
+      .withFailureHandler(function (e) {
+        setAdminAgentBusy(false, '\u00a0');
+        if (adminAgentStatus) {
+          adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
+          adminAgentStatus.classList.add('err');
+        }
+      })
+      .adminAgentsDelete(id);
+  }
+
+  function adminUploadFilterPdfFiles(fileList) {
+    var out = [];
+    if (!fileList || !fileList.length) return out;
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      if (!f) continue;
+      var ok = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+      if (ok) out.push(f);
+    }
+    return out;
+  }
+
+  function uploadAdminLocalPdfQueue(files, index, successCount) {
+    successCount = successCount || 0;
+    if (!files.length) return;
+    if (index >= files.length) {
+      setAdminAgentBusy(false, '\u00a0');
+      if (adminAgentStatus) {
+        adminAgentStatus.classList.remove('err');
+        adminAgentStatus.textContent =
+          successCount > 0
+            ? i18nFmt('admin_upload_done_added', { n: successCount })
+            : '\u00a0';
+      }
+      return;
+    }
+    var f = files[index];
+    setAdminAgentBusy(true, i18nFmt('admin_upload_progress', { current: index + 1, total: files.length }));
+    var reader = new FileReader();
+    reader.onload = function () {
+      var s = reader.result;
+      var b64 = typeof s === 'string' && s.indexOf(',') >= 0 ? s.split(',')[1] : '';
+      var mime = f.type && f.type.indexOf('pdf') >= 0 ? f.type : 'application/pdf';
+      var payload = JSON.stringify({ name: f.name, mimeType: mime, dataBase64: b64 });
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.id) {
+            addFileToState({ id: res.id, name: res.name || f.name });
+            uploadAdminLocalPdfQueue(files, index + 1, successCount + 1);
+          } else {
+            setAdminAgentBusy(false, '\u00a0');
+            if (adminAgentStatus) {
+              adminAgentStatus.textContent = i18nFmt('err_admin_upload_failed', { name: f.name });
+              adminAgentStatus.classList.add('err');
+            }
+          }
+        })
+        .withFailureHandler(function (e) {
+          setAdminAgentBusy(false, '\u00a0');
+          if (adminAgentStatus) {
+            adminAgentStatus.textContent =
+              e && e.message ? e.message : i18nFmt('err_admin_upload_failed', { name: f.name });
+            adminAgentStatus.classList.add('err');
+          }
+        })
+        .adminAgentsUploadLocalPdf(payload);
+    };
+    reader.onerror = function () {
+      setAdminAgentBusy(false, '\u00a0');
+      if (adminAgentStatus) {
+        adminAgentStatus.textContent = i18nFmt('err_admin_upload_failed', { name: f.name });
+        adminAgentStatus.classList.add('err');
+      }
+    };
+    reader.readAsDataURL(f);
+  }
+
+  function handleAdminLocalFilesChosen(fileList) {
+    if (!fileList || !fileList.length) return;
+    var emailEl = document.getElementById('email');
+    if (!emailEl || !(emailEl.textContent || '').trim()) {
+      if (adminAgentStatus) {
+        adminAgentStatus.textContent = i18n('admin_need_email_drive');
+        adminAgentStatus.classList.add('err');
+      }
+      return;
+    }
+    var valid = adminUploadFilterPdfFiles(fileList);
+    if (!valid.length) {
+      if (adminAgentStatus) {
+        adminAgentStatus.textContent = i18n('err_admin_upload_only_pdf');
+        adminAgentStatus.classList.add('err');
+      }
+      return;
+    }
+    if (adminAgentStatus) adminAgentStatus.classList.remove('err');
+    uploadAdminLocalPdfQueue(valid, 0, 0);
+  }
+
+  function bindAdminAgentDropzone() {
+    if (!adminAgentDropzone) return;
+    adminAgentDropzone.addEventListener('click', function (ev) {
+      if (!adminAgentBrowseLocalBtn || !adminAgentLocalFilesInput || adminAgentBrowseLocalBtn.disabled)
+        return;
+      var t = ev.target;
+      if (t === adminAgentBrowseLocalBtn ||
+          (adminAgentBrowseLocalBtn.contains && adminAgentBrowseLocalBtn.contains(t)))
+        return;
+      if (t === adminAgentLocalFilesInput) return;
+      adminAgentLocalFilesInput.click();
+    });
+    adminAgentDropzone.addEventListener('dragenter', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      adminAgentDropzone.classList.add('is-dragover');
+    });
+    adminAgentDropzone.addEventListener('dragleave', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var rect = adminAgentDropzone.getBoundingClientRect();
+      var x = e.clientX, y = e.clientY;
+      if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+        adminAgentDropzone.classList.remove('is-dragover');
+      }
+    });
+    adminAgentDropzone.addEventListener('dragover', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      adminAgentDropzone.classList.add('is-dragover');
+    });
+    adminAgentDropzone.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      adminAgentDropzone.classList.remove('is-dragover');
+      var dt = e.dataTransfer;
+      if (!dt || !dt.files) return;
+      handleAdminLocalFilesChosen(dt.files);
+    });
+  }
+
+  function refreshAdminAgentDocuments(append) {
+    var pname = (adminAgentProfile && adminAgentProfile.value || '').trim();
+    if (!pname || !adminAgentDocsBody) return;
+    if (append) {
+      setAdminAgentBusy(true, i18nFmt('rag_docs_loading_more', { name: pname }));
+    } else {
+      S.set('adminAgentDocsSkip', 0);
+      setAdminAgentBusy(true, i18nFmt('rag_docs_loading', { name: pname }));
+    }
+    var skip = append ? S.get('adminAgentDocsSkip') : 0;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        setAdminAgentBusy(false, '\u00a0');
+        var add = res.documents ? res.documents.length : 0;
+        S.set('adminAgentDocsSkip', skip + add);
+        gcRenderRagDocsIntoBox(pname, adminAgentDocsBody, res, !!append);
+      })
+      .withFailureHandler(function (e) {
+        setAdminAgentBusy(false, '\u00a0');
+        if (adminAgentStatus) {
+          adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_docs_list');
+          adminAgentStatus.classList.add('err');
+        }
+      })
+      .adminGlobantRagDocuments(pname, skip, 40);
+  }
+
+  // --- Globant Control helpers ---
+
+  function gcRemoveLoadMoreButton(box) {
+    var m = box.querySelector('[data-gc-act="rag-docs-more"]');
+    if (m && m.parentNode) m.parentNode.removeChild(m);
+  }
+
+  function gcMaybeAddMoreButton(pname, box, totalListed, totalOverall) {
+    gcRemoveLoadMoreButton(box);
+    if (totalListed < totalOverall) {
+      var more = document.createElement('button');
+      more.type = 'button';
+      more.textContent = i18nFmt('gc_load_more', { listed: totalListed, total: totalOverall });
+      more.setAttribute('data-gc-act', 'rag-docs-more');
+      more.setAttribute('data-pname', pname);
+      box.appendChild(more);
+    }
+  }
+
+  function gcRenderRagDocsRows(tbody, pname, list) {
+    for (var di = 0; di < list.length; di++) {
+      var d = list[di];
+      var dr = document.createElement('tr');
+      var dn = document.createElement('td');
+      dn.textContent = d.name || i18n('label_em_dash');
+      var ds = document.createElement('td');
+      ds.textContent = d.indexStatus || '';
+      var dact = document.createElement('td');
+      dact.className = 'flex items-center gap-2';
+      if (d.url) {
+        var viewLink = document.createElement('a');
+        viewLink.href = d.url;
+        viewLink.target = '_blank';
+        viewLink.rel = 'noopener noreferrer';
+        viewLink.className = 'btn-admin inline-flex items-center gap-1';
+        viewLink.innerHTML =
+          '<i class="fa-solid fa-eye" aria-hidden="true"></i>' +
+          '<span>' + i18n('gc_view_file') + '</span>';
+        dact.appendChild(viewLink);
+      }
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-admin inline-flex items-center gap-1';
+      b.innerHTML =
+        '<i class="fa-solid fa-trash" aria-hidden="true"></i>' +
+        '<span>' + i18n('gc_remove') + '</span>';
+      b.setAttribute('data-gc-act', 'rag-doc-del');
+      b.setAttribute('data-pname', pname);
+      b.setAttribute('data-doc', d.id || '');
+      dact.appendChild(b);
+      dr.appendChild(dn);
+      dr.appendChild(ds);
+      dr.appendChild(dact);
+      tbody.appendChild(dr);
+    }
+  }
+
+  function gcRenderRagDocsIntoBox(pname, box, docsRes, append) {
+    var list = docsRes.documents || [];
+    var tot = docsRes.totalDocuments || list.length;
+    var tbl, tbody;
+    if (!append) {
+      box.innerHTML = '';
+      if (!list.length) {
+        var e = document.createElement('div');
+        e.textContent =
+          docsRes.totalDocuments === 0
+            ? i18n('gc_empty_docs_profile')
+            : i18n('gc_empty_docs_page');
+        box.appendChild(e);
+        return;
+      }
+      tbl = document.createElement('table');
+      tbl.className = 'gc-table';
+      var st = document.createElement('thead');
+      var sr = document.createElement('tr');
+      ['gc_col_file', 'gc_col_index', 'gc_col_id'].forEach(function (hkey) {
+        var th = document.createElement('th');
+        th.textContent = i18n(hkey);
+        sr.appendChild(th);
+      });
+      st.appendChild(sr);
+      tbl.appendChild(st);
+      tbody = document.createElement('tbody');
+      tbl.appendChild(tbody);
+      box.appendChild(tbl);
+      gcRenderRagDocsRows(tbody, pname, list);
+      gcMaybeAddMoreButton(pname, box, list.length, tot);
+      return;
+    }
+    tbl = box.querySelector('table.gc-table');
+    if (!tbl) return;
+    tbody = tbl.querySelector('tbody');
+    if (!tbody) return;
+    gcRenderRagDocsRows(tbody, pname, list);
+    var listedSoFar = tbody.querySelectorAll('tr').length;
+    gcMaybeAddMoreButton(pname, box, listedSoFar, tot);
+  }
+
+  // --- Event listeners ---
+
+  if (adminAgentNewBtn) {
+    adminAgentNewBtn.addEventListener('click', function () { openNewAdminAgent(); });
+  }
+  if (adminAgentSeedBtn) {
+    adminAgentSeedBtn.addEventListener('click', function () {
+      if (adminAgentStatus) adminAgentStatus.classList.remove('err');
+      setAdminSeedLoader(true, i18n('admin_busy_agent_seed'));
+      setAdminAgentBusy(true, '\u00a0', { skipProgressWrap: true });
+      A.cache.invalidate('agentsList');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          loadAdminAgentsList(function () {
+            var created = res && res.created != null ? parseInt(String(res.created), 10) || 0 : 0;
+            setAdminSeedLoader(false, '');
+            setAdminAgentBusy(
+              false,
+              created > 0
+                ? i18nFmt('admin_agent_seed_done_added', { n: created })
+                : i18n('admin_agent_seed_done_noop'),
+            );
+          });
+        })
+        .withFailureHandler(function (e) {
+          setAdminSeedLoader(false, '');
+          setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
+          if (adminAgentStatus) {
+            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_agent_seed');
+            adminAgentStatus.classList.add('err');
+          }
+        })
+        .adminAgentsEnsureDefaults();
+    });
+  }
+  if (adminAgentBrowseLocalBtn && adminAgentLocalFilesInput) {
+    adminAgentBrowseLocalBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (!adminAgentLocalFilesInput.disabled) adminAgentLocalFilesInput.click();
+    });
+  }
+  if (adminAgentLocalFilesInput) {
+    adminAgentLocalFilesInput.addEventListener('change', function () {
+      if (adminAgentLocalFilesInput.files)
+        handleAdminLocalFilesChosen(adminAgentLocalFilesInput.files);
+      adminAgentLocalFilesInput.value = '';
+    });
+  }
+  bindAdminAgentDropzone();
+  if (adminAgentSaveBtn) {
+    adminAgentSaveBtn.addEventListener('click', function () {
+      if (!adminAgentStatus) return;
+      adminAgentStatus.classList.remove('err');
+      setAdminAgentBusy(true, i18n('admin_busy_agent_save'));
+      A.cache.invalidate('agentsList');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setAdminAgentBusy(false, i18n('admin_agent_saved'));
+          loadAdminAgentsList(null, true);
+          if (res && res.agent && res.agent.id) {
+            S.set('adminSelectedAgentId', res.agent.id);
+            selectAdminAgent(res.agent.id);
+          }
+        })
+        .withFailureHandler(function (e) {
+          setAdminAgentBusy(false, '\u00a0');
+          if (adminAgentStatus) {
+            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
+            adminAgentStatus.classList.add('err');
+          }
+        })
+        .adminAgentsSave(JSON.stringify(collectAdminAgentPayload()));
+    });
+  }
+  if (adminAgentSyncBtn) {
+    adminAgentSyncBtn.addEventListener('click', function () {
+      var id = S.get('adminSelectedAgentId');
+      if (!id) {
+        if (adminAgentStatus) {
+          adminAgentStatus.textContent = i18n('err_admin_agent_not_found');
+          adminAgentStatus.classList.add('err');
+        }
+        return;
+      }
+      if (!window.confirm(i18n('confirm_corpus_resync'))) return;
+      var src = S.get('adminSourcesState');
+      var nf = src.folders.length;
+      var na = src.files.length;
+      if (nf === 0 && na === 0) {
+        if (!window.confirm(i18n('confirm_empty_selection'))) return;
+      }
+      if (adminAgentStatus) adminAgentStatus.classList.remove('err');
+      setAdminAgentBusy(true, i18n('admin_busy_agent_sync'));
+      A.cache.invalidate('agentsList');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setAdminAgentBusy(false, '\u00a0');
+          var sr = res && res.sync ? res.sync : {};
+          var ag = res && res.agent ? res.agent : null;
+          if (adminAgentStatus) {
+            adminAgentStatus.textContent = i18nFmt('admin_agent_sync_done', {
+              profile: sr.profileName || '',
+              uploaded: sr.uploaded,
+              total: sr.docCount,
+            });
+          }
+          if (ag && ag.lastSync && adminAgentMeta) {
+            adminAgentMeta.textContent = i18nFmt('admin_agent_last_sync', { date: ag.lastSync });
+          }
+          loadAdminAgentsList(null, true);
+          if (ag && ag.id) selectAdminAgent(ag.id);
+          refreshAdminAgentDocuments(false);
+        })
+        .withFailureHandler(function (e) {
+          setAdminAgentBusy(false, '\u00a0');
+          if (adminAgentStatus) {
+            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_sync');
+            adminAgentStatus.classList.add('err');
+          }
+        })
+        .adminAgentsSync(id);
+    });
+  }
+  if (adminAgentDeleteBtn) {
+    adminAgentDeleteBtn.addEventListener('click', function () {
+      var id = S.get('adminSelectedAgentId');
+      if (!id) { openNewAdminAgent(); return; }
+      openAdminAgentDeleteModal();
+    });
+  }
+  if (adminAgentDeleteModal) {
+    adminAgentDeleteModal.addEventListener('click', function (ev) {
+      if (ev.target === adminAgentDeleteModal) closeAdminAgentDeleteModal();
+    });
+  }
+  if (adminAgentDeleteModalCancel) {
+    adminAgentDeleteModalCancel.addEventListener('click', function () { closeAdminAgentDeleteModal(); });
+  }
+  if (adminAgentDeleteModalConfirm) {
+    adminAgentDeleteModalConfirm.addEventListener('click', function () { runAdminAgentDeleteConfirmed(); });
+  }
+  if (adminAgentDocsRefresh) {
+    adminAgentDocsRefresh.addEventListener('click', function () { refreshAdminAgentDocuments(false); });
+  }
+  if (adminAgentDocsBody) {
+    adminAgentDocsBody.addEventListener('click', function (ev) {
+      var tgt = /** @type {HTMLElement} */ (ev.target);
+      var btnEl = tgt && tgt.closest ? tgt.closest('[data-gc-act]') : null;
+      var btn = btnEl instanceof Element ? btnEl : null;
+      if (!btn || !adminAgentDocsBody.contains(btn)) return;
+      var act = btn.getAttribute('data-gc-act');
+      var pnameBtn = btn.getAttribute('data-pname') || '';
+      var pname = ((adminAgentProfile && adminAgentProfile.value) || pnameBtn || '').trim();
+      if (act === 'rag-docs-more') {
+        refreshAdminAgentDocuments(true);
+      } else if (act === 'rag-doc-del') {
+        var doc = btn.getAttribute('data-doc') || '';
+        var pfrom = pnameBtn || pname;
+        if (!window.confirm(i18nFmt('confirm_rag_doc_remove', { name: pfrom }))) return;
+        google.script.run
+          .withSuccessHandler(function () { refreshAdminAgentDocuments(false); })
+          .withFailureHandler(function (e) {
+            if (adminAgentStatus) {
+              adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
+              adminAgentStatus.classList.add('err');
+            }
+          })
+          .adminGlobantDeleteRagDocument(pfrom, doc);
+      }
+    });
+  }
+
+  A.agents = {
+    loadList: loadAdminAgentsList,
+    selectAgent: selectAdminAgent,
+    addFolderToState: addFolderToState,
+    addFileToState: addFileToState,
+  };
+})(window.Aviators);
+</script>

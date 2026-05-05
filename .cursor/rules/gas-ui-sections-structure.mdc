@@ -1,0 +1,24 @@
+---
+description: Secciones de UI en gas/ — cabecera + párrafo explicativo obligatorio
+globs: gas/**/*.html
+alwaysApply: true
+---
+
+# Estructura de secciones (Aviators / HtmlService)
+
+- **Norma**: cada **sección de contenido** visible en la app (bloques dentro de `dashboard-card`, paneles de administración, páginas `app-page`, regiones que agrupan un tema con controles debajo) debe seguir el mismo esquema de aquí en adelante:
+  1. **Cabecera** — título claro (`<h2>` o `<h3>` según jerarquía de la página).
+  2. **Explicación** — un párrafo corto debajo que diga **qué es esa sección** y **qué puede hacer el usuario** (o en qué orden usar los controles si aplica).
+
+- **Maquetación sugerida**: envolver en `<section … aria-labelledby="id-del-heading">` cuando la sección sea unidad semántica; cabecera con clases alineadas al resto (`sec`, `text-base font-semibold text-slate-900`, etc.); lead con `text-sm leading-relaxed text-slate-600` y margen inferior (`mt-1`, `mb-3` / `mb-4`) antes de inputs, botones o listas.
+
+- **i18n** (obligatorio): título y párrafo explicativo van al catálogo **`gas/i18n/UiStrings.js`** en **es** y **en**. Convención de claves: prefijo estable por pantalla o bloque (`static_*_heading` / `static_*_lead`, `page_*_title` / `page_*_lead`, `admin_*_sec_*_heading` / `admin_*_sec_*_lead`, etc.). En HTML usar **`data-i18n`** en el título y en el `<p>` del lead; si el lead lleva HTML permitido, **`data-i18n-html`** solo donde ya exista ese patrón en el proyecto.
+
+- **Coherencia**: nuevas secciones deben verse como las ya unificadas en **Agentes** (subsecciones con heading + lead antes del contenido operativo). Detalle visual y Tailwind: **`gas-ui-tailwind.mdc`**.
+
+## Excepciones (si no aplica el esquema completo, indicarlo en el PR/commit)
+
+- **Cabeceras globales ya autosuficientes** — p. ej. el bloque `dashboard-welcome` con `dashboard-title` + `dashboard-lead` no exige duplicar otro lead por cada tarjeta si cada tarjeta cumple la norma.
+- **Controles densos sin “tema” propio** — una sola barra de herramientas entre breadcrumbs y lista, sin narrativa de producto; puede vivir sin párrafo si la sección padre ya explicó el contexto (evaluar caso por caso).
+- **Diálogos / pickers** — el `role="dialog"` suele bastar con **título** + nota al pie (`admin_pick_foot_html`); no hace falta un segundo lead si la nota cumple la función explicativa.
+- **Elementos de navegación o sidebar** — ítems compactos sin bloque de contenido.

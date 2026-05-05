@@ -280,12 +280,69 @@ function GlobantAssistantApiClient_create(config) {
     return { text: result.text || '', parsed: result };
   }
 
+  /**
+   * Envía un mensaje con un archivo adjunto (base64 inline) al /chat endpoint.
+   * Usa modelos multimodales (Gemini) para analizar PDFs/archivos sin indexación.
+   * @param {string} model e.g. "vertex_ai/gemini-2.0-flash-exp"
+   * @param {string} systemPrompt
+   * @param {string} userText
+   * @param {string} fileBase64 base64-encoded file content
+   * @param {string} mimeType e.g. "application/pdf"
+   * @return {{text:string, parsed:Object}}
+   */
+  function chatWithFileInline(model, systemPrompt, userText, fileBase64, mimeType) {
+    var messages = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: userText },
+        { type: 'image_url', image_url: 'data:' + mimeType + ';base64,' + fileBase64 },
+      ],
+    });
+    var payload = JSON.stringify({
+      model: model,
+      messages: messages,
+      stream: false,
+      max_tokens: 8192,
+      temperature: 0.1,
+    });
+    var r = BearerHttp_fetch(baseUrl + '/chat', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: authHeaders({}),
+      payload: payload,
+    });
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/chat (inline file)',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
+    }
+    var result = JSON.parse(text);
+    var answer = '';
+    if (result.choices && result.choices.length > 0) {
+      answer = (result.choices[0].message && result.choices[0].message.content) || '';
+    } else if (result.text) {
+      answer = result.text;
+    }
+    return { text: answer, parsed: result };
+  }
+
   return {
     getOrganizationAndProjectIds: getOrganizationAndProjectIds,
     uploadFile: uploadFile,
     deleteFile: deleteFile,
     listAllFiles: listAllFiles,
     sendMessageDetailed: sendMessageDetailed,
+    chatWithFileInline: chatWithFileInline,
     refreshAccessIds: function () {
       GlobantAssistantApiClient_invalidateAccessCache();
       memAccessIds = null;

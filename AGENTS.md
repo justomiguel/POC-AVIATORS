@@ -1,6 +1,6 @@
 # Aviators — guía para agentes (Cursor / IA)
 
-Este repo es **Google Apps Script** con **clasp** (`gas/`, despliegue a un proyecto Script). Las reglas detalladas están en **`.cursor/rules/*.mdc`** (stack, dependencias, i18n, manifiesto, convención de commits sin marcas de IDE).
+Este repo es **Google Apps Script** con **clasp** (`gas/`, despliegue a un proyecto Script). Las reglas detalladas están en **`.cursor/rules/*.mdc`** (stack, dependencias, i18n, manifiesto, convención de commits sin marcas de IDE). Convención de **icono en cada botón** de la UI: **`gas-ui-buttons-icons.mdc`**. Convención de **secciones** (cabecera + párrafo explicativo): **`gas-ui-sections-structure.mdc`**. Tras tocar Tailwind o clases en HTML de `gas/`, recompilar CSS: **`gas-tailwind-compile.mdc`**.
 
 ## Antes de implementar (agente)
 

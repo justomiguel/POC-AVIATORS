@@ -56,3 +56,25 @@ function GlobantRagDefaults_buildCreateProfileBody(name, description) {
     },
   };
 }
+
+/**
+ * Igual que `GlobantRagDefaults_buildCreateProfileBody` pero con plantilla RAG personalizada
+ * (`searchOptions.search.prompt`). Debe incluir los marcadores que use el backend (p. ej. `{context}` y `{question}`).
+ *
+ * @param {string} name
+ * @param {string} description
+ * @param {string} searchPromptTemplate
+ * @return {Object}
+ */
+function GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
+  name,
+  description,
+  searchPromptTemplate,
+) {
+  var base = GlobantRagDefaults_buildCreateProfileBody(name, description);
+  var t = ('' + (searchPromptTemplate || '')).trim();
+  if (t) {
+    base.searchOptions.search.prompt = t;
+  }
+  return base;
+}

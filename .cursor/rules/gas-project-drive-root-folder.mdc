@@ -1,0 +1,12 @@
+---
+description: Carpeta raíz de Drive para archivos del proyecto
+alwaysApply: true
+---
+
+# Carpeta raíz de Drive (proyecto)
+
+- **Regla**: cualquier archivo/documento relacionado al proyecto que se suba o gestione desde la app debe usar como destino por defecto la carpeta de Drive con ID `1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG`.
+- **URL de referencia**: `https://drive.google.com/drive/folders/1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG?usp=sharing`.
+- **Formato canónico**: en código/config usar el **ID** (no parsear desde URL en cada lugar).
+- **Excepción**: solo cambiar de carpeta si el usuario lo pide explícitamente para un flujo puntual.
+- **Persistencia recomendada**: si hay configuración runtime, guardar este ID en `ScriptProperties` con una clave estable y reutilizarla en todos los módulos.

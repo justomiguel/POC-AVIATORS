@@ -6,7 +6,9 @@ alwaysApply: false
 
 # UI (Aviators / HtmlService)
 
-- **Tailwind** vive en `gas/tailwind-input.css` (`@layer components` para bloques reutilizables: login, shell, sidebar). Tras cambiar clases en HTML o componentes, ejecutar **`npm run build:css`** en la raíz del repo para actualizar `gas/tailwind-include.html` antes de `clasp push`.
+- **Tailwind** vive en `gas/tailwind-input.css` (`@layer components` para bloques reutilizables: login, shell, sidebar). Tras cambiar clases en HTML o componentes, ejecutar **`npm run build:css`** en la raíz del repo para actualizar `gas/tailwind-include.html` antes de `clasp push`. En desarrollo se puede usar **`npm run watch:css`** (ver `.cursor/rules/gas-tailwind-compile.mdc`).
 - **No inventar clases sueltas** tipo `card`, `cta`, `sub` sin definirlas: o son utilidades Tailwind explícitas, o entran en `tailwind-input.css`.
 - **OAuth en Web App**: no hay popup de Google aparte; el usuario pulsa el botón y **`google.script.run` dispara la autorización**. Los textos deben aclarar “Iniciar sesión con Google” / permisos del manifiesto, sin prometer un widget OAuth distinto.
 - **Coherencia**: tipografía, espaciado y estados vacíos/err/load alineados con el resto de la app (sidebar, badges, `role="status"` donde aplique).
+- **Home / panel principal**: mantener una separación visible entre el bloque de cabecera y el contenedor de contenido (usar `pt-*`/`pb-*` en `app-content-scroll`, con variante `md:*`), evitando layouts “pegados” al header.
+- **Fondo con avión**: en `app-content-panel::before`, preservar que el avión se perciba claramente (opacidad y degradado balanceados) sin comprometer legibilidad del texto; al ajustar imagen/overlay, validar contraste del contenido.

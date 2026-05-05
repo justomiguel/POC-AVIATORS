@@ -11,6 +11,7 @@
  * @typedef {Object} LlmConsultationCommand
  * @property {string} question
  * @property {string[]} driveFileIds — ids de archivos en Drive (máx. impuesto por aplicación).
+ * @property {Array<{role:string,content:string}>} [history] — turnos previos para contexto multi-turn.
  */
 
 /**

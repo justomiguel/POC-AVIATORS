@@ -1,0 +1,362 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var askBtn = document.getElementById('ask-btn');
+  var questionEl = document.getElementById('question');
+  var askStatus = document.getElementById('ask-status');
+  var consultHeadingEl = document.getElementById('consult-heading');
+  var driveFilesHeadingEl = document.getElementById('drive-files-heading');
+  var geminiDocsBlock = document.getElementById('gemini-docs-block');
+  var askDriveRow = document.getElementById('ask-drive-row');
+  var globantAgentRow = document.getElementById('globant-agent-row');
+  var askAgentBtn = document.getElementById('ask-agent-btn');
+  var llmHintBox = document.getElementById('llm-hint-box');
+
+  var CHAT_THINKING_ID = 'chat-msg-thinking';
+  var MAX_HISTORY = 10;
+
+  function pushHistory(role, content) {
+    var hist = S.get('chatHistory') || [];
+    hist.push({ role: role, content: content, ts: Date.now() });
+    while (hist.length > MAX_HISTORY * 2) hist.shift();
+    S.set('chatHistory', hist);
+  }
+
+  function getHistoryJson() {
+    var hist = S.get('chatHistory') || [];
+    return JSON.stringify(hist);
+  }
+
+  function clearHistory() {
+    S.set('chatHistory', []);
+  }
+
+  function updateHomeChatBanner(cfg) {
+    if (!llmHintBox) return;
+    if (cfg && (cfg.mode === 'globant' || cfg.mode === 'apiKey')) {
+      llmHintBox.classList.add('hidden');
+      llmHintBox.textContent = '';
+      llmHintBox.classList.remove('home-chat-banner', 'err');
+      return;
+    }
+    llmHintBox.classList.remove('hidden');
+    llmHintBox.classList.add('home-chat-banner', 'err');
+    llmHintBox.textContent = i18n('home_chat_banner_setup');
+  }
+
+  function homeChatScrollToBottom() {
+    var t = document.getElementById('chat-thread');
+    if (!t) return;
+    try { t.scrollTop = t.scrollHeight; } catch (eSc) {}
+  }
+
+  function homeChatRemoveThinking() {
+    var el = document.getElementById(CHAT_THINKING_ID);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function homeChatSetThinking(on, msg) {
+    var thread = document.getElementById('chat-thread');
+    if (!thread) return;
+    homeChatRemoveThinking();
+    if (!on) return;
+    var emptyEl = document.getElementById('chat-empty');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    var wrap = document.createElement('div');
+    wrap.id = CHAT_THINKING_ID;
+    wrap.className = 'chat-msg-agent';
+    wrap.setAttribute('aria-live', 'polite');
+    var inner = document.createElement('div');
+    inner.className = 'chat-bubble-agent chat-thinking';
+    inner.textContent = msg || i18n('chat_thinking');
+    wrap.appendChild(inner);
+    thread.appendChild(wrap);
+    homeChatScrollToBottom();
+  }
+
+  function homeChatUpdateThinking(msg) {
+    var el = document.getElementById(CHAT_THINKING_ID);
+    if (!el) return;
+    var bub = el.querySelector('.chat-thinking');
+    if (bub) bub.textContent = msg;
+  }
+
+  function homeChatAppendUser(text) {
+    var thread = document.getElementById('chat-thread');
+    if (!thread) return;
+    var emptyEl = document.getElementById('chat-empty');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    var wrap = document.createElement('div');
+    wrap.className = 'chat-msg-user';
+    var sr = document.createElement('span');
+    sr.className = 'sr-only';
+    sr.textContent = i18n('chat_sr_you');
+    var bub = document.createElement('div');
+    bub.className = 'chat-bubble-user';
+    bub.textContent = text;
+    wrap.appendChild(sr);
+    wrap.appendChild(bub);
+    thread.appendChild(wrap);
+    homeChatScrollToBottom();
+  }
+
+  function homeChatAppendAgent(body, metaLine) {
+    var thread = document.getElementById('chat-thread');
+    if (!thread) return;
+    var emptyEl = document.getElementById('chat-empty');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    var wrap = document.createElement('div');
+    wrap.className = 'chat-msg-agent';
+    var sr = document.createElement('span');
+    sr.className = 'sr-only';
+    sr.textContent = i18n('chat_sr_agent');
+    var col = document.createElement('div');
+    col.className = 'chat-msg-agent-inner';
+    var bub = document.createElement('div');
+    bub.className = 'chat-bubble-agent';
+    bub.textContent = body || '';
+    col.appendChild(bub);
+    if (metaLine) {
+      var metaP = document.createElement('p');
+      metaP.className = 'chat-msg-meta';
+      metaP.textContent = metaLine;
+      col.appendChild(metaP);
+    }
+    wrap.appendChild(sr);
+    wrap.appendChild(col);
+    thread.appendChild(wrap);
+    homeChatScrollToBottom();
+  }
+
+  function homeChatResetThread() {
+    var thread = document.getElementById('chat-thread');
+    if (!thread) return;
+    thread.innerHTML = '';
+    homeChatRemoveThinking();
+    var p = document.createElement('p');
+    p.id = 'chat-empty';
+    p.className = 'chat-empty';
+    p.setAttribute('data-i18n', 'chat_empty_hint');
+    p.textContent = i18n('chat_empty_hint');
+    thread.appendChild(p);
+  }
+
+  function applyConsultModeLabels(llmCfg) {
+    if (!llmCfg || !consultHeadingEl) return;
+    consultHeadingEl.textContent = i18n('static_consult_heading');
+    if (driveFilesHeadingEl) {
+      driveFilesHeadingEl.textContent =
+        llmCfg.mode === 'globant'
+          ? i18n('drive_heading_globant')
+          : llmCfg.mode === 'apiKey'
+            ? i18n('drive_heading_gemini')
+            : i18n('drive_heading_plain');
+    }
+    var geminiUi = llmCfg.mode === 'apiKey';
+    if (geminiDocsBlock) geminiDocsBlock.classList.toggle('hidden', !geminiUi);
+    if (askDriveRow) askDriveRow.classList.toggle('hidden', llmCfg.mode === 'globant');
+    if (globantAgentRow) globantAgentRow.classList.toggle('hidden', llmCfg.mode !== 'globant');
+    var askBtnLabel =
+      askBtn &&
+      (askBtn.querySelector('[data-i18n="ask_btn"]') || askBtn.querySelector('span'));
+    if (askBtnLabel) askBtnLabel.textContent = i18n('ask_btn');
+  }
+
+  function applyConsultModeInitialState(llmCfg) {
+    applyConsultModeLabels(llmCfg);
+    var llmReady = llmCfg.mode === 'globant' || llmCfg.mode === 'apiKey';
+    if (askBtn) askBtn.disabled = !llmReady;
+    if (askAgentBtn) askAgentBtn.disabled = !llmReady;
+    homeChatResetThread();
+    if (askStatus) {
+      askStatus.textContent = '';
+      askStatus.classList.toggle('err', false);
+    }
+    if (questionEl) questionEl.value = '';
+  }
+
+  // --- Event listeners ---
+
+  if (askBtn) {
+    askBtn.addEventListener('click', function () {
+      askStatus.textContent = '';
+      askStatus.classList.remove('err');
+      var q = (questionEl.value || '').trim();
+      if (!q) {
+        askStatus.textContent = i18n('ask_empty_question');
+        askStatus.classList.add('err');
+        return;
+      }
+      var ids = A.getSelectedIds();
+      homeChatAppendUser(q);
+      pushHistory('user', q);
+      questionEl.value = '';
+      homeChatSetThinking(true);
+      var histJson = getHistoryJson();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          askBtn.disabled = false;
+          askAgentBtn.disabled = false;
+          homeChatRemoveThinking();
+          var answer = res.answer || '';
+          pushHistory('assistant', answer);
+          var metaLine = '';
+          if (res.meta && typeof res.meta.filesUsed === 'number' && res.meta.filesUsed > 0) {
+            metaLine = i18nFmt('meta_files_suffix', { n: res.meta.filesUsed });
+          }
+          homeChatAppendAgent(answer, metaLine);
+          askStatus.textContent = '\u00a0';
+        })
+        .withFailureHandler(function (e) {
+          askBtn.disabled = false;
+          askAgentBtn.disabled = false;
+          homeChatRemoveThinking();
+          askStatus.textContent = e && e.message ? e.message : i18n('err_ask');
+          askStatus.classList.add('err');
+        })
+        .askAboutDocuments(q, ids, histJson);
+      askBtn.disabled = true;
+      askAgentBtn.disabled = true;
+      askStatus.textContent = i18n('busy_consulting');
+    });
+  }
+
+  if (askAgentBtn) {
+    askAgentBtn.addEventListener('click', function () {
+      askStatus.textContent = '';
+      askStatus.classList.remove('err');
+      var gp = (questionEl.value || '').trim();
+      if (!gp) {
+        askStatus.textContent = i18n('ask_empty_question');
+        askStatus.classList.add('err');
+        return;
+      }
+      homeChatAppendUser(gp);
+      pushHistory('user', gp);
+      questionEl.value = '';
+      askAgentBtn.disabled = true;
+      askBtn.disabled = true;
+      homeChatSetThinking(true, i18n('orch_step_routing'));
+      askStatus.textContent = i18n('orch_step_routing');
+      var agentHistJson = getHistoryJson();
+      google.script.run
+        .withSuccessHandler(function (route) {
+          var agents = route.agents || [];
+          var agNames = agents.map(function (a) { return a.name || a.id; }).join(', ');
+          var isMulti = agents.length > 1;
+          if (route.isSelf) {
+            homeChatUpdateThinking(i18nFmt('orch_step_answering', { agent: agNames }));
+            askStatus.textContent = i18nFmt('orch_step_answering', { agent: agNames });
+          } else if (isMulti) {
+            homeChatUpdateThinking(i18nFmt('orch_step_multi', { agents: agNames }));
+            askStatus.textContent = i18nFmt('orch_step_multi', { agents: agNames });
+          } else {
+            homeChatUpdateThinking(i18nFmt('orch_step_delegating', { agent: agNames }));
+            askStatus.textContent = i18nFmt('orch_step_delegating', { agent: agNames });
+          }
+          var agentIds = agents.map(function (a) { return a.id; });
+          if (isMulti) {
+            google.script.run
+              .withSuccessHandler(function (results) {
+                askAgentBtn.disabled = false;
+                askBtn.disabled = false;
+                homeChatRemoveThinking();
+                if (!results || !results.length) {
+                  homeChatAppendAgent(i18n('orch_no_results'), '');
+                } else {
+                  var combined = [];
+                  for (var k = 0; k < results.length; k++) {
+                    var badge = i18nFmt('orch_routed_badge', { agent: results[k].agentName });
+                    homeChatAppendAgent(results[k].answer || '', badge);
+                    combined.push(results[k].answer || '');
+                  }
+                  pushHistory('assistant', combined.join('\n---\n'));
+                }
+                askStatus.textContent = '\u00a0';
+              })
+              .withFailureHandler(function (e) {
+                askAgentBtn.disabled = false;
+                askBtn.disabled = false;
+                homeChatRemoveThinking();
+                askStatus.textContent = e && e.message ? e.message : i18n('err_ask_agent');
+                askStatus.classList.add('err');
+              })
+              .globantAnswerMultiAgent(gp, agentIds, agentHistJson);
+          } else {
+            google.script.run
+              .withSuccessHandler(function (res) {
+                askAgentBtn.disabled = false;
+                askBtn.disabled = false;
+                homeChatRemoveThinking();
+                var answer = res.answer || '';
+                pushHistory('assistant', answer);
+                var badge = i18nFmt('orch_routed_badge', { agent: res.agentName || agNames });
+                homeChatAppendAgent(answer, badge);
+                askStatus.textContent = '\u00a0';
+              })
+              .withFailureHandler(function (e) {
+                askAgentBtn.disabled = false;
+                askBtn.disabled = false;
+                homeChatRemoveThinking();
+                askStatus.textContent = e && e.message ? e.message : i18n('err_ask_agent');
+                askStatus.classList.add('err');
+              })
+              .globantAnswerWithAgent(gp, agentIds[0], agentHistJson);
+          }
+        })
+        .withFailureHandler(function (e) {
+          askAgentBtn.disabled = false;
+          askBtn.disabled = false;
+          homeChatRemoveThinking();
+          askStatus.textContent = e && e.message ? e.message : i18n('err_ask_agent');
+          askStatus.classList.add('err');
+        })
+        .globantRouteQuery(gp);
+    });
+  }
+
+  var chatNewBtn = document.getElementById('chat-new-btn');
+  if (chatNewBtn) {
+    chatNewBtn.addEventListener('click', function () {
+      clearHistory();
+      homeChatResetThread();
+      if (questionEl) questionEl.value = '';
+      if (askStatus) { askStatus.textContent = ''; askStatus.classList.remove('err'); }
+    });
+  }
+
+  if (questionEl) {
+    questionEl.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' || ev.shiftKey) return;
+      if (ev.isComposing) return;
+      ev.preventDefault();
+      if (globantAgentRow && !globantAgentRow.classList.contains('hidden') &&
+          askAgentBtn && !askAgentBtn.disabled) {
+        askAgentBtn.click();
+        return;
+      }
+      if (askDriveRow && !askDriveRow.classList.contains('hidden') &&
+          askBtn && !askBtn.disabled) {
+        askBtn.click();
+        return;
+      }
+    });
+  }
+
+  A.chat = {
+    updateHomeChatBanner: updateHomeChatBanner,
+    applyConsultModeLabels: applyConsultModeLabels,
+    applyConsultModeInitialState: applyConsultModeInitialState,
+    resetThread: homeChatResetThread,
+    appendUser: homeChatAppendUser,
+    appendAgent: homeChatAppendAgent,
+    setThinking: homeChatSetThinking,
+    removeThinking: homeChatRemoveThinking,
+    updateThinking: homeChatUpdateThinking,
+    THINKING_ID: CHAT_THINKING_ID,
+  };
+})(window.Aviators);
+</script>

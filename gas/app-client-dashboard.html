@@ -1,0 +1,61 @@
+<script>
+(function (A) {
+  var state = A.state;
+  var i18n = A.i18n;
+
+  var _metricsEl = document.getElementById('dashboard-metrics');
+  var _agentsCountEl = document.getElementById('dash-agents-count');
+  var _contentsCountEl = document.getElementById('dash-contents-count');
+  var _clientsCountEl = document.getElementById('dash-clients-count');
+  var _llmStatusEl = document.getElementById('dash-llm-status');
+  var _llmIconWrap = document.getElementById('dash-llm-icon-wrap');
+
+  function updateAgentsCount() {
+    var cache = state.get('adminAgentsCache');
+    _agentsCountEl.textContent = cache ? cache.length : '—';
+  }
+
+  function updateContentsCount() {
+    var total = state.get('contentsListTotal');
+    var cache = state.get('contentsItemsCache');
+    _contentsCountEl.textContent = total || (cache ? cache.length : '—');
+  }
+
+  function updateClientsCount() {
+    var total = state.get('clientsListTotal');
+    var cache = state.get('clientsItemsCache');
+    _clientsCountEl.textContent = total || (cache ? cache.length : '—');
+  }
+
+  function updateLlmStatus(bootstrap) {
+    if (!bootstrap || !bootstrap.llm) return;
+    var llm = bootstrap.llm;
+    var configured = llm.configured;
+    var mode = llm.mode || '—';
+    _llmStatusEl.textContent = mode;
+    if (_llmIconWrap) {
+      if (configured) {
+        _llmIconWrap.classList.remove('bg-amber-100', 'text-amber-600', 'dark:bg-amber-900/40', 'dark:text-amber-400');
+        _llmIconWrap.classList.add('bg-emerald-100', 'text-emerald-600', 'dark:bg-emerald-900/40', 'dark:text-emerald-400');
+      }
+    }
+  }
+
+  function renderDashboard(bootstrap) {
+    if (!_metricsEl) return;
+    updateLlmStatus(bootstrap);
+    updateAgentsCount();
+    updateContentsCount();
+    updateClientsCount();
+    _metricsEl.classList.remove('hidden');
+  }
+
+  state.on('adminAgentsCache', updateAgentsCount);
+  state.on('contentsListTotal', updateContentsCount);
+  state.on('contentsItemsCache', updateContentsCount);
+  state.on('clientsListTotal', updateClientsCount);
+  state.on('clientsItemsCache', updateClientsCount);
+
+  A.renderDashboard = renderDashboard;
+})(window.Aviators);
+</script>

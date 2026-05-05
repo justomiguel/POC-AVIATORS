@@ -1,0 +1,419 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var viewLogin = document.getElementById('view-login');
+  var viewApp = document.getElementById('view-app');
+  var loginBtn = document.getElementById('login-btn');
+  var loginStatus = document.getElementById('login-status');
+  var emailEl = document.getElementById('email');
+  var userAvatar = document.getElementById('user-avatar');
+  var userAvatarPlaceholder = document.getElementById('user-avatar-placeholder');
+  var userDisplayName = document.getElementById('user-display-name');
+  var sidebarRole = document.getElementById('sidebar-role');
+  var homeVisitante = document.getElementById('home-visitante');
+  var homeMember = document.getElementById('home-member');
+  var filesUl = document.getElementById('files');
+  var sessionNote = document.getElementById('session-note');
+  var backLogin = document.getElementById('logout-toolbar');
+  var navBtnHome = document.getElementById('nav-btn-home');
+  var navPageAgents = document.getElementById('nav-page-agents');
+  var navPageContents = document.getElementById('nav-page-contents');
+  var navPageClients = document.getElementById('nav-page-clients');
+  var adminAgentStatus = document.getElementById('admin-agent-status');
+
+  function setAppPage(page) {
+    var nodes = document.querySelectorAll('.app-page');
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var p = nodes[i];
+      var id = p.id || '';
+      var show =
+        (page === 'home' && id === 'page-home') ||
+        (page === 'agents' && id === 'page-agents') ||
+        (page === 'contents' && id === 'page-contents') ||
+        (page === 'clients' && id === 'page-clients');
+      p.classList.toggle('hidden', !show);
+    }
+    var navItems = document.querySelectorAll('.app-nav-item');
+    for (i = 0; i < navItems.length; i++) {
+      var nb = navItems[i];
+      var ap = nb.getAttribute('data-app-page') || '';
+      var isCurrent = ap === page && !nb.classList.contains('hidden');
+      nb.classList.toggle('is-active', isCurrent);
+      if (isCurrent) {
+        nb.setAttribute('aria-current', 'page');
+      } else {
+        nb.removeAttribute('aria-current');
+      }
+    }
+    if (page === 'contents') {
+      A.contents.setScreen('list');
+      A.contents.toggleSpecificSections();
+      A.contents.loadList();
+    }
+    if (page === 'clients') {
+      A.clients.setScreen('list');
+      A.clients.loadList();
+    }
+  }
+
+  A.setAppPage = setAppPage;
+
+  function refreshUiAfterLocaleChange() {
+    var llm = S.get('lastLlmCfg');
+    if (llm) {
+      A.chat.applyConsultModeLabels(llm);
+      A.chat.updateHomeChatBanner(llm);
+    }
+    var ce = document.getElementById('chat-empty');
+    if (ce && !ce.classList.contains('hidden')) {
+      ce.textContent = i18n('chat_empty_hint');
+    }
+    var thinking = document.getElementById(A.chat.THINKING_ID);
+    if (thinking) {
+      var tb = thinking.querySelector('.chat-thinking');
+      if (tb) tb.textContent = i18n('chat_thinking');
+    }
+  }
+
+  function renderContextFiles(files) {
+    filesUl.innerHTML = '';
+    for (var i = 0; i < files.length; i++) {
+      (function (f) {
+        var li = document.createElement('li');
+        var lbl = document.createElement('label');
+        var chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.value = f.id;
+        chk.addEventListener('change', function () {
+          if (!chk.checked) return;
+          var n = filesUl.querySelectorAll('input:checked').length;
+          if (n > A.MAX_SELECTION) {
+            chk.checked = false;
+            var askStatus = document.getElementById('ask-status');
+            if (askStatus) {
+              askStatus.textContent = i18nFmt('ask_max_docs', { max: A.MAX_SELECTION });
+              askStatus.classList.add('err');
+            }
+          }
+        });
+        var a = document.createElement('a');
+        a.href = f.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = f.name || f.id;
+        lbl.appendChild(chk);
+        lbl.appendChild(a);
+        li.appendChild(lbl);
+        filesUl.appendChild(li);
+      })(files[i]);
+    }
+  }
+
+  function loadContextFilesLazy() {
+    var cached = A.cache.get('contextFiles');
+    if (cached) {
+      S.set('contextFiles', cached.files);
+      S.set('contextFilesNote', cached.note);
+      renderContextFiles(cached.files);
+      if (sessionNote && cached.note) {
+        sessionNote.textContent = (sessionNote.textContent || '').trim()
+          ? sessionNote.textContent + ' ' + cached.note
+          : cached.note;
+      }
+      return;
+    }
+
+    filesUl.innerHTML = '<li class="text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i>' + i18n('context_files_loading') + '</li>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var files = (res && res.files) || [];
+        var note = (res && res.note) || '';
+        S.set('contextFiles', files);
+        S.set('contextFilesNote', note);
+        A.cache.set('contextFiles', { files: files, note: note }, 120000);
+        renderContextFiles(files);
+        if (sessionNote && note) {
+          var cur = (sessionNote.textContent || '').trim();
+          sessionNote.textContent = cur ? cur + ' ' + note : note;
+        }
+      })
+      .withFailureHandler(function () {
+        filesUl.innerHTML = '';
+      })
+      .getContextFiles();
+  }
+
+  function showApp(bootstrap) {
+    var wantLocale = null;
+    try {
+      var st = localStorage.getItem('aviators_locale');
+      if (st === 'es' || st === 'en') wantLocale = st;
+    } catch (eLoc) {}
+
+    function runShowAppBody() {
+      A.applyClientI18n(bootstrap.i18n);
+      loginStatus.textContent = '\u00a0';
+      viewLogin.classList.add('hidden');
+      viewApp.classList.remove('hidden');
+
+      var data = bootstrap.session || {};
+      var llmCfg = bootstrap.llm || {};
+      S.set('lastLlmCfg', llmCfg);
+
+      sessionNote.textContent = data.note || '';
+      sessionNote.classList.toggle(
+        'err',
+        (!data.email && !!data.note) || !!data.showNoRoleBanner,
+      );
+      emailEl.textContent = data.email || i18n('label_no_email');
+
+      if (userDisplayName)
+        userDisplayName.textContent =
+          data.displayName || data.email || i18n('label_em_dash');
+      if (sidebarRole)
+        sidebarRole.textContent =
+          data.roleLabel || i18n('role_label_visitor');
+
+      var photo = (data.photoUrl || '').trim();
+      if (userAvatar && userAvatarPlaceholder) {
+        userAvatar.referrerPolicy = 'no-referrer';
+        userAvatar.onerror = function Avatar_onerror() {
+          userAvatar.onerror = null;
+          userAvatar.removeAttribute('src');
+          userAvatar.classList.add('hidden');
+          userAvatar.alt = '';
+          userAvatarPlaceholder.classList.remove('hidden');
+          userAvatarPlaceholder.textContent = A.initialsFromDisplayName(
+            data.displayName,
+            data.email,
+          );
+        };
+        if (photo) {
+          userAvatar.src = photo;
+          userAvatar.classList.remove('hidden');
+          userAvatar.alt = data.displayName || data.email || '';
+          userAvatarPlaceholder.classList.add('hidden');
+        } else {
+          userAvatar.removeAttribute('src');
+          userAvatar.classList.add('hidden');
+          userAvatar.alt = '';
+          userAvatarPlaceholder.classList.remove('hidden');
+          userAvatarPlaceholder.textContent = A.initialsFromDisplayName(
+            data.displayName,
+            data.email,
+          );
+        }
+      }
+
+      var isVisitor = !!data.isVisitor;
+      if (homeVisitante) homeVisitante.classList.toggle('hidden', !isVisitor);
+      if (homeMember) homeMember.classList.toggle('hidden', isVisitor);
+
+      A.chat.updateHomeChatBanner(llmCfg);
+
+      var adm = bootstrap.admin || {};
+      var rk = (data.roleKey || '').toLowerCase();
+      var isPresale =
+        rk.indexOf('presale') >= 0 ||
+        rk.indexOf('pre_sale') >= 0 ||
+        rk.indexOf('preventa') >= 0;
+      var isAdm = !!adm.isAdmin;
+      var canManageContents = isAdm || isPresale;
+      if (navPageAgents) navPageAgents.classList.toggle('hidden', !isAdm);
+      if (navPageContents) navPageContents.classList.toggle('hidden', !canManageContents);
+      if (navPageClients) navPageClients.classList.toggle('hidden', !canManageContents);
+      setAppPage('home');
+      if (A.renderDashboard) A.renderDashboard(bootstrap);
+      if (adminAgentStatus) {
+        adminAgentStatus.textContent = '\u00a0';
+        adminAgentStatus.classList.remove('err');
+      }
+      if (isAdm) {
+        A.agents.loadList();
+      }
+
+      A.chat.applyConsultModeInitialState(llmCfg);
+
+      loadContextFilesLazy();
+
+      A.drive.bootstrap(data);
+    }
+
+    if (
+      wantLocale &&
+      bootstrap.i18n &&
+      bootstrap.i18n._locale !== wantLocale
+    ) {
+      google.script.run
+        .withSuccessHandler(function (pack) {
+          if (pack) bootstrap.i18n = pack;
+          runShowAppBody();
+        })
+        .withFailureHandler(function () {
+          runShowAppBody();
+        })
+        .getI18nPack(wantLocale);
+      return;
+    }
+    runShowAppBody();
+  }
+
+  function resetToLogin(message) {
+    viewApp.classList.add('hidden');
+    viewLogin.classList.remove('hidden');
+    loginBtn.disabled = false;
+    A.applyClientI18n(S.get('cachedI18n'));
+    loginStatus.textContent = message || '\u00a0';
+    loginStatus.classList.toggle('err', !!message);
+  }
+
+  function onLogoutClick() {
+    resetToLogin('');
+  }
+
+  function setUiLocale(loc) {
+    var next = loc === 'en' ? 'en' : 'es';
+    try {
+      localStorage.setItem('aviators_locale', next);
+    } catch (eLoc2) {}
+    google.script.run
+      .withSuccessHandler(function (pack) {
+        if (!pack) return;
+        A.applyClientI18n(pack);
+        refreshUiAfterLocaleChange();
+      })
+      .withFailureHandler(function () {})
+      .getI18nPack(next);
+  }
+
+  // --- Event listeners ---
+
+  loginBtn.addEventListener('click', function () {
+    A.setBusy(true, i18n('busy_connecting'));
+    google.script.run
+      .withSuccessHandler(function (bootstrap) {
+        A.setBusy(false, '\u00a0');
+        showApp(bootstrap);
+      })
+      .withFailureHandler(function (e) {
+        A.setLoginError(
+          e && e.message ? e.message : i18n('err_login_session'),
+        );
+      })
+      .getBootstrap();
+  });
+
+  backLogin.addEventListener('click', onLogoutClick);
+
+  if (navBtnHome) {
+    navBtnHome.addEventListener('click', function () { setAppPage('home'); });
+  }
+  if (navPageAgents) {
+    navPageAgents.addEventListener('click', function () { setAppPage('agents'); });
+  }
+  if (navPageContents) {
+    navPageContents.addEventListener('click', function () { setAppPage('contents'); });
+  }
+  if (navPageClients) {
+    navPageClients.addEventListener('click', function () { setAppPage('clients'); });
+  }
+
+  var localeBtnEsEl = document.getElementById('locale-btn-es');
+  var localeBtnEnEl = document.getElementById('locale-btn-en');
+  if (localeBtnEsEl) {
+    localeBtnEsEl.addEventListener('click', function () { setUiLocale('es'); });
+  }
+  if (localeBtnEnEl) {
+    localeBtnEnEl.addEventListener('click', function () { setUiLocale('en'); });
+  }
+
+  var loginLocaleEs = document.getElementById('login-locale-es');
+  var loginLocaleEn = document.getElementById('login-locale-en');
+  function highlightLoginLocale(loc) {
+    if (loginLocaleEs) {
+      loginLocaleEs.classList.toggle('ring-2', loc === 'es');
+      loginLocaleEs.classList.toggle('ring-sky-500', loc === 'es');
+      loginLocaleEs.classList.toggle('bg-sky-50', loc === 'es');
+    }
+    if (loginLocaleEn) {
+      loginLocaleEn.classList.toggle('ring-2', loc === 'en');
+      loginLocaleEn.classList.toggle('ring-sky-500', loc === 'en');
+      loginLocaleEn.classList.toggle('bg-sky-50', loc === 'en');
+    }
+  }
+  function setLoginLocale(loc) {
+    setUiLocale(loc);
+    highlightLoginLocale(loc);
+  }
+  if (loginLocaleEs) {
+    loginLocaleEs.addEventListener('click', function () { setLoginLocale('es'); });
+  }
+  if (loginLocaleEn) {
+    loginLocaleEn.addEventListener('click', function () { setLoginLocale('en'); });
+  }
+  (function initLoginLocale() {
+    var saved = 'es';
+    try { var s = localStorage.getItem('aviators_locale'); if (s === 'en') saved = 'en'; } catch (e) {}
+    highlightLoginLocale(saved);
+  })();
+
+  // --- Dark mode ---
+
+  var themeToggleBtn = document.getElementById('theme-toggle-btn');
+  var themeToggleIcon = document.getElementById('theme-toggle-icon');
+  var themeToggleLabel = document.getElementById('theme-toggle-label');
+
+  function applyTheme(dark) {
+    document.documentElement.classList.toggle('dark', dark);
+    if (themeToggleIcon) {
+      themeToggleIcon.className = dark
+        ? 'fa-solid fa-sun shrink-0 text-amber-400'
+        : 'fa-solid fa-moon shrink-0 text-sky-600';
+    }
+    if (themeToggleLabel) {
+      themeToggleLabel.setAttribute('data-i18n', dark ? 'theme_light' : 'theme_dark');
+      themeToggleLabel.textContent = i18n(dark ? 'theme_light' : 'theme_dark');
+    }
+  }
+
+  (function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem('aviators_theme'); } catch (e) {}
+    var dark = saved === 'dark' || (saved === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    applyTheme(dark);
+  })();
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', function () {
+      var isDark = document.documentElement.classList.contains('dark');
+      var next = !isDark;
+      applyTheme(next);
+      try { localStorage.setItem('aviators_theme', next ? 'dark' : 'light'); } catch (e) {}
+    });
+  }
+
+  // --- Bootstrap ---
+
+  loginBtn.disabled = true;
+  loginStatus.textContent = i18n('session_check');
+  google.script.run
+    .withSuccessHandler(function (bootstrap) {
+      loginBtn.disabled = false;
+      A.applyClientI18n(bootstrap.i18n);
+      loginStatus.textContent = '\u00a0';
+      var s = bootstrap.session || {};
+      if (s.email) {
+        showApp(bootstrap);
+      }
+    })
+    .withFailureHandler(function () {
+      loginBtn.disabled = false;
+      loginStatus.textContent = '\u00a0';
+    })
+    .getBootstrap();
+})(window.Aviators);
+</script>

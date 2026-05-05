@@ -1,0 +1,85 @@
+<script>
+(function (A) {
+  var _container = document.getElementById('toast-container');
+  var _toasts = [];
+  var _counter = 0;
+  var MAX_VISIBLE = 3;
+
+  var ICONS = {
+    success: 'fa-solid fa-circle-check text-emerald-500',
+    error: 'fa-solid fa-circle-exclamation text-red-500',
+    info: 'fa-solid fa-circle-info text-sky-500',
+  };
+  var DEFAULTS = { success: 4000, error: 6000, info: 4000 };
+
+  function show(message, type, durationMs) {
+    if (!_container) return null;
+    var t = type || 'info';
+    var dur = durationMs || DEFAULTS[t] || 4000;
+    var id = 'toast-' + (++_counter);
+
+    var el = document.createElement('div');
+    el.id = id;
+    el.className = 'toast toast-' + t;
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+
+    var icon = document.createElement('i');
+    icon.className = ICONS[t] || ICONS.info;
+    icon.setAttribute('aria-hidden', 'true');
+
+    var text = document.createElement('span');
+    text.className = 'toast-text';
+    text.textContent = message || '';
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Close');
+    close.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    close.addEventListener('click', function () { dismiss(id); });
+
+    el.appendChild(icon);
+    el.appendChild(text);
+    el.appendChild(close);
+
+    _container.appendChild(el);
+    _toasts.push({ id: id, el: el, timer: null });
+
+    void el.offsetHeight;
+    el.classList.add('toast-visible');
+
+    var entry = _toasts[_toasts.length - 1];
+    entry.timer = setTimeout(function () { dismiss(id); }, dur);
+
+    while (_toasts.length > MAX_VISIBLE) {
+      dismiss(_toasts[0].id);
+    }
+    return id;
+  }
+
+  function dismiss(id) {
+    var idx = -1;
+    for (var i = 0; i < _toasts.length; i++) {
+      if (_toasts[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    var entry = _toasts[idx];
+    if (entry.timer) clearTimeout(entry.timer);
+    _toasts.splice(idx, 1);
+    entry.el.classList.remove('toast-visible');
+    entry.el.classList.add('toast-exit');
+    setTimeout(function () {
+      if (entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+    }, 300);
+  }
+
+  A.toast = {
+    show: show,
+    dismiss: dismiss,
+    success: function (msg, dur) { return show(msg, 'success', dur); },
+    error: function (msg, dur) { return show(msg, 'error', dur); },
+    info: function (msg, dur) { return show(msg, 'info', dur); },
+  };
+})(window.Aviators);
+</script>

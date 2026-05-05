@@ -9,6 +9,117 @@ var APP_UI_LOCALE = 'es';
 var UI_STRINGS = {
   es: {
     app_title: 'Aviators',
+    nav_home: 'Inicio',
+    nav_agents: 'Agentes',
+    nav_contents: 'Contenidos',
+    nav_clients: 'Clientes',
+    page_contents_title: 'Contenidos del agente',
+    page_contents_lead:
+      'Subí contenido, extraé metadata, revisá y guardá para indexar automáticamente en el agente correspondiente.',
+    contents_btn_new: 'Nuevo contenido',
+    contents_btn_back_list: 'Volver a la lista',
+    contents_editor_title_new: 'Nuevo contenido',
+    contents_editor_title_edit: 'Editar contenido',
+    contents_editor_subtitle_new:
+      'Elegí el tipo, subí el PDF y revisá los datos antes de guardar.',
+    contents_editor_subtitle_edit:
+      'Ajustá los datos o reemplazá el archivo para reindexar.',
+    contents_step_type: 'Tipo',
+    contents_step_file: 'Archivo',
+    contents_step_review: 'Revisión',
+    contents_type_helper:
+      'Esto define a qué agente se va a indexar el contenido.',
+    contents_dropzone_title: 'Arrastrá un PDF o elegí uno',
+    contents_current_file_label: 'Archivo procesado',
+    contents_btn_replace_file: 'Reemplazar',
+    contents_list_heading: 'Lista de contenidos',
+    contents_list_lead:
+      'Seleccioná una fila para editarla o reemplazar archivo y reprocesar todo el flujo.',
+    contents_filter_type: 'Tipo',
+    contents_filter_query: 'Buscar',
+    contents_filter_query_ph: 'Título, cliente o resumen',
+    contents_type_all: 'Todos',
+    contents_type_pick: 'Elegir tipo…',
+    contents_type_proposal: 'Propuesta',
+    contents_type_success_case: 'Success case',
+    contents_type_client: 'Cliente',
+    contents_legend_title: 'Agentes:',
+    contents_col_title: 'Título',
+    contents_col_type: 'Tipo',
+    contents_col_client: 'Cliente',
+    contents_col_updated: 'Actualizado',
+    contents_col_actions: 'Acciones',
+    contents_btn_edit: 'Editar',
+    contents_list_empty: 'No hay contenidos cargados todavía.',
+    contents_list_count: '{n} contenido(s).',
+    contents_editor_heading: 'Editor de contenido',
+    contents_editor_lead:
+      'Cargá un PDF, extraé metadata con el orquestador y ajustá antes de guardar.',
+    contents_lbl_type: 'Tipo de contenido',
+    contents_dropzone_hint:
+      'Solo PDF. Apenas lo seleccionés se sube, se extrae metadata y se prepara para indexar.',
+    contents_btn_pick_file: 'Elegir archivo',
+    contents_btn_upload: 'Subir archivo',
+    contents_btn_extract: 'Extraer metadata',
+    contents_file_pending_upload: 'Archivo seleccionado: {name} (pendiente de subir).',
+    contents_busy_processing: 'Procesando archivo…',
+    contents_step_reading: 'Leyendo archivo…',
+    contents_step_uploading: 'Enviando a análisis',
+    contents_step_analyzing: 'Analizando documento',
+    contents_step_extracting: 'Extrayendo metadata',
+    contents_step_analyzing_inline: 'Analizando documento con IA…',
+    contents_btn_cancel_upload: 'Cancelar',
+    contents_cancel_confirm:
+      'Se descartará el archivo subido y los datos extraídos. ¿Continuar?',
+    contents_cancelled: 'Operación cancelada.',
+    contents_lbl_title: 'Título',
+    contents_lbl_summary: 'Resumen',
+    contents_lbl_client: 'Cliente',
+    contents_lbl_tags: 'Hashtags',
+    contents_ph_add_tag: '#nuevoTag',
+    contents_btn_add_tag: 'Agregar',
+    contents_specific_proposal_heading: 'Campos de propuesta',
+    contents_specific_success_heading: 'Campos de success case',
+    contents_specific_client_heading: 'Campos de cliente',
+    contents_lbl_stage: 'Stage',
+    contents_lbl_pricing_model: 'Modelo de pricing',
+    contents_lbl_effort: 'Esfuerzo estimado',
+    contents_lbl_notes: 'Notas',
+    contents_lbl_challenge: 'Challenge',
+    contents_lbl_solution: 'Solution',
+    contents_lbl_impact_value: 'Impacto',
+    contents_lbl_account_status: 'Estado de cuenta',
+    contents_lbl_active_projects: 'Proyectos activos',
+    contents_lbl_health_score: 'Health score',
+    contents_btn_save: 'Guardar',
+    contents_btn_delete: 'Eliminar',
+    contents_btn_cancel: 'Cancelar',
+    contents_busy_loading: 'Cargando contenidos…',
+    contents_busy_opening: 'Abriendo contenido…',
+    contents_busy_uploading: 'Subiendo archivo…',
+    contents_busy_extracting: 'Extrayendo metadata…',
+    contents_busy_saving: 'Indexando y guardando…',
+    contents_busy_deleting: 'Eliminando del índice y catálogo…',
+    contents_extraction_done:
+      'Metadata extraída. Revisá y ajustá antes de guardar.',
+    contents_uploaded: 'Archivo subido. Ahora podés extraer metadata.',
+    contents_saved: 'Contenido guardado.',
+    contents_deleted: 'Contenido eliminado.',
+    contents_confirm_delete:
+      'Se eliminará del catálogo y del índice del agente. ¿Continuar?',
+    contents_err_pick_file: 'Elegí un archivo PDF.',
+    contents_err_pick_type: 'Elegí un tipo de contenido.',
+    contents_err_upload_first: 'Primero subí un archivo.',
+    contents_err_upload_read:
+      'No se pudo leer el archivo local. Intentá nuevamente.',
+    contents_err_upload_failed: 'No se pudo subir el archivo.',
+    contents_err_title_required: 'El título es obligatorio.',
+    contents_err_extract_first:
+      'Primero cargá y extraé metadata para obtener el archivo de trabajo.',
+    contents_err_pick_row: 'Elegí una fila para eliminar.',
+    contents_row_busy: 'Procesando…',
+    admin_contents_empty:
+      'No hay agentes todavía. Creá uno en la pestaña Agentes.',
     note_no_email:
       'No pudimos obtener tu correo. Volvé a autorizar la app o revisá el despliegue.',
     note_no_docs:
@@ -23,7 +134,7 @@ var UI_STRINGS = {
       'No tenés un rol asignado, así que el acceso es limitado. Si necesitás más funciones, pedí acceso a quien administre Aviators.',
     dashboard_title: 'Inicio',
     dashboard_lead:
-      'Usá el agente, tus documentos en Drive y el explorador desde esta misma cuenta.',
+      'Escribí abajo y seguí la conversación arriba. Las respuestas aparecen como mensajes.',
     session_no_role_line: 'No tenés un rol asignado.',
     session_role_err_open:
       'No se pudo abrir la planilla de roles (ID incorrecto o tu cuenta sin acceso a ese archivo).',
@@ -38,6 +149,25 @@ var UI_STRINGS = {
     sidebar_account: 'Cuenta',
     sidebar_logout: 'Cerrar sesión',
     sidebar_logout_aria: 'Cerrar sesión',
+    sidebar_language: 'Idioma',
+    lang_option_es: 'Español',
+    lang_option_en: 'Inglés',
+    theme_dark: 'Modo oscuro',
+    theme_light: 'Modo claro',
+    dash_agents_title: 'Agentes',
+    dash_contents_title: 'Contenidos',
+    dash_clients_title: 'Clientes',
+    dash_llm_title: 'LLM',
+    global_search_ph: 'Buscar en todo…',
+    global_search_no_results: 'Sin resultados.',
+    global_search_group_agents: 'Agentes',
+    global_search_group_contents: 'Contenidos',
+    global_search_group_clients: 'Clientes',
+    batch_selected: '{n} seleccionados',
+    batch_delete_selected: 'Eliminar seleccionados',
+    batch_delete_confirm: '¿Eliminar {n} elementos seleccionados?',
+    batch_deleting: 'Eliminando {done} de {total}…',
+    batch_done: '{n} elementos eliminados.',
     label_no_email: '(sin email)',
     label_em_dash: '—',
     err_generic: 'Error.',
@@ -51,9 +181,6 @@ var UI_STRINGS = {
       ' Usá «Cargar más» para la siguiente página.',
     drive_no_session:
       'Sin sesión con email no se puede listar Drive desde la app.',
-    admin_pick_items: '{n} elemento(s).',
-    admin_pick_more_short: ' Usá «Cargar más» si hace falta.',
-    admin_mime_not_eligible: 'Tipo no incluible en el corpus RAG.',
     globant_project_warn:
       'Estado proyecto: posiblemente inactivo/advertencia API.',
     gc_btn_docs: 'Docs',
@@ -98,23 +225,108 @@ var UI_STRINGS = {
     mime_google: 'Google',
     mime_file: 'Archivo',
     mime_trunc: '…',
-    static_consult_heading: 'Tu pregunta',
+    static_consult_heading: 'Conversación con el asistente',
+    static_consult_lead:
+      'Los mensajes quedan arriba; solo esa zona hace scroll. Enter envía; Shift+Enter baja de línea.',
     static_drive_explorer_heading: 'Explorador de Drive',
     static_drive_explorer_lead:
       'Navegá tus carpetas y archivos (solo lectura, misma cuenta que inició sesión). Los archivos se abren en una pestaña nueva.',
     btn_mi_drive: 'Mi Drive',
     btn_back: 'Volver',
     btn_load_more: 'Cargar más',
+    lbl_chat_input_sronly: 'Tu mensaje',
     lbl_question_sronly: 'Pregunta',
-    ph_question:
-      'Escribí cualquier pregunta… (ej.: ¿qué día es hoy? o resumí un documento de la lista de abajo)',
-    ask_agent_btn: 'Preguntar al agente',
-    ask_btn: 'Consultar',
-    footer_logout: 'Cerrar sesión y volver al inicio',
-    static_drive_files_heading: 'Documentos en Drive',
-    admin_sec_title: 'Administración · corpus RAG',
-    admin_lead_html:
-      '<strong>Modo rápido:</strong> una <strong>carpeta raíz</strong> y un botón: se recorre el árbol de subcarpetas y se suben a Globant (como PDF) Docs, Sheets, Slides, Drawing y PDF nativos, hasta el máximo por ciclo (propiedad <code>ADMIN_SYNC_MAX_FILES</code>, hasta 80). Podés además sumar fuentes con el buscador de abajo.',
+    chat_new_conversation: 'Nueva conversación',
+    chat_empty_hint:
+      'Todavía no hay mensajes. Escribí abajo y tocá enviar para ver la respuesta del asistente.',
+    chat_thinking: 'El asistente está escribiendo…',
+    chat_no_relevant_content: 'No encontré información relevante en mi base de conocimiento para responder tu consulta. ¿Podrías reformularla o hacer una pregunta más específica?',
+    chat_sr_you: 'Vos',
+    chat_sr_agent: 'Asistente',
+    home_chat_banner_setup:
+      'El asistente no está disponible por ahora. Si el problema sigue, contactá a quien administra Aviators.',
+    ph_question: 'Escribí tu mensaje…',
+    ask_agent_btn: 'Enviar',
+    ask_btn: 'Enviar con documentos',
+    static_drive_files_heading: 'Archivos de contexto',
+    static_drive_files_lead:
+      'Marcá hasta 5 archivos recientes para que entren en esta respuesta.',
+    page_agents_title: 'Administración de agentes',
+    page_agents_lead:
+      'Cada agente define el nombre del perfil en Globant, las instrucciones del modelo y las fuentes para indexar. Guardá los cambios y sincronizá cuando estés listo.',
+    admin_agent_sec_profile_heading: 'Perfil del agente',
+    admin_agent_sec_profile_lead:
+      'Nombre del perfil RAG en Globant. Tiene que ser único entre tus agentes.',
+    admin_agent_sec_prompt_heading: 'Instrucciones',
+    admin_agent_sec_prompt_lead:
+      'Plantilla opcional que orienta cómo usa el contexto recuperado al responder.',
+    admin_agent_sec_actions_heading: 'Guardar y sincronizar',
+    admin_agent_sec_actions_lead:
+      'Primero guardá perfil, instrucciones y PDF elegidos. Después sincronizá para subirlos al índice en Globant. Eliminar saca el agente del registro en Aviators.',
+    admin_agent_sec_sources_heading: 'Fuentes para el índice',
+    admin_agent_sec_sources_lead:
+      'Arrastrá o elegí PDF aquí; se suben a tu Drive y aparecen como chips abajo.',
+    admin_agent_sec_indexed_lead:
+      'Listado remoto en Globant para este perfil. Refrescá la lista después de sincronizar.',
+    admin_agent_dropzone_aria: 'Zona para arrastrar archivos PDF',
+    admin_agent_dropzone_hint:
+      'Arrastrá uno o varios PDF aquí, o elegí archivos en tu equipo.',
+    btn_admin_agent_upload_pdf: 'Elegir PDF',
+    btn_go_agents: 'Ir a Agentes',
+    admin_upload_progress: 'Subiendo archivo {current} de {total}…',
+    admin_upload_done_added:
+      'Se añadieron {n} archivo(s) a la selección. Guardá el agente si querés persistir.',
+    err_admin_upload_only_pdf:
+      'Solo se pueden subir archivos PDF para este corpus.',
+    err_admin_upload_empty: 'Archivo vacío: «{name}».',
+    err_admin_upload_decode: 'No se pudo leer el archivo «{name}».',
+    err_admin_upload_too_large:
+      'El archivo «{name}» supera el tamaño máximo permitido.',
+    err_admin_upload_mime:
+      'Tipo no válido para el corpus («{name}»: {mime}). Usá PDF.',
+    err_admin_upload_failed: 'No se pudo subir «{name}».',
+    admin_sec_title: 'Agentes',
+    admin_agent_new: 'Nuevo agente',
+    admin_agent_seed_defaults: 'Generar agentes por defecto',
+    lbl_admin_agent_profile: 'Nombre del perfil',
+    ph_admin_agent_profile: 'ej. mi-corpus-aviators',
+    lbl_admin_agent_prompt: 'Instrucciones del agente',
+    admin_agent_prompt_hint_html:
+      'Opcional. Usá <code>{context}</code> y <code>{question}</code> en la plantilla si aplica. Vacío = valor por defecto.',
+    btn_admin_agent_save: 'Guardar agente',
+    btn_admin_agent_sync: 'Sincronizar índice',
+    btn_admin_agent_delete: 'Eliminar agente',
+    btn_admin_agent_refresh_docs: 'Actualizar documentos',
+    admin_agent_globant_docs: 'Documentos indexados',
+    admin_agent_empty_select: 'Elegí un agente en la lista o creá uno nuevo.',
+    admin_agent_list_empty: 'Todavía no hay agentes.',
+    admin_busy_agent_save: 'Guardando agente…',
+    admin_busy_agent_seed: 'Generando agentes por defecto…',
+    admin_agent_seed_loader_hint:
+      'Si hace falta, se crea el archivo de registro en Drive y se añaden los agentes que falten. Puede tardar unos segundos.',
+    admin_busy_agent_sync: 'Sincronizando índice (puede tardar)…',
+    admin_busy_agent_delete: 'Eliminando…',
+    admin_agent_saved: 'Agente guardado.',
+    admin_agent_seed_done_added:
+      'Se crearon {n} agente(s) por defecto faltantes.',
+    admin_agent_seed_done_noop:
+      'Ya existían todos los agentes por defecto.',
+    admin_agent_last_sync: 'Última sincronización: {date}',
+    admin_agent_sync_done:
+      'Listo: perfil «{profile}» · subidos {uploaded}/{total}.',
+    err_admin_agent_payload: 'Datos del agente no válidos.',
+    err_admin_agent_profile_name:
+      'El nombre del perfil debe tener 2–80 caracteres: letras, números, guión bajo o medio; debe empezar con letra o número.',
+    err_admin_agent_duplicate: 'Ya existe un agente con el perfil «{name}».',
+    err_admin_agent_id: 'Falta el identificador del agente.',
+    err_admin_agent_not_found: 'No se encontró ese agente.',
+    err_admin_agent_seed:
+      'No se pudieron crear o verificar los agentes por defecto.',
+    confirm_delete_agent_registry:
+      '¿Eliminar este agente de Aviators? Si existe en Globant (modo RAG), también se pedirá borrar el perfil allí.',
+    admin_agent_delete_modal_title: '¿Eliminar este agente?',
+    admin_agent_delete_modal_cancel: 'Cancelar',
+    admin_agent_delete_modal_confirm: 'Sí, eliminar',
     admin_globant_summary: 'Agentes Globant — listar y eliminar',
     admin_globant_howto_html:
       'Cada <strong>agente</strong> es un <strong>perfil RAG</strong> del proyecto de tu API key (endpoint <code>GET /v1/search/profiles</code>). Tocá <strong>Actualizar listado</strong> y elegí <strong>Eliminar agente</strong> en la fila que quieras.',
@@ -144,18 +356,11 @@ var UI_STRINGS = {
     btn_save_config: 'Guardar configuración',
     btn_clear_selection: 'Vaciar selección',
     btn_sync_corpus: 'Sincronizar corpus (recrear perfil)',
-    admin_pick_title: 'Elegir en tu Drive',
     btn_close: 'Cerrar',
-    admin_pick_foot_html:
-      'Solo se pueden marcar archivos que el corpus puede subir como PDF (Google Docs, Sheets, Slides, Drawing, PDF). Las carpetas marcan todo el árbol al sincronizar.',
-    admin_pick_cancel: 'Cancelar',
-    admin_pick_add: 'Añadir a la selección',
     chip_folder: 'CARPETA',
     chip_file: 'ARCHIVO',
     chip_remove_aria: 'Quitar',
     admin_need_email_drive: 'Necesitás sesión con email para explorar Drive.',
-    admin_pick_added:
-      'Listo: sumé {folders} carpeta(s) y {files} archivo(s). Guardá la configuración si querés persistir.',
     admin_search_no_results:
       'Sin resultados para «{q}». Probá otras palabras o marcar búsqueda en contenido.',
     admin_search_results: '{count} resultado(s).',
@@ -180,7 +385,6 @@ var UI_STRINGS = {
     confirm_delete_profile: '¿Eliminar el agente RAG «{name}»? Esta acción no se puede deshacer.',
     confirm_delete_doc: '¿Eliminar del índice el documento {id}?',
     generic_folder_name: 'Carpeta',
-    admin_open: 'Abrir',
     admin_add_folder: 'Sumar carpeta',
     admin_add_file: 'Sumar archivo',
     err_globant_list: 'Error al listar Globant.',
@@ -194,6 +398,7 @@ var UI_STRINGS = {
     gc_empty_docs_page: '(Sin resultados en este tramo)',
     gc_load_more: 'Cargar más documentos ({listed}/{total})',
     gc_remove: 'Quitar',
+    gc_view_file: 'Ver',
     gc_asst_summary:
       '{count} elemento(s) en Files API · no son agentes RAG (modo Assistant).',
     gc_col_name: 'Nombre',
@@ -204,14 +409,22 @@ var UI_STRINGS = {
     err_ask: 'Error al consultar.',
     ask_empty_question: 'Escribí una pregunta.',
     busy_consulting_agent: 'Consultando con el agente…',
+    orch_step_routing: 'Analizando tu consulta…',
+    orch_step_delegating: 'Delegando a {agent}…',
+    orch_step_answering: '{agent} está respondiendo…',
+    orch_step_multi: 'Consultando a {agents}…',
+    orch_routed_badge: 'Respondido por {agent}',
+    orch_no_results:
+      'Ninguno de los agentes encontró contenido relevante en su índice para esta consulta.',
     err_ask_agent: 'Error al llamar al API.',
     ask_max_docs: 'Podés seleccionar como máximo {max} documentos.',
-    consult_heading_globant: 'Tu pregunta — agente Globant',
-    consult_heading_gemini: 'Tu pregunta — Gemini',
-    consult_heading_none: 'Tu pregunta — sin modelo configurado',
-    drive_heading_globant: 'Documentos en Drive (solo para consulta con documentos)',
-    drive_heading_gemini: 'Documentos en Drive (marcá hasta 5)',
-    drive_heading_plain: 'Documentos en Drive',
+    consult_heading_globant: 'Preguntale al agente',
+    consult_heading_gemini: 'Pregunta con Gemini y documentos',
+    consult_heading_none: 'Consultas (sin modelo configurado)',
+    drive_heading_globant:
+      'Selección desde Drive oculta: en Globant preguntás al perfil/agente configurado.',
+    drive_heading_gemini: 'Archivos para esta respuesta',
+    drive_heading_plain: 'Archivos',
     btn_consult_drive: 'Consultar con documentos de Drive',
     answer_placeholder_globant:
       'Acá verás la respuesta. «Preguntar al agente» usa tu perfil RAG Globant con el corpus que sincronicés desde Drive (PDF, Docs, Sheets, Slides). «Consultar con documentos» exporta los archivos marcados arriba a PDF y arma el contexto de la respuesta.',
@@ -282,6 +495,8 @@ var UI_STRINGS = {
     globant_assistant_files_list_hint:
       'Modo Assistant: los archivos no son los documentos indexados del RAG; se listan vía GET /v1/files/all.',
     err_globant_profile_name_required: 'Indicá el nombre del perfil RAG.',
+    err_orchestrator_missing:
+      'No se encontró el agente orquestador en la configuración.',
     err_globant_rag_list_mode_only:
       'Este listado sólo aplica con GLOBANT_API_MODE vacío o rag.',
     err_globant_delete_profile_rag_only:
@@ -345,6 +560,9 @@ var UI_STRINGS = {
       'modo Assistant (sin filtro documento RAG)',
     meta_filter_rag_doc_id: 'id = {id}',
     meta_filter_rag_full_profile: 'sin filtro (perfil completo)',
+    meta_filter_profile: 'perfil = {profile}',
+    meta_orchestrator_selected_agent:
+      'Enrutado a {agent} · confianza {confidence}',
     meta_provider_gemini_api: 'Gemini API',
     llm_gemini_system_preamble:
       'Respondé en español usando solo información de los documentos. Si algo no aparece ahí, decilo claramente. Podés usar viñetas.',
@@ -353,9 +571,154 @@ var UI_STRINGS = {
     llm_gemini_doc_heading: '### {name}\n',
     llm_gemini_between_docs: '\n\n---\n',
     llm_gemini_block_read_error: '### id {id}\n_Error: {err}_',
+    page_clients_title: 'Clientes',
+    page_clients_lead:
+      'Gestioná tu cartera de clientes. Podés agregar metadata como industria, país y contacto principal.',
+    clients_btn_new: 'Nuevo cliente',
+    clients_btn_back_list: 'Volver a la lista',
+    clients_th_name: 'Nombre',
+    clients_th_industry: 'Industria',
+    clients_th_country: 'País',
+    clients_th_contact: 'Contacto',
+    clients_th_actions: 'Acciones',
+    clients_lbl_name: 'Nombre del cliente',
+    clients_lbl_industry: 'Industria',
+    clients_lbl_country: 'País',
+    clients_lbl_contact_name: 'Nombre del contacto',
+    clients_lbl_contact_email: 'Email del contacto',
+    clients_lbl_notes: 'Notas',
+    clients_btn_save: 'Guardar cliente',
+    clients_btn_delete: 'Eliminar',
+    clients_btn_cancel: 'Cancelar',
+    clients_busy_loading: 'Cargando clientes…',
+    clients_busy_saving: 'Guardando cliente…',
+    clients_busy_deleting: 'Eliminando cliente…',
+    clients_saved: 'Cliente guardado.',
+    clients_deleted: 'Cliente eliminado.',
+    clients_err_name_required: 'El nombre del cliente es requerido.',
+    clients_confirm_delete: '¿Eliminar este cliente permanentemente?',
+    clients_no_items: 'No hay clientes registrados.',
+    clients_load_more: 'Cargar más',
+    clients_showing_of: 'Mostrando {shown} de {total}.',
+    contents_client_combo_new: '+ Agregar nuevo cliente',
+    contents_client_combo_placeholder: 'Seleccionar cliente…',
+    contents_load_more: 'Cargar más',
+    contents_showing_of: 'Mostrando {shown} de {total}.',
+    context_files_loading: 'Cargando archivos de contexto…',
   },
   en: {
     app_title: 'Aviators',
+    nav_home: 'Home',
+    nav_agents: 'Agents',
+    nav_contents: 'Content',
+    nav_clients: 'Clients',
+    page_contents_title: 'Agent content',
+    page_contents_lead:
+      'Upload content, extract metadata, review and save it to auto-index into the matching agent.',
+    contents_btn_new: 'New content',
+    contents_btn_back_list: 'Back to list',
+    contents_editor_title_new: 'New content',
+    contents_editor_title_edit: 'Edit content',
+    contents_editor_subtitle_new:
+      'Pick a type, upload the PDF and review the data before saving.',
+    contents_editor_subtitle_edit:
+      'Adjust the data or replace the file to re-index.',
+    contents_step_type: 'Type',
+    contents_step_file: 'File',
+    contents_step_review: 'Review',
+    contents_type_helper:
+      'This decides which agent the content gets indexed into.',
+    contents_dropzone_title: 'Drop a PDF or pick one',
+    contents_current_file_label: 'Processed file',
+    contents_btn_replace_file: 'Replace',
+    contents_list_heading: 'Content list',
+    contents_list_lead:
+      'Pick a row to edit it, or replace its file and run the full process again.',
+    contents_filter_type: 'Type',
+    contents_filter_query: 'Search',
+    contents_filter_query_ph: 'Title, client or summary',
+    contents_type_all: 'All',
+    contents_type_pick: 'Pick type…',
+    contents_type_proposal: 'Proposal',
+    contents_type_success_case: 'Success case',
+    contents_type_client: 'Client',
+    contents_legend_title: 'Agents:',
+    contents_col_title: 'Title',
+    contents_col_type: 'Type',
+    contents_col_client: 'Client',
+    contents_col_updated: 'Updated',
+    contents_col_actions: 'Actions',
+    contents_btn_edit: 'Edit',
+    contents_list_empty: 'No content items yet.',
+    contents_list_count: '{n} item(s).',
+    contents_editor_heading: 'Content editor',
+    contents_editor_lead:
+      'Upload a PDF, extract metadata with the orchestrator, then adjust before saving.',
+    contents_lbl_type: 'Content type',
+    contents_dropzone_hint:
+      'PDF only. As soon as you pick it we upload, extract metadata and prepare to index.',
+    contents_btn_pick_file: 'Choose file',
+    contents_btn_upload: 'Upload file',
+    contents_btn_extract: 'Extract metadata',
+    contents_file_pending_upload: 'Selected file: {name} (pending upload).',
+    contents_busy_processing: 'Processing file…',
+    contents_step_reading: 'Reading file…',
+    contents_step_uploading: 'Sending for analysis',
+    contents_step_analyzing: 'Analyzing document',
+    contents_step_extracting: 'Extracting metadata',
+    contents_step_analyzing_inline: 'Analyzing document with AI…',
+    contents_btn_cancel_upload: 'Cancel',
+    contents_cancel_confirm:
+      'The uploaded file and extracted data will be discarded. Continue?',
+    contents_cancelled: 'Operation cancelled.',
+    contents_lbl_title: 'Title',
+    contents_lbl_summary: 'Summary',
+    contents_lbl_client: 'Client',
+    contents_lbl_tags: 'Hashtags',
+    contents_ph_add_tag: '#newTag',
+    contents_btn_add_tag: 'Add',
+    contents_specific_proposal_heading: 'Proposal fields',
+    contents_specific_success_heading: 'Success case fields',
+    contents_specific_client_heading: 'Client fields',
+    contents_lbl_stage: 'Stage',
+    contents_lbl_pricing_model: 'Pricing model',
+    contents_lbl_effort: 'Estimated effort',
+    contents_lbl_notes: 'Notes',
+    contents_lbl_challenge: 'Challenge',
+    contents_lbl_solution: 'Solution',
+    contents_lbl_impact_value: 'Impact',
+    contents_lbl_account_status: 'Account status',
+    contents_lbl_active_projects: 'Active projects',
+    contents_lbl_health_score: 'Health score',
+    contents_btn_save: 'Save',
+    contents_btn_delete: 'Delete',
+    contents_btn_cancel: 'Cancel',
+    contents_busy_loading: 'Loading content…',
+    contents_busy_opening: 'Opening content…',
+    contents_busy_uploading: 'Uploading file…',
+    contents_busy_extracting: 'Extracting metadata…',
+    contents_busy_saving: 'Indexing and saving…',
+    contents_busy_deleting: 'Deleting from index and catalog…',
+    contents_extraction_done:
+      'Metadata extracted. Review and adjust before saving.',
+    contents_uploaded: 'File uploaded. You can now extract metadata.',
+    contents_saved: 'Content saved.',
+    contents_deleted: 'Content deleted.',
+    contents_confirm_delete:
+      'This removes the item from catalog and agent index. Continue?',
+    contents_err_pick_file: 'Choose a PDF file.',
+    contents_err_pick_type: 'Choose a content type.',
+    contents_err_upload_first: 'Upload a file first.',
+    contents_err_upload_read:
+      'Could not read the local file. Please try again.',
+    contents_err_upload_failed: 'Could not upload the file.',
+    contents_err_title_required: 'Title is required.',
+    contents_err_extract_first:
+      'Upload and extract metadata first to get a working file.',
+    contents_err_pick_row: 'Pick a row to delete.',
+    contents_row_busy: 'Processing…',
+    admin_contents_empty:
+      'No agents yet. Create one in the Agents tab.',
     note_no_email:
       'We could not get your email. Re-authorize the app or check deployment.',
     note_no_docs:
@@ -369,7 +732,7 @@ var UI_STRINGS = {
       "You don't have a role assigned, so access is limited. If you need more features, ask your Aviators admin.",
     dashboard_title: 'Home',
     dashboard_lead:
-      'Use the agent, your Drive files, and the explorer with this account.',
+      'Write below and follow the conversation above. Replies appear as messages.',
     session_no_role_line: "You don't have a role assigned.",
     session_role_err_open:
       'Could not open the roles spreadsheet (wrong ID or your account has no access).',
@@ -384,6 +747,25 @@ var UI_STRINGS = {
     sidebar_account: 'Account',
     sidebar_logout: 'Sign out',
     sidebar_logout_aria: 'Sign out',
+    sidebar_language: 'Language',
+    lang_option_es: 'Spanish',
+    lang_option_en: 'English',
+    theme_dark: 'Dark mode',
+    theme_light: 'Light mode',
+    dash_agents_title: 'Agents',
+    dash_contents_title: 'Contents',
+    dash_clients_title: 'Clients',
+    dash_llm_title: 'LLM',
+    global_search_ph: 'Search everything…',
+    global_search_no_results: 'No results.',
+    global_search_group_agents: 'Agents',
+    global_search_group_contents: 'Contents',
+    global_search_group_clients: 'Clients',
+    batch_selected: '{n} selected',
+    batch_delete_selected: 'Delete selected',
+    batch_delete_confirm: 'Delete {n} selected items?',
+    batch_deleting: 'Deleting {done} of {total}…',
+    batch_done: '{n} items deleted.',
     label_no_email: '(no email)',
     label_em_dash: '—',
     err_generic: 'Error.',
@@ -395,9 +777,6 @@ var UI_STRINGS = {
     drive_status_more_hint: ' Use “Load more” for the next page.',
     drive_no_session:
       'Drive cannot be listed without an email session.',
-    admin_pick_items: '{n} item(s).',
-    admin_pick_more_short: ' Use “Load more” if needed.',
-    admin_mime_not_eligible: 'MIME type not allowed for RAG corpus.',
     globant_project_warn: 'Project status: possibly inactive / API warning.',
     gc_btn_docs: 'Docs',
     gc_btn_clear_docs: 'Clear docs',
@@ -439,23 +818,107 @@ var UI_STRINGS = {
     mime_google: 'Google',
     mime_file: 'File',
     mime_trunc: '…',
-    static_consult_heading: 'Your question',
+    static_consult_heading: 'Conversation with the assistant',
+    static_consult_lead:
+      'Messages stay above; only that area scrolls. Enter sends; Shift+Enter adds a new line.',
     static_drive_explorer_heading: 'Drive explorer',
     static_drive_explorer_lead:
       'Browse your folders and files (read-only, same account as signed in). Files open in a new tab.',
     btn_mi_drive: 'My Drive',
     btn_back: 'Back',
     btn_load_more: 'Load more',
+    lbl_chat_input_sronly: 'Your message',
+    chat_new_conversation: 'New conversation',
+    chat_empty_hint:
+      'No messages yet. Type below and tap send to see the assistant reply.',
+    chat_thinking: 'The assistant is typing…',
+    chat_no_relevant_content: 'I couldn\'t find relevant information in my knowledge base to answer your query. Could you rephrase it or ask a more specific question?',
+    chat_sr_you: 'You',
+    chat_sr_agent: 'Assistant',
+    home_chat_banner_setup:
+      'The assistant is not available right now. If this keeps happening, contact your Aviators admin.',
     lbl_question_sronly: 'Question',
-    ph_question:
-      'Type any question… (e.g. what day is it? or summarize a document from the list below)',
-    ask_agent_btn: 'Ask the agent',
-    ask_btn: 'Ask',
-    footer_logout: 'Sign out and return to start',
-    static_drive_files_heading: 'Documents in Drive',
-    admin_sec_title: 'Administration · RAG corpus',
-    admin_lead_html:
-      '<strong>Quick mode:</strong> one <strong>root folder</strong> and one button: the subfolder tree is walked and uploaded to Globant as PDF (Docs, Sheets, Slides, Drawing, native PDFs), up to the max per cycle (<code>ADMIN_SYNC_MAX_FILES</code>, up to 80). You can also add sources via the search below.',
+    ph_question: 'Type your message…',
+    ask_agent_btn: 'Send',
+    ask_btn: 'Send with documents',
+    static_drive_files_heading: 'Context files',
+    static_drive_files_lead:
+      'Select up to 5 recent files to include in this answer.',
+    page_agents_title: 'Agent administration',
+    page_agents_lead:
+      'Each agent defines the Globant profile name, model instructions, and sources to index. Save changes and sync when you are ready.',
+    admin_agent_sec_profile_heading: 'Agent profile',
+    admin_agent_sec_profile_lead:
+      'Globant RAG profile name. It must be unique among your agents.',
+    admin_agent_sec_prompt_heading: 'Instructions',
+    admin_agent_sec_prompt_lead:
+      'Optional template that guides how retrieved context is used when answering.',
+    admin_agent_sec_actions_heading: 'Save and sync',
+    admin_agent_sec_actions_lead:
+      'Save profile, instructions, and PDF selection first. Then sync to upload them to the Globant index. Delete removes the agent from Aviators.',
+    admin_agent_sec_sources_heading: 'Sources for the index',
+    admin_agent_sec_sources_lead:
+      'Drag or choose PDFs here; they upload to your Drive and appear as chips below.',
+    admin_agent_sec_indexed_lead:
+      'Remote Globant listing for this profile. Refresh the list after syncing.',
+    admin_agent_dropzone_aria: 'Drop PDF files here',
+    admin_agent_dropzone_hint:
+      'Drop one or more PDFs here, or choose files on your computer.',
+    btn_admin_agent_upload_pdf: 'Choose PDF',
+    btn_go_agents: 'Go to Agents',
+    admin_upload_progress: 'Uploading file {current} of {total}…',
+    admin_upload_done_added:
+      '{n} file(s) added to the selection. Save the agent to persist.',
+    err_admin_upload_only_pdf: 'Only PDF files can be uploaded for this corpus.',
+    err_admin_upload_empty: 'Empty file: «{name}».',
+    err_admin_upload_decode: 'Could not read file «{name}».',
+    err_admin_upload_too_large:
+      'File «{name}» exceeds the maximum allowed size.',
+    err_admin_upload_mime:
+      'Unsupported type for the corpus («{name}»: {mime}). Use PDF.',
+    err_admin_upload_failed: 'Could not upload «{name}».',
+    admin_sec_title: 'Agents',
+    admin_agent_new: 'New agent',
+    admin_agent_seed_defaults: 'Generate default agents',
+    lbl_admin_agent_profile: 'Profile name',
+    ph_admin_agent_profile: 'e.g. my-aviators-corpus',
+    lbl_admin_agent_prompt: 'Agent instructions',
+    admin_agent_prompt_hint_html:
+      'Optional. Use <code>{context}</code> and <code>{question}</code> in the template when needed. Empty = default.',
+    btn_admin_agent_save: 'Save agent',
+    btn_admin_agent_sync: 'Sync index',
+    btn_admin_agent_delete: 'Delete agent',
+    btn_admin_agent_refresh_docs: 'Refresh documents',
+    admin_agent_globant_docs: 'Indexed documents',
+    admin_agent_empty_select: 'Pick an agent from the list or create a new one.',
+    admin_agent_list_empty: 'No agents yet.',
+    admin_busy_agent_save: 'Saving agent…',
+    admin_busy_agent_seed: 'Generating default agents…',
+    admin_agent_seed_loader_hint:
+      'If needed, the registry file is created in Drive and any missing default agents are added. This may take a few seconds.',
+    admin_busy_agent_sync: 'Syncing index (may take a while)…',
+    admin_busy_agent_delete: 'Deleting…',
+    admin_agent_saved: 'Agent saved.',
+    admin_agent_seed_done_added:
+      'Created {n} missing default agent(s).',
+    admin_agent_seed_done_noop:
+      'All default agents already exist.',
+    admin_agent_last_sync: 'Last sync: {date}',
+    admin_agent_sync_done:
+      'Done: profile «{profile}» · uploaded {uploaded}/{total}.',
+    err_admin_agent_payload: 'Invalid agent data.',
+    err_admin_agent_profile_name:
+      'Profile name must be 2–80 characters: letters, digits, underscore or hyphen; must start with a letter or digit.',
+    err_admin_agent_duplicate: 'An agent with profile «{name}» already exists.',
+    err_admin_agent_id: 'Agent id is required.',
+    err_admin_agent_not_found: 'That agent was not found.',
+    err_admin_agent_seed:
+      'Could not create or verify default agents.',
+    confirm_delete_agent_registry:
+      'Remove this agent from Aviators? If it exists in Globant (RAG mode), the remote profile will be deleted too.',
+    admin_agent_delete_modal_title: 'Delete this agent?',
+    admin_agent_delete_modal_cancel: 'Cancel',
+    admin_agent_delete_modal_confirm: 'Yes, delete',
     admin_globant_summary: 'Globant agents — list and delete',
     admin_globant_howto_html:
       'Each <strong>agent</strong> is a RAG <strong>profile</strong> for your API key project (<code>GET /v1/search/profiles</code>). Click <strong>Refresh list</strong> and choose <strong>Delete agent</strong> on the row you want.',
@@ -485,18 +948,11 @@ var UI_STRINGS = {
     btn_save_config: 'Save configuration',
     btn_clear_selection: 'Clear selection',
     btn_sync_corpus: 'Sync corpus (recreate profile)',
-    admin_pick_title: 'Pick from your Drive',
     btn_close: 'Close',
-    admin_pick_foot_html:
-      'Only files the corpus can upload as PDF (Google Docs, Sheets, Slides, Drawing, PDF) can be marked. Folders mark the whole tree when syncing.',
-    admin_pick_cancel: 'Cancel',
-    admin_pick_add: 'Add to selection',
     chip_folder: 'FOLDER',
     chip_file: 'FILE',
     chip_remove_aria: 'Remove',
     admin_need_email_drive: 'You need a session with email to browse Drive.',
-    admin_pick_added:
-      'Done: added {folders} folder(s) and {files} file(s). Save configuration to persist.',
     admin_search_no_results:
       'No results for “{q}”. Try other words or enable full-text search.',
     admin_search_results: '{count} result(s).',
@@ -522,7 +978,6 @@ var UI_STRINGS = {
       'Delete RAG agent «{name}»? This cannot be undone.',
     confirm_delete_doc: 'Remove document {id} from the index?',
     generic_folder_name: 'Folder',
-    admin_open: 'Open',
     admin_add_folder: 'Add folder',
     admin_add_file: 'Add file',
     err_globant_list: 'Error listing Globant.',
@@ -536,6 +991,7 @@ var UI_STRINGS = {
     gc_empty_docs_page: '(No results in this page)',
     gc_load_more: 'Load more documents ({listed}/{total})',
     gc_remove: 'Remove',
+    gc_view_file: 'View',
     gc_asst_summary:
       '{count} item(s) in Files API · not RAG agents (Assistant mode).',
     gc_col_name: 'Name',
@@ -546,14 +1002,22 @@ var UI_STRINGS = {
     err_ask: 'Error while asking.',
     ask_empty_question: 'Type a question.',
     busy_consulting_agent: 'Calling the agent…',
+    orch_step_routing: 'Analyzing your query…',
+    orch_step_delegating: 'Delegating to {agent}…',
+    orch_step_answering: '{agent} is answering…',
+    orch_step_multi: 'Querying {agents}…',
+    orch_routed_badge: 'Answered by {agent}',
+    orch_no_results:
+      'None of the agents found relevant content in their index for this query.',
     err_ask_agent: 'Error calling the API.',
     ask_max_docs: 'You can select at most {max} documents.',
-    consult_heading_globant: 'Your question — Globant agent',
-    consult_heading_gemini: 'Your question — Gemini',
-    consult_heading_none: 'Your question — no model configured',
-    drive_heading_globant: 'Documents in Drive (for document-backed Q&A only)',
-    drive_heading_gemini: 'Documents in Drive (select up to 5)',
-    drive_heading_plain: 'Documents in Drive',
+    consult_heading_globant: 'Ask the agent',
+    consult_heading_gemini: 'Ask with Gemini and documents',
+    consult_heading_none: 'Questions (no model configured)',
+    drive_heading_globant:
+      'Drive pickers hidden: with Globant you query the configured profile/agent.',
+    drive_heading_gemini: 'Files for this answer',
+    drive_heading_plain: 'Files',
     btn_consult_drive: 'Ask using selected Drive documents',
     answer_placeholder_globant:
       'The answer appears here. “Ask the agent” uses your Globant RAG profile and corpus synced from Drive. “Ask with documents” exports selected files to PDF and builds context.',
@@ -620,6 +1084,8 @@ var UI_STRINGS = {
     globant_assistant_files_list_hint:
       'Assistant mode: these files are not RAG indexed docs; they are listed via GET /v1/files/all.',
     err_globant_profile_name_required: 'Enter the RAG profile name.',
+    err_orchestrator_missing:
+      'The orchestrator agent was not found in configuration.',
     err_globant_rag_list_mode_only:
       'This list only applies with GLOBANT_API_MODE empty or rag.',
     err_globant_delete_profile_rag_only:
@@ -683,6 +1149,9 @@ var UI_STRINGS = {
       'Assistant mode (no RAG document filter)',
     meta_filter_rag_doc_id: 'id = {id}',
     meta_filter_rag_full_profile: 'no filter (full profile)',
+    meta_filter_profile: 'profile = {profile}',
+    meta_orchestrator_selected_agent:
+      'Routed to {agent} · confidence {confidence}',
     meta_provider_gemini_api: 'Gemini API',
     llm_gemini_system_preamble:
       'Answer in English using only information from the documents. If something is not there, say so clearly. You may use bullet points.',
@@ -691,6 +1160,40 @@ var UI_STRINGS = {
     llm_gemini_doc_heading: '### {name}\n',
     llm_gemini_between_docs: '\n\n---\n',
     llm_gemini_block_read_error: '### id {id}\n_Error: {err}_',
+    page_clients_title: 'Clients',
+    page_clients_lead:
+      'Manage your client portfolio. Add metadata like industry, country, and main contact.',
+    clients_btn_new: 'New client',
+    clients_btn_back_list: 'Back to list',
+    clients_th_name: 'Name',
+    clients_th_industry: 'Industry',
+    clients_th_country: 'Country',
+    clients_th_contact: 'Contact',
+    clients_th_actions: 'Actions',
+    clients_lbl_name: 'Client name',
+    clients_lbl_industry: 'Industry',
+    clients_lbl_country: 'Country',
+    clients_lbl_contact_name: 'Contact name',
+    clients_lbl_contact_email: 'Contact email',
+    clients_lbl_notes: 'Notes',
+    clients_btn_save: 'Save client',
+    clients_btn_delete: 'Delete',
+    clients_btn_cancel: 'Cancel',
+    clients_busy_loading: 'Loading clients…',
+    clients_busy_saving: 'Saving client…',
+    clients_busy_deleting: 'Deleting client…',
+    clients_saved: 'Client saved.',
+    clients_deleted: 'Client deleted.',
+    clients_err_name_required: 'Client name is required.',
+    clients_confirm_delete: 'Delete this client permanently?',
+    clients_no_items: 'No clients registered.',
+    clients_load_more: 'Load more',
+    clients_showing_of: 'Showing {shown} of {total}.',
+    contents_client_combo_new: '+ Add new client',
+    contents_client_combo_placeholder: 'Select client…',
+    contents_load_more: 'Load more',
+    contents_showing_of: 'Showing {shown} of {total}.',
+    context_files_loading: 'Loading context files…',
   },
 };
 
@@ -730,17 +1233,26 @@ function UiStrings_fmt_(key, vars) {
 }
 
 /**
- * Objeto plano para HtmlService (un idioma activo).
+ * Pack de textos para un locale (cliente / getI18nPack).
+ * @param {'es'|'en'} locale
  * @return {Object<string, string>}
  */
-function UiStrings_getClientPack_() {
-  var locale = UiStrings_activeLocale_();
-  var src = UI_STRINGS[locale] || UI_STRINGS.es;
+function UiStrings_getClientPackForLocale(locale) {
+  var loc = locale === 'en' ? 'en' : 'es';
+  var src = UI_STRINGS[loc] || UI_STRINGS.es;
   /** @type {Object<string, string>} */
   var out = {};
   for (var k in src) {
     if (Object.prototype.hasOwnProperty.call(src, k)) out[k] = src[k];
   }
-  out._locale = locale;
+  out._locale = loc;
   return out;
+}
+
+/**
+ * Objeto plano para HtmlService (un idioma activo).
+ * @return {Object<string, string>}
+ */
+function UiStrings_getClientPack_() {
+  return UiStrings_getClientPackForLocale(UiStrings_activeLocale_());
 }

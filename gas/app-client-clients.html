@@ -1,0 +1,357 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var clientsNewBtn = document.getElementById('clients-new-btn');
+  var clientsScreenList = document.getElementById('clients-screen-list');
+  var clientsScreenEditor = document.getElementById('clients-screen-editor');
+  var clientsListLoader = document.getElementById('clients-list-loader');
+  var clientsListLoaderMsg = document.getElementById('clients-list-loader-msg');
+  var clientsTableBody = document.getElementById('clients-table-body');
+  var clientsListStatus = document.getElementById('clients-list-status');
+  var clientsEditorTitle = document.getElementById('clients-editor-title');
+  var clientsEditorSubtitle = document.getElementById('clients-editor-subtitle');
+  var clientsBackBtn = document.getElementById('clients-back-btn');
+  var clientsId = document.getElementById('clients-id');
+  var clientsName = document.getElementById('clients-name');
+  var clientsIndustry = document.getElementById('clients-industry');
+  var clientsCountry = document.getElementById('clients-country');
+  var clientsContactName = document.getElementById('clients-contact-name');
+  var clientsContactEmail = document.getElementById('clients-contact-email');
+  var clientsNotes = document.getElementById('clients-notes');
+  var clientsSaveBtn = document.getElementById('clients-save-btn');
+  var clientsDeleteBtn = document.getElementById('clients-delete-btn');
+  var clientsCancelBtn = document.getElementById('clients-cancel-btn');
+  var clientsEditorStatus = document.getElementById('clients-editor-status');
+
+  function clientsSetScreen(mode) {
+    var isList = mode === 'list';
+    if (clientsScreenList) clientsScreenList.classList.toggle('hidden', !isList);
+    if (clientsScreenEditor) clientsScreenEditor.classList.toggle('hidden', isList);
+  }
+
+  function clientsSetListBusy(on, msg) {
+    if (clientsListLoader) clientsListLoader.classList.toggle('hidden', !on);
+    if (clientsListLoaderMsg) clientsListLoaderMsg.textContent = on ? msg || '' : '';
+  }
+
+  function clientsSetListStatus(msg, isErr) {
+    if (!clientsListStatus) return;
+    clientsListStatus.textContent = msg || '\u00a0';
+    clientsListStatus.classList.toggle('err', !!isErr);
+  }
+
+  function clientsSetEditorStatus(msg, isErr) {
+    if (!clientsEditorStatus) return;
+    clientsEditorStatus.textContent = msg || '\u00a0';
+    clientsEditorStatus.classList.toggle('err', !!isErr);
+  }
+
+  function clientsResetForm() {
+    S.set('clientsSelectedId', null);
+    if (clientsId) clientsId.value = '';
+    if (clientsName) clientsName.value = '';
+    if (clientsIndustry) clientsIndustry.value = '';
+    if (clientsCountry) clientsCountry.value = '';
+    if (clientsContactName) clientsContactName.value = '';
+    if (clientsContactEmail) clientsContactEmail.value = '';
+    if (clientsNotes) clientsNotes.value = '';
+    clientsSetEditorStatus('\u00a0', false);
+  }
+
+  function clientsFillForm(item) {
+    if (!item) return;
+    S.set('clientsSelectedId', item.client_id || null);
+    if (clientsId) clientsId.value = item.client_id || '';
+    if (clientsName) clientsName.value = item.client_name || '';
+    if (clientsIndustry) clientsIndustry.value = item.industry || '';
+    if (clientsCountry) clientsCountry.value = item.country || '';
+    if (clientsContactName) clientsContactName.value = item.main_contact_name || '';
+    if (clientsContactEmail) clientsContactEmail.value = item.main_contact_email || '';
+    if (clientsNotes) clientsNotes.value = item.notes || '';
+  }
+
+  function clientsCollectPayload() {
+    return {
+      client_id: (clientsId && clientsId.value) || '',
+      client_name: (clientsName && clientsName.value) || '',
+      industry: (clientsIndustry && clientsIndustry.value) || '',
+      country: (clientsCountry && clientsCountry.value) || '',
+      main_contact_name: (clientsContactName && clientsContactName.value) || '',
+      main_contact_email: (clientsContactEmail && clientsContactEmail.value) || '',
+      notes: (clientsNotes && clientsNotes.value) || '',
+    };
+  }
+
+  function clientsRenderTable() {
+    if (!clientsTableBody) return;
+    clientsTableBody.innerHTML = '';
+    var cache = S.get('clientsItemsCache');
+    if (!cache || cache.length === 0) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 6;
+      td.className = 'px-4 py-6 text-center text-sm text-slate-400';
+      td.textContent = i18n('clients_no_items');
+      tr.appendChild(td);
+      clientsTableBody.appendChild(tr);
+      return;
+    }
+    for (var i = 0; i < cache.length; i++) {
+      (function (item) {
+        var tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
+        var cbTd = document.createElement('td');
+        cbTd.className = 'w-8 px-2 py-3';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'clients-row-cb rounded';
+        cb.dataset.id = item.client_name || '';
+        cb.addEventListener('change', clientsBatchUpdateBar);
+        cbTd.appendChild(cb);
+        tr.appendChild(cbTd);
+        var tdName = document.createElement('td');
+        tdName.className = 'px-4 py-3 font-medium text-slate-900';
+        tdName.textContent = item.client_name || '';
+        tr.appendChild(tdName);
+        var tdIndustry = document.createElement('td');
+        tdIndustry.className = 'px-4 py-3 text-slate-600';
+        tdIndustry.textContent = item.industry || '\u2014';
+        tr.appendChild(tdIndustry);
+        var tdCountry = document.createElement('td');
+        tdCountry.className = 'px-4 py-3 text-slate-600';
+        tdCountry.textContent = item.country || '\u2014';
+        tr.appendChild(tdCountry);
+        var tdContact = document.createElement('td');
+        tdContact.className = 'px-4 py-3 text-slate-600';
+        tdContact.textContent = item.main_contact_name || '\u2014';
+        tr.appendChild(tdContact);
+        var tdActions = document.createElement('td');
+        tdActions.className = 'px-4 py-3 text-right';
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'btn-admin text-xs inline-flex items-center gap-1';
+        editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+        editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
+        tdActions.appendChild(editBtn);
+        tr.appendChild(tdActions);
+        clientsTableBody.appendChild(tr);
+      })(cache[i]);
+    }
+  }
+
+  var CLIENTS_PAGE_SIZE = 50;
+  var CLIENTS_CACHE_TTL = 60000;
+
+  function clientsLoadList(opts) {
+    var o = opts || {};
+    var append = !!o.append;
+    var skipCache = !!o.skipCache;
+
+    if (!append && !skipCache) {
+      var cached = A.cache.get('clientsList');
+      if (cached) {
+        S.set('clientsItemsCache', cached.items);
+        S.set('clientsListTotal', cached.total);
+        S.set('clientsListHasMore', cached.hasMore);
+        clientsRenderTable();
+        clientsUpdateLoadMoreBtn();
+        S.set('contentsClientsCache', cached.items.slice());
+        if (A.contents && A.contents.populateClientCombo) {
+          A.contents.populateClientCombo();
+        }
+        return;
+      }
+    }
+
+    var skip = append ? S.get('clientsItemsCache').length : 0;
+    clientsSetListBusy(true, i18n('clients_busy_loading'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        clientsSetListBusy(false, '');
+        var newItems = (res && res.items) || [];
+        var total = (res && res.total) || 0;
+        var hasMore = (res && res.hasMore) || false;
+        var merged;
+        if (append) {
+          merged = S.get('clientsItemsCache').concat(newItems);
+        } else {
+          merged = newItems;
+        }
+        S.set('clientsItemsCache', merged);
+        S.set('clientsListTotal', total);
+        S.set('clientsListHasMore', hasMore);
+        A.cache.set('clientsList', { items: merged, total: total, hasMore: hasMore }, CLIENTS_CACHE_TTL);
+        clientsRenderTable();
+        clientsUpdateLoadMoreBtn();
+        S.set('contentsClientsCache', merged.slice());
+        if (A.contents && A.contents.populateClientCombo) {
+          A.contents.populateClientCombo();
+        }
+      })
+      .withFailureHandler(function (e) {
+        clientsSetListBusy(false, '');
+        clientsSetListStatus((e && e.message) || i18n('err_generic'), true);
+      })
+      .clientsList({ skip: skip, limit: CLIENTS_PAGE_SIZE });
+  }
+
+  function clientsUpdateLoadMoreBtn() {
+    var btn = document.getElementById('clients-load-more-btn');
+    if (!btn) return;
+    btn.classList.toggle('hidden', !S.get('clientsListHasMore'));
+  }
+
+  function clientsOpenEditor(item) {
+    clientsResetForm();
+    if (item) {
+      clientsFillForm(item);
+      if (clientsEditorTitle) clientsEditorTitle.textContent = item.client_name || '';
+      if (clientsEditorSubtitle) clientsEditorSubtitle.textContent = i18n('clients_btn_back_list');
+      if (clientsDeleteBtn) clientsDeleteBtn.classList.remove('hidden');
+    } else {
+      if (clientsEditorTitle) clientsEditorTitle.textContent = i18n('clients_btn_new');
+      if (clientsEditorSubtitle) clientsEditorSubtitle.textContent = '';
+      if (clientsDeleteBtn) clientsDeleteBtn.classList.add('hidden');
+    }
+    clientsSetScreen('editor');
+  }
+
+  function clientsSave() {
+    var payload = clientsCollectPayload();
+    if (!payload.client_name) {
+      clientsSetEditorStatus(i18n('clients_err_name_required'), true);
+      return;
+    }
+    A.showBlockingModal(i18n('clients_busy_saving'));
+    A.cache.invalidate('clientsList');
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        clientsSetScreen('list');
+        clientsLoadList({ skipCache: true });
+        clientsSetListStatus(i18n('clients_saved'), false);
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        clientsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
+      })
+      .clientsUpsert(JSON.stringify(payload));
+  }
+
+  function clientsDelete() {
+    var id = (clientsId && clientsId.value) || '';
+    if (!id) return;
+    if (!window.confirm(i18n('clients_confirm_delete'))) return;
+    A.showBlockingModal(i18n('clients_busy_deleting'));
+    A.cache.invalidate('clientsList');
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        clientsResetForm();
+        clientsSetScreen('list');
+        clientsLoadList({ skipCache: true });
+        clientsSetListStatus(i18n('clients_deleted'), false);
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        clientsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
+      })
+      .clientsDelete(id);
+  }
+
+  // --- Event listeners ---
+
+  if (clientsNewBtn) {
+    clientsNewBtn.addEventListener('click', function () { clientsOpenEditor(null); });
+  }
+  if (clientsBackBtn) {
+    clientsBackBtn.addEventListener('click', function () {
+      clientsResetForm();
+      clientsSetScreen('list');
+    });
+  }
+  if (clientsCancelBtn) {
+    clientsCancelBtn.addEventListener('click', function () {
+      clientsResetForm();
+      clientsSetScreen('list');
+    });
+  }
+  if (clientsSaveBtn) {
+    clientsSaveBtn.addEventListener('click', function () { clientsSave(); });
+  }
+  if (clientsDeleteBtn) {
+    clientsDeleteBtn.addEventListener('click', function () { clientsDelete(); });
+  }
+  var clientsLoadMoreBtn = document.getElementById('clients-load-more-btn');
+  if (clientsLoadMoreBtn) {
+    clientsLoadMoreBtn.addEventListener('click', function () {
+      clientsLoadList({ append: true, skipCache: true });
+    });
+  }
+
+  // --- Batch ops ---
+  var clientsBatchBar = document.getElementById('clients-batch-bar');
+  var clientsBatchCount = document.getElementById('clients-batch-count');
+  var clientsBatchDeleteBtn = document.getElementById('clients-batch-delete-btn');
+  var clientsSelectAll = document.getElementById('clients-select-all');
+
+  function clientsBatchGetSelected() {
+    var cbs = clientsTableBody ? clientsTableBody.querySelectorAll('.clients-row-cb:checked') : [];
+    var ids = [];
+    for (var i = 0; i < cbs.length; i++) ids.push(cbs[i].dataset.id);
+    return ids;
+  }
+
+  function clientsBatchUpdateBar() {
+    var ids = clientsBatchGetSelected();
+    if (clientsBatchBar) clientsBatchBar.classList.toggle('hidden', ids.length === 0);
+    if (clientsBatchCount) clientsBatchCount.textContent = i18nFmt('batch_selected', { n: ids.length });
+  }
+
+  if (clientsSelectAll) {
+    clientsSelectAll.addEventListener('change', function () {
+      var checked = clientsSelectAll.checked;
+      var cbs = clientsTableBody ? clientsTableBody.querySelectorAll('.clients-row-cb') : [];
+      for (var i = 0; i < cbs.length; i++) cbs[i].checked = checked;
+      clientsBatchUpdateBar();
+    });
+  }
+
+  if (clientsBatchDeleteBtn) {
+    clientsBatchDeleteBtn.addEventListener('click', function () {
+      var ids = clientsBatchGetSelected();
+      if (!ids.length) return;
+      if (!confirm(i18nFmt('batch_delete_confirm', { n: ids.length }))) return;
+      clientsBatchDeleteBtn.disabled = true;
+      var done = 0;
+      var total = ids.length;
+      function next() {
+        if (done >= total) {
+          clientsBatchDeleteBtn.disabled = false;
+          if (clientsSelectAll) clientsSelectAll.checked = false;
+          clientsBatchUpdateBar();
+          A.cache.invalidate('clientsList');
+          clientsLoadList({ skipCache: true });
+          if (A.toast) A.toast.success(i18nFmt('batch_done', { n: total }));
+          return;
+        }
+        if (clientsBatchCount) clientsBatchCount.textContent = i18nFmt('batch_deleting', { done: done + 1, total: total });
+        google.script.run
+          .withSuccessHandler(function () { done++; next(); })
+          .withFailureHandler(function () { done++; next(); })
+          .clientsDelete(ids[done]);
+      }
+      next();
+    });
+  }
+
+  A.clients = {
+    setScreen: clientsSetScreen,
+    loadList: clientsLoadList,
+    resetForm: clientsResetForm,
+  };
+})(window.Aviators);
+</script>

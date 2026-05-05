@@ -83,8 +83,19 @@ function LlmProviderGemini_consult(cmd) {
   var modelLabel =
     p.getProperty(LLM_PROP.GEMINI_MODEL) || LLM_DEFAULTS.GEMINI_MODEL;
 
+  var contents = [];
+  var hist = cmd.history || [];
+  for (var hi = 0; hi < hist.length; hi++) {
+    var he = hist[hi];
+    if (he && he.content) {
+      var gemRole = he.role === 'assistant' ? 'model' : 'user';
+      contents.push({ role: gemRole, parts: [{ text: he.content }] });
+    }
+  }
+  contents.push({ role: 'user', parts: [{ text: prompt }] });
+
   var payload = {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: contents,
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 4096,

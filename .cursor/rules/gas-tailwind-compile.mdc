@@ -1,0 +1,22 @@
+---
+description: Obligatorio recompilar Tailwind tras tocar CSS/HTML de la UI; watch opcional
+alwaysApply: true
+---
+
+# Tailwind — compilación obligatoria (Aviators)
+
+- **Sí hay que compilar**: la Web App de Apps Script no ejecuta Tailwind. Solo entra lo que está en **`gas/tailwind-include.html`**, generado en local con **`npm run build:css`** (raíz del repo). Sin ese paso, los cambios en `gas/tailwind-input.css`, `tailwind.config.js` o **clases Tailwind nuevas** en `gas/**/*.html` **no llegan** al despliegue.
+
+## Cuándo ejecutar
+
+- **Al terminar** un cambio que toque estilos (input CSS, config, o clases en HTML): ejecutar **`npm run build:css`** y versionar **`gas/tailwind-include.html`** (artefacto que inyecta HtmlService). `gas/tailwind-built.css` suele estar en `.gitignore`; no hace falta commitearlo si el proyecto lo ignora.
+
+## Modo “automático” en desarrollo
+
+- En una terminal: **`npm run watch:css`** — recompila Tailwind en watch y **actualiza `tailwind-include.html`** cuando cambia el CSS generado (equivalente a `build:css` sin minify en cada iteración). Detener con Ctrl+C; antes de producción o `clasp push`, conviene un **`npm run build:css`** final (minifica).
+
+- **`./deploy`** (`scripts/deploy-gas.sh`) ejecuta **siempre** **`npm run build:css`** al inicio (así vale desplegar con cambios locales sin commitear).
+
+## No sustituye
+
+- Esto **no** reemplaza `clasp push`; solo asegura que el artefacto CSS inyectado en HtmlService esté actualizado.

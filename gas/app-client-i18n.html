@@ -1,0 +1,62 @@
+<script>
+(function (A) {
+  var S = A.state;
+
+  A.applyClientI18n = function (pack) {
+    if (!pack) return;
+    S.set('cachedI18n', pack);
+    A.updateLocaleButtonHighlight();
+    var elems = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < elems.length; i++) {
+      var key = elems[i].getAttribute('data-i18n');
+      if (key && pack[key] !== undefined) elems[i].textContent = pack[key];
+    }
+    var htmlElems = document.querySelectorAll('[data-i18n-html]');
+    for (var j = 0; j < htmlElems.length; j++) {
+      var hk = htmlElems[j].getAttribute('data-i18n-html');
+      if (hk && pack[hk] !== undefined) htmlElems[j].innerHTML = pack[hk];
+    }
+    var plElems = document.querySelectorAll('[data-i18n-placeholder]');
+    for (var p = 0; p < plElems.length; p++) {
+      var pk = plElems[p].getAttribute('data-i18n-placeholder');
+      if (pk && pack[pk] !== undefined) plElems[p].placeholder = pack[pk];
+    }
+    var arElems = document.querySelectorAll('[data-i18n-aria-label]');
+    for (var a = 0; a < arElems.length; a++) {
+      var ak = arElems[a].getAttribute('data-i18n-aria-label');
+      if (ak && pack[ak] !== undefined)
+        arElems[a].setAttribute('aria-label', pack[ak]);
+    }
+  };
+
+  A.i18n = function (key) {
+    var ci = S.get('cachedI18n');
+    return (ci && ci[key]) || key;
+  };
+
+  A.i18nFmt = function (key, params) {
+    var ci = S.get('cachedI18n');
+    var tpl = (ci && ci[key]) || key;
+    if (!params) return tpl;
+    return tpl.replace(/\{(\w+)\}/g, function (_, k) {
+      return params[k] !== undefined ? params[k] : '{' + k + '}';
+    });
+  };
+
+  (function () {
+    var want = null;
+    try {
+      var st = localStorage.getItem('aviators_locale');
+      if (st === 'es' || st === 'en') want = st;
+    } catch (eLoc) {}
+    var ci = S.get('cachedI18n');
+    if (!want || (ci && ci._locale === want)) return;
+    google.script.run
+      .withSuccessHandler(function (pack) {
+        if (pack) A.applyClientI18n(pack);
+      })
+      .withFailureHandler(function () {})
+      .getI18nPack(want);
+  })();
+})(window.Aviators);
+</script>

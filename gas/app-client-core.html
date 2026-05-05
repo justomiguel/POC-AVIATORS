@@ -1,0 +1,187 @@
+<script>
+window.Aviators = window.Aviators || {};
+(function (A) {
+  var _state = {
+    adminAgentsCache: [],
+    adminSelectedAgentId: null,
+    adminAgentDocsSkip: 0,
+    adminSourcesState: { folders: [], files: [] },
+    contentsItemsCache: [],
+    contentsSelectedId: null,
+    contentsCurrentFile: null,
+    contentsRowBusyId: '',
+    contentsSortKey: '',
+    contentsSortDir: '',
+    contentsUploadCancelled: false,
+    contentsCurrentTags: [],
+    contentsAllTagsCache: [],
+    contentsClientsCache: [],
+    contentsClientNewMode: false,
+    contentsListTotal: 0,
+    contentsListHasMore: false,
+    clientsItemsCache: [],
+    clientsSelectedId: null,
+    clientsListTotal: 0,
+    clientsListHasMore: false,
+    contextFiles: null,
+    contextFilesNote: '',
+    chatHistory: [],
+    driveExpStack: [],
+    driveExpNextToken: '',
+    lastLlmCfg: null,
+    cachedI18n:
+      typeof window !== 'undefined' && window.__AVIATORS_I18N_INITIAL
+        ? window.__AVIATORS_I18N_INITIAL
+        : null,
+  };
+  var _listeners = {};
+
+  A.state = {
+    get: function (key) { return _state[key]; },
+    set: function (key, value) {
+      var old = _state[key];
+      _state[key] = value;
+      if (_listeners[key]) {
+        for (var i = 0; i < _listeners[key].length; i++) {
+          _listeners[key][i](value, old, key);
+        }
+      }
+    },
+    on: function (key, fn) {
+      if (!_listeners[key]) _listeners[key] = [];
+      _listeners[key].push(fn);
+    },
+    off: function (key, fn) {
+      if (!_listeners[key]) return;
+      _listeners[key] = _listeners[key].filter(function (f) { return f !== fn; });
+    },
+    dump: function () { return JSON.parse(JSON.stringify(_state)); }
+  };
+
+  A.MAX_SELECTION = 5;
+  A.MIME_FOLDER = 'application/vnd.google-apps.folder';
+
+  var blockingModal = document.getElementById('blocking-modal');
+  var blockingModalMsg = document.getElementById('blocking-modal-msg');
+
+  A.showBlockingModal = function (msg) {
+    if (blockingModalMsg) blockingModalMsg.textContent = msg || '';
+    if (blockingModal) {
+      blockingModal.classList.remove('hidden');
+      blockingModal.setAttribute('aria-hidden', 'false');
+    }
+  };
+
+  A.hideBlockingModal = function () {
+    if (blockingModal) {
+      blockingModal.classList.add('hidden');
+      blockingModal.setAttribute('aria-hidden', 'true');
+    }
+  };
+
+  A.setBusy = function (busy, msg) {
+    var btn = document.getElementById('login-btn');
+    var st = document.getElementById('login-status');
+    if (btn) btn.disabled = !!busy;
+    if (st) {
+      st.textContent =
+        msg != null && msg !== ''
+          ? msg
+          : busy
+            ? A.i18n('busy_connecting')
+            : '\u00a0';
+      st.classList.toggle('err', false);
+    }
+  };
+
+  A.setLoginError = function (text) {
+    var btn = document.getElementById('login-btn');
+    var st = document.getElementById('login-status');
+    if (st) {
+      st.textContent = text || A.i18n('err_generic');
+      st.classList.toggle('err', true);
+    }
+    if (btn) btn.disabled = false;
+  };
+
+  A.mimeShortLabel = function (mt) {
+    if (mt === A.MIME_FOLDER) return A.i18n('mime_folder');
+    if (mt === 'application/pdf' || mt === 'application/vnd.google-apps.document')
+      return A.i18n('mime_doc_pdf');
+    if (mt === 'application/vnd.google-apps.spreadsheet') return A.i18n('mime_sheet');
+    if (mt === 'application/vnd.google-apps.presentation') return A.i18n('mime_slides');
+    if (mt === 'application/vnd.google-apps.drawing') return A.i18n('mime_drawing');
+    if (mt && mt.indexOf('vnd.google-apps') !== -1) return A.i18n('mime_google');
+    var cut = (mt || '').split('/').pop() || mt || A.i18n('mime_file');
+    return cut.length > 18 ? cut.substring(0, 16) + A.i18n('mime_trunc') : cut;
+  };
+
+  A.getSelectedIds = function () {
+    var filesUl = document.getElementById('files');
+    var out = [];
+    if (!filesUl) return out;
+    var nodes = filesUl.querySelectorAll('input[type=checkbox]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].checked) out.push(nodes[i].value);
+    }
+    return out;
+  };
+
+  A.syncSidebarBrandLogo = function () {
+    var loginLogo = document.getElementById('aviators-logo');
+    var side = document.getElementById('sidebar-brand-logo');
+    if (!side) return;
+    var src = loginLogo && loginLogo.getAttribute('src');
+    if (src) side.setAttribute('src', src);
+  };
+
+  A.updateLocaleButtonHighlight = function () {
+    var ci = _state.cachedI18n;
+    var loc = ci && ci._locale ? ci._locale : 'es';
+    var esBtn = document.getElementById('locale-btn-es');
+    var enBtn = document.getElementById('locale-btn-en');
+    if (esBtn) {
+      esBtn.classList.toggle('ring-2', loc === 'es');
+      esBtn.classList.toggle('ring-sky-500', loc === 'es');
+      esBtn.classList.toggle('bg-sky-50', loc === 'es');
+    }
+    if (enBtn) {
+      enBtn.classList.toggle('ring-2', loc === 'en');
+      enBtn.classList.toggle('ring-sky-500', loc === 'en');
+      enBtn.classList.toggle('bg-sky-50', loc === 'en');
+    }
+  };
+
+  A.initialsFromDisplayName = function (name, email) {
+    var s = (name || '').trim();
+    if (!s && email) s = ((email || '').split('@')[0] || '').trim();
+    var parts = s.split(/\s+/).filter(function (x) { return x.length; });
+    if (parts.length >= 2)
+      return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+    return (s.slice(0, 2) || '?').toUpperCase();
+  };
+
+  var _cacheStore = {};
+
+  A.cache = {
+    get: function (key) {
+      var entry = _cacheStore[key];
+      if (!entry) return null;
+      if (Date.now() > entry.expiresAt) {
+        delete _cacheStore[key];
+        return null;
+      }
+      return entry.data;
+    },
+    set: function (key, data, ttlMs) {
+      _cacheStore[key] = { data: data, expiresAt: Date.now() + (ttlMs || 60000) };
+    },
+    invalidate: function (key) {
+      delete _cacheStore[key];
+    },
+    clear: function () {
+      _cacheStore = {};
+    },
+  };
+})(window.Aviators);
+</script>

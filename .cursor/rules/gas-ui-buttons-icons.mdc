@@ -1,0 +1,18 @@
+---
+description: Botones de la UI en gas/ deben incluir icono visible (Font Awesome + i18n)
+globs: gas/**/*.html
+alwaysApply: true
+---
+
+# Iconos en botones (Aviators / HtmlService)
+
+- **Norma**: todo **`<button>`** (y el mismo criterio para enlaces o elementos con `role="button"` que actúen como acción principal tipo CTA en la app) debe incluir un **icono visible** junto al texto, salvo las excepciones abajo. Objetivo: coherencia visual y no olvidar iconografía al añadir controles.
+- **Iconos**: usar **Font Awesome** ya referenciado en `gas/index.html` (`<i class="fa-solid fa-…" aria-hidden="true"></i>`). Elegir icono acorde a la acción (p. ej. guardar → `fa-floppy-disk`, eliminar → `fa-trash`, sincronizar → `fa-rotate`, salir → `fa-right-from-bracket`).
+- **Maquetación**: preferir **`inline-flex items-center gap-2`** (o `flex` + `justify-center` + `gap-2` en botones a ancho completo). Mantener padding y clases existentes (`btn-admin`, `cta`, `btn-logout`, etc.).
+- **i18n** (obligatorio en este repo): el texto visible va en **`<span data-i18n="clave">`** (o claves de placeholder/aria en atributos). **No** poner **`data-i18n` en el `<button>`** si el botón contiene también un `<i>`: `applyClientI18n` usa `textContent` y eliminaría los iconos. Detalle: `gas-i18n.mdc`.
+
+## Excepciones (documentar en commit o comentario mínimo si no es obvio)
+
+- **Botón solo icono**: debe tener **`aria-label`** (idealmente vía **`data-i18n-aria-label`** + catálogo) y tamaño táctil adecuado.
+- **Login “Iniciar sesión con Google”**: el **logo SVG de Google** cumple función de icono; no hace falta duplicar FA.
+- **Controles que no son `<button>`** (`<summary>`, menús nativos, etc.) quedan fuera de esta regla; si se rediseñan como botón, aplicar la norma.

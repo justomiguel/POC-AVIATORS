@@ -5,10 +5,10 @@
 @layer components {
   /* Pantalla de login / OAuth (HtmlService no usa OAuth popup; el clic dispara autorización vía script.run) */
   .login-root {
-    @apply flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50 to-indigo-100 px-4 py-12;
+    @apply flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50 to-indigo-100 px-4 py-12 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900;
   }
   .login-card {
-    @apply w-full max-w-md rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl shadow-slate-900/10 backdrop-blur-sm;
+    @apply w-full max-w-md rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl shadow-slate-900/10 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95 dark:shadow-black/30;
   }
   .login-logo-wrap {
     @apply mb-6 flex justify-center;
@@ -17,19 +17,54 @@
     @apply h-24 w-auto max-w-[220px] object-contain drop-shadow-sm md:h-28;
   }
   .login-title {
-    @apply text-center text-2xl font-bold tracking-tight text-slate-900 md:text-3xl;
+    @apply text-center text-2xl font-bold tracking-tight text-slate-900 md:text-3xl dark:text-slate-100;
   }
   .login-lead {
-    @apply mt-3 text-center text-base leading-relaxed text-slate-600;
+    @apply mt-3 text-center text-base leading-relaxed text-slate-600 dark:text-slate-400;
   }
   .login-status {
-    @apply mt-4 min-h-[1.5rem] text-center text-sm text-slate-500;
+    @apply mt-4 min-h-[1.5rem] text-center text-sm text-slate-500 dark:text-slate-400;
   }
   .login-status.err {
     @apply font-medium text-red-600;
   }
   .btn-google {
-    @apply mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-[15px] font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-[15px] font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600;
+  }
+
+  /**
+   * Sistema de botones Aviators (HtmlService): combinar .btn + tamaño + variante.
+   * .btn-primary acción principal · .btn-secondary neutro · .btn-danger salir/borrar.
+   */
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 border font-semibold tracking-tight transition duration-150;
+    @apply focus-visible:outline-none disabled:pointer-events-none disabled:opacity-45;
+  }
+  .btn-sm {
+    @apply rounded-xl px-3 py-1.5 text-sm leading-snug;
+  }
+  .btn-md {
+    @apply rounded-2xl px-4 py-2.5 text-[15px] leading-snug;
+  }
+  .btn-primary {
+    @apply border-transparent bg-aviators-primary text-white shadow-md shadow-aviators-primary/30;
+    @apply hover:brightness-[1.06] hover:shadow-lg hover:shadow-aviators-primary/35;
+    @apply active:scale-[0.99];
+    @apply focus-visible:ring-2 focus-visible:ring-aviators-primary focus-visible:ring-offset-2;
+  }
+  .btn-secondary {
+    @apply border-slate-200/90 bg-white text-slate-800 shadow-sm shadow-slate-900/5;
+    @apply hover:border-slate-300 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-900/10;
+    @apply active:scale-[0.99];
+    @apply focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2;
+    @apply dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:shadow-black/20;
+    @apply dark:hover:border-slate-500 dark:hover:bg-slate-600;
+  }
+  .btn-danger {
+    @apply border border-red-800/40 bg-gradient-to-b from-red-500 to-red-600 text-white shadow-md shadow-red-600/35;
+    @apply hover:from-red-600 hover:to-red-700 hover:shadow-lg hover:shadow-red-700/40;
+    @apply active:scale-[0.99];
+    @apply focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2;
   }
   .login-footnote {
     @apply mt-6 text-center text-xs leading-relaxed text-slate-500;
@@ -42,24 +77,144 @@
     @apply flex flex-col gap-4 md:flex-row md:gap-6 md:items-stretch;
   }
   .app-sidebar {
-    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:w-64;
+    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:w-64 dark:border-slate-700 dark:bg-slate-800;
   }
   .app-content {
     @apply min-w-0 flex-1;
   }
+  .app-content-panel {
+    @apply relative isolate;
+  }
+  .app-content-panel::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0 -z-10 opacity-[0.58];
+    background-color: rgb(241 245 249);
+    /* Más presencia del avión sin perder legibilidad del panel */
+    background-image:
+      linear-gradient(
+        135deg,
+        rgb(255 255 255 / 0.42) 0%,
+        rgb(248 250 252 / 0.24) 42%,
+        rgb(224 242 254 / 0.15) 100%
+      ),
+      url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=2000&q=75');
+    background-size: cover;
+    background-position: center 34%;
+  }
   .role-badge {
-    @apply inline-flex max-w-full items-center rounded-full bg-aviators-primary/10 px-3 py-1 text-sm font-medium text-aviators-primary;
+    @apply inline-flex max-w-full items-center rounded-full bg-aviators-primary/10 px-3 py-1 text-sm font-medium text-aviators-primary dark:bg-aviators-primary/20;
   }
   .user-avatar-wrap {
-    @apply relative mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full border-2 border-white shadow-md ring-2 ring-slate-200;
+    @apply relative mx-auto mb-3 h-32 w-32 overflow-hidden rounded-full border-2 border-white shadow-md ring-2 ring-slate-200 dark:border-slate-700 dark:ring-slate-600;
   }
   .user-avatar-placeholder {
-    @apply flex h-full w-full items-center justify-center bg-slate-200 text-lg font-semibold text-slate-600;
+    @apply flex h-full w-full items-center justify-center bg-slate-200 text-3xl font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300;
   }
   .session-banner {
-    @apply mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 empty:hidden;
+    @apply mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 empty:hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300;
   }
   .session-banner.err {
-    @apply border-amber-200 bg-amber-50 text-amber-950;
+    @apply border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200;
+  }
+
+  /* Inicio — hilo de chat (mensajes usuario / asistente) */
+  .home-chat-shell {
+    @apply mx-auto flex h-[min(88vh,760px)] max-h-[min(88vh,760px)] min-h-[280px] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800;
+  }
+  .home-chat-banner {
+    @apply border-sky-100 bg-sky-50/90 text-slate-800 dark:border-sky-800 dark:bg-sky-950/60 dark:text-sky-200;
+  }
+  .home-chat-banner.err {
+    @apply border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200;
+  }
+  .chat-thread {
+    @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth bg-slate-50/40 px-4 py-4 dark:bg-slate-900/40;
+  }
+  .chat-empty {
+    @apply px-2 py-12 text-center text-sm leading-relaxed text-slate-500;
+  }
+  .chat-msg-user {
+    @apply flex justify-end;
+  }
+  .chat-msg-agent {
+    @apply flex justify-start;
+  }
+  .chat-bubble-user {
+    @apply max-w-[min(100%,36rem)] whitespace-pre-wrap rounded-2xl rounded-br-md bg-sky-600 px-4 py-2.5 text-[15px] text-white shadow-sm;
+  }
+  .chat-bubble-agent {
+    @apply max-w-[min(100%,36rem)] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-slate-200/90 bg-white px-4 py-2.5 text-[15px] text-slate-800 shadow-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200;
+  }
+  .chat-bubble-agent.chat-thinking {
+    @apply border-dashed border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400;
+  }
+  .chat-msg-agent-inner {
+    @apply min-w-0 max-w-full;
+  }
+  .chat-msg-meta {
+    @apply mt-1.5 pl-1 text-xs text-slate-500;
+  }
+
+  /* Panel admin — agentes (sidebar + editor) */
+  .admin-app-shell {
+    @apply w-full;
+  }
+  .admin-app-layout {
+    @apply flex flex-col gap-4 lg:flex-row lg:gap-6 lg:items-start;
+  }
+  .admin-app-sidebar {
+    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50/90 p-4 lg:w-80 dark:border-slate-700 dark:bg-slate-800/90;
+  }
+  .admin-app-sidebar-title {
+    @apply text-lg font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .admin-app-sidebar-lead {
+    @apply mt-2;
+  }
+  .admin-app-main {
+    @apply min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-800;
+  }
+  .admin-agent-nav-list {
+    @apply max-h-[min(42vh,22rem)] overflow-y-auto pr-1;
+  }
+  .admin-agent-nav-btn {
+    @apply flex w-full items-center justify-between rounded-lg border border-transparent px-3 py-2 text-left text-sm text-slate-800 transition hover:border-slate-200 hover:bg-white dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700;
+  }
+  .admin-agent-nav-btn.is-active {
+    @apply border-sky-200 bg-sky-50 font-medium text-sky-950 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-200;
+  }
+  .admin-agent-empty:not(.hidden) ~ .admin-agent-editor {
+    @apply mt-0;
+  }
+
+  /* Toast / snackbar system */
+  #toast-container {
+    @apply fixed bottom-4 right-4 z-[9999] flex flex-col-reverse items-end gap-2;
+    pointer-events: none;
+  }
+  .toast {
+    @apply pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-xl border bg-white px-4 py-3 text-sm text-slate-800 shadow-lg dark:bg-slate-800 dark:text-slate-200;
+    @apply translate-y-2 opacity-0 transition-all duration-300 ease-out;
+  }
+  .toast-visible {
+    @apply translate-y-0 opacity-100;
+  }
+  .toast-exit {
+    @apply translate-y-2 opacity-0;
+  }
+  .toast-success {
+    @apply border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/60;
+  }
+  .toast-error {
+    @apply border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-950/60;
+  }
+  .toast-info {
+    @apply border-sky-200 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/60;
+  }
+  .toast-text {
+    @apply min-w-0 flex-1;
+  }
+  .toast-close {
+    @apply shrink-0 cursor-pointer rounded p-1 text-slate-400 transition hover:text-slate-700;
   }
 }

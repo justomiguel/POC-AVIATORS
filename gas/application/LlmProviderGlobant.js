@@ -94,6 +94,20 @@ function LlmProviderGlobant_consult(cmd) {
       UiStrings_t(UiStrings_activeLocale_(), 'err_question_required'),
     );
 
+  var hist = cmd.history || [];
+  if (hist.length > 0) {
+    var histContext = [];
+    for (var hi = 0; hi < hist.length; hi++) {
+      var he = hist[hi];
+      if (he && he.content) {
+        histContext.push('[' + (he.role || 'user').toUpperCase() + ']: ' + he.content);
+      }
+    }
+    if (histContext.length > 0) {
+      q = '[Previous conversation]\n' + histContext.join('\n') + '\n[/Previous conversation]\n\nCurrent question: ' + q;
+    }
+  }
+
   var ids = cmd.driveFileIds || [];
   if (ids.length === 0) {
     throw new Error(
@@ -318,5 +332,105 @@ function LlmProviderGlobant_consultPromptOnly(prompt) {
           UiStrings_activeLocale_(),
           'meta_filter_rag_full_profile',
         ),
+  };
+}
+
+/**
+ * Ejecuta una consulta de texto sobre un perfil/agente especifico.
+ * Permite inyectar instrucciones de sistema por agente sin tocar propiedades globales.
+ *
+ * @param {string} profileName
+ * @param {string} prompt
+ * @param {string} [systemPrompt]
+ * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string }}
+ */
+function LlmProviderGlobant_consultPromptWithAgent(
+  profileName,
+  prompt,
+  systemPrompt,
+) {
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'),
+    );
+  }
+
+  var pn = ('' + (profileName || '')).trim();
+  if (!pn) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_profile_name_required'),
+    );
+  }
+
+  var q = ('' + (prompt || '')).trim();
+  if (!q) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_prompt_required'),
+    );
+  }
+
+  var finalPrompt = q;
+  var sp = ('' + (systemPrompt || '')).trim();
+  if (sp) {
+    finalPrompt =
+      '[SYSTEM]\n' +
+      sp +
+      '\n[/SYSTEM]\n\n' +
+      '[USER]\n' +
+      q +
+      '\n[/USER]';
+  }
+
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
+
+  if (LlmProviderGlobant_isAssistantMode(p)) {
+    var ast = GlobantAssistantApiClient_create({
+      apiKey: apiKey,
+      baseUrl: baseUrl || undefined,
+    });
+    var chatOut = GlobantAssistantApiClient_sendChatWithRetry(
+      ast,
+      pn,
+      finalPrompt,
+      maxRetries,
+    );
+    var rawA = JSON.stringify(chatOut.parsed, null, 2);
+    if (rawA.length > 6000) {
+      rawA = rawA.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
+    }
+    return {
+      answer: chatOut.text,
+      model: 'globant-assistant',
+      providerLabel: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'meta_provider_globant_assistant',
+      ),
+      rawJson: rawA,
+      filterLabel: UiStrings_fmt_('meta_filter_profile', { profile: pn }),
+    };
+  }
+
+  var client = GlobantRagApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+  var detail = client.executeQueryDetailed(pn, finalPrompt, '');
+  var rawStr = JSON.stringify(detail.parsed, null, 2);
+  if (rawStr.length > 6000) {
+    rawStr = rawStr.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
+  }
+
+  return {
+    answer: detail.text,
+    model: 'globant-rag',
+    providerLabel: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'meta_provider_globant_execute',
+    ),
+    rawJson: rawStr,
+    filterLabel: UiStrings_fmt_('meta_filter_profile', { profile: pn }),
   };
 }

@@ -1,0 +1,60 @@
+---
+description: Convención de módulos parciales del cliente (app-client-*.html) para HtmlService
+globs: gas/app-client-*.html
+alwaysApply: false
+---
+
+# Módulos parciales del cliente (Aviators)
+
+El JS del cliente está separado en archivos `gas/app-client-*.html`, cada uno un `<script>` con IIFE que registra su API en el namespace global `window.Aviators`. No hay bundler: el orden de carga en `index.html` determina las dependencias.
+
+## Orden de carga (no cambiar sin actualizar `Code.js` + `index.html`)
+
+1. **core** — namespace, AppState, constantes, helpers compartidos
+2. **i18n** — `applyClientI18n`, `i18n()`, `i18nFmt()`
+3. **drive** — drive explorer
+4. **chat** — chat/consult
+5. **agents** — admin agents CRUD
+6. **contents** — contents CRUD
+7. **clients** — clients CRUD
+8. **boot** — `showApp`, `setAppPage`, bootstrap final
+
+## Plantilla para un módulo nuevo
+
+```html
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  // DOM refs locales al módulo
+  var miElemento = document.getElementById('mi-elemento');
+
+  // Funciones privadas (no expuestas)
+  function helperInterno() { /* ... */ }
+
+  // Funciones públicas (accesibles desde otros módulos)
+  function miFuncionPublica() { /* ... */ }
+
+  // Event listeners del módulo
+  if (miElemento) {
+    miElemento.addEventListener('click', function () { /* ... */ });
+  }
+
+  // Exponer API pública en el namespace
+  A.miModulo = {
+    miFuncion: miFuncionPublica,
+  };
+})(window.Aviators);
+</script>
+```
+
+## Reglas
+
+- **Estado**: usar `A.state.get('key')` / `A.state.set('key', value)`. Nuevas claves de estado van en `_state` de `app-client-core.html`.
+- **DOM refs**: resolver con `getElementById` dentro de la IIFE del módulo. No compartir refs entre módulos; cada uno resuelve las suyas.
+- **Cross-module**: llamar funciones de otros módulos via `A.otroModulo.funcion()`. No acceder a variables internas de otro módulo.
+- **i18n**: atajos locales `var i18n = A.i18n; var i18nFmt = A.i18nFmt;` al inicio de la IIFE (válido porque i18n carga antes que los módulos de dominio).
+- **Inyección**: al crear un archivo nuevo, agregar la línea correspondiente en `Code.js` (`tpl.clientScriptX = ...`) y en `index.html` (`<?!= clientScriptX ?>`), respetando el orden de dependencias.
+- **Naming**: `gas/app-client-<dominio>.html` y `tpl.clientScript<Dominio>` en Code.js.

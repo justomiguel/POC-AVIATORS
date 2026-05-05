@@ -1,0 +1,31 @@
+---
+description: Toda operación asíncrona en la UI de gas/ debe mostrar feedback visible y bloquear controles
+globs: gas/**/*.html
+alwaysApply: true
+---
+
+# Feedback de UI en operaciones asíncronas (Aviators / HtmlService)
+
+- **Norma**: cualquier acción que dispare una operación asíncrona (RPC `google.script.run`, `FileReader`, fetch del navegador, espera de servidor, lectura/subida de archivos, etc.) **debe** mostrar al usuario que algo está ocurriendo, **mientras dura la operación**, y **deshabilitar** los controles que podrían reentrarla. Operaciones encadenadas deben mostrar feedback **por etapa** y no quedar “mudas” en ningún paso.
+
+## Requisitos mínimos
+
+1. **Indicador visible** durante la operación: spinner, banner `role="status" aria-live="polite"`, barra indeterminada o estado contextual (badge en fila, ícono giratorio, etc.). No basta con desactivar el botón sin texto.
+2. **Texto i18n** en el indicador, tomado del catálogo `gas/i18n/UiStrings.js` (claves `*_busy_*`, `*_processing_*`, `*_loading_*`, etc.). Sin literales en HTML/JS.
+3. **Controles deshabilitados** mientras la operación corre: el propio botón disparador y, si la acción se reentra fácilmente, los controles asociados (tabla, formulario, file input) deben pasar a `disabled` o tener un overlay.
+4. **Cierre claro**: al terminar (éxito o error), reactivar controles, ocultar indicador y mostrar **mensaje final i18n** (estado “listo”, “guardado”, “falló: <detalle>”). No dejar nunca un spinner colgado.
+5. **Encadenamientos** (p. ej. `subir → indexar → extraer → guardar`): cada etapa debe actualizar el indicador con su propio texto i18n. No reusar un único “Procesando…” cuando hay varias subetapas conocidas.
+6. **Acciones por fila/tarjeta**: si la acción ocurre dentro de una fila o tarjeta de una lista (editar/eliminar fila concreta), el feedback debe verse **en esa fila** (badge `Procesando…`, spinner inline) además del indicador global, para que el usuario sepa **a qué item** afecta.
+7. **Validación previa síncrona** (campos faltantes, formato inválido) puede mostrarse como error inmediato sin loader; **toda RPC posterior** sí entra en este patrón.
+
+## Excepciones
+
+- Operaciones puramente sincrónicas, ultra rápidas y sin red (filtrar in-memory, render local, toggles de UI).
+- Animaciones/transiciones de presentación que no modifican estado del servidor.
+- Acciones idempotentes muy cortas donde un loader sería ruido visual; aún así, el botón disparador debe quedar momentáneamente disabled.
+
+## Coherencia con el resto de reglas
+
+- **i18n**: textos del feedback al catálogo, no embebidos. Detalle: `gas-i18n.mdc`.
+- **Iconos**: usar `fa-spinner fa-spin`, `fa-rotate`, etc. de Font Awesome. Detalle: `gas-ui-buttons-icons.mdc`.
+- **Estructura de secciones**: el indicador acompaña a la sección que lo dispara, no a una zona genérica fuera del contexto. Detalle: `gas-ui-sections-structure.mdc`.

@@ -237,7 +237,19 @@ function AdminKnowledge_saveConfiguration(sourcesJson, profileName) {
 }
 
 function AdminKnowledge_buildSyncFileIds(props, maxFiles) {
-  var src = AdminKnowledge_loadSources(props);
+  return AdminKnowledge_buildSyncFileIdsFromSources(
+    AdminKnowledge_loadSources(props),
+    maxFiles,
+  );
+}
+
+/**
+ * @param {{ folders: Array<{id:string,name:string}>, files: Array<{id:string,name:string}> }} sources
+ * @param {number} maxFiles
+ * @return {string[]}
+ */
+function AdminKnowledge_buildSyncFileIdsFromSources(sources, maxFiles) {
+  var src = sources || { folders: [], files: [] };
   var seen = {};
   var out = [];
 
@@ -322,7 +334,18 @@ function AdminKnowledge_saveRootFolderOnlyAndSync(rootFolderInput, profileName) 
   };
 }
 
-function AdminKnowledge_syncCorpusFromDrive() {
+/**
+ * Sincroniza corpus Drive → Globant RAG para un perfil y fuentes concretas.
+ *
+ * @param {Object} opts
+ * @param {string} opts.profileName
+ * @param {{ folders: Array<{id:string,name:string}>, files: Array<{id:string,name:string}> }} opts.sources
+ * @param {string} [opts.searchPrompt] · si viene vacío, usa plantilla por defecto
+ * @param {string} [opts.description] · descripción del perfil en Globant
+ * @param {number} [opts.maxFiles]
+ * @return {{ profileName: string, docCount: number, uploaded: number, note: string }}
+ */
+function AdminKnowledge_syncCorpusWithOptions(opts) {
   AdminAuth_requireAdmin();
 
   if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
@@ -343,16 +366,20 @@ function AdminKnowledge_syncCorpusFromDrive() {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
 
   var bootstrap = AdminKnowledge_getBootstrapSlice();
-  var docIds = AdminKnowledge_buildSyncFileIds(props, bootstrap.maxFiles);
+  var maxF =
+    opts.maxFiles != null && opts.maxFiles > 0
+      ? Math.min(80, opts.maxFiles)
+      : bootstrap.maxFiles;
+
+  var profileName = ('' + (opts.profileName || '')).trim();
+  if (!profileName) profileName = ADMIN_KNOWLEDGE_DEFAULT_PROFILE;
+
+  var docIds = AdminKnowledge_buildSyncFileIdsFromSources(opts.sources, maxF);
   if (docIds.length === 0) {
     throw new Error(
       UiStrings_t(UiStrings_activeLocale_(), 'admin_corpus_nothing_to_index'),
     );
   }
-
-  var profileName =
-    (props.getProperty(_AK_PROP_PROFILE) || '').trim() ||
-    ADMIN_KNOWLEDGE_DEFAULT_PROFILE;
 
   var baseUrl = (props.getProperty(_GLOBANT_BASE) || '').trim();
   var client = GlobantRagApiClient_create({
@@ -364,15 +391,27 @@ function AdminKnowledge_syncCorpusFromDrive() {
     client.deleteProfile(profileName);
   } catch (delE) {}
 
-  client.createProfile(
-    GlobantRagDefaults_buildCreateProfileBody(
-      profileName,
-      UiStrings_t(
-        UiStrings_activeLocale_(),
-        'admin_rag_default_profile_description',
-      ),
-    ),
+  var defaultDesc = UiStrings_t(
+    UiStrings_activeLocale_(),
+    'admin_rag_default_profile_description',
   );
+  var desc =
+    opts.description != null && String(opts.description).trim()
+      ? String(opts.description).trim()
+      : defaultDesc;
+
+  var prompt = (opts.searchPrompt || '').trim();
+  if (prompt) {
+    client.createProfile(
+      GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
+        profileName,
+        desc,
+        prompt,
+      ),
+    );
+  } else {
+    client.createProfile(GlobantRagDefaults_buildCreateProfileBody(profileName, desc));
+  }
 
   var uploaded = 0;
   var idx = 0;
@@ -393,6 +432,8 @@ function AdminKnowledge_syncCorpusFromDrive() {
 
   props.setProperty(_GLOBANT_PROFILE, profileName);
   props.setProperty(_AK_PROP_LAST_SYNC, new Date().toISOString());
+  props.setProperty(_AK_PROP_SOURCES, JSON.stringify(opts.sources));
+  props.setProperty(_AK_PROP_PROFILE, profileName);
   props.deleteProperty('GLOBANT_RAG_DOCUMENT_ID');
 
   return {
@@ -404,4 +445,19 @@ function AdminKnowledge_syncCorpusFromDrive() {
       'admin_corpus_sync_return_note',
     ),
   };
+}
+
+function AdminKnowledge_syncCorpusFromDrive() {
+  var props = PropertiesService.getScriptProperties();
+  var bootstrap = AdminKnowledge_getBootstrapSlice();
+  var profileName =
+    (props.getProperty(_AK_PROP_PROFILE) || '').trim() ||
+    ADMIN_KNOWLEDGE_DEFAULT_PROFILE;
+  var sources = AdminKnowledge_loadSources(props);
+  return AdminKnowledge_syncCorpusWithOptions({
+    profileName: profileName,
+    sources: sources,
+    searchPrompt: '',
+    maxFiles: bootstrap.maxFiles,
+  });
 }

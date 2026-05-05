@@ -25,7 +25,7 @@ function LlmOrchestrator_resolveProviderKind() {
 /**
  * @return {LlmConsultationAnswer}
  */
-function LlmOrchestrator_consultWithDriveDocuments(question, driveFileIds) {
+function LlmOrchestrator_consultWithDriveDocuments(question, driveFileIds, history) {
   var max = LLM_DEFAULTS.MAX_DRIVE_FILES;
   var raw = Array.isArray(driveFileIds) ? driveFileIds : [];
   var ids = [];
@@ -34,7 +34,7 @@ function LlmOrchestrator_consultWithDriveDocuments(question, driveFileIds) {
   }
 
   /** @type {LlmConsultationCommand} */
-  var cmd = { question: question, driveFileIds: ids };
+  var cmd = { question: question, driveFileIds: ids, history: history || [] };
 
   var kind = LlmOrchestrator_resolveProviderKind();
 
