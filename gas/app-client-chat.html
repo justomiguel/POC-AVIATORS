@@ -71,7 +71,27 @@
     wrap.setAttribute('aria-live', 'polite');
     var inner = document.createElement('div');
     inner.className = 'chat-bubble-agent chat-thinking';
-    inner.textContent = msg || i18n('chat_thinking');
+    var icon = document.createElement('i');
+    icon.className = 'fa-solid fa-sparkles chat-thinking-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    var text = document.createElement('span');
+    text.className = 'chat-thinking-text';
+    text.textContent = msg || i18n('chat_thinking');
+    var dots = document.createElement('span');
+    dots.className = 'chat-thinking-dots';
+    dots.setAttribute('aria-hidden', 'true');
+    var d1 = document.createElement('span');
+    d1.className = 'dot dot-1';
+    var d2 = document.createElement('span');
+    d2.className = 'dot dot-2';
+    var d3 = document.createElement('span');
+    d3.className = 'dot dot-3';
+    dots.appendChild(d1);
+    dots.appendChild(d2);
+    dots.appendChild(d3);
+    inner.appendChild(icon);
+    inner.appendChild(text);
+    inner.appendChild(dots);
     wrap.appendChild(inner);
     thread.appendChild(wrap);
     homeChatScrollToBottom();
@@ -80,8 +100,8 @@
   function homeChatUpdateThinking(msg) {
     var el = document.getElementById(CHAT_THINKING_ID);
     if (!el) return;
-    var bub = el.querySelector('.chat-thinking');
-    if (bub) bub.textContent = msg;
+    var txt = el.querySelector('.chat-thinking-text');
+    if (txt) txt.textContent = msg;
   }
 
   function homeChatAppendUser(text) {
@@ -103,7 +123,7 @@
     homeChatScrollToBottom();
   }
 
-  function homeChatAppendAgent(body, metaLine) {
+  function homeChatAppendAgent(body, metaLine, references) {
     var thread = document.getElementById('chat-thread');
     if (!thread) return;
     var emptyEl = document.getElementById('chat-empty');
@@ -124,6 +144,36 @@
       metaP.className = 'chat-msg-meta';
       metaP.textContent = metaLine;
       col.appendChild(metaP);
+    }
+    var refs = Array.isArray(references) ? references : [];
+    if (refs.length) {
+      var refsWrap = document.createElement('div');
+      refsWrap.className = 'mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-600 dark:bg-slate-800';
+      var refsTitle = document.createElement('p');
+      refsTitle.className = 'mb-1 font-semibold text-slate-600 dark:text-slate-300';
+      refsTitle.textContent = i18n('chat_refs_title');
+      refsWrap.appendChild(refsTitle);
+      for (var ri = 0; ri < refs.length; ri++) {
+        var ref = refs[ri] || {};
+        var line = document.createElement('div');
+        line.className = 'mb-1 last:mb-0';
+        var label = document.createElement('span');
+        label.className = 'text-slate-700 dark:text-slate-300';
+        label.textContent = (ref.contentId || '-') + ' · ' + (ref.title || '');
+        line.appendChild(label);
+        if (ref.url) {
+          line.appendChild(document.createTextNode(' · '));
+          var a = document.createElement('a');
+          a.href = ref.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.className = 'text-sky-700 underline dark:text-sky-300';
+          a.textContent = i18n('chat_refs_open_link');
+          line.appendChild(a);
+        }
+        refsWrap.appendChild(line);
+      }
+      col.appendChild(refsWrap);
     }
     wrap.appendChild(sr);
     wrap.appendChild(col);
@@ -207,7 +257,7 @@
           if (res.meta && typeof res.meta.filesUsed === 'number' && res.meta.filesUsed > 0) {
             metaLine = i18nFmt('meta_files_suffix', { n: res.meta.filesUsed });
           }
-          homeChatAppendAgent(answer, metaLine);
+          homeChatAppendAgent(answer, metaLine, (res.meta && res.meta.references) || []);
           askStatus.textContent = '\u00a0';
         })
         .withFailureHandler(function (e) {
@@ -265,12 +315,16 @@
                 askBtn.disabled = false;
                 homeChatRemoveThinking();
                 if (!results || !results.length) {
-                  homeChatAppendAgent(i18n('orch_no_results'), '');
+                  homeChatAppendAgent(i18n('orch_no_results'), '', []);
                 } else {
                   var combined = [];
                   for (var k = 0; k < results.length; k++) {
                     var badge = i18nFmt('orch_routed_badge', { agent: results[k].agentName });
-                    homeChatAppendAgent(results[k].answer || '', badge);
+                    homeChatAppendAgent(
+                      results[k].answer || '',
+                      badge,
+                      (results[k].meta && results[k].meta.references) || [],
+                    );
                     combined.push(results[k].answer || '');
                   }
                   pushHistory('assistant', combined.join('\n---\n'));
@@ -294,7 +348,7 @@
                 var answer = res.answer || '';
                 pushHistory('assistant', answer);
                 var badge = i18nFmt('orch_routed_badge', { agent: res.agentName || agNames });
-                homeChatAppendAgent(answer, badge);
+                homeChatAppendAgent(answer, badge, (res.meta && res.meta.references) || []);
                 askStatus.textContent = '\u00a0';
               })
               .withFailureHandler(function (e) {

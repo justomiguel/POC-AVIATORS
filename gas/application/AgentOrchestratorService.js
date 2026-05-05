@@ -41,7 +41,7 @@ function AgentOrchestrator_routeOnly(question) {
  * Paso 2: responde la consulta usando un agente especifico (por id).
  * @param {string} question
  * @param {string} agentId
- * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string, agentName: string }}
+ * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string, agentName: string, references?: Array<Object> }}
  */
 function AgentOrchestrator_answerWith(question, agentId, history) {
   AgentOrchestrator_requireGlobant_();
@@ -83,6 +83,10 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     confidence: 'routed',
   });
   answer.agentName = chosen.profileName;
+  answer.references = AgentOrchestrator_matchCatalogReferences_(
+    answer.answer,
+    [AgentOrchestrator_mapAgentIdToContentType_(chosen.id)],
+  );
   return answer;
 }
 
@@ -90,7 +94,7 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
  * Consulta multiples agentes y devuelve solo los que tengan contenido relevante.
  * @param {string} question
  * @param {Array<string>} agentIds
- * @return {Array<{answer:string, agentName:string, model:string, providerLabel:string, rawJson:string, filterLabel:string}>}
+ * @return {Array<{answer:string, agentName:string, model:string, providerLabel:string, rawJson:string, filterLabel:string, references?:Array<Object>}>}
  */
 function AgentOrchestrator_answerMulti(question, agentIds, history) {
   AgentOrchestrator_requireGlobant_();
@@ -138,6 +142,10 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
 
       if (!AgentOrchestrator_isEmptyResponse_(answer.answer)) {
         answer.answer = AgentOrchestrator_sanitizeAnswer_(answer.answer);
+        answer.references = AgentOrchestrator_matchCatalogReferences_(
+          answer.answer,
+          [AgentOrchestrator_mapAgentIdToContentType_(chosen.id)],
+        );
         results.push(answer);
       }
     } catch (e) {
@@ -171,6 +179,143 @@ function AgentOrchestrator_sanitizeAnswer_(text) {
     return UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content');
   }
   return t;
+}
+
+/**
+ * @param {string} agentId
+ * @return {'proposal'|'success_case'|'client'|''}
+ */
+function AgentOrchestrator_mapAgentIdToContentType_(agentId) {
+  if (agentId === _ADMIN_AGENT_ID_PROPOSALS) return 'proposal';
+  if (agentId === _ADMIN_AGENT_ID_SUCCESS_CASES) return 'success_case';
+  if (agentId === _ADMIN_AGENT_ID_CLIENTS) return 'client';
+  return '';
+}
+
+/** @type {Object<string,string>} */
+var _ORCH_DRIVE_URL_BY_FILE_NAME = {};
+
+/**
+ * @param {string} fileName
+ * @return {string}
+ */
+function AgentOrchestrator_resolveDriveUrlByFileName_(fileName) {
+  var key = ('' + (fileName || '')).trim();
+  if (!key) return '';
+  if (_ORCH_DRIVE_URL_BY_FILE_NAME[key] != null) return _ORCH_DRIVE_URL_BY_FILE_NAME[key];
+  try {
+    var escaped = key.replace(/'/g, "\\'");
+    var q =
+      "title = '" +
+      escaped +
+      "' and '" +
+      CATALOG_ROOT_FOLDER_ID +
+      "' in parents and trashed = false";
+    var it = DriveApp.searchFiles(q);
+    if (it.hasNext()) {
+      var f = it.next();
+      var url = String(f.getUrl() || '');
+      _ORCH_DRIVE_URL_BY_FILE_NAME[key] = url;
+      return url;
+    }
+  } catch (e) {}
+  _ORCH_DRIVE_URL_BY_FILE_NAME[key] = '';
+  return '';
+}
+
+/**
+ * @param {string} s
+ * @return {string}
+ */
+function AgentOrchestrator_normText_(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * @param {string} answerText
+ * @param {Array<string>} preferredTypes
+ * @return {Array<{contentId:string,title:string,contentType:string,url:string,fileName:string}>}
+ */
+function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
+  var text = AgentOrchestrator_normText_(answerText);
+  if (!text) return [];
+
+  var typeSet = {};
+  var i;
+  for (i = 0; i < (preferredTypes || []).length; i++) {
+    var t = String(preferredTypes[i] || '').trim();
+    if (t) typeSet[t] = true;
+  }
+
+  /** @type {Array<Object>} */
+  var items = [];
+  try {
+    var wanted = Object.keys(typeSet);
+    if (!wanted.length) {
+      wanted = ['proposal', 'success_case', 'client'];
+    }
+    for (i = 0; i < wanted.length; i++) {
+      var list = ContentCatalog_list({ contentType: wanted[i], skip: 0, limit: 300 });
+      if (list && list.items && list.items.length) {
+        items = items.concat(list.items);
+      }
+    }
+  } catch (e) {
+    return [];
+  }
+
+  /** @type {Array<{score:number,ref:{contentId:string,title:string,contentType:string,url:string,fileName:string}}>} */
+  var scored = [];
+  for (i = 0; i < items.length; i++) {
+    var c = items[i] && items[i].common ? items[i].common : {};
+    var title = String(c.title || '').trim();
+    var client = String(c.client_name || '').trim();
+    var docId = String(c.globant_document_id || '').trim();
+    var fileName = String(c.file_name || '').trim();
+    var cType = String(c.content_type || '').trim();
+    var cId = String(c.content_id || '').trim();
+    if (!cId) continue;
+
+    var score = 0;
+    var nTitle = AgentOrchestrator_normText_(title);
+    var nClient = AgentOrchestrator_normText_(client);
+    if (nTitle && text.indexOf(nTitle) >= 0) score += 5;
+    if (nClient && text.indexOf(nClient) >= 0) score += 2;
+    if (docId && text.indexOf(AgentOrchestrator_normText_(docId)) >= 0) score += 4;
+    if (score <= 0) continue;
+
+    var url = AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
+    scored.push({
+      score: score,
+      ref: {
+        contentId: cId,
+        title: title || cId,
+        contentType: cType,
+        url: url,
+        fileName: fileName,
+      },
+    });
+  }
+
+  scored.sort(function (a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+    return String(a.ref.title || '').localeCompare(String(b.ref.title || ''));
+  });
+
+  var out = [];
+  var seen = {};
+  for (i = 0; i < scored.length && out.length < 5; i++) {
+    var key = scored[i].ref.contentId;
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push(scored[i].ref);
+  }
+  return out;
 }
 
 /**

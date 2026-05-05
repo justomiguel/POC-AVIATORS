@@ -10,6 +10,8 @@ var _ADMIN_AGENT_ID_ORCHESTRATOR = 'orchestrator';
 var _ADMIN_AGENT_ID_SUCCESS_CASES = 'success_cases';
 var _ADMIN_AGENT_ID_PROPOSALS = 'proposals';
 var _ADMIN_AGENT_ID_CLIENTS = 'clients';
+var _ADMIN_AGENTS_API_CATALOG_SSID_PROP = 'ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID';
+var _ADMIN_AGENTS_API_CATALOG_TAB = 'agent_api_catalog';
 
 /**
  * @return {Array<{id:string,profileName:string,systemPrompt:string,sources:{folders:Array<{id:string,name:string}>,files:Array<{id:string,name:string}>},lastSync:string}>}
@@ -127,6 +129,7 @@ function AdminAgents_ensureDefaultAgentsInRegistry_(reg) {
       profileName: df.profileName,
       systemPrompt: df.systemPrompt,
       sources: AdminAgents_normalizeSources_(df.sources),
+      globantAgent: AdminAgents_defaultGlobantAgentConfig_(df),
       lastSync: '',
     });
     changed = true;
@@ -142,6 +145,229 @@ function AdminAgents_isValidProfileName_(name) {
   var s = ('' + (name || '')).trim();
   if (s.length < 2 || s.length > 80) return false;
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(s);
+}
+
+/**
+ * @param {unknown} v
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ * @return {number}
+ */
+function AdminAgents_numberOrDefault_(v, min, max, fallback) {
+  var n = Number(v);
+  if (isNaN(n)) return fallback;
+  if (n < min) return min;
+  if (n > max) return max;
+  return n;
+}
+
+/**
+ * @param {Object} agentLike
+ * @return {{
+ *   idOrName: string,
+ *   automaticPublish: boolean,
+ *   accessScope: string,
+ *   sharingScope: string,
+ *   status: string,
+ *   name: string,
+ *   jobDescription: string,
+ *   avatarImage: string,
+ *   description: string,
+ *   strategyName: string,
+ *   promptContext: string,
+ *   promptInstructions: string,
+ *   modelName: string,
+ *   maxTokens: number,
+ *   timeout: number,
+ *   temperature: number
+ * }}
+ */
+function AdminAgents_defaultGlobantAgentConfig_(agentLike) {
+  var profile = String((agentLike && agentLike.profileName) || '').trim();
+  var prompt = String((agentLike && agentLike.systemPrompt) || '');
+  return {
+    idOrName: profile,
+    automaticPublish: false,
+    accessScope: 'private',
+    sharingScope: 'organization',
+    status: 'active',
+    name: profile,
+    jobDescription: '',
+    avatarImage: '',
+    description: '',
+    strategyName: 'Chain of Thought',
+    promptContext: '',
+    promptInstructions: prompt,
+    modelName: '',
+    maxTokens: 4000,
+    timeout: 0,
+    temperature: 0.2,
+  };
+}
+
+/**
+ * @param {Array<string>} arr
+ * @return {Array<string>}
+ */
+function AdminAgents_uniqueNonEmpty_(arr) {
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < arr.length; i++) {
+    var v = String(arr[i] || '').trim();
+    if (!v || seen[v]) continue;
+    seen[v] = true;
+    out.push(v);
+  }
+  return out;
+}
+
+/**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {{ spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, sheet: GoogleAppsScript.Spreadsheet.Sheet }}
+ */
+function AdminAgents_getOrCreateApiCatalogSheet_(props) {
+  var ssId = (props.getProperty(_ADMIN_AGENTS_API_CATALOG_SSID_PROP) || '').trim();
+  var ss = null;
+  if (ssId) {
+    try {
+      ss = SpreadsheetApp.openById(ssId);
+    } catch (eOpen) {
+      ss = null;
+    }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Aviators - Admin Agent API Catalog');
+    props.setProperty(_ADMIN_AGENTS_API_CATALOG_SSID_PROP, ss.getId());
+  }
+  var sh = ss.getSheetByName(_ADMIN_AGENTS_API_CATALOG_TAB);
+  if (!sh) sh = ss.insertSheet(_ADMIN_AGENTS_API_CATALOG_TAB);
+  if (sh.getLastRow() < 1) {
+    sh.getRange(1, 1, 1, 2).setValues([['model', 'strategy']]);
+  } else {
+    var h1 = String(sh.getRange(1, 1).getValue() || '').trim().toLowerCase();
+    var h2 = String(sh.getRange(1, 2).getValue() || '').trim().toLowerCase();
+    if (h1 !== 'model' || h2 !== 'strategy') {
+      sh.getRange(1, 1, 1, 2).setValues([['model', 'strategy']]);
+    }
+  }
+  return { spreadsheet: ss, sheet: sh };
+}
+
+/**
+ * Catálogo editable desde hoja:
+ * - Spreadsheet: Script Property ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID.
+ * - Tab: agent_api_catalog.
+ * - Columnas: model, strategy.
+ * @return {{ ok: boolean, models: Array<string>, strategies: Array<string>, source: string, spreadsheetId: string, sheetName: string }}
+ */
+function AdminAgents_apiCatalog() {
+  AdminAuth_requireAdmin();
+  var props = PropertiesService.getScriptProperties();
+  var defaultModels = [
+    'vertex_ai/gemini-2.5-pro',
+    'vertex_ai/gemini-2.5-flash',
+    'vertex_ai/gemini-2.5-flash-lite',
+    'vertex_ai/gemini-2.0-flash',
+    'openai/gpt-5',
+    'openai/gpt-5-mini',
+    'openai/gpt-4.1',
+    'anthropic/claude-sonnet-4-20250514',
+  ];
+  var defaultStrategies = [
+    'Chain of Thought',
+    'Direct Answer',
+    'Tree of Thoughts',
+    'Self-Consistency',
+    'ReAct',
+  ];
+  var cat = AdminAgents_getOrCreateApiCatalogSheet_(props);
+  var sh = cat.sheet;
+  var models = [];
+  var strategies = [];
+  var last = sh.getLastRow();
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 2).getDisplayValues();
+    var i;
+    for (i = 0; i < vals.length; i++) {
+      models.push(vals[i][0]);
+      strategies.push(vals[i][1]);
+    }
+  }
+  models = AdminAgents_uniqueNonEmpty_(models);
+  strategies = AdminAgents_uniqueNonEmpty_(strategies);
+  return {
+    ok: true,
+    models: models.length ? models : defaultModels,
+    strategies: strategies.length ? strategies : defaultStrategies,
+    source: models.length || strategies.length ? 'spreadsheet' : 'defaults',
+    spreadsheetId: cat.spreadsheet.getId(),
+    sheetName: _ADMIN_AGENTS_API_CATALOG_TAB,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @param {Object=} agentLike
+ * @return {Object}
+ */
+function AdminAgents_normalizeGlobantAgentConfig_(raw, agentLike) {
+  var base = AdminAgents_defaultGlobantAgentConfig_(agentLike || {});
+  if (!raw || typeof raw !== 'object') return base;
+  var inCfg = /** @type {Object<string, unknown>} */ (raw);
+
+  var accessScope = String(inCfg.accessScope || '').trim().toLowerCase();
+  if (accessScope !== 'public' && accessScope !== 'private') {
+    accessScope = base.accessScope;
+  }
+  var sharingScope = String(inCfg.sharingScope || '').trim().toLowerCase();
+  if (
+    sharingScope !== 'none' &&
+    sharingScope !== 'organization' &&
+    sharingScope !== 'everybody'
+  ) {
+    sharingScope = base.sharingScope;
+  }
+  var status = String(inCfg.status || '').trim().toLowerCase();
+  if (status !== 'active' && status !== 'inactive') {
+    status = base.status;
+  }
+
+  return {
+    idOrName: String(inCfg.idOrName || base.idOrName).trim(),
+    automaticPublish:
+      String(inCfg.automaticPublish).toLowerCase() === 'true' ||
+      inCfg.automaticPublish === true,
+    accessScope: accessScope,
+    sharingScope: sharingScope,
+    status: status,
+    name: String(inCfg.name || base.name).trim(),
+    jobDescription: String(inCfg.jobDescription || '').trim(),
+    avatarImage: String(inCfg.avatarImage || '').trim(),
+    description: String(inCfg.description || '').trim(),
+    strategyName: String(inCfg.strategyName || base.strategyName).trim(),
+    promptContext: String(inCfg.promptContext || '').trim(),
+    promptInstructions: String(
+      inCfg.promptInstructions != null
+        ? inCfg.promptInstructions
+        : base.promptInstructions,
+    ),
+    modelName: String(inCfg.modelName || '').trim(),
+    maxTokens: AdminAgents_numberOrDefault_(
+      inCfg.maxTokens,
+      1,
+      65536,
+      base.maxTokens,
+    ),
+    timeout: AdminAgents_numberOrDefault_(inCfg.timeout, 0, 600, base.timeout),
+    temperature: AdminAgents_numberOrDefault_(
+      inCfg.temperature,
+      0,
+      2,
+      base.temperature,
+    ),
+  };
 }
 
 /**
@@ -225,6 +451,10 @@ function AdminAgents_loadRegistry_(props) {
       profileName: prof,
       systemPrompt: '',
       sources: legacySources,
+      globantAgent: AdminAgents_defaultGlobantAgentConfig_({
+        profileName: prof,
+        systemPrompt: '',
+      }),
       lastSync: (props.getProperty(_AK_PROP_LAST_SYNC) || '').trim(),
     },
   ];
@@ -338,6 +568,91 @@ function AdminAgents_maybeCreateRagClient_(props) {
 }
 
 /**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {{upsertAgent:function(string,Object,boolean):Object}}
+ */
+function AdminAgents_createGlobantAgentsApiClient_(props) {
+  var apiKey = (props.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'),
+    );
+  }
+  var baseUrl = (props.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var projectId = (props.getProperty('GLOBANT_PROJECT_ID') || '').trim();
+  return GlobantAgentsApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+    projectId: projectId || undefined,
+  });
+}
+
+/**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @param {string} profileName
+ * @param {string} systemPrompt
+ * @param {Object} globantAgent
+ * @return {{config:Object, remote:Object}}
+ */
+function AdminAgents_upsertRemoteGlobantAgent_(
+  props,
+  profileName,
+  systemPrompt,
+  globantAgent,
+) {
+  var cfg = AdminAgents_normalizeGlobantAgentConfig_(globantAgent, {
+    profileName: profileName,
+    systemPrompt: systemPrompt,
+  });
+  if (!String(cfg.modelName || '').trim()) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_api_model_required'),
+    );
+  }
+  var idOrName = String(cfg.idOrName || cfg.name || profileName).trim();
+  if (!idOrName) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_api_id'),
+    );
+  }
+  var name = String(cfg.name || profileName || idOrName).trim();
+  var instructions = String(
+    cfg.promptInstructions != null ? cfg.promptInstructions : systemPrompt,
+  );
+  var agentDefinition = {
+    name: name,
+    accessScope: cfg.accessScope,
+    sharingScope: cfg.sharingScope,
+    status: cfg.status,
+    jobDescription: String(cfg.jobDescription || ''),
+    avatarImage: String(cfg.avatarImage || ''),
+    description: String(cfg.description || ''),
+    agentData: {
+      strategyName: String(cfg.strategyName || ''),
+      prompt: {
+        context: String(cfg.promptContext || ''),
+        instructions: instructions,
+      },
+      llmConfig: {
+        maxTokens: cfg.maxTokens,
+        timeout: cfg.timeout,
+        sampling: {
+          temperature: cfg.temperature,
+        },
+      },
+      models: [{ name: String(cfg.modelName || '') }],
+    },
+  };
+  var client = AdminAgents_createGlobantAgentsApiClient_(props);
+  var remote = client.upsertAgent(idOrName, agentDefinition, !!cfg.automaticPublish);
+
+  cfg.idOrName = idOrName;
+  cfg.name = name;
+  cfg.promptInstructions = instructions;
+  return { config: cfg, remote: remote };
+}
+
+/**
  * @param {Object} ragClient
  * @return {Object<string, boolean>}
  */
@@ -423,6 +738,7 @@ function AdminAgents_list() {
       profileName: String(a.profileName || ''),
       systemPrompt: String(a.systemPrompt || ''),
       sources: AdminAgents_normalizeSources_(a.sources),
+      globantAgent: AdminAgents_normalizeGlobantAgentConfig_(a.globantAgent, a),
       lastSync: String(a.lastSync || ''),
     });
   }
@@ -519,11 +835,22 @@ function AdminAgents_upsert(agentIn) {
     }
   }
 
+  // El guardado de Agentes siempre refleja la definición en Globant antes
+  // de persistir localmente en Drive.
+  var remoteSave = AdminAgents_upsertRemoteGlobantAgent_(
+    props,
+    profileName,
+    systemPrompt,
+    agentIn.globantAgent,
+  );
+  var globantAgent = remoteSave.config;
+
   var entry = {
     id: id,
     profileName: profileName,
     systemPrompt: systemPrompt,
     sources: sources,
+    globantAgent: globantAgent,
     lastSync:
       foundIdx >= 0 && reg.agents[foundIdx].lastSync
         ? String(reg.agents[foundIdx].lastSync)
@@ -535,7 +862,16 @@ function AdminAgents_upsert(agentIn) {
 
   AdminAgents_saveRegistry_(props, reg);
 
-  return { ok: true, agent: entry };
+  return {
+    ok: true,
+    agent: entry,
+    globant: {
+      idOrName: String(globantAgent.idOrName || ''),
+      revision: Number((remoteSave.remote && remoteSave.remote.revision) || 0),
+      isDraft: !!(remoteSave.remote && remoteSave.remote.isDraft),
+      status: String((remoteSave.remote && remoteSave.remote.status) || ''),
+    },
+  };
 }
 
 /**

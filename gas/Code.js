@@ -19,6 +19,7 @@ function doGet() {
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
   tpl.clientScriptSearch = HtmlService.createHtmlOutputFromFile('app-client-search').getContent();
+  tpl.clientScriptExport = HtmlService.createHtmlOutputFromFile('app-client-export').getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptBoot = HtmlService.createHtmlOutputFromFile('app-client-boot').getContent();
   return tpl
@@ -251,6 +252,75 @@ function getContextFiles() {
 }
 
 /**
+ * @param {string[]} fileIds
+ * @return {Array<{contentId:string,title:string,contentType:string,url:string,fileName:string,driveFileId:string}>}
+ */
+function ChatReferences_buildFromSelectedFiles_(fileIds) {
+  var ids = Array.isArray(fileIds) ? fileIds : [];
+  var refs = [];
+  var seen = {};
+  for (var i = 0; i < ids.length; i++) {
+    var fid = String(ids[i] || '').trim();
+    if (!fid || seen[fid]) continue;
+    seen[fid] = true;
+    try {
+      var f = DriveApp.getFileById(fid);
+      refs.push({
+        contentId: '',
+        title: String(f.getName() || fid),
+        contentType: 'selected_file',
+        url: String(f.getUrl() || ''),
+        fileName: String(f.getName() || ''),
+        driveFileId: fid,
+      });
+    } catch (e) {}
+  }
+  return refs;
+}
+
+/**
+ * @param {Array<Object>} catalogRefs
+ * @param {Array<Object>} selectedFileRefs
+ * @return {Array<Object>}
+ */
+function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
+  var out = [];
+  var i;
+  var byFileName = {};
+  for (i = 0; i < selectedFileRefs.length; i++) {
+    var s = selectedFileRefs[i];
+    var k = String(s.fileName || '').trim().toLowerCase();
+    if (k) byFileName[k] = s;
+  }
+
+  var seen = {};
+  for (i = 0; i < catalogRefs.length; i++) {
+    var c = catalogRefs[i] || {};
+    var fKey = String(c.fileName || '').trim().toLowerCase();
+    if (!c.url && fKey && byFileName[fKey] && byFileName[fKey].url) {
+      c.url = byFileName[fKey].url;
+    }
+    var idKey = String(c.contentId || '') || String(c.title || '');
+    if (idKey && !seen[idKey]) {
+      seen[idKey] = true;
+      out.push(c);
+    }
+  }
+
+  // Fallback: if no catalog match, still provide explicit URLs from selected files.
+  if (!out.length) {
+    for (i = 0; i < selectedFileRefs.length; i++) {
+      var sRef = selectedFileRefs[i];
+      var sKey = 'file:' + String(sRef.driveFileId || sRef.fileName || i);
+      if (seen[sKey]) continue;
+      seen[sKey] = true;
+      out.push(sRef);
+    }
+  }
+  return out;
+}
+
+/**
  * Entrada HTML: delega en el orquestador (proveedor según Propiedades del script).
  * @param {string} question
  * @param {string[]} fileIds
@@ -259,12 +329,22 @@ function askAboutDocuments(question, fileIds, historyJson) {
   var history = [];
   try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
   var ans = LlmOrchestrator_consultWithDriveDocuments(question, fileIds, history);
+  var selectedRefs = ChatReferences_buildFromSelectedFiles_(fileIds);
+  var catalogRefs = [];
+  try {
+    catalogRefs = AgentOrchestrator_matchCatalogReferences_(
+      ans.answer || '',
+      ['proposal', 'success_case', 'client'],
+    );
+  } catch (eMatch) {}
+  var refs = ChatReferences_merge_(catalogRefs, selectedRefs);
   return {
     answer: ans.answer,
     meta: {
       model: ans.model,
       location: ans.providerLabel,
       filesUsed: ans.filesUsed,
+      references: refs,
     },
   };
 }
@@ -295,6 +375,7 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
       location: r.providerLabel,
       filterNote: r.filterLabel,
       rawJson: r.rawJson,
+      references: r.references || [],
     },
   };
 }
@@ -320,6 +401,7 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
         location: r.providerLabel,
         filterNote: r.filterLabel,
         rawJson: r.rawJson,
+        references: r.references || [],
       },
     });
   }
@@ -387,6 +469,11 @@ function adminAgentsList() {
 /** Solo admin · crear agentes por defecto faltantes (sin duplicar). */
 function adminAgentsEnsureDefaults() {
   return AdminAgents_ensureDefaults();
+}
+
+/** Solo admin · catálogo de modelos/estrategias para Agent API. */
+function adminAgentsApiCatalog() {
+  return AdminAgents_apiCatalog();
 }
 
 /**

@@ -13,9 +13,28 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    <script>
+      (function () {
+        var dark = false;
+        try {
+          var saved = localStorage.getItem('aviators_theme');
+          if (saved === 'dark') {
+            dark = true;
+          } else if (saved !== 'light' && window.matchMedia) {
+            dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+        } catch (e) {
+          if (window.matchMedia) {
+            dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+        }
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      })();
+    </script>
   </head>
 
-  <body class="h-full min-h-0 bg-slate-100">
+  <body class="h-full min-h-0 bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
     <main class="h-full min-h-0">
       <div id="view-login" class="login-root">
         <div class="login-card">
@@ -61,10 +80,10 @@
         <p id="login-footnote" class="login-footnote hidden" aria-hidden="true"></p>
 
         <div class="mt-6 flex items-center justify-center gap-3">
-          <button type="button" id="login-locale-es" class="locale-btn-login inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-sky-50" data-ui-locale="es">
+          <button type="button" id="login-locale-es" class="locale-btn-login inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600" data-ui-locale="es">
             🇪🇸 <span>ES</span>
           </button>
-          <button type="button" id="login-locale-en" class="locale-btn-login inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-sky-50" data-ui-locale="en">
+          <button type="button" id="login-locale-en" class="locale-btn-login inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600" data-ui-locale="en">
             🇬🇧 <span>EN</span>
           </button>
         </div>
@@ -76,9 +95,11 @@
         class="app-shell-view hidden flex h-full min-h-0 max-w-full flex-col overflow-hidden md:flex-row"
       >
         <aside
-          class="app-sidebar flex h-full min-h-0 w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 md:min-h-0 md:w-72 md:border-b-0 md:border-r md:py-4 md:pl-4 md:pr-3"
+          id="app-sidebar"
+          class="app-sidebar flex h-full min-h-0 w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 md:min-h-0 md:w-72 md:border-b-0 md:border-r md:py-4 md:pl-4 md:pr-3"
           data-i18n-aria-label="sidebar_aria_profile"
           aria-label=""
+          aria-hidden="false"
         >
           <div
             class="app-sidebar-brand mb-4 flex shrink-0 items-center gap-3 px-4 pt-4 md:mb-5 md:px-2 md:pt-0"
@@ -96,10 +117,19 @@
             />
             <div class="min-w-0">
               <p
-                class="text-lg font-bold tracking-tight text-slate-900"
+                class="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100"
                 data-i18n="app_title"
               ></p>
             </div>
+            <button
+              type="button"
+              id="mobile-drawer-close-btn"
+              class="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:hidden dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+              data-i18n-aria-label="mobile_menu_close_aria"
+              aria-label=""
+            >
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto px-4 md:px-2">
@@ -236,7 +266,31 @@
             </button>
           </div>
         </aside>
+        <button
+          type="button"
+          id="app-drawer-backdrop"
+          class="app-drawer-backdrop md:hidden"
+          tabindex="-1"
+          aria-hidden="true"
+          data-i18n-aria-label="mobile_menu_backdrop_aria"
+          aria-label=""
+        ></button>
           <div class="app-content app-content-panel relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div class="app-mobile-topbar flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-3 py-2.5 md:hidden dark:border-slate-700 dark:bg-slate-800/95">
+              <button
+                type="button"
+                id="mobile-drawer-open-btn"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                aria-controls="app-sidebar"
+                aria-expanded="false"
+                data-i18n-aria-label="mobile_menu_open_aria"
+                aria-label=""
+              >
+                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+              </button>
+              <p class="truncate text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-100" data-i18n="app_title"></p>
+              <span class="w-10" aria-hidden="true"></span>
+            </div>
             <div class="app-content-scroll min-h-0 flex-1 overflow-y-auto px-3 pt-6 pb-5 md:px-6 md:pt-8 md:pb-6">
             <p id="session-note" class="session-banner status-msg"></p>
             <section
@@ -251,7 +305,7 @@
             <div id="member-standard-home">
         <!-- Dashboard metrics cards -->
         <div id="dashboard-metrics" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 hidden">
-          <div class="dash-card rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div id="dash-card-agents" class="dash-card hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex items-center gap-3">
               <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400">
                 <i class="fa-solid fa-robot" aria-hidden="true"></i>
@@ -262,7 +316,7 @@
               </div>
             </div>
           </div>
-          <div class="dash-card rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div id="dash-card-contents" class="dash-card hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex items-center gap-3">
               <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
                 <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
@@ -273,7 +327,7 @@
               </div>
             </div>
           </div>
-          <div class="dash-card rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div id="dash-card-clients" class="dash-card hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex items-center gap-3">
               <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">
                 <i class="fa-solid fa-building" aria-hidden="true"></i>
@@ -359,15 +413,43 @@
           class="label-sr-only"
           data-i18n="lbl_chat_input_sronly"
         ></label>
-        <textarea
-          id="question"
-          class="q-area w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[15px] text-slate-800 shadow-inner outline-none ring-sky-500/20 transition placeholder:text-slate-400 focus:border-aviators-primary focus:ring-2"
-          rows="3"
-          data-i18n-placeholder="ph_question"
-          data-i18n-aria-label="lbl_chat_input_sronly"
-          placeholder=""
-          aria-label=""
-        ></textarea>
+        <div class="chat-input-row">
+          <textarea
+            id="question"
+            class="q-area w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[15px] text-slate-800 shadow-inner outline-none ring-sky-500/20 transition placeholder:text-slate-400 focus:border-aviators-primary focus:ring-2"
+            rows="3"
+            data-i18n-placeholder="ph_question"
+            data-i18n-aria-label="lbl_chat_input_sronly"
+            placeholder=""
+            aria-label=""
+          ></textarea>
+          <div class="chat-send-actions">
+            <div id="globant-agent-row" class="btn-row flex flex-wrap gap-2 hidden">
+              <button
+                type="button"
+                id="ask-agent-btn"
+                class="btn btn-md btn-primary mobile-send-icon-btn"
+                data-i18n-aria-label="ask_agent_btn"
+                aria-label=""
+              >
+                <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                <span data-i18n="ask_agent_btn"></span>
+              </button>
+            </div>
+            <div id="ask-drive-row" class="btn-row flex flex-wrap gap-2 hidden">
+              <button
+                type="button"
+                id="ask-btn"
+                class="btn btn-md btn-primary mobile-send-icon-btn"
+                data-i18n-aria-label="ask_btn"
+                aria-label=""
+              >
+                <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                <span data-i18n="ask_btn"></span>
+              </button>
+            </div>
+          </div>
+        </div>
         <div
           id="gemini-docs-block"
           class="gemini-docs-block mt-4 hidden rounded-xl border border-dashed border-slate-200 bg-white/80 p-4"
@@ -383,18 +465,6 @@
             data-i18n="static_drive_files_lead"
           ></p>
           <ul id="files" class="files"></ul>
-        </div>
-        <div id="globant-agent-row" class="btn-row mt-4 flex flex-wrap gap-2 hidden">
-          <button type="button" id="ask-agent-btn" class="btn btn-md btn-primary">
-            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-            <span data-i18n="ask_agent_btn"></span>
-          </button>
-        </div>
-        <div id="ask-drive-row" class="btn-row mt-3 flex flex-wrap gap-2 hidden">
-          <button type="button" id="ask-btn" class="btn btn-md btn-primary">
-            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-            <span data-i18n="ask_btn"></span>
-          </button>
         </div>
         <p id="ask-status" class="status-msg ask-status-mt"></p>
         </div>
@@ -453,6 +523,13 @@
                       <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
                       <span data-i18n="admin_agent_seed_defaults"></span>
                     </button>
+                    <div id="agents-batch-bar" class="hidden mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs dark:border-sky-800 dark:bg-sky-950/40">
+                      <span id="agents-batch-count" class="block mb-1 font-medium text-sky-800 dark:text-sky-300"></span>
+                      <button type="button" id="agents-batch-sync-btn" class="btn btn-sm btn-primary w-full">
+                        <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                        <span data-i18n="batch_sync_selected"></span>
+                      </button>
+                    </div>
                   </aside>
                   <main class="admin-app-main">
                     <div id="admin-agent-empty" class="admin-agent-empty rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-600" data-i18n="admin_agent_empty_select"></div>
@@ -476,6 +553,92 @@
                           <label for="admin-agent-prompt" class="block text-sm font-medium text-slate-800" data-i18n="lbl_admin_agent_prompt"></label>
                           <p class="mt-1 text-xs leading-relaxed text-slate-500" data-i18n-html="admin_agent_prompt_hint_html"></p>
                           <textarea id="admin-agent-prompt" rows="7" class="mt-2 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 font-mono text-sm text-slate-800"></textarea>
+                        </div>
+                      </section>
+                      <section class="admin-agent-section space-y-3" aria-labelledby="admin-agent-sec-api-heading">
+                        <div>
+                          <h3 id="admin-agent-sec-api-heading" class="text-base font-semibold text-slate-900" data-i18n="admin_agent_sec_api_heading"></h3>
+                          <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="admin_agent_sec_api_lead"></p>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <label for="admin-agent-api-id-or-name" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_id_or_name"></span>
+                            <input type="text" id="admin-agent-api-id-or-name" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="ph_admin_agent_api_id_or_name" placeholder="" autocomplete="off" />
+                          </label>
+                          <label for="admin-agent-api-name" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_name"></span>
+                            <input type="text" id="admin-agent-api-name" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="ph_admin_agent_api_name" placeholder="" autocomplete="off" />
+                          </label>
+                          <label for="admin-agent-api-model" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_model"></span>
+                            <select id="admin-agent-api-model" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></select>
+                          </label>
+                          <label for="admin-agent-api-strategy" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_strategy"></span>
+                            <select id="admin-agent-api-strategy" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></select>
+                          </label>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-3">
+                          <label for="admin-agent-api-max-tokens" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_max_tokens"></span>
+                            <input type="number" id="admin-agent-api-max-tokens" min="1" max="65536" step="1" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                          </label>
+                          <label for="admin-agent-api-timeout" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_timeout"></span>
+                            <input type="number" id="admin-agent-api-timeout" min="0" max="600" step="1" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                          </label>
+                          <label for="admin-agent-api-temperature" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_temperature"></span>
+                            <input type="number" id="admin-agent-api-temperature" min="0" max="2" step="0.1" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                          </label>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-3">
+                          <label for="admin-agent-api-access-scope" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_access_scope"></span>
+                            <select id="admin-agent-api-access-scope" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                              <option value="private" data-i18n="opt_admin_agent_private"></option>
+                              <option value="public" data-i18n="opt_admin_agent_public"></option>
+                            </select>
+                          </label>
+                          <label for="admin-agent-api-sharing-scope" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_sharing_scope"></span>
+                            <select id="admin-agent-api-sharing-scope" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                              <option value="organization" data-i18n="opt_admin_agent_sharing_organization"></option>
+                              <option value="none" data-i18n="opt_admin_agent_sharing_none"></option>
+                              <option value="everybody" data-i18n="opt_admin_agent_sharing_everybody"></option>
+                            </select>
+                          </label>
+                          <label for="admin-agent-api-status" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_status"></span>
+                            <select id="admin-agent-api-status" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                              <option value="active" data-i18n="opt_admin_agent_status_active"></option>
+                              <option value="inactive" data-i18n="opt_admin_agent_status_inactive"></option>
+                            </select>
+                          </label>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm text-slate-700" for="admin-agent-api-automatic-publish">
+                          <input type="checkbox" id="admin-agent-api-automatic-publish" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                          <span data-i18n="lbl_admin_agent_api_automatic_publish"></span>
+                        </label>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <label for="admin-agent-api-job-description" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_job_description"></span>
+                            <textarea id="admin-agent-api-job-description" rows="2" class="mt-1 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
+                          </label>
+                          <label for="admin-agent-api-description" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_description"></span>
+                            <textarea id="admin-agent-api-description" rows="2" class="mt-1 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
+                          </label>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <label for="admin-agent-api-avatar" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_avatar"></span>
+                            <input type="url" id="admin-agent-api-avatar" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="ph_admin_agent_api_avatar" placeholder="" autocomplete="off" />
+                          </label>
+                          <label for="admin-agent-api-prompt-context" class="text-sm font-medium text-slate-800">
+                            <span data-i18n="lbl_admin_agent_api_prompt_context"></span>
+                            <textarea id="admin-agent-api-prompt-context" rows="2" class="mt-1 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
+                          </label>
                         </div>
                       </section>
                       <section class="admin-agent-section space-y-3" aria-labelledby="admin-agent-sec-sources-heading">
@@ -561,10 +724,20 @@
                     <h2 class="mb-1 text-lg font-semibold text-slate-900" data-i18n="page_contents_title"></h2>
                     <p class="text-sm leading-relaxed text-slate-600" data-i18n="page_contents_lead"></p>
                   </div>
-                  <button type="button" id="contents-new-btn" class="btn-admin primary inline-flex items-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
-                    <span data-i18n="contents_btn_new"></span>
-                  </button>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" id="contents-export-btn" class="btn btn-sm btn-secondary">
+                      <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
+                      <span data-i18n="export_csv"></span>
+                    </button>
+                    <button type="button" id="contents-import-btn" class="btn btn-sm btn-secondary">
+                      <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
+                      <span data-i18n="import_csv"></span>
+                    </button>
+                    <button type="button" id="contents-new-btn" class="btn-admin primary inline-flex items-center gap-2 whitespace-nowrap">
+                      <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+                      <span data-i18n="contents_btn_new"></span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -871,10 +1044,20 @@
                     <h2 class="text-lg font-semibold text-slate-900" data-i18n="page_clients_title"></h2>
                     <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="page_clients_lead"></p>
                   </div>
-                  <button type="button" id="clients-new-btn" class="btn-admin primary inline-flex items-center gap-2 shrink-0">
-                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                    <span data-i18n="clients_btn_new"></span>
-                  </button>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" id="clients-export-btn" class="btn btn-sm btn-secondary">
+                      <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
+                      <span data-i18n="export_csv"></span>
+                    </button>
+                    <button type="button" id="clients-import-btn" class="btn btn-sm btn-secondary">
+                      <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
+                      <span data-i18n="import_csv"></span>
+                    </button>
+                    <button type="button" id="clients-new-btn" class="btn-admin primary inline-flex items-center gap-2 shrink-0">
+                      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                      <span data-i18n="clients_btn_new"></span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1031,8 +1214,8 @@
         <p id="blocking-modal-msg" class="text-sm font-medium text-slate-700"></p>
       </div>
     </div>
-    <script>
-      window.__AVIATORS_I18N_INITIAL = <?!= i18nEmbed ?>;
+    <script type="application/json" id="aviators-i18n-initial">
+      <?!= i18nEmbed ?>
     </script>
     <?!= clientScriptCore ?>
     <?!= clientScriptI18n ?>
@@ -1043,6 +1226,7 @@
     <?!= clientScriptContents ?>
     <?!= clientScriptClients ?>
     <?!= clientScriptSearch ?>
+    <?!= clientScriptExport ?>
     <?!= clientScriptDashboard ?>
     <?!= clientScriptBoot ?>
     <div id="toast-container"></div>

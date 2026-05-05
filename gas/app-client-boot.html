@@ -23,6 +23,68 @@
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageClients = document.getElementById('nav-page-clients');
   var adminAgentStatus = document.getElementById('admin-agent-status');
+  var appShellView = document.getElementById('view-app');
+  var appSidebar = document.getElementById('app-sidebar');
+  var mobileDrawerOpenBtn = document.getElementById('mobile-drawer-open-btn');
+  var mobileDrawerCloseBtn = document.getElementById('mobile-drawer-close-btn');
+  var appDrawerBackdrop = document.getElementById('app-drawer-backdrop');
+  var mobileDrawerMql = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
+  var lastDrawerFocusEl = null;
+
+  function isMobileDrawerViewport() {
+    return !!(mobileDrawerMql && mobileDrawerMql.matches);
+  }
+
+  function setDrawerState(open, options) {
+    var opts = options || {};
+    var shouldOpen = !!open;
+    if (!appShellView) return;
+    if (!isMobileDrawerViewport()) shouldOpen = false;
+    appShellView.classList.toggle('drawer-open', shouldOpen);
+    if (appSidebar) appSidebar.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+    if (mobileDrawerOpenBtn) {
+      mobileDrawerOpenBtn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    }
+    if (!shouldOpen && opts.restoreFocus && lastDrawerFocusEl && lastDrawerFocusEl.focus) {
+      try { lastDrawerFocusEl.focus(); } catch (eFocusBack) {}
+    }
+  }
+
+  function openMobileDrawer() {
+    if (!isMobileDrawerViewport()) return;
+    lastDrawerFocusEl = document.activeElement || null;
+    setDrawerState(true);
+    var focusTarget =
+      navBtnHome ||
+      appSidebar && appSidebar.querySelector('.app-nav-item') ||
+      mobileDrawerCloseBtn;
+    if (focusTarget && focusTarget.focus) {
+      try { focusTarget.focus(); } catch (eFocusOpen) {}
+    }
+  }
+
+  function closeMobileDrawer(options) {
+    setDrawerState(false, options);
+  }
+
+  function toggleMobileDrawer() {
+    if (!appShellView) return;
+    if (appShellView.classList.contains('drawer-open')) {
+      closeMobileDrawer({ restoreFocus: true });
+    } else {
+      openMobileDrawer();
+    }
+  }
+
+  function syncMobileDrawerViewport() {
+    if (!isMobileDrawerViewport()) {
+      closeMobileDrawer({ restoreFocus: false });
+      if (appSidebar) appSidebar.setAttribute('aria-hidden', 'false');
+    } else if (!appShellView || !appShellView.classList.contains('drawer-open')) {
+      if (appSidebar) appSidebar.setAttribute('aria-hidden', 'true');
+      if (mobileDrawerOpenBtn) mobileDrawerOpenBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
 
   function setAppPage(page) {
     var nodes = document.querySelectorAll('.app-page');
@@ -58,6 +120,7 @@
       A.clients.setScreen('list');
       A.clients.loadList();
     }
+    closeMobileDrawer({ restoreFocus: false });
   }
 
   A.setAppPage = setAppPage;
@@ -156,6 +219,8 @@
 
     function runShowAppBody() {
       A.applyClientI18n(bootstrap.i18n);
+      // Keep sidebar logo in sync with embedded login logo data URL.
+      if (A.syncSidebarBrandLogo) A.syncSidebarBrandLogo();
       loginStatus.textContent = '\u00a0';
       viewLogin.classList.add('hidden');
       viewApp.classList.remove('hidden');
@@ -227,7 +292,8 @@
       if (navPageContents) navPageContents.classList.toggle('hidden', !canManageContents);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canManageContents);
       setAppPage('home');
-      if (A.renderDashboard) A.renderDashboard(bootstrap);
+      syncMobileDrawerViewport();
+      if (A.renderDashboard) A.renderDashboard(bootstrap, { isAdmin: isAdm, canManageContents: canManageContents });
       if (adminAgentStatus) {
         adminAgentStatus.textContent = '\u00a0';
         adminAgentStatus.classList.remove('err');
@@ -338,11 +404,13 @@
       loginLocaleEs.classList.toggle('ring-2', loc === 'es');
       loginLocaleEs.classList.toggle('ring-sky-500', loc === 'es');
       loginLocaleEs.classList.toggle('bg-sky-50', loc === 'es');
+      loginLocaleEs.classList.toggle('dark:bg-sky-900/40', loc === 'es');
     }
     if (loginLocaleEn) {
       loginLocaleEn.classList.toggle('ring-2', loc === 'en');
       loginLocaleEn.classList.toggle('ring-sky-500', loc === 'en');
       loginLocaleEn.classList.toggle('bg-sky-50', loc === 'en');
+      loginLocaleEn.classList.toggle('dark:bg-sky-900/40', loc === 'en');
     }
   }
   function setLoginLocale(loc) {
@@ -366,9 +434,27 @@
   var themeToggleBtn = document.getElementById('theme-toggle-btn');
   var themeToggleIcon = document.getElementById('theme-toggle-icon');
   var themeToggleLabel = document.getElementById('theme-toggle-label');
+  var prefersDarkMedia = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
-  function applyTheme(dark) {
+  function getSavedTheme() {
+    try {
+      var savedTheme = localStorage.getItem('aviators_theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
+    } catch (e) {}
+    return null;
+  }
+
+  function resolveTheme() {
+    var savedTheme = getSavedTheme();
+    if (savedTheme) return savedTheme;
+    return prefersDarkMedia && prefersDarkMedia.matches ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme, options) {
+    var opts = options || {};
+    var dark = theme === 'dark';
     document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     if (themeToggleIcon) {
       themeToggleIcon.className = dark
         ? 'fa-solid fa-sun shrink-0 text-amber-400'
@@ -378,23 +464,67 @@
       themeToggleLabel.setAttribute('data-i18n', dark ? 'theme_light' : 'theme_dark');
       themeToggleLabel.textContent = i18n(dark ? 'theme_light' : 'theme_dark');
     }
+    if (themeToggleBtn) {
+      themeToggleBtn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+      themeToggleBtn.setAttribute('title', i18n(dark ? 'theme_light' : 'theme_dark'));
+    }
+    if (opts.persist) {
+      try { localStorage.setItem('aviators_theme', theme); } catch (e) {}
+    }
   }
 
   (function initTheme() {
-    var saved = null;
-    try { saved = localStorage.getItem('aviators_theme'); } catch (e) {}
-    var dark = saved === 'dark' || (saved === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    applyTheme(dark);
+    applyTheme(resolveTheme());
+    if (prefersDarkMedia) {
+      var onPrefersChange = function (evt) {
+        if (!getSavedTheme()) {
+          applyTheme(evt.matches ? 'dark' : 'light');
+        }
+      };
+      if (prefersDarkMedia.addEventListener) {
+        prefersDarkMedia.addEventListener('change', onPrefersChange);
+      } else if (prefersDarkMedia.addListener) {
+        prefersDarkMedia.addListener(onPrefersChange);
+      }
+    }
   })();
 
   if (themeToggleBtn) {
     themeToggleBtn.addEventListener('click', function () {
       var isDark = document.documentElement.classList.contains('dark');
-      var next = !isDark;
-      applyTheme(next);
-      try { localStorage.setItem('aviators_theme', next ? 'dark' : 'light'); } catch (e) {}
+      applyTheme(isDark ? 'light' : 'dark', { persist: true });
     });
   }
+
+  if (mobileDrawerOpenBtn) {
+    mobileDrawerOpenBtn.addEventListener('click', function () {
+      toggleMobileDrawer();
+    });
+  }
+  if (mobileDrawerCloseBtn) {
+    mobileDrawerCloseBtn.addEventListener('click', function () {
+      closeMobileDrawer({ restoreFocus: true });
+    });
+  }
+  if (appDrawerBackdrop) {
+    appDrawerBackdrop.addEventListener('click', function () {
+      closeMobileDrawer({ restoreFocus: true });
+    });
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (!appShellView || !appShellView.classList.contains('drawer-open')) return;
+    closeMobileDrawer({ restoreFocus: true });
+  });
+  if (mobileDrawerMql) {
+    if (mobileDrawerMql.addEventListener) {
+      mobileDrawerMql.addEventListener('change', syncMobileDrawerViewport);
+    } else if (mobileDrawerMql.addListener) {
+      mobileDrawerMql.addListener(syncMobileDrawerViewport);
+    }
+  }
+  window.addEventListener('resize', syncMobileDrawerViewport);
+  window.addEventListener('orientationchange', syncMobileDrawerViewport);
 
   // --- Bootstrap ---
 

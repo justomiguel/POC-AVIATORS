@@ -352,6 +352,16 @@
     setScreen: clientsSetScreen,
     loadList: clientsLoadList,
     resetForm: clientsResetForm,
+    selectById: function (name) {
+      var cache = S.get('clientsItemsCache') || [];
+      for (var i = 0; i < cache.length; i++) {
+        if ((cache[i].client_name || cache[i].name || '') === name) {
+          clientsOpenEditor(cache[i]);
+          clientsSetScreen('editor');
+          return;
+        }
+      }
+    },
   };
 })(window.Aviators);
 </script>

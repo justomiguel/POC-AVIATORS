@@ -1,6 +1,16 @@
 <script>
 window.Aviators = window.Aviators || {};
 (function (A) {
+  function readInitialI18nPack() {
+    var node = document.getElementById('aviators-i18n-initial');
+    if (!node) return null;
+    try {
+      return JSON.parse(node.textContent || '{}');
+    } catch (eI18nInitial) {
+      return null;
+    }
+  }
+
   var _state = {
     adminAgentsCache: [],
     adminSelectedAgentId: null,
@@ -29,10 +39,7 @@ window.Aviators = window.Aviators || {};
     driveExpStack: [],
     driveExpNextToken: '',
     lastLlmCfg: null,
-    cachedI18n:
-      typeof window !== 'undefined' && window.__AVIATORS_I18N_INITIAL
-        ? window.__AVIATORS_I18N_INITIAL
-        : null,
+    cachedI18n: readInitialI18nPack(),
   };
   var _listeners = {};
 
