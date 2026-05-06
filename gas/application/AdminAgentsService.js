@@ -756,7 +756,7 @@ function AdminAgents_list() {
 
 /**
  * Lista mínima para métricas del home (sin prompts ni fuentes).
- * Visible para cualquier usuario con rol en la hoja de roles o admin por allowlist.
+ * Solo quien puede administrar agentes en Aviators.
  *
  * @return {{ ok: boolean, agents: Array<Object> }}
  */
@@ -764,12 +764,7 @@ function AdminAgents_listForDashboardMetrics() {
   var email = ('' + Session.getActiveUser().getEmail()).trim();
   if (!email) return { ok: true, agents: [] };
 
-  var allowed = false;
-  try {
-    if (RoleDirectory_lookupRole(email)) allowed = true;
-  } catch (eRole) {}
-  if (!allowed && AdminAuth_emailIsAdmin(email)) allowed = true;
-  if (!allowed) return { ok: true, agents: [] };
+  if (!AdminAuth_canManageAgents(email)) return { ok: true, agents: [] };
 
   var props = PropertiesService.getScriptProperties();
   var reg = AdminAgents_loadRegistry_(props);

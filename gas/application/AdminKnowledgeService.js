@@ -82,7 +82,7 @@ function AdminKnowledge_loadSources(props) {
 }
 
 /**
- * @return {{ isAdmin: boolean, canManageAgents: boolean, sources: Object, folderIds: string[], fileIds: string[], profileName: string, lastSync: string, maxFiles: number }}
+ * @return {{ isAdmin: boolean, canManageAgents: boolean, canWriteCatalog: boolean, sources: Object, folderIds: string[], fileIds: string[], profileName: string, lastSync: string, maxFiles: number }}
  */
 function AdminKnowledge_getBootstrapSlice() {
   var p = PropertiesService.getScriptProperties();
@@ -99,9 +99,17 @@ function AdminKnowledge_getBootstrapSlice() {
   }
 
   var email = ('' + Session.getActiveUser().getEmail()).trim();
+  var isAdm = AdminAuth_emailIsAdmin(email);
+  var canMgAgents = false;
+  var canWriteCat = isAdm;
+  try {
+    canMgAgents = AdminAuth_canManageAgents(email);
+    if (!isAdm) canWriteCat = RoleDirectory_emailIsPresale(email);
+  } catch (eRole) {}
   return {
-    isAdmin: AdminAuth_emailIsAdmin(email),
-    canManageAgents: AdminAuth_canManageAgents(email),
+    isAdmin: isAdm,
+    canManageAgents: canMgAgents,
+    canWriteCatalog: canWriteCat,
     sources: src,
     folderIds: src.folders.map(function (f) {
       return f.id;

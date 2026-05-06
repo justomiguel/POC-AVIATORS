@@ -13,13 +13,17 @@ var UI_STRINGS = {
     nav_agents: 'Agentes',
     nav_contents: 'Contenidos',
     nav_clients: 'Clientes',
+    nav_metrics: 'Métricas',
     nav_faq: 'Ayuda / FAQ',
     page_faq_title: 'Preguntas frecuentes',
     page_faq_lead:
-      'Guía breve para saber para qué sirve Aviators y cómo moverte por la app.',
+      'Guía para entender la idea general del sitio, cómo se reparte el trabajo entre el orquestador y los agentes especializados del chat, y cómo usar cada área (Inicio, Contenidos, Clientes, Agentes) según tu rol.',
+    faq_sec_platform_heading: 'Glob.ai y motor de agentes',
+    faq_sec_platform_lead:
+      'Aviators está construido sobre Glob.ai: el stack que antes se conocía comercialmente como Globant Enterprise AI ahora actúa como “superpoder” detrás de la orquestación, los perfiles RAG y los agentes especializados del chat (indexación, consultas y administración cuando tu cuenta tiene permisos).',
     faq_sec_purpose_heading: '¿Para qué está pensado Aviators?',
     faq_sec_purpose_lead:
-      'Centraliza consultas con IA sobre tu conocimiento en Google Drive, administración de agentes según tu rol y un flujo guiado para subir PDFs, extraer metadata e indexarlos.',
+      'Aviators es una Web App sobre Google Workspace que concentra tres frentes: (1) consultar con IA usando tus propios documentos como fuente verificable; (2) administrar agentes RAG, instrucciones y carpetas de Drive cuando tenés permisos; (3) cargar PDFs con un flujo guiado —elegís el tipo de contenido, extraés metadatos con IA, revisás y guardás— para indexar cada ítem en el agente que corresponda (propuesta, success case o cliente). Así el chat puede apoyarse en material curado en lugar de respuestas genéricas.',
     faq_sec_visual_heading: 'Referencias visuales',
     faq_sec_visual_lead:
       'Esquemas simplificados del layout y los flujos principales (la interfaz real puede variar según tu pantalla e idioma).',
@@ -30,16 +34,33 @@ var UI_STRINGS = {
     faq_fig_pipeline_caption: 'Flujo típico en Contenidos: tipo → PDF → revisión → guardado e indexación.',
     faq_sec_q_heading: 'Dudas habituales',
     faq_sec_q_lead:
-      'Expandí cada pregunta para ver una respuesta corta. Si falta permiso para algo, pedilo a quien administra roles en tu organización.',
+      'Arriba está el detalle de cada agente del chat. Acá, expandí cada pregunta para respuestas breves sobre la app. Si falta permiso para algo, pedilo a quien administra roles en tu organización.',
+    faq_sec_agents_heading: 'Agentes del chat: qué hace cada uno',
+    faq_sec_agents_lead:
+      'Cuando usás un modo asistido por varios perfiles RAG, un orquestador enruta la pregunta hacia uno o más especialistas. Cada uno está entrenado por instrucciones de sistema para ceñirse a su corpus indexado en Globant: no inventan hechos y, si no hay coincidencias, indican que no hallaron material en lugar de rellenar a ciegas.',
+    faq_agent_orchestrator_title: 'Orquestador',
+    faq_agent_orchestrator_detail_html:
+      '<p>Su único objetivo es <strong>clasificar tu consulta</strong> y decidir qué agente(s) deben responder. No es un experto “de memoria”: cumple la función de enrutamiento.</p><p>Si la misma pregunta podría atenderse desde más de un repositorio, puede disparar <strong>varios agentes en paralelo</strong> (por ejemplo, “¿qué hicimos con el cliente X?” puede mezclar casos de éxito y propuestas).</p><ul class="mt-2 list-disc space-y-1 pl-5"><li><strong>Success cases</strong>: historias de implementación, resultados y referencias por industria o tecnología.</li><li><strong>Propuestas</strong>: alcance comercial, entregables, cronograma, esfuerzo, pricing, RFP u ofertas presupuestadas.</li><li><strong>Clientes</strong>: nómina de cuentas, proyectos activos o en mantenimiento y estado de la relación.</li><li><strong>Conversación general</strong>: saludos o charla breve sin consultar esos corpus se resuelve en un modo conversacional sin especialistas.</li></ul>',
+    faq_agent_success_cases_title: 'Success cases',
+    faq_agent_success_cases_detail_html:
+      '<p>Responde <strong>solo</strong> con lo que esté en el repositorio indexado de success cases del estudio; no usa conocimiento externo como verdad documentada.</p><p>El foco son casos concretos y comparables: contexto, problema, solución implementada, resultados y aprendizajes, en tono ejecutivo y accionable. Cuando aplica, estructura en bloques tipo Caso, Contexto, Solución, Impacto y Riesgos. Si varios casos encajan, puede listarlos y ofrecer profundizar en uno.</p><p>Si el índice no contiene nada pertinente, la respuesta deja claro que <strong>no hay material alineado</strong> en lugar de inventar clientes, métricas o nombres de proyecto.</p>',
+    faq_agent_proposals_title: 'Propuestas comerciales',
+    faq_agent_proposals_detail_html:
+      '<p>Se apoya exclusivamente en el repositorio indexado de <strong>propuestas comerciales</strong>. Orienta la respuesta a ventas y entrega: alcance, supuestos, entregables, fases, riesgos y próximos pasos, de forma breve y alineada a lo documentado.</p><p>Distingue en la práctica lo que está explícito en el PDF frente a inferencias; si falta un dato imprescindible, convendrá pedirlo antes de afirmar. No debe inventar precios, fechas, compromisos ni clientes no respaldados por el índice. Si hay varias propuestas relacionadas, puede resumirlas y preguntar en cuál profundizar.</p><p>Sin propuestas relevantes en el índice, comunica que <strong>no encontró coincidencias</strong> en lugar de fabricar ofertas.</p>',
+    faq_agent_clients_title: 'Clientes y proyectos',
+    faq_agent_clients_detail_html:
+      '<p>Toma como única fuente la <strong>nómina indexada de clientes actuales y proyectos en mantenimiento</strong>. Objetivo: responder por cuenta, obra vigente, estado y continuidad de la relación.</p><p>No mezcla clientes ni proyectos sin evidencia en el índice; si el nombre es ambiguo, conviene aclarar la entidad antes de afirmar. Cuando aplica, organiza en bloques: Cliente, Proyectos vigentes, Estado, Riesgos o pendientes. No debe inventar contratos, revenue, alcance ni fechas.</p><p>Si el cliente o proyecto no aparece en el índice, la respuesta indica <strong>falta de información indexada</strong>, en lugar de suponer datos comerciales.</p>',
+    faq_agents_admin_note:
+      'Los administradores pueden ajustar instrucciones, perfiles Globant y carpetas de Drive en la sección Agentes; esta descripción refleja el comportamiento previsto por defecto en el código del sistema.',
     faq_q_what: '¿Qué es Aviators?',
     faq_a_what:
-      'Es una Web App de Google Apps Script que te permite conversar con modelos de IA usando documentos de tu Workspace como base, y gestionar agentes, contenidos indexados y clientes cuando tu usuario tiene los roles adecuados.',
+      'Es una Web App de Google Apps Script pensada para equipos que quieren conversar con modelos de IA sobre documentación propia: el conocimiento vive en Drive y en flujos de “Contenidos” que indexan PDFs en agentes RAG. Según tu rol, también gestionás el registro de agentes, la cartera en “Clientes” y el chat en Inicio, con orquestación hacia especialistas cuando el modo de despliegue lo habilita.',
     faq_q_flow: '¿Cómo empiezo después de iniciar sesión?',
     faq_a_flow:
       'Usá la barra lateral para ir a Inicio (tablero y chat), o a Agentes, Contenidos y Clientes si aparecen en tu menú. La búsqueda global está debajo de las entradas de navegación.',
     faq_q_chat: '¿Cómo funciona el chat de Inicio?',
     faq_a_chat:
-      'Escribís tu pregunta en el área de mensajes y enviás. El modo de consulta (Globant RAG, Assistant o Gemini según configuración) aparece en el cartel superior del chat. Podés mantener turnos sucesivos en la misma conversación.',
+      'Escribís tu pregunta en el área de mensajes y enviás. El modo de consulta técnico (Globant RAG, Assistant o Gemini según configuración) aparece en el cartel superior del chat. Cuando el despliegue usa varios perfiles indexados, un orquestador puede dirigir la pregunta a uno o más agentes —success cases, propuestas o clientes— según el tema. Podés mantener turnos sucesivos en la misma conversación.',
     faq_q_drive_ctx: '¿Qué son los archivos de contexto o Drive?',
     faq_a_drive_ctx:
       'Podés explorar carpetas de Drive y adjuntar archivos permitidos para que la respuesta se apoye en ellos, respetando límites de selección y formatos que la integración acepte.',
@@ -48,7 +69,7 @@ var UI_STRINGS = {
       'Creás o editás ítems de conocimiento: elegís el tipo (propuesta, success case, cliente), subís un PDF, pedís extraer metadata con IA, revisás los campos y guardás para indexar en el agente correspondiente.',
     faq_q_agents_clients: '¿Qué son Agentes y Clientes?',
     faq_a_agents_clients:
-      'Agentes registra y sincroniza configuración de agentes con Globant cuando tenés permiso de administración. Clientes es tu cartera comercial con datos como industria y contacto; ambos suelen ser visibles solo para perfiles admin o preventa según la política del proyecto.',
+      'En Agentes, quien administra el proyecto registra cada especialista (perfil Globant, instrucciones, carpetas y archivos de Drive que alimentan el índice) y lanza la sincronización. La pantalla Clientes es la cartera operativa (industria, contacto, notas) alineada al negocio. El detalle de qué responde cada agente en el chat está en la sección “Agentes del chat” arriba.',
     faq_q_visibility: '¿Por qué no veo Agentes, Contenidos o Clientes?',
     faq_a_visibility:
       'Esas secciones dependen del rol asignado en el directorio interno. Si solo ves el aviso de visitante, tu cuenta aún no tiene permisos de miembro; contactá al equipo que gestiona la planilla o lista de acceso.',
@@ -183,6 +204,9 @@ var UI_STRINGS = {
     visitor_title: 'Sin rol asignado',
     visitor_body:
       'No tenés un rol asignado, así que el acceso es limitado. Si necesitás más funciones, pedí acceso a quien administre Aviators.',
+    home_welcome_title: 'Bienvenido a la suite agéntica de Aviators',
+    home_welcome_lead_html:
+      'Para más información de uso ir al <a href="#" data-nav-page="faq" class="font-medium text-sky-600 underline hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300">FAQ</a>, o hacé una pregunta directamente.',
     dashboard_title: 'Inicio',
     dashboard_lead:
       'Escribí abajo y seguí la conversación arriba. Las respuestas aparecen como mensajes.',
@@ -211,6 +235,8 @@ var UI_STRINGS = {
     dash_agents_title: 'Agentes',
     dash_contents_title: 'Contenidos',
     dash_clients_title: 'Clientes',
+    contents_readonly_notice: 'Solo lectura',
+    clients_readonly_notice: 'Solo lectura',
     dash_detail_empty: 'Sin desglose todavía.',
     dash_agent_kind_orchestrator: 'Orquestador',
     dash_agent_kind_success_cases: 'Success cases',
@@ -234,6 +260,9 @@ var UI_STRINGS = {
     batch_sync_confirm: '¿Sincronizar {n} agentes seleccionados?',
     batch_syncing: 'Sincronizando {done} de {total}…',
     batch_sync_done: '{n} agentes sincronizados.',
+    batch_agents_delete_confirm: '¿Eliminar {n} agentes seleccionados?',
+    batch_agents_deleting: 'Eliminando {done} de {total}…',
+    batch_agents_delete_done: '{done}/{total} agentes eliminados.',
     export_csv: 'Exportar CSV',
     import_csv: 'Importar CSV',
     export_done: 'Exportación completada.',
@@ -720,6 +749,53 @@ var UI_STRINGS = {
     contents_client_combo_placeholder: 'Seleccionar cliente…',
     contents_load_more: 'Cargar más',
     contents_showing_of: 'Mostrando {shown} de {total}.',
+    page_metrics_title: 'Métricas',
+    page_metrics_lead:
+      'Seguimiento operativo del uso del chat, no respondidas y desempeño por agente, cliente e industria.',
+    metrics_range_label: 'Ventana',
+    metrics_range_30d: 'Últimos 30 días',
+    metrics_range_90d: 'Últimos 90 días',
+    metrics_range_12m: 'Últimos 12 meses',
+    metrics_refresh_btn: 'Actualizar métricas',
+    metrics_overview_heading: 'Resumen',
+    metrics_overview_lead:
+      'Indicadores globales para entender volumen de preguntas y consultas sin respuesta.',
+    metrics_total_questions: 'Preguntas',
+    metrics_total_unanswered: 'No respondidas',
+    metrics_trend_heading: 'Tendencia temporal',
+    metrics_trend_lead:
+      'Evolución diaria del uso de preguntas y consultas no respondidas en la ventana elegida.',
+    metrics_agent_usage_heading: 'Uso por agente',
+    metrics_agent_usage_lead:
+      'Cuántas preguntas se dirigieron a cada agente en el período seleccionado.',
+    metrics_leaderboards_heading: 'Leaderboards',
+    metrics_leaderboards_lead:
+      'Rankings de adopción por usuario y desempeño del catálogo por cliente/industria.',
+    metrics_lb_users: 'Personas usando el chat (preguntas)',
+    metrics_lb_agents: 'Preguntas por agente',
+    metrics_lb_success_client: 'Success cases por cliente',
+    metrics_lb_success_industry: 'Success cases por industria',
+    metrics_lb_proposal_client: 'Propuestas por cliente',
+    metrics_lb_proposal_industry: 'Propuestas por industria',
+    metrics_unanswered_heading: 'Consultas no respondidas',
+    metrics_unanswered_lead:
+      'Historial de preguntas donde no hubo contenido suficiente para responder.',
+    metrics_th_date: 'Fecha',
+    metrics_th_user: 'Usuario',
+    metrics_th_agent: 'Agente',
+    metrics_th_question: 'Pregunta',
+    metrics_th_reason: 'Motivo',
+    metrics_loading_dashboard: 'Cargando dashboard de métricas…',
+    metrics_loading_unanswered: 'Cargando consultas no respondidas…',
+    metrics_loaded: 'Métricas actualizadas.',
+    metrics_load_error: 'No se pudieron cargar las métricas.',
+    metrics_empty: 'Sin datos para mostrar.',
+    metrics_pagination_info: 'Mostrando {from}–{to} de {total}.',
+    metrics_pagination_empty: 'No hay registros.',
+    pagination_prev: 'Anterior',
+    pagination_next: 'Siguiente',
+    err_metrics_only:
+      'Solo usuarios con rol admin, manager o presales pueden ver métricas.',
     context_files_loading: 'Cargando archivos de contexto…',
   },
   en: {
@@ -728,13 +804,17 @@ var UI_STRINGS = {
     nav_agents: 'Agents',
     nav_contents: 'Content',
     nav_clients: 'Clients',
+    nav_metrics: 'Metrics',
     nav_faq: 'Help / FAQ',
     page_faq_title: 'Frequently asked questions',
     page_faq_lead:
-      'Short guide to what Aviators is for and how to move around the app.',
+      'How the product fits together: the big picture, how the orchestrator splits work among specialized chat agents, and how to use Home, Content, Clients and Agents based on your role.',
+    faq_sec_platform_heading: 'Glob.ai and the agent runtime',
+    faq_sec_platform_lead:
+      'Aviators runs on Glob.ai—the stack formerly marketed as Globant Enterprise AI—which now superpowers orchestration, RAG profiles and the specialized chat agents (indexing, Q&A and administration when your account is permitted).',
     faq_sec_purpose_heading: 'What is Aviators for?',
     faq_sec_purpose_lead:
-      'It brings together AI Q&A over knowledge in Google Drive, agent administration by role, and a guided flow to upload PDFs, extract metadata, and index them.',
+      'Aviators is a Google Workspace web app built around three pillars: (1) ask AI questions with your own documents as the trusted source; (2) administer RAG agents, prompts and Drive folders when you have permissions; (3) upload PDFs through a guided flow—pick a content type, run AI metadata extraction, review and save—so each item is indexed into the right agent (proposal, success case or client). That way chat answers draw on curated material instead of generic guesses.',
     faq_sec_visual_heading: 'Visual reference',
     faq_sec_visual_lead:
       'Simplified sketches of layout and main flows (your actual UI may vary by screen size and language).',
@@ -745,16 +825,33 @@ var UI_STRINGS = {
     faq_fig_pipeline_caption: 'Typical Content flow: type → PDF → review → save and index.',
     faq_sec_q_heading: 'Common questions',
     faq_sec_q_lead:
-      'Expand each question for a short answer. If something is missing, ask whoever manages roles in your organization.',
+      'Above you will find each chat agent explained in detail. Expand the questions here for quick answers about the app. If a feature is unavailable, ask whoever manages roles in your organization.',
+    faq_sec_agents_heading: 'Chat agents: what each one does',
+    faq_sec_agents_lead:
+      'When several indexed RAG profiles are enabled, an orchestrator routes your question to one or more specialists. System prompts train each agent to stick to its Globant-indexed corpus: they must not fabricate facts, and when nothing matches they say so instead of filling gaps blindly.',
+    faq_agent_orchestrator_title: 'Orchestrator',
+    faq_agent_orchestrator_detail_html:
+      '<p>Its only job is to <strong>classify your question</strong> and decide which agent(s) should answer. It is not a subject-matter “memory expert”—it routes traffic.</p><p>If one question could be answered from more than one corpus, it may call <strong>multiple agents in parallel</strong> (for example, “what did we do for client X?” may combine success stories and proposals).</p><ul class="mt-2 list-disc space-y-1 pl-5"><li><strong>Success cases</strong>: delivery stories, outcomes and references by industry or technology.</li><li><strong>Proposals</strong>: commercial scope, deliverables, schedule, effort, pricing, RFPs or budgeted bids.</li><li><strong>Clients</strong>: account roster, active or maintenance projects and relationship status.</li><li><strong>General chat</strong>: brief greetings or small talk without those corpora uses a conversational mode without specialists.</li></ul>',
+    faq_agent_success_cases_title: 'Success cases',
+    faq_agent_success_cases_detail_html:
+      '<p>Answers <strong>only</strong> from the studio’s indexed success-case repository; it does not treat the open web as vetted knowledge.</p><p>The goal is concrete, comparable cases: context, problem, implemented solution, outcomes and learnings, in an executive, actionable tone. When useful, it uses blocks like Case, Context, Solution, Impact and Risks. If several cases fit, it may list them and offer to go deeper on one.</p><p>If the index has no relevant material, the reply makes clear there is <strong>no aligned content</strong> rather than inventing clients, metrics or project names.</p>',
+    faq_agent_proposals_title: 'Commercial proposals',
+    faq_agent_proposals_detail_html:
+      '<p>Grounds exclusively in the indexed <strong>commercial proposal</strong> corpus. It frames answers around sales and delivery: scope, assumptions, deliverables, phases, risks and next steps—brief and faithful to what is documented.</p><p>In practice it separates what the PDF states from inference; if a critical fact is missing, it should ask before asserting. It must not invent prices, dates, commitments or undocumented clients. If several proposals relate to the ask, it may summarize them and ask which one to deepen.</p><p>With no matching proposals in the index, it reports <strong>no relevant hits</strong> instead of fabricating offers.</p>',
+    faq_agent_clients_title: 'Clients and projects',
+    faq_agent_clients_detail_html:
+      '<p>Uses only the indexed roster of <strong>current clients and maintenance projects</strong>. Goal: answer by account, active work, status and relationship continuity.</p><p>It does not mix clients or projects without evidence in the index; ambiguous names should be clarified before stating facts. When it helps, it organizes into Client, Active projects, Status, and Risks or open items. It must not invent contracts, revenue, scope or dates.</p><p>If the client or project is not in the index, the reply signals <strong>missing indexed information</strong> instead of guessing commercial details.</p>',
+    faq_agents_admin_note:
+      'Administrators can edit prompts, Globant profiles and Drive folders under Agents; this page reflects the default behavior shipped with the system.',
     faq_q_what: 'What is Aviators?',
     faq_a_what:
-      'A Google Apps Script web app to chat with AI models grounded in your Workspace documents, and to manage agents, indexed content, and clients when your account has the right roles.',
+      'A Google Apps Script web app for teams that want AI conversations anchored in their own documents: knowledge lives in Drive and in Content workflows that index PDFs into RAG agents. Depending on your role you also manage the agent registry, the Clients portfolio and Home chat, with orchestration to specialists when the deployment enables it.',
     faq_q_flow: 'What should I do right after signing in?',
     faq_a_flow:
       'Use the sidebar for Home (dashboard and chat), or Agents, Content and Clients if they appear. Global search sits below the nav items.',
     faq_q_chat: 'How does Home chat work?',
     faq_a_chat:
-      'Type in the message area and send. The consultation mode (Globant RAG, Assistant or Gemini depending on setup) is shown in the banner above the chat. You can keep multiple turns in one thread.',
+      'Type in the message area and send. The technical consultation mode (Globant RAG, Assistant or Gemini depending on setup) is shown in the banner above the chat. When several indexed profiles are enabled, an orchestrator may route the question to one or more agents—success cases, proposals or clients—based on the topic. You can keep multiple turns in one thread.',
     faq_q_drive_ctx: 'What about Drive or context files?',
     faq_a_drive_ctx:
       'You can browse Drive folders and attach allowed files so answers use them, within selection limits and formats the integration accepts.',
@@ -763,7 +860,7 @@ var UI_STRINGS = {
       'Create or edit knowledge items: pick a type (proposal, success case, client), upload a PDF, run AI metadata extraction, review fields, then save to index into the right agent.',
     faq_q_agents_clients: 'What are Agents and Clients?',
     faq_a_agents_clients:
-      'Agents registers and syncs agent configuration with Globant when you have admin permission. Clients is your commercial account list (industry, contact, etc.); both are often limited to admin or presales profiles.',
+      'Under Agents, project admins register each specialist (Globant profile, prompts, Drive folders and files feeding the index) and run sync jobs. Clients is the operational account view (industry, contacts, notes) aligned with the business. For what each chat agent answers, see the “Chat agents” section above.',
     faq_q_visibility: "Why don't I see Agents, Content or Clients?",
     faq_a_visibility:
       'Those areas depend on your role in the internal directory. If you only see the visitor notice, your account is not a full member yet—ask whoever manages the roster or access list.',
@@ -897,6 +994,9 @@ var UI_STRINGS = {
     visitor_title: 'No role assigned',
     visitor_body:
       "You don't have a role assigned, so access is limited. If you need more features, ask your Aviators admin.",
+    home_welcome_title: 'Welcome to the Aviators agentic suite',
+    home_welcome_lead_html:
+      'For more info go to the <a href="#" data-nav-page="faq" class="font-medium text-sky-600 underline hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300">FAQ</a>, or ask a question directly.',
     dashboard_title: 'Home',
     dashboard_lead:
       'Write below and follow the conversation above. Replies appear as messages.',
@@ -925,6 +1025,8 @@ var UI_STRINGS = {
     dash_agents_title: 'Agents',
     dash_contents_title: 'Contents',
     dash_clients_title: 'Clients',
+    contents_readonly_notice: 'Read-only',
+    clients_readonly_notice: 'Read-only',
     dash_detail_empty: 'No breakdown yet.',
     dash_agent_kind_orchestrator: 'Orchestrator',
     dash_agent_kind_success_cases: 'Success cases',
@@ -948,6 +1050,9 @@ var UI_STRINGS = {
     batch_sync_confirm: 'Sync {n} selected agents?',
     batch_syncing: 'Syncing {done} of {total}…',
     batch_sync_done: '{n} agents synced.',
+    batch_agents_delete_confirm: 'Delete {n} selected agents?',
+    batch_agents_deleting: 'Deleting {done} of {total}…',
+    batch_agents_delete_done: '{done}/{total} agents deleted.',
     export_csv: 'Export CSV',
     import_csv: 'Import CSV',
     export_done: 'Export completed.',
@@ -1425,6 +1530,53 @@ var UI_STRINGS = {
     contents_client_combo_placeholder: 'Select client…',
     contents_load_more: 'Load more',
     contents_showing_of: 'Showing {shown} of {total}.',
+    page_metrics_title: 'Metrics',
+    page_metrics_lead:
+      'Operational dashboard for chat usage, unanswered questions, and performance by agent, client and industry.',
+    metrics_range_label: 'Window',
+    metrics_range_30d: 'Last 30 days',
+    metrics_range_90d: 'Last 90 days',
+    metrics_range_12m: 'Last 12 months',
+    metrics_refresh_btn: 'Refresh metrics',
+    metrics_overview_heading: 'Overview',
+    metrics_overview_lead:
+      'Top-level indicators to understand total question volume and unanswered requests.',
+    metrics_total_questions: 'Questions',
+    metrics_total_unanswered: 'Unanswered',
+    metrics_trend_heading: 'Time trend',
+    metrics_trend_lead:
+      'Daily evolution of questions and unanswered requests for the selected window.',
+    metrics_agent_usage_heading: 'Usage by agent',
+    metrics_agent_usage_lead:
+      'How many questions were routed to each agent in the selected period.',
+    metrics_leaderboards_heading: 'Leaderboards',
+    metrics_leaderboards_lead:
+      'Adoption rankings by user and catalog performance by client/industry.',
+    metrics_lb_users: 'People using chat (questions)',
+    metrics_lb_agents: 'Questions by agent',
+    metrics_lb_success_client: 'Success cases by client',
+    metrics_lb_success_industry: 'Success cases by industry',
+    metrics_lb_proposal_client: 'Proposals by client',
+    metrics_lb_proposal_industry: 'Proposals by industry',
+    metrics_unanswered_heading: 'Unanswered queries',
+    metrics_unanswered_lead:
+      'Question history where the system had insufficient content to answer.',
+    metrics_th_date: 'Date',
+    metrics_th_user: 'User',
+    metrics_th_agent: 'Agent',
+    metrics_th_question: 'Question',
+    metrics_th_reason: 'Reason',
+    metrics_loading_dashboard: 'Loading metrics dashboard…',
+    metrics_loading_unanswered: 'Loading unanswered queries…',
+    metrics_loaded: 'Metrics updated.',
+    metrics_load_error: 'Metrics could not be loaded.',
+    metrics_empty: 'No data to display.',
+    metrics_pagination_info: 'Showing {from}–{to} of {total}.',
+    metrics_pagination_empty: 'No records.',
+    pagination_prev: 'Previous',
+    pagination_next: 'Next',
+    err_metrics_only:
+      'Only admin, manager or presales users can view metrics.',
     context_files_loading: 'Loading context files…',
   },
 };

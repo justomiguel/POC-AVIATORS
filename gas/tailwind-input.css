@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Ocultar el triángulo nativo del <summary> cuando usamos list-none */
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
 @layer components {
   /* Pantalla de login / OAuth (HtmlService no usa OAuth popup; el clic dispara autorización vía script.run) */
   .login-root {
@@ -144,6 +151,17 @@
   }
   .chat-bubble-agent {
     @apply max-w-[min(100%,36rem)] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-slate-200/90 bg-white px-4 py-2.5 text-[15px] text-slate-800 shadow-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200;
+  }
+  /* Tinte por agente: --agent-h en grados (0–359), definido en el elemento */
+  .chat-bubble-agent.chat-bubble-agent-tinted {
+    background-color: hsl(var(--agent-h) 40% 93%);
+    border-color: hsl(var(--agent-h) 32% 78%);
+    color: hsl(var(--agent-h) 26% 17%);
+  }
+  .dark .chat-bubble-agent.chat-bubble-agent-tinted {
+    background-color: hsl(var(--agent-h) 26% 24%);
+    border-color: hsl(var(--agent-h) 22% 40%);
+    color: hsl(var(--agent-h) 10% 94%);
   }
   .chat-bubble-agent.chat-thinking {
     @apply border-dashed border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400;

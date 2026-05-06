@@ -94,6 +94,7 @@ function ClientsMaster_readRows_(sheet, headers) {
  * @return {{ok:boolean, items:Array<Object>}}
  */
 function ClientsMaster_list(filters) {
+  ContentCatalog_requireContributor_();
   var f = filters || {};
   var q = String(f.q || '').toLowerCase().trim();
   var catalog = ClientsMaster_getOrCreateSpreadsheet_();

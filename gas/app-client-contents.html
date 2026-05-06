@@ -498,13 +498,16 @@
             contentsTableBody.appendChild(tr);
             return;
           }
-          var edit = document.createElement('button');
-          edit.type = 'button';
-          edit.className = 'btn-admin inline-flex items-center gap-1 text-xs';
-          edit.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i><span>' + i18n('contents_btn_edit') + '</span>';
-          edit.addEventListener('click', function () { contentsOpenEditorFromRow(c.content_id || ''); });
-          actTd.appendChild(edit);
-          if (c.index_repair_needed) {
+          var canWrite = !!S.get('canWriteContents');
+          if (canWrite) {
+            var edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'btn-admin inline-flex items-center gap-1 text-xs';
+            edit.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i><span>' + i18n('contents_btn_edit') + '</span>';
+            edit.addEventListener('click', function () { contentsOpenEditorFromRow(c.content_id || ''); });
+            actTd.appendChild(edit);
+          }
+          if (canWrite && c.index_repair_needed) {
             var repairWrap = document.createElement('span');
             repairWrap.className = 'ml-2 inline-flex items-center gap-2';
             var repairBadge = document.createElement('span');
@@ -573,12 +576,14 @@
             });
             actTd.appendChild(view);
           }
-          var del = document.createElement('button');
-          del.type = 'button';
-          del.className = 'btn-admin danger inline-flex items-center gap-1 text-xs ml-2';
-          del.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span>' + i18n('contents_btn_delete') + '</span>';
-          del.addEventListener('click', function () { contentsDeleteFromRow(c.content_id || ''); });
-          actTd.appendChild(del);
+          if (canWrite) {
+            var del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn-admin danger inline-flex items-center gap-1 text-xs ml-2';
+            del.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span>' + i18n('contents_btn_delete') + '</span>';
+            del.addEventListener('click', function () { contentsDeleteFromRow(c.content_id || ''); });
+            actTd.appendChild(del);
+          }
           tr.appendChild(actTd);
           contentsTableBody.appendChild(tr);
         })(rows[i]);
@@ -971,6 +976,17 @@
 
   // --- Event listeners ---
 
+  function contentsApplyWriteAccess() {
+    var canWrite = !!S.get('canWriteContents');
+    if (contentsNewBtn) contentsNewBtn.classList.toggle('hidden', !canWrite);
+    var batchDel = document.getElementById('contents-batch-delete-btn');
+    if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
+    var batchSelCol = document.getElementById('contents-th-select');
+    if (batchSelCol) batchSelCol.classList.toggle('hidden', !canWrite);
+    var badge = document.getElementById('contents-readonly-badge');
+    if (badge) badge.classList.toggle('hidden', canWrite);
+  }
+
   if (contentsNewBtn) {
     contentsNewBtn.addEventListener('click', function () {
       contentsResetForm();
@@ -1142,6 +1158,7 @@
     resetForm: contentsResetForm,
     populateClientCombo: contentsPopulateClientCombo,
     selectById: function (id) { contentsOpenEditorFromRow(id); },
+    applyWriteAccess: contentsApplyWriteAccess,
   };
 })(window.Aviators);
 </script>

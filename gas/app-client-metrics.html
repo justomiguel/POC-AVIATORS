@@ -1,0 +1,341 @@
+<script>
+(function (A) {
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var rangeEl = document.getElementById('metrics-range');
+  var refreshBtn = document.getElementById('metrics-refresh-btn');
+  var statusWrap = document.getElementById('metrics-status');
+  var statusText = document.getElementById('metrics-status-text');
+
+  var totalQuestionsEl = document.getElementById('metrics-total-questions');
+  var totalUnansweredEl = document.getElementById('metrics-total-unanswered');
+
+  var trendCanvas = document.getElementById('metrics-trend-chart');
+  var agentCanvas = document.getElementById('metrics-agent-chart');
+
+  var lbUsersEl = document.getElementById('metrics-lb-users');
+  var lbAgentsEl = document.getElementById('metrics-lb-agents');
+  var lbSuccessClientEl = document.getElementById('metrics-lb-success-client');
+  var lbSuccessIndustryEl = document.getElementById('metrics-lb-success-industry');
+  var lbProposalClientEl = document.getElementById('metrics-lb-proposal-client');
+  var lbProposalIndustryEl = document.getElementById('metrics-lb-proposal-industry');
+
+  var unansweredBody = document.getElementById('metrics-unanswered-body');
+  var unansweredInfo = document.getElementById('metrics-unanswered-page-info');
+  var unansweredPrevBtn = document.getElementById('metrics-unanswered-prev');
+  var unansweredNextBtn = document.getElementById('metrics-unanswered-next');
+
+  var unansweredPage = { skip: 0, limit: 10, total: 0, hasMore: false };
+  var trendChart = null;
+  var agentChart = null;
+  var loadingDashboard = false;
+  var loadingUnanswered = false;
+
+  function activeRange() {
+    return rangeEl ? String(rangeEl.value || '30d') : '30d';
+  }
+
+  function setStatus(text, busy) {
+    if (!statusWrap || !statusText) return;
+    var t = String(text || '').trim();
+    if (!t) {
+      statusWrap.classList.add('hidden');
+      statusText.textContent = '';
+      return;
+    }
+    statusWrap.classList.remove('hidden');
+    statusText.textContent = t;
+    var icon = statusWrap.querySelector('i');
+    if (icon) {
+      icon.classList.toggle('fa-spin', !!busy);
+      icon.classList.toggle('fa-spinner', !!busy);
+      icon.classList.toggle('fa-circle-check', !busy);
+    }
+  }
+
+  function syncBusyControls() {
+    var busy = loadingDashboard || loadingUnanswered;
+    if (rangeEl) rangeEl.disabled = busy;
+    if (refreshBtn) refreshBtn.disabled = busy;
+    if (unansweredPrevBtn) unansweredPrevBtn.disabled = busy || unansweredPage.skip <= 0;
+    if (unansweredNextBtn) unansweredNextBtn.disabled = busy || !unansweredPage.hasMore;
+  }
+
+  function formatDateTime(value) {
+    var ms = Date.parse(String(value || ''));
+    if (isNaN(ms)) return String(value || '');
+    try {
+      return new Intl.DateTimeFormat(navigator.language || 'es', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(ms));
+    } catch (eFmt) {
+      return new Date(ms).toISOString();
+    }
+  }
+
+  function renderRankList(el, rows) {
+    if (!el) return;
+    el.innerHTML = '';
+    var items = Array.isArray(rows) ? rows : [];
+    if (!items.length) {
+      var li = document.createElement('li');
+      li.className = 'text-xs text-slate-500';
+      li.textContent = i18n('metrics_empty');
+      el.appendChild(li);
+      return;
+    }
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i] || {};
+      var liRow = document.createElement('li');
+      liRow.className = 'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-2 py-1.5';
+      var left = document.createElement('span');
+      left.className = 'truncate';
+      left.textContent = String(row.name || '');
+      var right = document.createElement('span');
+      right.className = 'shrink-0 font-semibold text-slate-900';
+      right.textContent = String(row.count || 0);
+      liRow.appendChild(left);
+      liRow.appendChild(right);
+      el.appendChild(liRow);
+    }
+  }
+
+  function destroyCharts() {
+    if (trendChart && typeof trendChart.destroy === 'function') trendChart.destroy();
+    if (agentChart && typeof agentChart.destroy === 'function') agentChart.destroy();
+    trendChart = null;
+    agentChart = null;
+  }
+
+  function renderCharts(data) {
+    destroyCharts();
+    if (typeof Chart === 'undefined') return;
+
+    var trend = (data && data.trend) || [];
+    var trendLabels = [];
+    var trendQuestions = [];
+    var trendUnanswered = [];
+    for (var i = 0; i < trend.length; i++) {
+      trendLabels.push(String(trend[i].date || ''));
+      trendQuestions.push(Number(trend[i].questions || 0));
+      trendUnanswered.push(Number(trend[i].unanswered || 0));
+    }
+    if (trendCanvas) {
+      trendChart = new Chart(trendCanvas, {
+        type: 'line',
+        data: {
+          labels: trendLabels,
+          datasets: [
+            {
+              label: i18n('metrics_total_questions'),
+              data: trendQuestions,
+              borderColor: '#0ea5e9',
+              backgroundColor: 'rgba(14,165,233,0.15)',
+              tension: 0.25,
+            },
+            {
+              label: i18n('metrics_total_unanswered'),
+              data: trendUnanswered,
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249,115,22,0.12)',
+              tension: 0.25,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true } },
+        },
+      });
+    }
+
+    var byAgent = (data && data.leaderboard && data.leaderboard.agents) || [];
+    var agentLabels = [];
+    var agentCounts = [];
+    for (var j = 0; j < byAgent.length; j++) {
+      agentLabels.push(String(byAgent[j].name || ''));
+      agentCounts.push(Number(byAgent[j].count || 0));
+    }
+    if (agentCanvas) {
+      agentChart = new Chart(agentCanvas, {
+        type: 'bar',
+        data: {
+          labels: agentLabels,
+          datasets: [
+            {
+              label: i18n('metrics_agent_usage_heading'),
+              data: agentCounts,
+              backgroundColor: '#2563eb',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+  }
+
+  function renderDashboard(data) {
+    var summary = (data && data.summary) || {};
+    if (totalQuestionsEl) totalQuestionsEl.textContent = String(summary.questions || 0);
+    if (totalUnansweredEl) totalUnansweredEl.textContent = String(summary.unanswered || 0);
+
+    var lb = (data && data.leaderboard) || {};
+    renderRankList(lbUsersEl, lb.users);
+    renderRankList(lbAgentsEl, lb.agents);
+    renderRankList(lbSuccessClientEl, lb.successByClient);
+    renderRankList(lbSuccessIndustryEl, lb.successByIndustry);
+    renderRankList(lbProposalClientEl, lb.proposalByClient);
+    renderRankList(lbProposalIndustryEl, lb.proposalByIndustry);
+    renderCharts(data);
+  }
+
+  function renderUnansweredTable(rows) {
+    if (!unansweredBody) return;
+    unansweredBody.innerHTML = '';
+    var items = Array.isArray(rows) ? rows : [];
+    if (!items.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'px-3 py-4 text-center text-sm text-slate-500';
+      td.textContent = i18n('metrics_empty');
+      tr.appendChild(td);
+      unansweredBody.appendChild(tr);
+      return;
+    }
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i] || {};
+      var trRow = document.createElement('tr');
+      trRow.className = 'border-b border-slate-100';
+      var cols = [
+        formatDateTime(row.ts_iso),
+        String(row.user_display_name || row.user_email || ''),
+        String(row.agent_name || row.agent_id || ''),
+        String(row.question_text || ''),
+        String(row.unanswered_code || ''),
+      ];
+      for (var c = 0; c < cols.length; c++) {
+        var tdCol = document.createElement('td');
+        tdCol.className = 'px-3 py-2 align-top text-sm text-slate-700';
+        tdCol.textContent = cols[c];
+        trRow.appendChild(tdCol);
+      }
+      unansweredBody.appendChild(trRow);
+    }
+  }
+
+  function renderUnansweredPageInfo() {
+    if (!unansweredInfo) return;
+    if (!unansweredPage.total) {
+      unansweredInfo.textContent = i18n('metrics_pagination_empty');
+      return;
+    }
+    var from = unansweredPage.skip + 1;
+    var to = Math.min(unansweredPage.skip + unansweredPage.limit, unansweredPage.total);
+    unansweredInfo.textContent = i18nFmt('metrics_pagination_info', {
+      from: from,
+      to: to,
+      total: unansweredPage.total,
+    });
+  }
+
+  function loadUnanswered(resetPage) {
+    if (resetPage) unansweredPage.skip = 0;
+    loadingUnanswered = true;
+    setStatus(i18n('metrics_loading_unanswered'), true);
+    syncBusyControls();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loadingUnanswered = false;
+        unansweredPage.total = Number(res && res.total || 0);
+        unansweredPage.hasMore = !!(res && res.hasMore);
+        unansweredPage.limit = Number(res && res.limit || unansweredPage.limit);
+        unansweredPage.skip = Number(res && res.skip || unansweredPage.skip);
+        renderUnansweredTable((res && res.items) || []);
+        renderUnansweredPageInfo();
+        setStatus(i18n('metrics_loaded'), false);
+        syncBusyControls();
+      })
+      .withFailureHandler(function (e) {
+        loadingUnanswered = false;
+        setStatus((e && e.message) || i18n('metrics_load_error'), false);
+        syncBusyControls();
+      })
+      .metricsUnansweredList({
+        range: activeRange(),
+        skip: unansweredPage.skip,
+        limit: unansweredPage.limit,
+      });
+  }
+
+  function loadDashboard() {
+    loadingDashboard = true;
+    setStatus(i18n('metrics_loading_dashboard'), true);
+    syncBusyControls();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loadingDashboard = false;
+        if (res && res.ok) {
+          renderDashboard(res);
+          setStatus(i18n('metrics_loaded'), false);
+        } else {
+          setStatus(i18n('metrics_load_error'), false);
+        }
+        syncBusyControls();
+      })
+      .withFailureHandler(function (e) {
+        loadingDashboard = false;
+        setStatus((e && e.message) || i18n('metrics_load_error'), false);
+        syncBusyControls();
+      })
+      .metricsDashboard(activeRange(), 8);
+    loadUnanswered(false);
+  }
+
+  function loadAll(resetUnanswered) {
+    if (resetUnanswered) unansweredPage.skip = 0;
+    loadDashboard();
+  }
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', function () {
+      loadAll(true);
+    });
+  }
+  if (rangeEl) {
+    rangeEl.addEventListener('change', function () {
+      loadAll(true);
+    });
+  }
+  if (unansweredPrevBtn) {
+    unansweredPrevBtn.addEventListener('click', function () {
+      if (unansweredPage.skip <= 0) return;
+      unansweredPage.skip = Math.max(0, unansweredPage.skip - unansweredPage.limit);
+      loadUnanswered(false);
+    });
+  }
+  if (unansweredNextBtn) {
+    unansweredNextBtn.addEventListener('click', function () {
+      if (!unansweredPage.hasMore) return;
+      unansweredPage.skip += unansweredPage.limit;
+      loadUnanswered(false);
+    });
+  }
+
+  A.metrics = {
+    loadDashboard: function () {
+      loadAll(false);
+    },
+  };
+})(window.Aviators);
+</script>

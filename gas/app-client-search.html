@@ -47,22 +47,27 @@
     }
     if (agentHits.length) groups.push({ title: i18n('global_search_group_agents'), items: agentHits });
 
+    var canWriteCat = !!(state.get('canWriteContents'));
     var contents = state.get('contentsItemsCache') || [];
     var contentHits = [];
-    for (var c = 0; c < contents.length && contentHits.length < MAX_PER_GROUP; c++) {
-      var ct = contents[c];
-      if (normalize(ct.title || '').indexOf(q) >= 0 || normalize(ct.description || '').indexOf(q) >= 0 || normalize(ct.client || '').indexOf(q) >= 0) {
-        contentHits.push({ label: ct.title || ct.id, page: 'contents', id: ct.id });
+    if (canWriteCat) {
+      for (var c = 0; c < contents.length && contentHits.length < MAX_PER_GROUP; c++) {
+        var ct = contents[c];
+        if (normalize(ct.title || '').indexOf(q) >= 0 || normalize(ct.description || '').indexOf(q) >= 0 || normalize(ct.client || '').indexOf(q) >= 0) {
+          contentHits.push({ label: ct.title || ct.id, page: 'contents', id: ct.id });
+        }
       }
     }
     if (contentHits.length) groups.push({ title: i18n('global_search_group_contents'), items: contentHits });
 
     var clients = state.get('clientsItemsCache') || [];
     var clientHits = [];
-    for (var cl = 0; cl < clients.length && clientHits.length < MAX_PER_GROUP; cl++) {
-      var clt = clients[cl];
-      if (normalize(clt.name || '').indexOf(q) >= 0 || normalize(clt.industry || '').indexOf(q) >= 0) {
-        clientHits.push({ label: clt.name || clt.id, page: 'clients', id: clt.id });
+    if (canWriteCat) {
+      for (var cl = 0; cl < clients.length && clientHits.length < MAX_PER_GROUP; cl++) {
+        var clt = clients[cl];
+        if (normalize(clt.name || '').indexOf(q) >= 0 || normalize(clt.industry || '').indexOf(q) >= 0) {
+          clientHits.push({ label: clt.name || clt.id, page: 'clients', id: clt.id });
+        }
       }
     }
     if (clientHits.length) groups.push({ title: i18n('global_search_group_clients'), items: clientHits });
@@ -104,6 +109,12 @@
     _input.value = '';
     _results.classList.add('hidden');
     if (page === 'agents' && !state.get('canManageAgents')) {
+      page = 'home';
+    }
+    if (
+      (page === 'contents' || page === 'clients') &&
+      !state.get('canWriteContents')
+    ) {
       page = 'home';
     }
     if (A.setAppPage) A.setAppPage(page);

@@ -21,6 +21,7 @@ function doGet() {
   tpl.clientScriptSearch = HtmlService.createHtmlOutputFromFile('app-client-search').getContent();
   tpl.clientScriptExport = HtmlService.createHtmlOutputFromFile('app-client-export').getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
+  tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
   tpl.clientScriptBoot = HtmlService.createHtmlOutputFromFile('app-client-boot').getContent();
   return tpl
     .evaluate()
@@ -36,11 +37,30 @@ function getLlmUiConfig() {
 
 /** Sesión + archivos + estado proveedor IA */
 function getBootstrap() {
+  var perms = { canManageAgents: false, canEditCatalog: false, canViewMetrics: false };
+  try {
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (email) {
+      var isAdmin = AdminAuth_emailIsAdmin(email);
+      var isPresale = false;
+      try { isPresale = RoleDirectory_emailIsPresale(email); } catch (ep) {}
+      var roleRec = null;
+      try { roleRec = RoleDirectory_lookupRole(email); } catch (er) {}
+      var roleKey = roleRec && roleRec.key ? String(roleRec.key).trim().toLowerCase() : '';
+      var roleLabel = roleRec && roleRec.label ? String(roleRec.label).trim().toLowerCase() : '';
+      var isManager = roleKey === 'manager' || roleLabel === 'manager';
+      perms.canManageAgents = isAdmin && !isPresale;
+      perms.canEditCatalog  = isAdmin || isPresale;
+      perms.canViewMetrics = isAdmin || isPresale || isManager;
+    }
+  } catch (ePerms) {}
+
   return {
     session: getSessionInfo(),
     llm: LlmOrchestrator_getUiConfig(),
     admin: AdminKnowledge_getBootstrapSlice(),
     i18n: UiStrings_getClientPack_(),
+    permissions: perms,
   };
 }
 
@@ -373,6 +393,16 @@ function askAboutDocuments(question, fileIds, historyJson) {
     );
   } catch (eMatch) {}
   var refs = ChatReferences_merge_(catalogRefs, selectedRefs);
+  var answerText = String(ans.answer || '').trim();
+  var isUnanswered = !answerText;
+  MetricsService_trackQuestionEvent({
+    mode: 'drive_docs',
+    agentId: 'drive_docs',
+    agentName: 'Drive Docs',
+    questionText: question,
+    isUnanswered: isUnanswered,
+    unansweredCode: isUnanswered ? 'EMPTY_ANSWER' : '',
+  });
   return {
     answer: ans.answer,
     meta: {
@@ -402,6 +432,14 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
   var history = [];
   try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
   var r = AgentOrchestrator_answerWith(prompt, agentId, history);
+  MetricsService_trackQuestionEvent({
+    mode: 'globant_agent',
+    agentId: agentId,
+    agentName: r.agentName || '',
+    questionText: prompt,
+    isUnanswered: !!r.isUnanswered,
+    unansweredCode: r.unansweredCode || '',
+  });
   return {
     answer: r.answer,
     agentName: r.agentName || '',
@@ -425,6 +463,15 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
   var history = [];
   try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
   var results = AgentOrchestrator_answerMulti(prompt, agentIds, history);
+  var multiAgentId = 'multi:' + (Array.isArray(agentIds) ? agentIds.join(',') : '');
+  MetricsService_trackQuestionEvent({
+    mode: 'globant_multi',
+    agentId: multiAgentId,
+    agentName: 'Multi-agent',
+    questionText: prompt,
+    isUnanswered: !results || !results.length,
+    unansweredCode: !results || !results.length ? 'NO_RELEVANT_CONTENT' : '',
+  });
   var out = [];
   for (var i = 0; i < results.length; i++) {
     var r = results[i];
@@ -454,6 +501,17 @@ function globantAskDirect(prompt) {
     );
   }
   var r = AgentOrchestrator_answer(prompt);
+  var noRelevant = String(r.answer || '').indexOf(
+    UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content'),
+  ) >= 0;
+  MetricsService_trackQuestionEvent({
+    mode: 'globant_direct',
+    agentId: 'orchestrator',
+    agentName: 'orchestrator',
+    questionText: prompt,
+    isUnanswered: noRelevant,
+    unansweredCode: noRelevant ? 'NO_RELEVANT_CONTENT' : '',
+  });
   return {
     answer: r.answer,
     meta: {
@@ -632,4 +690,38 @@ function clientsDelete(clientId) {
 /** Métricas agregadas para tarjetas del home (admin y/o contributor según rol). */
 function dashboardHomeMetrics() {
   return DashboardHome_metrics();
+}
+
+/**
+ * Dashboard principal de métricas (leaderboards + tendencias).
+ * @param {string} range
+ * @param {number} topN
+ */
+function metricsDashboard(range, topN) {
+  return MetricsService_dashboard(range, topN);
+}
+
+/**
+ * Registro explícito de una pregunta para telemetría.
+ * @param {Object} payload
+ */
+function metricsTrackQuestion(payload) {
+  return MetricsService_trackQuestionEvent(payload || {});
+}
+
+/**
+ * Lista paginada de consultas no respondidas.
+ * @param {Object} filters
+ */
+function metricsUnansweredList(filters) {
+  return MetricsService_unansweredList(filters || {});
+}
+
+/**
+ * Lista paginada de leaderboard por tipo.
+ * @param {string} kind
+ * @param {Object} filters
+ */
+function metricsLeaderboardList(kind, filters) {
+  return MetricsService_leaderboardList(kind, filters || {});
 }

@@ -71,6 +71,7 @@ function ContentCatalog_headersByType_(contentType) {
 }
 
 /**
+ * Requiere presale o admin (para escritura).
  * @return {{email:string, roleKey:string, roleLabel:string}}
  */
 function ContentCatalog_requireContributor_() {
@@ -94,6 +95,23 @@ function ContentCatalog_requireContributor_() {
     roleKey: key || 'presale',
     roleLabel: label || 'Presale',
   };
+}
+
+/**
+ * Requiere cualquier rol activo del directorio (lectura). Solo verifica sesión y presencia en el directorio.
+ */
+function ContentCatalog_requireAnyRole_() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
+    );
+  }
+  if (AdminAuth_emailIsAdmin(email)) return;
+  var rec = RoleDirectory_lookupRole(email);
+  if (!rec || !rec.key) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  }
 }
 
 /**
@@ -330,7 +348,7 @@ function ContentCatalog_tagsToCsv_(tags) {
  * @return {{ok:boolean,items:Array<Object>,total:number,controlledTags:Array<string>}}
  */
 function ContentCatalog_list(filters) {
-  ContentCatalog_requireContributor_();
+  ContentCatalog_requireAnyRole_();
   var props = PropertiesService.getScriptProperties();
   var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
   var ss = catalog.spreadsheet;

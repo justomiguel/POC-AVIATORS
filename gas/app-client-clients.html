@@ -130,12 +130,14 @@
         tr.appendChild(tdContact);
         var tdActions = document.createElement('td');
         tdActions.className = 'px-4 py-3 text-right';
-        var editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'btn-admin text-xs inline-flex items-center gap-1';
-        editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
-        tdActions.appendChild(editBtn);
+        if (S.get('canWriteContents')) {
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn-admin text-xs inline-flex items-center gap-1';
+          editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+          editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
+          tdActions.appendChild(editBtn);
+        }
         tr.appendChild(tdActions);
         clientsTableBody.appendChild(tr);
       })(cache[i]);
@@ -262,6 +264,15 @@
       .clientsDelete(id);
   }
 
+  function clientsApplyWriteAccess() {
+    var canWrite = !!S.get('canWriteContents');
+    if (clientsNewBtn) clientsNewBtn.classList.toggle('hidden', !canWrite);
+    var batchDel = document.getElementById('clients-batch-delete-btn');
+    if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
+    var badge = document.getElementById('clients-readonly-badge');
+    if (badge) badge.classList.toggle('hidden', canWrite);
+  }
+
   // --- Event listeners ---
 
   if (clientsNewBtn) {
@@ -352,6 +363,7 @@
     setScreen: clientsSetScreen,
     loadList: clientsLoadList,
     resetForm: clientsResetForm,
+    applyWriteAccess: clientsApplyWriteAccess,
     selectById: function (name) {
       var cache = S.get('clientsItemsCache') || [];
       for (var i = 0; i < cache.length; i++) {

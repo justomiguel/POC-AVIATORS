@@ -183,11 +183,7 @@ function DashboardHome_metrics() {
     isContributor = true;
   } catch (eC) {}
 
-  var canSeeAgents = false;
-  try {
-    if (RoleDirectory_lookupRole(email)) canSeeAgents = true;
-  } catch (eR) {}
-  if (!canSeeAgents && AdminAuth_emailIsAdmin(email)) canSeeAgents = true;
+  var canSeeAgents = AdminAuth_canManageAgents(email);
 
   if (canSeeAgents) {
     try {

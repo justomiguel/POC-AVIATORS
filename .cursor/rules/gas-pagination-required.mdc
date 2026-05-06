@@ -1,0 +1,44 @@
+---
+description: Cualquier listado extenso en Aviators debe implementar paginación de backend y UI
+alwaysApply: true
+---
+
+# Paginación obligatoria para listados extensos (Aviators)
+
+- **Norma**: todo endpoint o pantalla que pueda crecer más allá de un bloque corto debe implementar paginación explícita de extremo a extremo.
+
+## Contrato backend (obligatorio)
+
+- Parámetros de entrada: `skip` (offset) y `limit` (tamaño de página).
+- Respuesta estándar:
+  - `{ ok, items, total, skip, limit, hasMore }`
+- Reglas mínimas:
+  - `skip` nunca negativo.
+  - `limit` con default seguro (ej. 20/25) y tope máximo (ej. 100).
+  - `hasMore = (skip + items.length) < total`.
+
+## Manejo UI (obligatorio)
+
+- Toda vista paginada debe incluir:
+  - estado de carga visible (`role="status"` / spinner),
+  - estado vacío,
+  - estado de error,
+  - controles de navegación (siguiente/anterior o numeración),
+  - indicador del rango mostrado y total.
+- Durante carga, deshabilitar controles de paginación para evitar reentradas.
+- Al cambiar filtro/orden, reiniciar `skip` a `0`.
+
+## Cuándo aplica
+
+- Tablas operativas (admin, catálogos, auditoría, métricas, historiales).
+- Leaderboards largos.
+- Historiales de eventos/consultas.
+
+## Excepción acotada
+
+- Solo se permite no paginar cuando el conjunto está técnicamente acotado y estable (pocas filas, no crece en runtime). Debe quedar documentado en comentario o commit.
+
+## Coherencia con el proyecto
+
+- Mantener i18n de textos de paginación en `gas/i18n/UiStrings.js` (es/en).
+- No exponer datos sensibles en mensajes de error.

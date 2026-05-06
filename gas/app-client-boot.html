@@ -22,6 +22,7 @@
   var navPageAgents = document.getElementById('nav-page-agents');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageClients = document.getElementById('nav-page-clients');
+  var navPageMetrics = document.getElementById('nav-page-metrics');
   var navPageFaq = document.getElementById('nav-page-faq');
   var adminAgentStatus = document.getElementById('admin-agent-status');
   var appShellView = document.getElementById('view-app');
@@ -92,6 +93,15 @@
     if (pg === 'agents' && !S.get('canManageAgents')) {
       pg = 'home';
     }
+    if (
+      (pg === 'contents' || pg === 'clients') &&
+      !S.get('canWriteContents')
+    ) {
+      pg = 'home';
+    }
+    if (pg === 'metrics' && !S.get('canViewMetrics')) {
+      pg = 'home';
+    }
     var nodes = document.querySelectorAll('.app-page');
     var i;
     for (i = 0; i < nodes.length; i++) {
@@ -102,23 +112,14 @@
         (pg === 'agents' && id === 'page-agents') ||
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'clients' && id === 'page-clients') ||
+        (pg === 'metrics' && id === 'page-metrics') ||
         (pg === 'faq' && id === 'page-faq');
       p.classList.toggle('hidden', !show);
     }
     if (homeMember) {
-      if (pg === 'faq') {
-        homeMember.classList.add('hidden');
-      } else {
-        homeMember.classList.toggle('hidden', !!S.get('isVisitor'));
-      }
+      homeMember.classList.toggle('hidden', pg === 'faq');
     }
-    if (homeVisitante) {
-      if (pg === 'faq') {
-        homeVisitante.classList.add('hidden');
-      } else {
-        homeVisitante.classList.toggle('hidden', !S.get('isVisitor'));
-      }
-    }
+    if (homeVisitante) homeVisitante.classList.add('hidden');
     var scrollArea = document.querySelector('.app-content-scroll');
     if (scrollArea) scrollArea.scrollTop = 0;
     var navItems = document.querySelectorAll('.app-nav-item');
@@ -138,13 +139,20 @@
         A.dashboard.loadMetrics();
       }
     }
+    if (pg === 'metrics') {
+      if (A.metrics && typeof A.metrics.loadDashboard === 'function') {
+        A.metrics.loadDashboard();
+      }
+    }
     if (pg === 'contents') {
       A.contents.setScreen('list');
       A.contents.toggleSpecificSections();
+      if (A.contents.applyWriteAccess) A.contents.applyWriteAccess();
       A.contents.loadList();
     }
     if (pg === 'clients') {
       A.clients.setScreen('list');
+      if (A.clients.applyWriteAccess) A.clients.applyWriteAccess();
       A.clients.loadList();
     }
     closeMobileDrawer({ restoreFocus: false });
@@ -301,33 +309,36 @@
 
       var isVisitor = !!data.isVisitor;
       S.set('isVisitor', isVisitor);
-      if (homeVisitante) homeVisitante.classList.toggle('hidden', !isVisitor);
-      if (homeMember) homeMember.classList.toggle('hidden', isVisitor);
+      if (homeVisitante) homeVisitante.classList.add('hidden');
+      if (homeMember) homeMember.classList.remove('hidden');
 
       A.chat.updateHomeChatBanner(llmCfg);
 
-      var adm = bootstrap.admin || {};
-      var rk = (data.roleKey || '').toLowerCase();
-      var isPresale =
-        rk.indexOf('presale') >= 0 ||
-        rk.indexOf('pre_sale') >= 0 ||
-        rk.indexOf('preventa') >= 0;
-      var canManageAgents =
-        adm.canManageAgents !== undefined && adm.canManageAgents !== null
-          ? !!adm.canManageAgents
-          : !!adm.isAdmin;
+      // Permisos del servidor (fuente única de verdad).
+      var perms = bootstrap.permissions || {};
+      var canManageAgents = !!perms.canManageAgents;
+      var canWriteCatalog = !!perms.canEditCatalog;
+      var canViewMetrics = !!perms.canViewMetrics;
       S.set('canManageAgents', canManageAgents);
-      var canManageContents = !!adm.isAdmin || isPresale;
+      S.set('canWriteContents', canWriteCatalog);
+      S.set('canViewMetrics', canViewMetrics);
+      console.log('[Aviators:permissions]', JSON.stringify({
+        raw: bootstrap.permissions,
+        canManageAgents: canManageAgents,
+        canWriteCatalog: canWriteCatalog,
+        adminSlice: { isAdmin: (bootstrap.admin||{}).isAdmin, cma: (bootstrap.admin||{}).canManageAgents, cwc: (bootstrap.admin||{}).canWriteCatalog },
+        session: { email: data.email, roleKey: data.roleKey, isVisitor: data.isVisitor },
+      }));
       if (navPageAgents) navPageAgents.classList.toggle('hidden', !canManageAgents);
-      if (navPageContents) navPageContents.classList.toggle('hidden', !canManageContents);
-      if (navPageClients) navPageClients.classList.toggle('hidden', !canManageContents);
+      if (navPageContents) navPageContents.classList.toggle('hidden', !canWriteCatalog);
+      if (navPageClients) navPageClients.classList.toggle('hidden', !canWriteCatalog);
+      if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
       setAppPage('home');
       syncMobileDrawerViewport();
-      var showAgentsDashboard = !isVisitor;
       if (A.renderDashboard) {
         A.renderDashboard(bootstrap, {
-          showAgentsCard: showAgentsDashboard,
-          canManageContents: canManageContents,
+          showAgentsCard: canManageAgents,
+          canManageContents: canWriteCatalog,
         });
       }
       if (adminAgentStatus) {
@@ -423,9 +434,19 @@
   if (navPageClients) {
     navPageClients.addEventListener('click', function () { setAppPage('clients'); });
   }
+  if (navPageMetrics) {
+    navPageMetrics.addEventListener('click', function () { setAppPage('metrics'); });
+  }
   if (navPageFaq) {
     navPageFaq.addEventListener('click', function () { setAppPage('faq'); });
   }
+
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('[data-nav-page]');
+    if (!link) return;
+    e.preventDefault();
+    setAppPage(link.getAttribute('data-nav-page'));
+  });
 
   var localeBtnEsEl = document.getElementById('locale-btn-es');
   var localeBtnEnEl = document.getElementById('locale-btn-en');

@@ -1,33 +1,12 @@
 /**
  * @fileoverview Autorización de modo administrador (solo servidor; revalidar en cada RPC).
  *
- * Allowlist: propiedad del script **ADMIN_EMAILS** (coma-separada, case-insensitive).
- * Si está vacía, el único admin por defecto es justo.vargas@globant.com.
+ * Fuente única: rol en la planilla de roles (pestaña «data», columna Rol).
+ * Las etiquetas que cuentan como admin se configuran en la propiedad ADMIN_SHEET_ROLES
+ * (coma-separada, case-insensitive). Default: Admin,Administrador,administrator.
  */
 
-var ADMIN_DEFAULT_EMAIL = 'justo.vargas@globant.com';
-
 /**
- * @return {string[]}
- */
-function AdminAuth_getAllowlist() {
-  var raw = (
-    PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || ''
-  ).trim();
-  var parts = raw.split(',');
-  var out = [];
-  for (var i = 0; i < parts.length; i++) {
-    var e = (parts[i] || '').trim().toLowerCase();
-    if (e) out.push(e);
-  }
-  if (out.length === 0) out.push(ADMIN_DEFAULT_EMAIL);
-  return out;
-}
-
-/**
- * Roles de la hoja «data» que cuentan como administrador (coma-separada, sin espacios obligatorios).
- * Propiedad: ADMIN_SHEET_ROLES — por defecto Admin,Administrador,administrator
- *
  * @return {string[]}
  */
 function AdminAuth_getSheetAdminRoleLabelsLower_() {
@@ -51,11 +30,8 @@ function AdminAuth_getSheetAdminRoleLabelsLower_() {
 function AdminAuth_emailIsAdmin(email) {
   var normalized = ((email || '') + '').trim().toLowerCase();
   if (!normalized) return false;
-  var list = AdminAuth_getAllowlist();
-  for (var i = 0; i < list.length; i++) {
-    if (list[i] === normalized) return true;
-  }
-  var rec = RoleDirectory_lookupRole(email);
+  var rec = null;
+  try { rec = RoleDirectory_lookupRole(email); } catch (e) { return false; }
   if (!rec || !rec.label) return false;
   var rl = rec.label.trim().toLowerCase();
   var admins = AdminAuth_getSheetAdminRoleLabelsLower_();

@@ -55,9 +55,13 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
   }
   systemPrompt += '\n' + AgentOrchestrator_languageInstruction_(q);
+  systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
+
+  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
+  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
 
   var histArr = Array.isArray(history) ? history : [];
-  var promptWithHistory = q;
+  var promptWithHistory = rolePrefix + q;
   if (histArr.length > 0) {
     var histLines = [];
     for (var h = 0; h < histArr.length; h++) {
@@ -67,7 +71,7 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
       }
     }
     if (histLines.length > 0) {
-      promptWithHistory = '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
+      promptWithHistory = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
     }
   }
 
@@ -77,7 +81,10 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     systemPrompt,
   );
 
+  var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer.answer);
   answer.answer = AgentOrchestrator_sanitizeAnswer_(answer.answer);
+  answer.isUnanswered = isUnanswered;
+  answer.unansweredCode = isUnanswered ? 'NO_RELEVANT_CONTENT' : '';
   answer.filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
     agent: chosen.profileName,
     confidence: 'routed',
@@ -102,8 +109,11 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
   var ctx = AgentOrchestrator_loadContext_();
   var langInstr = AgentOrchestrator_languageInstruction_(q);
 
+  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
+  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
+
   var histArr = Array.isArray(history) ? history : [];
-  var promptWithHistory = q;
+  var promptWithHistory = rolePrefix + q;
   if (histArr.length > 0) {
     var histLines = [];
     for (var h = 0; h < histArr.length; h++) {
@@ -113,7 +123,7 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
       }
     }
     if (histLines.length > 0) {
-      promptWithHistory = '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
+      promptWithHistory = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
     }
   }
 
@@ -127,6 +137,7 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
       systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
     }
     systemPrompt += '\n' + langInstr;
+    systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
 
     try {
       var answer = LlmProviderGlobant_consultPromptWithAgent(
@@ -524,30 +535,66 @@ function AgentOrchestrator_buildRoutingPrompt_(question, orchestrator, candidate
 }
 
 /**
+ * Resuelve el rol del usuario actual para inyectarlo en cada prompt.
+ * @return {string} e.g. "admin", "presales", "client partner", "visitante"
+ */
+function AgentOrchestrator_resolveUserRoleTag_() {
+  try {
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (!email) return 'visitante';
+    var rec = RoleDirectory_lookupRole(email);
+    if (!rec || !rec.label) return 'visitante';
+    return rec.label.trim().toLowerCase();
+  } catch (e) {
+    return 'visitante';
+  }
+}
+
+/**
+ * Bloque compacto de restricciones por rol, inyectado en todo system prompt.
+ * @return {string}
+ */
+function AgentOrchestrator_buildRoleRestriction_() {
+  return [
+    '',
+    '## Restricciones por rol',
+    'El usuario envía su rol en cada mensaje como [ROL_USUARIO: <rol>].',
+    '- Si el rol es "visitante": compartí solo success cases e información general de Globant / Aviation Studio. NO reveles clientes, propuestas ni datos internos de proyectos.',
+    '- Otros roles (admin, presales, client partner, etc.): acceso completo.',
+    'No respondas preguntas fuera del alcance de Globant / Aviation Studio.',
+  ].join('\n');
+}
+
+/**
  * Prompt del orquestador en modo "respuesta final al usuario".
  * Se separa del prompt de ruteo para evitar fugas de JSON al chat.
  * @return {string}
  */
 function AgentOrchestrator_buildSelfAnswerPrompt_() {
   var lines = [];
-  lines.push(
-    'Sos el Orquestador de Aviators respondiendo DIRECTAMENTE al usuario final.',
-  );
-  lines.push(
-    'En este modo NO clasifiques ni enrutes, y NO muestres decision interna.',
-  );
-  lines.push(
-    'Regla estricta: NO respondas en JSON ni bloques estructurados de routing.',
-  );
-  lines.push(
-    'Si el usuario saluda o hace charla breve, respondé cordialmente y en pocas lineas.',
-  );
-  lines.push(
-    'Si la consulta es general/ambigua y no requiere un agente especializado, respondé vos con claridad.',
-  );
-  lines.push(
-    'Mantenete en contexto Aviators cuando aplique y no inventes datos no verificados.',
-  );
+
+  lines.push('Sos el Orquestador de Aviators, el asistente inteligente del Aviation Studio de Globant.');
+  lines.push('Respondés DIRECTAMENTE al usuario final. NO clasifiques, NO enrutes, NO muestres decisiones internas.');
+  lines.push('Regla estricta: NO respondas en JSON ni bloques estructurados de routing.');
+  lines.push('');
+
+  lines.push('## Alcance temático');
+  lines.push('Solo respondés preguntas relacionadas con Globant, el Aviation Studio, aerolíneas, y los contenidos de la plataforma Aviators (success cases, propuestas, clientes, FAQ).');
+  lines.push('Si la pregunta está completamente fuera de ese alcance, decliná amablemente y sugerí reformular.');
+  lines.push('');
+
+  lines.push('## Restricciones por rol del usuario');
+  lines.push('El rol del usuario se indica en cada mensaje con la etiqueta [ROL_USUARIO]. Las restricciones son:');
+  lines.push('- **visitante**: solo puede acceder a información de **success cases** y preguntas generales sobre Globant / Aviation Studio. NO compartas datos de clientes, propuestas, ni información interna de proyectos.');
+  lines.push('- **Cualquier otro rol** (admin, presales, client partner, etc.): acceso completo a toda la información disponible (success cases, propuestas, clientes, proyectos).');
+  lines.push('Si el visitante pregunta por clientes o propuestas, respondé amablemente que esa información requiere un rol asignado y que puede pedir acceso a su administrador de Aviators.');
+  lines.push('');
+
+  lines.push('## Estilo');
+  lines.push('Si el usuario saluda o hace charla breve, respondé cordialmente y en pocas líneas.');
+  lines.push('Si la consulta es general/ambigua, respondé con claridad.');
+  lines.push('No inventes datos no verificados.');
+
   return lines.join('\n');
 }
 

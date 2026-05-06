@@ -104,6 +104,17 @@
     if (txt) txt.textContent = msg;
   }
 
+  function homeChatAgentHueFromKey_(key) {
+    var str = String(key || '').trim();
+    if (!str) return null;
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h) + str.charCodeAt(i);
+      h |= 0;
+    }
+    return Math.abs(h) % 360;
+  }
+
   function homeChatAppendUser(text) {
     var thread = document.getElementById('chat-thread');
     if (!thread) return;
@@ -123,7 +134,7 @@
     homeChatScrollToBottom();
   }
 
-  function homeChatAppendAgent(body, metaLine, references) {
+  function homeChatAppendAgent(body, metaLine, references, agentKey) {
     var thread = document.getElementById('chat-thread');
     if (!thread) return;
     var emptyEl = document.getElementById('chat-empty');
@@ -137,6 +148,11 @@
     col.className = 'chat-msg-agent-inner';
     var bub = document.createElement('div');
     bub.className = 'chat-bubble-agent';
+    var agentHue = homeChatAgentHueFromKey_(agentKey);
+    if (agentHue !== null) {
+      bub.classList.add('chat-bubble-agent-tinted');
+      bub.style.setProperty('--agent-h', String(agentHue));
+    }
     bub.textContent = body || '';
     col.appendChild(bub);
     if (metaLine) {
@@ -362,10 +378,13 @@
                   var combined = [];
                   for (var k = 0; k < results.length; k++) {
                     var badge = i18nFmt('orch_routed_badge', { agent: results[k].agentName });
+                    var agentTintKey =
+                      results[k].agentName || (agentIds[k] != null ? String(agentIds[k]) : '');
                     homeChatAppendAgent(
                       results[k].answer || '',
                       badge,
                       (results[k].meta && results[k].meta.references) || [],
+                      agentTintKey,
                     );
                     combined.push(results[k].answer || '');
                   }
@@ -390,7 +409,11 @@
                 var answer = res.answer || '';
                 pushHistory('assistant', answer);
                 var badge = i18nFmt('orch_routed_badge', { agent: res.agentName || agNames });
-                homeChatAppendAgent(answer, badge, (res.meta && res.meta.references) || []);
+                var singleTintKey =
+                  res.agentName ||
+                  (agentIds && agentIds.length ? String(agentIds[0]) : '') ||
+                  agNames;
+                homeChatAppendAgent(answer, badge, (res.meta && res.meta.references) || [], singleTintKey);
                 askStatus.textContent = '\u00a0';
               })
               .withFailureHandler(function (e) {

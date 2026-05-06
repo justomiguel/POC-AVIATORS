@@ -998,6 +998,7 @@
   var agentsBatchBar = document.getElementById('agents-batch-bar');
   var agentsBatchCount = document.getElementById('agents-batch-count');
   var agentsBatchSyncBtn = document.getElementById('agents-batch-sync-btn');
+  var agentsBatchDeleteBtn = document.getElementById('agents-batch-delete-btn');
 
   function agentsBatchGetSelected() {
     var cbs = adminAgentNavList ? adminAgentNavList.querySelectorAll('.agents-batch-cb:checked') : [];
@@ -1012,6 +1013,12 @@
     if (agentsBatchCount) agentsBatchCount.textContent = i18nFmt('batch_selected', { n: ids.length });
   }
 
+  function agentsBatchClearSelection() {
+    var cbs = adminAgentNavList ? adminAgentNavList.querySelectorAll('.agents-batch-cb') : [];
+    for (var i = 0; i < cbs.length; i++) cbs[i].checked = false;
+    agentsBatchUpdateBar();
+  }
+
   if (agentsBatchSyncBtn) {
     agentsBatchSyncBtn.addEventListener('click', function () {
       var ids = agentsBatchGetSelected();
@@ -1023,9 +1030,7 @@
       function next() {
         if (done >= total) {
           agentsBatchSyncBtn.disabled = false;
-          var cbs = adminAgentNavList ? adminAgentNavList.querySelectorAll('.agents-batch-cb') : [];
-          for (var j = 0; j < cbs.length; j++) cbs[j].checked = false;
-          agentsBatchUpdateBar();
+          agentsBatchClearSelection();
           if (A.toast) A.toast.success(i18nFmt('batch_sync_done', { n: total }));
           return;
         }
@@ -1036,6 +1041,41 @@
           .adminAgentsSync(ids[done]);
       }
       next();
+    });
+  }
+
+  if (agentsBatchDeleteBtn) {
+    agentsBatchDeleteBtn.addEventListener('click', function () {
+      var ids = agentsBatchGetSelected();
+      if (!ids.length) return;
+      if (!confirm(i18nFmt('batch_agents_delete_confirm', { n: ids.length }))) return;
+      agentsBatchDeleteBtn.disabled = true;
+      if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = true;
+      var done = 0;
+      var ok = 0;
+      var total = ids.length;
+      function nextDelete() {
+        if (done >= total) {
+          agentsBatchDeleteBtn.disabled = false;
+          if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = false;
+          agentsBatchClearSelection();
+          loadAdminAgentsList(function () {
+            if (A.toast) A.toast.success(i18nFmt('batch_agents_delete_done', { done: ok, total: total }));
+          }, true);
+          return;
+        }
+        if (agentsBatchCount) {
+          agentsBatchCount.textContent = i18nFmt('batch_agents_deleting', {
+            done: done + 1,
+            total: total,
+          });
+        }
+        google.script.run
+          .withSuccessHandler(function () { ok++; done++; nextDelete(); })
+          .withFailureHandler(function () { done++; nextDelete(); })
+          .adminAgentsDelete(ids[done]);
+      }
+      nextDelete();
     });
   }
 
