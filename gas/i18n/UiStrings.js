@@ -73,6 +73,9 @@ var UI_STRINGS = {
     faq_q_visibility: '¿Por qué no veo Agentes, Contenidos o Clientes?',
     faq_a_visibility:
       'Esas secciones dependen del rol asignado en el directorio interno. Si solo ves el aviso de visitante, tu cuenta aún no tiene permisos de miembro; contactá al equipo que gestiona la planilla o lista de acceso.',
+    faq_q_roles: '¿Qué roles existen y qué puede hacer cada uno?',
+    faq_a_roles_html:
+      '<p>Los permisos se asignan desde la hoja de roles interna (columna <strong>Rol</strong>) y se aplican automáticamente en el menú y acciones:</p><ul class="mt-2 list-disc space-y-1 pl-5"><li><strong>visitante</strong>: acceso básico (Inicio/FAQ), chat con alcance acotado y sin acceso a datos internos sensibles.</li><li><strong>admin</strong>: acceso completo con escritura (Agentes, Contenidos, Clientes y Métricas), incluyendo operaciones de administración.</li><li><strong>presales</strong>: foco comercial-operativo con escritura en Contenidos/Clientes y lectura de Métricas.</li><li><strong>manager</strong>: lectura de Métricas y navegación general para seguimiento.</li><li><strong>tech</strong>: lectura en Agentes, Contenidos, Clientes y Métricas; sin acciones de escritura.</li><li><strong>client partner</strong>: lectura en Agentes, Contenidos, Clientes y Métricas; sin acciones de escritura.</li></ul><p class="mt-2">Si necesitás cambiar de rol o ampliar permisos, pedilo al administrador de la planilla de roles.</p>',
     faq_q_misc: '¿Dónde cambio idioma, tema oscuro o exporto datos?',
     faq_a_misc:
       'Idioma y modo claro/oscuro están al pie del panel lateral. En listas de Contenidos y Clientes hay acciones de exportación/importación CSV cuando correspondan.',
@@ -757,6 +760,12 @@ var UI_STRINGS = {
     metrics_range_90d: 'Últimos 90 días',
     metrics_range_12m: 'Últimos 12 meses',
     metrics_refresh_btn: 'Actualizar métricas',
+    metrics_reset_btn: 'Resetear métricas',
+    metrics_reset_confirm:
+      'Esto borrará todo el histórico de métricas. ¿Querés continuar?',
+    metrics_reset_busy: 'Reseteando métricas…',
+    metrics_reset_done: 'Métricas reseteadas.',
+    metrics_reset_error: 'No se pudieron resetear las métricas.',
     metrics_overview_heading: 'Resumen',
     metrics_overview_lead:
       'Indicadores globales para entender volumen de preguntas y consultas sin respuesta.',
@@ -795,7 +804,9 @@ var UI_STRINGS = {
     pagination_prev: 'Anterior',
     pagination_next: 'Siguiente',
     err_metrics_only:
-      'Solo usuarios con rol admin, manager o presales pueden ver métricas.',
+      'Solo usuarios con rol admin, manager, presales, tech o client partner pueden ver métricas.',
+    err_metrics_reset_only:
+      'Solo administradores pueden resetear métricas.',
     context_files_loading: 'Cargando archivos de contexto…',
   },
   en: {
@@ -864,6 +875,9 @@ var UI_STRINGS = {
     faq_q_visibility: "Why don't I see Agents, Content or Clients?",
     faq_a_visibility:
       'Those areas depend on your role in the internal directory. If you only see the visitor notice, your account is not a full member yet—ask whoever manages the roster or access list.',
+    faq_q_roles: 'What roles exist and what can each one do?',
+    faq_a_roles_html:
+      '<p>Permissions come from the internal role sheet (the <strong>Role</strong> column) and are enforced automatically in menus and actions:</p><ul class="mt-2 list-disc space-y-1 pl-5"><li><strong>visitante</strong>: basic access (Home/FAQ), chat with constrained scope, and no sensitive internal data access.</li><li><strong>admin</strong>: full write access (Agents, Content, Clients and Metrics), including administrative operations.</li><li><strong>presales</strong>: commercial/operational focus with write access in Content/Clients and metrics visibility.</li><li><strong>manager</strong>: metrics visibility and general navigation for follow-up.</li><li><strong>tech</strong>: read-only access across Agents, Content, Clients and Metrics; no write actions.</li><li><strong>client partner</strong>: read-only access across Agents, Content, Clients and Metrics; no write actions.</li></ul><p class="mt-2">If you need a role change or broader permissions, contact the administrator of the role sheet.</p>',
     faq_q_misc: 'Where do I change language, dark mode or export data?',
     faq_a_misc:
       'Locale and light/dark mode are at the bottom of the sidebar. Content and Clients lists include CSV export/import actions when available.',
@@ -1538,6 +1552,12 @@ var UI_STRINGS = {
     metrics_range_90d: 'Last 90 days',
     metrics_range_12m: 'Last 12 months',
     metrics_refresh_btn: 'Refresh metrics',
+    metrics_reset_btn: 'Reset metrics',
+    metrics_reset_confirm:
+      'This will wipe all metrics history. Do you want to continue?',
+    metrics_reset_busy: 'Resetting metrics…',
+    metrics_reset_done: 'Metrics reset complete.',
+    metrics_reset_error: 'Metrics could not be reset.',
     metrics_overview_heading: 'Overview',
     metrics_overview_lead:
       'Top-level indicators to understand total question volume and unanswered requests.',
@@ -1576,7 +1596,9 @@ var UI_STRINGS = {
     pagination_prev: 'Previous',
     pagination_next: 'Next',
     err_metrics_only:
-      'Only admin, manager or presales users can view metrics.',
+      'Only admin, manager, presales, tech, or client partner users can view metrics.',
+    err_metrics_reset_only:
+      'Only administrators can reset metrics.',
     context_files_loading: 'Loading context files…',
   },
 };

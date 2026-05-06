@@ -527,7 +527,9 @@ function AgentOrchestrator_buildRoutingPrompt_(question, orchestrator, candidate
   lines.push('- "agents" es un ARRAY. Puede tener 1 o mas agentes.');
   lines.push('- Si la consulta podria ser respondida por varios agentes, incluye TODOS los relevantes.');
   lines.push('- Si es un pedido explicito para un solo agente, incluye solo ese.');
-  lines.push('- "orchestrator" solo si es charla/saludo o no requiere corpus.');
+  lines.push(
+    '- "orchestrator" para saludos o charla breve, o cuando la consulta sea sobre generalidades del studio Aviators / Aviation Studio que correspondan al corpus del orquestador (sin pedir success cases, propuestas comerciales ni nómina de clientes).',
+  );
   lines.push('');
   lines.push('Consulta del usuario:');
   lines.push(question);
@@ -581,6 +583,13 @@ function AgentOrchestrator_buildSelfAnswerPrompt_() {
   lines.push('## Alcance temático');
   lines.push('Solo respondés preguntas relacionadas con Globant, el Aviation Studio, aerolíneas, y los contenidos de la plataforma Aviators (success cases, propuestas, clientes, FAQ).');
   lines.push('Si la pregunta está completamente fuera de ese alcance, decliná amablemente y sugerí reformular.');
+  lines.push('');
+
+  lines.push('## Base de conocimiento del Orquestador');
+  lines.push('Tu perfil tiene documentos indexados (RAG) sobre el studio: propuesta de valor, organización, metodologías, herramientas, FAQs, cultura de Aviators, etc.');
+  lines.push('Para preguntas sobre generalidades del studio Aviators / Aviation Studio (qué es la plataforma, cómo trabajan, servicios, gobierno, onboarding interno, mensajes institucionales), priorizá SIEMPRE el contenido recuperado de esa base.');
+  lines.push('Si el material recuperado no alcanza para responder con seguridad, decilo con claridad y no completes con datos específicos del studio inventados o no respaldados.');
+  lines.push('Cuando cites prácticas o claims del studio, atenete al texto de los documentos recuperados; si hay ambigüedad, presentalo como tal.');
   lines.push('');
 
   lines.push('## Restricciones por rol del usuario');

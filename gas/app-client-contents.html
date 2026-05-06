@@ -695,10 +695,12 @@
     if (!id) return;
     if (!window.confirm(i18n('contents_confirm_delete'))) return;
     contentsSetRowBusy(id, true);
+    A.showBlockingModal(i18n('contents_busy_deleting'));
     contentsSetListStatus(i18n('contents_busy_deleting'), false);
     A.cache.invalidate('contentsList');
     google.script.run
       .withSuccessHandler(function () {
+        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
         if (contentsContentId && String(contentsContentId.value || '').trim() === id) {
           contentsResetForm();
@@ -707,6 +709,7 @@
         contentsLoadList({ skipCache: true });
       })
       .withFailureHandler(function (e) {
+        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
         contentsSetListStatus((e && e.message) || i18n('err_generic'), true);
       })
@@ -717,10 +720,12 @@
     var id = String(contentId || '').trim();
     if (!id) return;
     contentsSetRowBusy(id, true);
+    A.showBlockingModal(i18n('contents_busy_repairing_index'));
     contentsSetListStatus(i18n('contents_busy_repairing_index'), false);
     A.cache.invalidate('contentsList');
     google.script.run
       .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
         contentsLoadList({ skipCache: true });
         var doneMsg;
@@ -733,6 +738,7 @@
         if (A.toast) A.toast.success(doneMsg);
       })
       .withFailureHandler(function (e) {
+        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
         var msg = (e && e.message) || i18n('contents_repair_failed');
         contentsSetListStatus(msg, true);
@@ -979,6 +985,10 @@
   function contentsApplyWriteAccess() {
     var canWrite = !!S.get('canWriteContents');
     if (contentsNewBtn) contentsNewBtn.classList.toggle('hidden', !canWrite);
+    var exportBtn = document.getElementById('contents-export-btn');
+    var importBtn = document.getElementById('contents-import-btn');
+    if (exportBtn) exportBtn.classList.toggle('hidden', !canWrite);
+    if (importBtn) importBtn.classList.toggle('hidden', !canWrite);
     var batchDel = document.getElementById('contents-batch-delete-btn');
     if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
     var batchSelCol = document.getElementById('contents-th-select');
@@ -1131,9 +1141,11 @@
       contentsBatchDeleteBtn.disabled = true;
       var done = 0;
       var total = ids.length;
+      A.showBlockingModal(i18nFmt('batch_deleting', { done: 1, total: total }));
       function next() {
         if (done >= total) {
           contentsBatchDeleteBtn.disabled = false;
+          A.hideBlockingModal();
           if (contentsSelectAll) contentsSelectAll.checked = false;
           contentsBatchUpdateBar();
           A.cache.invalidate('contentsList');
@@ -1141,7 +1153,9 @@
           if (A.toast) A.toast.success(i18nFmt('batch_done', { n: total }));
           return;
         }
-        if (contentsBatchCount) contentsBatchCount.textContent = i18nFmt('batch_deleting', { done: done + 1, total: total });
+        var progMsg = i18nFmt('batch_deleting', { done: done + 1, total: total });
+        if (contentsBatchCount) contentsBatchCount.textContent = progMsg;
+        A.showBlockingModal(progMsg);
         google.script.run
           .withSuccessHandler(function () { done++; next(); })
           .withFailureHandler(function () { done++; next(); })

@@ -37,21 +37,26 @@ function getLlmUiConfig() {
 
 /** Sesión + archivos + estado proveedor IA */
 function getBootstrap() {
-  var perms = { canManageAgents: false, canEditCatalog: false, canViewMetrics: false };
+  var perms = {
+    canViewAgents: false,
+    canViewCatalog: false,
+    canManageAgents: false,
+    canEditCatalog: false,
+    canViewMetrics: false,
+    canResetMetrics: false,
+  };
   try {
     var email = ('' + Session.getActiveUser().getEmail()).trim();
     if (email) {
-      var isAdmin = AdminAuth_emailIsAdmin(email);
-      var isPresale = false;
-      try { isPresale = RoleDirectory_emailIsPresale(email); } catch (ep) {}
-      var roleRec = null;
-      try { roleRec = RoleDirectory_lookupRole(email); } catch (er) {}
-      var roleKey = roleRec && roleRec.key ? String(roleRec.key).trim().toLowerCase() : '';
-      var roleLabel = roleRec && roleRec.label ? String(roleRec.label).trim().toLowerCase() : '';
-      var isManager = roleKey === 'manager' || roleLabel === 'manager';
-      perms.canManageAgents = isAdmin && !isPresale;
-      perms.canEditCatalog  = isAdmin || isPresale;
-      perms.canViewMetrics = isAdmin || isPresale || isManager;
+      perms.canManageAgents = AdminAuth_canManageAgents(email);
+      perms.canEditCatalog = AdminAuth_emailIsAdmin(email) ||
+        (function () {
+          try { return RoleDirectory_emailIsPresale(email); } catch (ePresale) { return false; }
+        })();
+      perms.canViewAgents = AdminAuth_emailCanViewAgents(email);
+      perms.canViewCatalog = AdminAuth_emailCanViewCatalog(email);
+      perms.canViewMetrics = AdminAuth_emailCanViewMetrics(email);
+      perms.canResetMetrics = AdminAuth_emailIsAdmin(email);
     }
   } catch (ePerms) {}
 
@@ -349,6 +354,16 @@ function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
   }
 
   var seen = {};
+  var seenTargets = {};
+  function resolveTargetKey_(ref, idx) {
+    var driveId = String((ref && ref.driveFileId) || '').trim();
+    if (driveId) return 'drive:' + driveId;
+    var rawUrl = String((ref && ref.url) || '').trim();
+    if (rawUrl) return 'url:' + rawUrl.toLowerCase();
+    var name = String((ref && (ref.fileName || ref.title)) || '').trim().toLowerCase();
+    if (name) return 'name:' + name;
+    return 'idx:' + idx;
+  }
   for (i = 0; i < catalogRefs.length; i++) {
     var c = catalogRefs[i] || {};
     var fKey = String(c.fileName || '').trim().toLowerCase();
@@ -356,8 +371,14 @@ function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
       c.url = byFileName[fKey].url;
     }
     var idKey = String(c.contentId || '') || String(c.title || '');
+    var targetKey = resolveTargetKey_(c, i);
+    if (seenTargets[targetKey]) continue;
     if (idKey && !seen[idKey]) {
       seen[idKey] = true;
+      seenTargets[targetKey] = true;
+      out.push(c);
+    } else if (!idKey) {
+      seenTargets[targetKey] = true;
       out.push(c);
     }
   }
@@ -367,8 +388,10 @@ function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
     for (i = 0; i < selectedFileRefs.length; i++) {
       var sRef = selectedFileRefs[i];
       var sKey = 'file:' + String(sRef.driveFileId || sRef.fileName || i);
-      if (seen[sKey]) continue;
+      var sTargetKey = resolveTargetKey_(sRef, i);
+      if (seen[sKey] || seenTargets[sTargetKey]) continue;
       seen[sKey] = true;
+      seenTargets[sTargetKey] = true;
       out.push(sRef);
     }
   }
@@ -554,7 +577,7 @@ function globantAssistantDeleteFile(fileId) {
   return { success: true };
 }
 
-/** Solo admin · listar agentes configurados (perfil + fuentes + prompt). */
+/** Admin o lectura técnica/client partner · listar agentes configurados (perfil + fuentes + prompt). */
 function adminAgentsList() {
   return AdminAgents_list();
 }
@@ -564,7 +587,7 @@ function adminAgentsEnsureDefaults() {
   return AdminAgents_ensureDefaults();
 }
 
-/** Solo admin · catálogo de modelos/estrategias para Agent API. */
+/** Admin o lectura técnica/client partner · catálogo de modelos/estrategias para Agent API. */
 function adminAgentsApiCatalog() {
   return AdminAgents_apiCatalog();
 }
@@ -724,4 +747,9 @@ function metricsUnansweredList(filters) {
  */
 function metricsLeaderboardList(kind, filters) {
   return MetricsService_leaderboardList(kind, filters || {});
+}
+
+/** Reset total de métricas (solo admin). */
+function metricsResetAll() {
+  return MetricsService_resetAll();
 }

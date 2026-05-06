@@ -90,12 +90,13 @@
 
   function setAppPage(page) {
     var pg = page;
-    if (pg === 'agents' && !S.get('canManageAgents')) {
+    var canManageAgents = !!S.get('canManageAgents');
+    if (pg === 'agents' && !S.get('canViewAgents')) {
       pg = 'home';
     }
     if (
       (pg === 'contents' || pg === 'clients') &&
-      !S.get('canWriteContents')
+      !S.get('canViewCatalog')
     ) {
       pg = 'home';
     }
@@ -107,9 +108,12 @@
     for (i = 0; i < nodes.length; i++) {
       var p = nodes[i];
       var id = p.id || '';
+      var showAgentsWrite = pg === 'agents' && canManageAgents && id === 'page-agents';
+      var showAgentsReadOnly = pg === 'agents' && !canManageAgents && id === 'page-agents-readonly';
       var show =
         (pg === 'home' && id === 'page-home') ||
-        (pg === 'agents' && id === 'page-agents') ||
+        showAgentsWrite ||
+        showAgentsReadOnly ||
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'clients' && id === 'page-clients') ||
         (pg === 'metrics' && id === 'page-metrics') ||
@@ -318,20 +322,28 @@
       var perms = bootstrap.permissions || {};
       var canManageAgents = !!perms.canManageAgents;
       var canWriteCatalog = !!perms.canEditCatalog;
+      var canViewAgents = !!perms.canViewAgents || canManageAgents;
+      var canViewCatalog = !!perms.canViewCatalog || canWriteCatalog;
       var canViewMetrics = !!perms.canViewMetrics;
+      var canResetMetrics = !!perms.canResetMetrics;
       S.set('canManageAgents', canManageAgents);
       S.set('canWriteContents', canWriteCatalog);
+      S.set('canViewAgents', canViewAgents);
+      S.set('canViewCatalog', canViewCatalog);
       S.set('canViewMetrics', canViewMetrics);
+      S.set('canResetMetrics', canResetMetrics);
       console.log('[Aviators:permissions]', JSON.stringify({
         raw: bootstrap.permissions,
         canManageAgents: canManageAgents,
         canWriteCatalog: canWriteCatalog,
+        canViewAgents: canViewAgents,
+        canViewCatalog: canViewCatalog,
         adminSlice: { isAdmin: (bootstrap.admin||{}).isAdmin, cma: (bootstrap.admin||{}).canManageAgents, cwc: (bootstrap.admin||{}).canWriteCatalog },
         session: { email: data.email, roleKey: data.roleKey, isVisitor: data.isVisitor },
       }));
-      if (navPageAgents) navPageAgents.classList.toggle('hidden', !canManageAgents);
-      if (navPageContents) navPageContents.classList.toggle('hidden', !canWriteCatalog);
-      if (navPageClients) navPageClients.classList.toggle('hidden', !canWriteCatalog);
+      if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
+      if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
+      if (navPageClients) navPageClients.classList.toggle('hidden', !canViewCatalog);
       if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
       setAppPage('home');
       syncMobileDrawerViewport();
@@ -345,7 +357,7 @@
         adminAgentStatus.textContent = '\u00a0';
         adminAgentStatus.classList.remove('err');
       }
-      if (canManageAgents) {
+      if (canViewAgents) {
         A.agents.loadList();
       }
 

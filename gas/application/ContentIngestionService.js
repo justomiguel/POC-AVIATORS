@@ -298,11 +298,27 @@ function ContentIngestion_delete(contentId) {
     var item = ContentCatalog_get(id).item;
     var profile = String(item.common.globant_profile_name || '').trim();
     var docId = String(item.common.globant_document_id || '').trim();
+    var remoteDeleteError = null;
     if (profile && docId) {
-      var client = ContentIngestion_createRagClient_();
-      client.deleteDocument(profile, docId);
+      try {
+        var client = ContentIngestion_createRagClient_();
+        client.deleteDocument(profile, docId);
+      } catch (eRemote) {
+        // No bloquear el borrado de filas locales por residuos remotos/corruptos.
+        remoteDeleteError = eRemote;
+      }
     }
-    return ContentCatalog_deleteHard(id);
+    var deleted = ContentCatalog_deleteHard(id);
+    return {
+      ok: true,
+      deleted: !!(deleted && deleted.deleted),
+      remoteDeleteOk: remoteDeleteError == null,
+      remoteDeleteWarning: remoteDeleteError
+        ? String(remoteDeleteError && remoteDeleteError.message
+            ? remoteDeleteError.message
+            : remoteDeleteError)
+        : '',
+    };
   } finally {
     lock.releaseLock();
   }

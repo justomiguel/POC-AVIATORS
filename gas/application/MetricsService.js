@@ -58,18 +58,20 @@ function MetricsService_monthlyHeaders_() {
 function MetricsAuth_canView(email) {
   var em = String(email || '').trim();
   if (!em) return false;
-  if (AdminAuth_emailIsAdmin(em)) return true;
-  if (RoleDirectory_emailIsPresale(em)) return true;
-  var rec = RoleDirectory_lookupRole(em);
-  var key = rec && rec.key ? String(rec.key).trim().toLowerCase() : '';
-  var label = rec && rec.label ? String(rec.label).trim().toLowerCase() : '';
-  return key === 'manager' || label === 'manager';
+  return AdminAuth_emailCanViewMetrics(em);
 }
 
 function MetricsAuth_requireView() {
   var email = ('' + Session.getActiveUser().getEmail()).trim();
   if (!MetricsAuth_canView(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_metrics_only'));
+  }
+}
+
+function MetricsAuth_requireReset() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!AdminAuth_emailIsAdmin(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_metrics_reset_only'));
   }
 }
 
@@ -533,4 +535,34 @@ function MetricsService_leaderboardList(kind, filters) {
   }
 
   return MetricsService_page_(data, f.skip, f.limit);
+}
+
+/**
+ * Reset total de métricas manteniendo headers.
+ * @return {{ok:boolean,cleared:{usage:number,unanswered:number,monthly:number}}}
+ */
+function MetricsService_resetAll() {
+  MetricsAuth_requireReset();
+  var db = MetricsService_getOrCreateSpreadsheet_();
+
+  function clearSheetKeepHeaders_(sheet) {
+    var last = sheet.getLastRow();
+    if (last <= 1) return 0;
+    var rows = last - 1;
+    sheet.getRange(2, 1, rows, sheet.getLastColumn()).clearContent();
+    return rows;
+  }
+
+  var usageCleared = clearSheetKeepHeaders_(db.usageSheet);
+  var unansweredCleared = clearSheetKeepHeaders_(db.unansweredSheet);
+  var monthlyCleared = clearSheetKeepHeaders_(db.monthlySheet);
+
+  return {
+    ok: true,
+    cleared: {
+      usage: usageCleared,
+      unanswered: unansweredCleared,
+      monthly: monthlyCleared,
+    },
+  };
 }

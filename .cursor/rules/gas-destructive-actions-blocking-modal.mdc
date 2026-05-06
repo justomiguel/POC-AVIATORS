@@ -1,0 +1,33 @@
+---
+description: Delete/update actions in gas UI must block screen with modal until completion
+globs: gas/app-client-*.html
+alwaysApply: true
+---
+
+# Modal bloqueante en acciones de borrado/actualización (Aviators)
+
+- **Norma**: toda operación de escritura que pueda borrar o actualizar datos persistidos debe bloquear la pantalla con modal hasta finalizar (éxito o error).
+
+## Cuándo aplica
+
+- Borrado individual y batch (`delete`, `remove`, `trash`, `purge`).
+- Guardado/actualización (`save`, `upsert`, `sync`, `repair`, `import`).
+- Cualquier RPC `google.script.run` que modifique estado en backend.
+
+## Requisitos mínimos
+
+1. Antes de disparar la RPC: abrir modal bloqueante (`A.showBlockingModal(...)`) con mensaje i18n.
+2. Mientras corre: deshabilitar el disparador principal para evitar doble envío.
+3. Al terminar (success o failure): cerrar modal (`A.hideBlockingModal()`), siempre.
+4. En procesos batch: actualizar texto del modal por progreso (`{done}/{total}`) y cerrar al final.
+5. Mantener confirmación previa cuando la acción sea destructiva.
+
+## Excepciones
+
+- Lecturas puras (`list`, `get`, `search`) no requieren modal global.
+- Validaciones síncronas locales sin RPC no requieren modal.
+
+## Coherencia
+
+- Mensajes visibles siempre desde `gas/i18n/UiStrings.js` (es/en).
+- Nunca dejar modal colgado ante errores.

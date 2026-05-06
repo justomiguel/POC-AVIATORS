@@ -45,6 +45,22 @@
   var adminAgentProgressWrap = document.getElementById('admin-agent-progress-wrap');
   var adminAgentProgressMsg = document.getElementById('admin-agent-progress-msg');
   var adminAgentApiCatalog = { models: [], strategies: [] };
+  var adminAgentSecProfileHeading = document.getElementById('admin-agent-sec-profile-heading');
+  var adminAgentSecPromptHeading = document.getElementById('admin-agent-sec-prompt-heading');
+  var adminAgentSecApiHeading = document.getElementById('admin-agent-sec-api-heading');
+  var adminAgentSecSourcesHeading = document.getElementById('admin-agent-sec-sources-heading');
+  var adminAgentSecActionsHeading = document.getElementById('admin-agent-sec-actions-heading');
+  var agentsBatchBar = document.getElementById('agents-batch-bar');
+  var agentsBatchCount = document.getElementById('agents-batch-count');
+  var agentsBatchSyncBtn = document.getElementById('agents-batch-sync-btn');
+  var agentsBatchDeleteBtn = document.getElementById('agents-batch-delete-btn');
+
+  function adminShowBlocking(msg) {
+    if (A.showBlockingModal) A.showBlockingModal(msg || i18n('busy_connecting'));
+  }
+  function adminHideBlocking() {
+    if (A.hideBlockingModal) A.hideBlockingModal();
+  }
 
   function stripIdFromLists(id) {
     var src = S.get('adminSourcesState');
@@ -123,17 +139,19 @@
     ty.textContent = kind === 'folder' ? i18n('chip_folder') : i18n('chip_file');
     var nm = document.createElement('span');
     nm.textContent = entry.name;
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'x';
-    btn.setAttribute('aria-label', i18n('chip_remove_aria'));
-    btn.textContent = '\u00d7';
-    (function (k, eid) {
-      btn.addEventListener('click', function () { removeFromAdminState(k, eid); });
-    })(kind, entry.id);
     wrap.appendChild(ty);
     wrap.appendChild(nm);
-    wrap.appendChild(btn);
+    if (S.get('canManageAgents')) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'x';
+      btn.setAttribute('aria-label', i18n('chip_remove_aria'));
+      btn.textContent = '\u00d7';
+      (function (k, eid) {
+        btn.addEventListener('click', function () { removeFromAdminState(k, eid); });
+      })(kind, entry.id);
+      wrap.appendChild(btn);
+    }
     return wrap;
   }
 
@@ -141,6 +159,7 @@
 
   function loadAdminAgentsListBody_(agents, onDone) {
     S.set('adminAgentsCache', agents);
+    applyAgentsWriteAccess();
     renderAdminAgentNav();
     if (!agents.length) {
       if (adminAgentEmpty) {
@@ -186,6 +205,7 @@
 
   function renderAdminAgentNav() {
     if (!adminAgentNavList) return;
+    var canWrite = !!S.get('canManageAgents');
     adminAgentNavList.innerHTML = '';
     var cache = S.get('adminAgentsCache');
     var selId = S.get('adminSelectedAgentId');
@@ -193,12 +213,14 @@
       (function (ag) {
         var li = document.createElement('li');
         li.className = 'flex items-center gap-1';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'agents-batch-cb rounded shrink-0';
-        cb.dataset.agentId = ag.id;
-        cb.addEventListener('change', agentsBatchUpdateBar);
-        li.appendChild(cb);
+        if (canWrite) {
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'agents-batch-cb rounded shrink-0';
+          cb.dataset.agentId = ag.id;
+          cb.addEventListener('change', agentsBatchUpdateBar);
+          li.appendChild(cb);
+        }
         var bt = document.createElement('button');
         bt.type = 'button';
         bt.className = 'admin-agent-nav-btn flex-1';
@@ -379,6 +401,7 @@
       adminAgentStatus.textContent = '\u00a0';
       adminAgentStatus.classList.remove('err');
     }
+    setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
   }
 
   function openNewAdminAgent() {
@@ -400,6 +423,7 @@
       ? adminAgentNavList.querySelectorAll('.admin-agent-nav-btn')
       : [];
     for (var ni = 0; ni < nodes.length; ni++) nodes[ni].classList.remove('is-active');
+    setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
   }
 
   function collectAdminAgentPayload() {
@@ -458,33 +482,34 @@
   function setAdminAgentBusy(busy, msg, opts) {
     opts = opts || {};
     var skipProgressWrap = !!opts.skipProgressWrap;
-    if (adminAgentSeedBtn) adminAgentSeedBtn.disabled = !!busy;
-    if (adminAgentNewBtn) adminAgentNewBtn.disabled = !!busy;
-    if (adminAgentSaveBtn) adminAgentSaveBtn.disabled = !!busy;
-    if (adminAgentSyncBtn) adminAgentSyncBtn.disabled = !!busy;
-    if (adminAgentDeleteBtn) adminAgentDeleteBtn.disabled = !!busy;
-    if (adminAgentProfile) adminAgentProfile.disabled = !!busy;
-    if (adminAgentPrompt) adminAgentPrompt.disabled = !!busy;
-    if (adminAgentApiIdOrName) adminAgentApiIdOrName.disabled = !!busy;
-    if (adminAgentApiName) adminAgentApiName.disabled = !!busy;
-    if (adminAgentApiModel) adminAgentApiModel.disabled = !!busy;
-    if (adminAgentApiStrategy) adminAgentApiStrategy.disabled = !!busy;
-    if (adminAgentApiMaxTokens) adminAgentApiMaxTokens.disabled = !!busy;
-    if (adminAgentApiTimeout) adminAgentApiTimeout.disabled = !!busy;
-    if (adminAgentApiTemperature) adminAgentApiTemperature.disabled = !!busy;
-    if (adminAgentApiAccessScope) adminAgentApiAccessScope.disabled = !!busy;
-    if (adminAgentApiSharingScope) adminAgentApiSharingScope.disabled = !!busy;
-    if (adminAgentApiStatus) adminAgentApiStatus.disabled = !!busy;
-    if (adminAgentApiAutomaticPublish) adminAgentApiAutomaticPublish.disabled = !!busy;
-    if (adminAgentApiJobDescription) adminAgentApiJobDescription.disabled = !!busy;
-    if (adminAgentApiDescription) adminAgentApiDescription.disabled = !!busy;
-    if (adminAgentApiAvatar) adminAgentApiAvatar.disabled = !!busy;
-    if (adminAgentApiPromptContext) adminAgentApiPromptContext.disabled = !!busy;
-    if (adminAgentDocsRefresh) adminAgentDocsRefresh.disabled = !!busy;
-    if (adminAgentBrowseLocalBtn) adminAgentBrowseLocalBtn.disabled = !!busy;
-    if (adminAgentLocalFilesInput) adminAgentLocalFilesInput.disabled = !!busy;
+    var lockWrite = !!busy || !S.get('canManageAgents');
+    if (adminAgentSeedBtn) adminAgentSeedBtn.disabled = lockWrite;
+    if (adminAgentNewBtn) adminAgentNewBtn.disabled = lockWrite;
+    if (adminAgentSaveBtn) adminAgentSaveBtn.disabled = lockWrite;
+    if (adminAgentSyncBtn) adminAgentSyncBtn.disabled = lockWrite;
+    if (adminAgentDeleteBtn) adminAgentDeleteBtn.disabled = lockWrite;
+    if (adminAgentProfile) adminAgentProfile.disabled = lockWrite;
+    if (adminAgentPrompt) adminAgentPrompt.disabled = lockWrite;
+    if (adminAgentApiIdOrName) adminAgentApiIdOrName.disabled = lockWrite;
+    if (adminAgentApiName) adminAgentApiName.disabled = lockWrite;
+    if (adminAgentApiModel) adminAgentApiModel.disabled = lockWrite;
+    if (adminAgentApiStrategy) adminAgentApiStrategy.disabled = lockWrite;
+    if (adminAgentApiMaxTokens) adminAgentApiMaxTokens.disabled = lockWrite;
+    if (adminAgentApiTimeout) adminAgentApiTimeout.disabled = lockWrite;
+    if (adminAgentApiTemperature) adminAgentApiTemperature.disabled = lockWrite;
+    if (adminAgentApiAccessScope) adminAgentApiAccessScope.disabled = lockWrite;
+    if (adminAgentApiSharingScope) adminAgentApiSharingScope.disabled = lockWrite;
+    if (adminAgentApiStatus) adminAgentApiStatus.disabled = lockWrite;
+    if (adminAgentApiAutomaticPublish) adminAgentApiAutomaticPublish.disabled = lockWrite;
+    if (adminAgentApiJobDescription) adminAgentApiJobDescription.disabled = lockWrite;
+    if (adminAgentApiDescription) adminAgentApiDescription.disabled = lockWrite;
+    if (adminAgentApiAvatar) adminAgentApiAvatar.disabled = lockWrite;
+    if (adminAgentApiPromptContext) adminAgentApiPromptContext.disabled = lockWrite;
+    if (adminAgentDocsRefresh) adminAgentDocsRefresh.disabled = lockWrite;
+    if (adminAgentBrowseLocalBtn) adminAgentBrowseLocalBtn.disabled = lockWrite;
+    if (adminAgentLocalFilesInput) adminAgentLocalFilesInput.disabled = lockWrite;
     if (adminAgentDropzone) {
-      adminAgentDropzone.classList.toggle('pointer-events-none', !!busy);
+      adminAgentDropzone.classList.toggle('pointer-events-none', lockWrite);
       adminAgentDropzone.setAttribute('aria-busy', busy ? 'true' : 'false');
     }
     if (adminAgentProgressWrap) {
@@ -506,6 +531,29 @@
         adminAgentStatus.classList.remove('err');
       }
     }
+  }
+
+  function applyAgentsWriteAccess() {
+    var canWrite = !!S.get('canManageAgents');
+    function toggleSectionByHeading(headingEl, show) {
+      var sec = headingEl && headingEl.closest ? headingEl.closest('section') : null;
+      if (sec) sec.classList.toggle('hidden', !show);
+    }
+    if (adminAgentNewBtn) adminAgentNewBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentSeedBtn) adminAgentSeedBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentSaveBtn) adminAgentSaveBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentSyncBtn) adminAgentSyncBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentDeleteBtn) adminAgentDeleteBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentBrowseLocalBtn) adminAgentBrowseLocalBtn.classList.toggle('hidden', !canWrite);
+    if (adminAgentDocsRefresh) adminAgentDocsRefresh.classList.toggle('hidden', !canWrite);
+    if (agentsBatchSyncBtn) agentsBatchSyncBtn.classList.toggle('hidden', !canWrite);
+    if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.classList.toggle('hidden', !canWrite);
+    toggleSectionByHeading(adminAgentSecProfileHeading, canWrite);
+    toggleSectionByHeading(adminAgentSecPromptHeading, canWrite);
+    toggleSectionByHeading(adminAgentSecApiHeading, canWrite);
+    toggleSectionByHeading(adminAgentSecSourcesHeading, canWrite);
+    toggleSectionByHeading(adminAgentSecActionsHeading, canWrite);
+    if (!canWrite && agentsBatchBar) agentsBatchBar.classList.add('hidden');
   }
 
   var adminAgentDeleteModalEscHandler = null;
@@ -539,14 +587,17 @@
     if (!id) { closeAdminAgentDeleteModal(); return; }
     closeAdminAgentDeleteModal();
     setAdminAgentBusy(true, i18n('admin_busy_agent_delete'));
+    adminShowBlocking(i18n('admin_busy_agent_delete'));
     A.cache.invalidate('agentsList');
     google.script.run
       .withSuccessHandler(function () {
+        adminHideBlocking();
         setAdminAgentBusy(false, '\u00a0');
         S.set('adminSelectedAgentId', null);
         loadAdminAgentsList(null, true);
       })
       .withFailureHandler(function (e) {
+        adminHideBlocking();
         setAdminAgentBusy(false, '\u00a0');
         if (adminAgentStatus) {
           adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
@@ -729,6 +780,7 @@
   }
 
   function gcRenderRagDocsRows(tbody, pname, list) {
+    var canWrite = !!S.get('canManageAgents');
     for (var di = 0; di < list.length; di++) {
       var d = list[di];
       var dr = document.createElement('tr');
@@ -749,16 +801,18 @@
           '<span>' + i18n('gc_view_file') + '</span>';
         dact.appendChild(viewLink);
       }
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'btn-admin inline-flex items-center gap-1';
-      b.innerHTML =
-        '<i class="fa-solid fa-trash" aria-hidden="true"></i>' +
-        '<span>' + i18n('gc_remove') + '</span>';
-      b.setAttribute('data-gc-act', 'rag-doc-del');
-      b.setAttribute('data-pname', pname);
-      b.setAttribute('data-doc', d.id || '');
-      dact.appendChild(b);
+      if (canWrite) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-admin inline-flex items-center gap-1';
+        b.innerHTML =
+          '<i class="fa-solid fa-trash" aria-hidden="true"></i>' +
+          '<span>' + i18n('gc_remove') + '</span>';
+        b.setAttribute('data-gc-act', 'rag-doc-del');
+        b.setAttribute('data-pname', pname);
+        b.setAttribute('data-doc', d.id || '');
+        dact.appendChild(b);
+      }
       dr.appendChild(dn);
       dr.appendChild(ds);
       dr.appendChild(dact);
@@ -811,18 +865,24 @@
   // --- Event listeners ---
 
   if (adminAgentNewBtn) {
-    adminAgentNewBtn.addEventListener('click', function () { openNewAdminAgent(); });
+    adminAgentNewBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
+      openNewAdminAgent();
+    });
   }
   if (adminAgentSeedBtn) {
     adminAgentSeedBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       if (adminAgentStatus) adminAgentStatus.classList.remove('err');
       setAdminSeedLoader(true, i18n('admin_busy_agent_seed'));
       setAdminAgentBusy(true, '\u00a0', { skipProgressWrap: true });
+      adminShowBlocking(i18n('admin_busy_agent_seed'));
       A.cache.invalidate('agentsList');
       google.script.run
         .withSuccessHandler(function (res) {
           loadAdminAgentsList(function () {
             var created = res && res.created != null ? parseInt(String(res.created), 10) || 0 : 0;
+            adminHideBlocking();
             setAdminSeedLoader(false, '');
             setAdminAgentBusy(
               false,
@@ -833,6 +893,7 @@
           });
         })
         .withFailureHandler(function (e) {
+          adminHideBlocking();
           setAdminSeedLoader(false, '');
           setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
           if (adminAgentStatus) {
@@ -857,6 +918,7 @@
     });
   }
   bindAdminAgentDropzone();
+  applyAgentsWriteAccess();
   renderAdminApiCatalog('', 'Chain of Thought');
   loadAdminApiCatalog();
   if (adminAgentProfile) {
@@ -873,12 +935,15 @@
   }
   if (adminAgentSaveBtn) {
     adminAgentSaveBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       if (!adminAgentStatus) return;
       adminAgentStatus.classList.remove('err');
       setAdminAgentBusy(true, i18n('admin_busy_agent_save'));
+      adminShowBlocking(i18n('admin_busy_agent_save'));
       A.cache.invalidate('agentsList');
       google.script.run
         .withSuccessHandler(function (res) {
+          adminHideBlocking();
           setAdminAgentBusy(false, i18n('admin_agent_saved'));
           loadAdminAgentsList(null, true);
           if (res && res.agent && res.agent.id) {
@@ -887,6 +952,7 @@
           }
         })
         .withFailureHandler(function (e) {
+          adminHideBlocking();
           setAdminAgentBusy(false, '\u00a0');
           if (adminAgentStatus) {
             adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
@@ -898,6 +964,7 @@
   }
   if (adminAgentSyncBtn) {
     adminAgentSyncBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       var id = S.get('adminSelectedAgentId');
       if (!id) {
         if (adminAgentStatus) {
@@ -915,9 +982,11 @@
       }
       if (adminAgentStatus) adminAgentStatus.classList.remove('err');
       setAdminAgentBusy(true, i18n('admin_busy_agent_sync'));
+      adminShowBlocking(i18n('admin_busy_agent_sync'));
       A.cache.invalidate('agentsList');
       google.script.run
         .withSuccessHandler(function (res) {
+          adminHideBlocking();
           setAdminAgentBusy(false, '\u00a0');
           var sr = res && res.sync ? res.sync : {};
           var ag = res && res.agent ? res.agent : null;
@@ -936,6 +1005,7 @@
           refreshAdminAgentDocuments(false);
         })
         .withFailureHandler(function (e) {
+          adminHideBlocking();
           setAdminAgentBusy(false, '\u00a0');
           if (adminAgentStatus) {
             adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_sync');
@@ -947,6 +1017,7 @@
   }
   if (adminAgentDeleteBtn) {
     adminAgentDeleteBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       var id = S.get('adminSelectedAgentId');
       if (!id) { openNewAdminAgent(); return; }
       openAdminAgentDeleteModal();
@@ -978,12 +1049,18 @@
       if (act === 'rag-docs-more') {
         refreshAdminAgentDocuments(true);
       } else if (act === 'rag-doc-del') {
+        if (!S.get('canManageAgents')) return;
         var doc = btn.getAttribute('data-doc') || '';
         var pfrom = pnameBtn || pname;
         if (!window.confirm(i18nFmt('confirm_rag_doc_remove', { name: pfrom }))) return;
+        adminShowBlocking(i18n('admin_busy_agent_delete'));
         google.script.run
-          .withSuccessHandler(function () { refreshAdminAgentDocuments(false); })
+          .withSuccessHandler(function () {
+            adminHideBlocking();
+            refreshAdminAgentDocuments(false);
+          })
           .withFailureHandler(function (e) {
+            adminHideBlocking();
             if (adminAgentStatus) {
               adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
               adminAgentStatus.classList.add('err');
@@ -994,13 +1071,8 @@
     });
   }
 
-  // --- Batch ops ---
-  var agentsBatchBar = document.getElementById('agents-batch-bar');
-  var agentsBatchCount = document.getElementById('agents-batch-count');
-  var agentsBatchSyncBtn = document.getElementById('agents-batch-sync-btn');
-  var agentsBatchDeleteBtn = document.getElementById('agents-batch-delete-btn');
-
   function agentsBatchGetSelected() {
+    if (!S.get('canManageAgents')) return [];
     var cbs = adminAgentNavList ? adminAgentNavList.querySelectorAll('.agents-batch-cb:checked') : [];
     var ids = [];
     for (var i = 0; i < cbs.length; i++) ids.push(cbs[i].dataset.agentId);
@@ -1008,6 +1080,10 @@
   }
 
   function agentsBatchUpdateBar() {
+    if (!S.get('canManageAgents')) {
+      if (agentsBatchBar) agentsBatchBar.classList.add('hidden');
+      return;
+    }
     var ids = agentsBatchGetSelected();
     if (agentsBatchBar) agentsBatchBar.classList.toggle('hidden', ids.length === 0);
     if (agentsBatchCount) agentsBatchCount.textContent = i18nFmt('batch_selected', { n: ids.length });
@@ -1021,20 +1097,27 @@
 
   if (agentsBatchSyncBtn) {
     agentsBatchSyncBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       var ids = agentsBatchGetSelected();
       if (!ids.length) return;
       if (!confirm(i18nFmt('batch_sync_confirm', { n: ids.length }))) return;
       agentsBatchSyncBtn.disabled = true;
+      if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = true;
       var done = 0;
       var total = ids.length;
+      adminShowBlocking(i18nFmt('batch_syncing', { done: 1, total: total }));
       function next() {
         if (done >= total) {
           agentsBatchSyncBtn.disabled = false;
+          if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = false;
+          adminHideBlocking();
           agentsBatchClearSelection();
           if (A.toast) A.toast.success(i18nFmt('batch_sync_done', { n: total }));
           return;
         }
-        if (agentsBatchCount) agentsBatchCount.textContent = i18nFmt('batch_syncing', { done: done + 1, total: total });
+        var prog = i18nFmt('batch_syncing', { done: done + 1, total: total });
+        if (agentsBatchCount) agentsBatchCount.textContent = prog;
+        adminShowBlocking(prog);
         google.script.run
           .withSuccessHandler(function () { done++; next(); })
           .withFailureHandler(function () { done++; next(); })
@@ -1046,6 +1129,7 @@
 
   if (agentsBatchDeleteBtn) {
     agentsBatchDeleteBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
       var ids = agentsBatchGetSelected();
       if (!ids.length) return;
       if (!confirm(i18nFmt('batch_agents_delete_confirm', { n: ids.length }))) return;
@@ -1054,10 +1138,12 @@
       var done = 0;
       var ok = 0;
       var total = ids.length;
+      adminShowBlocking(i18nFmt('batch_agents_deleting', { done: 1, total: total }));
       function nextDelete() {
         if (done >= total) {
           agentsBatchDeleteBtn.disabled = false;
           if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = false;
+          adminHideBlocking();
           agentsBatchClearSelection();
           loadAdminAgentsList(function () {
             if (A.toast) A.toast.success(i18nFmt('batch_agents_delete_done', { done: ok, total: total }));
@@ -1070,6 +1156,7 @@
             total: total,
           });
         }
+        adminShowBlocking(i18nFmt('batch_agents_deleting', { done: done + 1, total: total }));
         google.script.run
           .withSuccessHandler(function () { ok++; done++; nextDelete(); })
           .withFailureHandler(function () { done++; nextDelete(); })

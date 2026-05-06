@@ -62,6 +62,76 @@ function AdminAuth_canManageAgents(email) {
 }
 
 /**
+ * @param {string} email
+ * @return {{key:string,label:string}}
+ */
+function AdminAuth_roleMeta_(email) {
+  try {
+    var rec = RoleDirectory_lookupRole(email);
+    return {
+      key: rec && rec.key ? String(rec.key).trim().toLowerCase() : '',
+      label: rec && rec.label ? String(rec.label).trim().toLowerCase() : '',
+    };
+  } catch (e) {
+    return { key: '', label: '' };
+  }
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailIsTechOrClientPartner(email) {
+  var em = ('' + (email || '')).trim();
+  if (!em) return false;
+  var meta = AdminAuth_roleMeta_(em);
+  return meta.key === 'tech' ||
+    meta.label === 'tech' ||
+    meta.key === 'client_partner' ||
+    meta.label === 'client partner';
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewAgents(email) {
+  var em = ('' + (email || '')).trim();
+  if (!em) return false;
+  return AdminAuth_canManageAgents(em) || AdminAuth_emailIsTechOrClientPartner(em);
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewCatalog(email) {
+  var em = ('' + (email || '')).trim();
+  if (!em) return false;
+  var isPresale = false;
+  try { isPresale = RoleDirectory_emailIsPresale(em); } catch (ePresale) {}
+  return AdminAuth_emailIsAdmin(em) ||
+    isPresale ||
+    AdminAuth_emailIsTechOrClientPartner(em);
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewMetrics(email) {
+  var em = ('' + (email || '')).trim();
+  if (!em) return false;
+  if (AdminAuth_emailIsAdmin(em)) return true;
+  var isPresale = false;
+  try { isPresale = RoleDirectory_emailIsPresale(em); } catch (ePresale) {}
+  if (isPresale) return true;
+  if (AdminAuth_emailIsTechOrClientPartner(em)) return true;
+  var meta = AdminAuth_roleMeta_(em);
+  return meta.key === 'manager' || meta.label === 'manager';
+}
+
+/**
  * @return {boolean}
  */
 function AdminAuth_sessionCanManageAgents() {
@@ -71,6 +141,13 @@ function AdminAuth_sessionCanManageAgents() {
 
 function AdminAuth_requireAgentsAdmin() {
   if (!AdminAuth_sessionCanManageAgents()) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  }
+}
+
+function AdminAuth_requireAgentsView() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanViewAgents(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
   }
 }

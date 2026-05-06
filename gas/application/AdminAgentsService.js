@@ -27,14 +27,15 @@ function AdminAgents_defaultRegistryEntries_() {
         '- success_cases: casos de exito, historias de implementacion, resultados logrados, referencias del studio, trabajos realizados en una industria/tecnologia.\n' +
         '- proposals: propuestas comerciales, alcance, entregables, cronograma, esfuerzo, pricing, RFP, trabajos cotizados/presupuestados.\n' +
         '- clients: nomina de clientes, cuentas activas, proyectos en mantenimiento, estado de relacion por cliente.\n' +
-        '- orchestrator: SOLO para saludos, charla breve, o preguntas que claramente NO requieren ningun corpus especializado.\n\n' +
+        '- orchestrator: saludos, charla breve, y preguntas sobre generalidades del studio Aviators / Aviation Studio (mensaje, organizacion, metodologia, FAQs internas) usando la base de conocimiento indexada del orquestador; tambien si la consulta NO requiere corpus de success_cases, proposals ni clients.\n\n' +
         'REGLA CLAVE — consulta paralela:\n' +
         'Cuando la consulta del usuario podria ser respondida por MAS DE UN agente (por ejemplo: "que hicimos con X", "experiencia en Y", "proyectos de Z") DEBES listar TODOS los agentes relevantes en el array "agents". Ejemplos:\n' +
         '- "que hicimos con el cliente Acme" → agents: ["success_cases","proposals"] (podria haber casos de exito Y propuestas).\n' +
         '- "dame los success cases de banca" → agents: ["success_cases"] (pedido explicito, uno solo).\n' +
         '- "alguna propuesta de data engineering" → agents: ["proposals"] (pedido explicito).\n' +
         '- "experiencia en cloud" → agents: ["success_cases","proposals"] (experiencia puede estar en ambos).\n' +
-        '- "hola" → agents: ["orchestrator"].\n\n' +
+        '- "hola" → agents: ["orchestrator"].\n' +
+        '- "que es Aviators / como trabaja el Aviation Studio o similares" → agents: ["orchestrator"].\n\n' +
         'Debes devolver SIEMPRE un JSON estricto sin texto adicional:\n' +
         '{"agents":["success_cases","proposals"],"confidence":"high|medium|low","reason":"frase corta"}\n' +
         'El array "agents" puede tener 1 o mas elementos. No inventes agentes fuera de la lista.',
@@ -263,7 +264,7 @@ function AdminAgents_getOrCreateApiCatalogSheet_(props) {
  * @return {{ ok: boolean, models: Array<string>, strategies: Array<string>, source: string, spreadsheetId: string, sheetName: string }}
  */
 function AdminAgents_apiCatalog() {
-  AdminAuth_requireAgentsAdmin();
+  AdminAuth_requireAgentsView();
   var props = PropertiesService.getScriptProperties();
   var defaultModels = [
     'vertex_ai/gemini-2.5-pro',
@@ -725,7 +726,7 @@ function AdminAgents_pickDefaultAgents_(reg) {
  * @return {{ ok: boolean, agents: Array<Object> }}
  */
 function AdminAgents_list() {
-  AdminAuth_requireAgentsAdmin();
+  AdminAuth_requireAgentsView();
   var props = PropertiesService.getScriptProperties();
   var reg = AdminAgents_loadRegistry_(props);
   var out = [];

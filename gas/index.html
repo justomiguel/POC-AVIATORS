@@ -748,6 +748,72 @@
             </div>
 
             <div
+              id="page-agents-readonly"
+              class="app-page app-page-agents admin-app-shell hidden space-y-6"
+              data-app-page="agents"
+            >
+              <div class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6">
+                <h2 class="mb-1 text-lg font-semibold text-slate-900" data-i18n="page_agents_title"></h2>
+                <p class="mb-4 text-sm leading-relaxed text-slate-600" data-i18n="page_agents_readonly_lead"></p>
+                <div class="admin-app-layout">
+                  <aside class="admin-app-sidebar">
+                    <h3 class="sec admin-app-sidebar-title text-base" data-i18n="admin_sec_title"></h3>
+                    <ul id="agents-ro-nav-list" class="admin-agent-nav-list mt-2 space-y-1" role="list"></ul>
+                  </aside>
+                  <main class="admin-app-main">
+                    <div
+                      id="agents-ro-empty"
+                      class="admin-agent-empty rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-sm text-slate-600"
+                      data-i18n="agents_ro_empty_select"
+                    ></div>
+                    <section
+                      id="agents-ro-detail"
+                      class="hidden space-y-5 rounded-xl border border-slate-200 bg-white p-5"
+                      aria-labelledby="agents-ro-detail-heading"
+                    >
+                      <h3
+                        id="agents-ro-detail-heading"
+                        class="text-base font-semibold text-slate-900"
+                        data-i18n="agents_ro_detail_heading"
+                      ></h3>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="lbl_admin_agent_profile"></p>
+                          <p id="agents-ro-profile" class="mt-1 text-sm font-medium text-slate-800"></p>
+                        </div>
+                        <div>
+                          <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="admin_agent_last_sync_label"></p>
+                          <p id="agents-ro-last-sync" class="mt-1 text-sm text-slate-700"></p>
+                        </div>
+                      </div>
+                      <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="lbl_admin_agent_prompt"></p>
+                        <p
+                          id="agents-ro-prompt"
+                          class="mt-1 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                        ></p>
+                      </div>
+                      <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="agents_ro_sources_label"></p>
+                        <div id="agents-ro-sources" class="admin-chips mt-1"></div>
+                      </div>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="lbl_admin_agent_api_model"></p>
+                          <p id="agents-ro-model" class="mt-1 text-sm text-slate-700"></p>
+                        </div>
+                        <div>
+                          <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="lbl_admin_agent_api_strategy"></p>
+                          <p id="agents-ro-strategy" class="mt-1 text-sm text-slate-700"></p>
+                        </div>
+                      </div>
+                    </section>
+                  </main>
+                </div>
+              </div>
+            </div>
+
+            <div
               id="page-contents"
               class="app-page app-page-contents admin-app-shell hidden space-y-6"
               data-app-page="contents"
@@ -1223,6 +1289,10 @@
                     <i class="fa-solid fa-rotate" aria-hidden="true"></i>
                     <span data-i18n="metrics_refresh_btn"></span>
                   </button>
+                  <button type="button" id="metrics-reset-btn" class="btn-admin danger hidden inline-flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                    <span data-i18n="metrics_reset_btn"></span>
+                  </button>
                 </div>
                 <div id="metrics-status" class="mt-3 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
                   <i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i>
@@ -1541,6 +1611,16 @@
                   </details>
                   <details class="group rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
                     <summary class="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <i class="fa-solid fa-user-shield w-4 shrink-0 text-center text-sky-500" aria-hidden="true"></i>
+                      <span class="flex-1" data-i18n="faq_q_roles"></span>
+                      <i class="fa-solid fa-chevron-down w-3 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 pl-11 dark:border-slate-600">
+                      <div class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n-html="faq_a_roles_html"></div>
+                    </div>
+                  </details>
+                  <details class="group rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
                       <i class="fa-solid fa-gear w-4 shrink-0 text-center text-slate-400" aria-hidden="true"></i>
                       <span class="flex-1" data-i18n="faq_q_misc"></span>
                       <i class="fa-solid fa-chevron-down w-3 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true"></i>
@@ -1606,8 +1686,21 @@
       aria-modal="true"
       aria-labelledby="blocking-modal-msg"
     >
-      <div class="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
-        <i class="fa-solid fa-spinner fa-spin text-3xl text-sky-600" aria-hidden="true"></i>
+      <div class="blocking-modal-card flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
+        <div class="blocking-flight" aria-hidden="true">
+          <span class="blocking-flight-contrail"></span>
+          <svg
+            class="blocking-flight-plane"
+            viewBox="0 0 1280 640"
+            role="img"
+            aria-label="Plane in flight"
+          >
+            <path
+              d="M844 40c0-5 52-150 115-323 115-314 115-315 97-340-10-14-238-334-506-711l-487-687-47-6c-26-3-249-26-497-51-247-25-558-57-690-70-270-28-722-74-1080-110-609-62-923-61-1405 1-219 28-340 52-417 83-67 26-170 78-176 88-3 5 5 67 19 138 13 72 24 138 24 148 0 15-13 17-124 17h-123l-37-55c-20-30-42-55-49-55-17 0-203 168-477 431-191 183-471 466-1025 1037l-101 103-207-52c-114-28-207-54-207-58 0-3 264-523 585-1156 641-1261 600-1166 513-1180-21-4-42-13-45-21-3-7 5-46 17-85 12-39 18-75 13-79-17-14-111-43-533-160-615-171-1254-355-1398-401-127-42-192-82-192-119 0-20 60-77 96-90 12-5 94-16 181-25l158-17 935 252c514 138 952 256 972 262 34 10 46 6 185-55 293-129 825-333 1133-434 102-33 165-47 260-58 69-7 262-30 430-50 305-37 305-37 590-31 244 5 283 4 270-8-818-302-1799-655-1637-589-1785-640-1805-627-11 7-100 82-196 166l-175 152-80-6c-44-3-137-11-207-17l-127-12 196-201c107-110 231-248 274-306 84-114 103-129 194-156 49-15 92-19 235-18h175l615 203c338 111 1133 373 1765 582 633 208 1312 432 1510 499 198 66 367 120 376 120 8 0 26-12 40-26 13-14 36-35 51-45l27-19 13 27c18 37 63 61 131 69 70 8 72 0 18-64-50-61-73-107-69-140 3-28 18-32 92-21 27 4 32-1 59-53 38-76 96-134 162-164 72-33 248-48 460-40 88 4 255 11 370 15 116 4 222 13 237 19 34 14 208 134 230 159 45 49 118 254 118 330 0 42-48 230-70 274-25 48-86 101-143 125-46 19-55 28-39 38 9 5 560 71 842 101 74 8 308 28 520 45 1073 85 2210 206 2553 271 285 53 578 200 840 419 112 94 155 148 182 226 17 51 17 55 1 99-32 83-156 184-401 325-60 35-130 81-155 103-71 62-244 140-425 192-269 78-423 114-575 136-139 21-158 21-425 10-444-19-1299-84-1931-147-39-4-64-3-68 4-4 6 86 296 199 644 113 348 204 642 202 653-2 11-99 161-216 333l-213 312h-169c-93 0-169-3-169-7z"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
         <p id="blocking-modal-msg" class="text-sm font-medium text-slate-700"></p>
       </div>
     </div>

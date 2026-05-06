@@ -255,10 +255,30 @@
   var clientsExportBtn = document.getElementById('clients-export-btn');
   var clientsImportBtn = document.getElementById('clients-import-btn');
 
-  if (contentsExportBtn) contentsExportBtn.addEventListener('click', exportContentsCsv);
-  if (contentsImportBtn) contentsImportBtn.addEventListener('click', function () { importCsvFlow('contents'); });
-  if (clientsExportBtn) clientsExportBtn.addEventListener('click', exportClientsCsv);
-  if (clientsImportBtn) clientsImportBtn.addEventListener('click', function () { importCsvFlow('clients'); });
+  if (contentsExportBtn) {
+    contentsExportBtn.addEventListener('click', function () {
+      if (!S.get('canWriteContents')) return;
+      exportContentsCsv();
+    });
+  }
+  if (contentsImportBtn) {
+    contentsImportBtn.addEventListener('click', function () {
+      if (!S.get('canWriteContents')) return;
+      importCsvFlow('contents');
+    });
+  }
+  if (clientsExportBtn) {
+    clientsExportBtn.addEventListener('click', function () {
+      if (!S.get('canWriteContents')) return;
+      exportClientsCsv();
+    });
+  }
+  if (clientsImportBtn) {
+    clientsImportBtn.addEventListener('click', function () {
+      if (!S.get('canWriteContents')) return;
+      importCsvFlow('clients');
+    });
+  }
 
   A.exportImport = {
     exportContentsCsv: exportContentsCsv,
