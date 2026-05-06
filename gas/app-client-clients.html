@@ -88,11 +88,12 @@
   function clientsRenderTable() {
     if (!clientsTableBody) return;
     clientsTableBody.innerHTML = '';
+    var canWrite = !!S.get('canWriteContents');
     var cache = S.get('clientsItemsCache');
     if (!cache || cache.length === 0) {
       var tr = document.createElement('tr');
       var td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = canWrite ? 6 : 4;
       td.className = 'px-4 py-6 text-center text-sm text-slate-400';
       td.textContent = i18n('clients_no_items');
       tr.appendChild(td);
@@ -103,15 +104,17 @@
       (function (item) {
         var tr = document.createElement('tr');
         tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
-        var cbTd = document.createElement('td');
-        cbTd.className = 'w-8 px-2 py-3';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'clients-row-cb rounded';
-        cb.dataset.id = item.client_name || '';
-        cb.addEventListener('change', clientsBatchUpdateBar);
-        cbTd.appendChild(cb);
-        tr.appendChild(cbTd);
+        if (canWrite) {
+          var cbTd = document.createElement('td');
+          cbTd.className = 'w-8 px-2 py-3';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'clients-row-cb rounded';
+          cb.dataset.id = item.client_name || '';
+          cb.addEventListener('change', clientsBatchUpdateBar);
+          cbTd.appendChild(cb);
+          tr.appendChild(cbTd);
+        }
         var tdName = document.createElement('td');
         tdName.className = 'px-4 py-3 font-medium text-slate-900';
         tdName.textContent = item.client_name || '';
@@ -130,7 +133,7 @@
         tr.appendChild(tdContact);
         var tdActions = document.createElement('td');
         tdActions.className = 'px-4 py-3 text-right';
-        if (S.get('canWriteContents')) {
+        if (canWrite) {
           var editBtn = document.createElement('button');
           editBtn.type = 'button';
           editBtn.className = 'btn-admin text-xs inline-flex items-center gap-1';
@@ -138,7 +141,7 @@
           editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
           tdActions.appendChild(editBtn);
         }
-        tr.appendChild(tdActions);
+        if (canWrite) tr.appendChild(tdActions);
         clientsTableBody.appendChild(tr);
       })(cache[i]);
     }
@@ -273,6 +276,11 @@
     if (importBtn) importBtn.classList.toggle('hidden', !canWrite);
     var batchDel = document.getElementById('clients-batch-delete-btn');
     if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
+    var selectCol = document.getElementById('clients-th-select');
+    if (selectCol) selectCol.classList.toggle('hidden', !canWrite);
+    var actionsCol = document.getElementById('clients-th-actions');
+    if (actionsCol) actionsCol.classList.toggle('hidden', !canWrite);
+    if (clientsSelectAll) clientsSelectAll.checked = false;
     var badge = document.getElementById('clients-readonly-badge');
     if (badge) badge.classList.toggle('hidden', canWrite);
   }

@@ -367,6 +367,8 @@ var UI_STRINGS = {
     page_agents_title: 'Administración de agentes',
     page_agents_lead:
       'Cada agente define el nombre del perfil en Globant, las instrucciones del modelo y las fuentes para indexar. Guardá los cambios y sincronizá cuando estés listo.',
+    page_agents_readonly_lead:
+      'Vista de solo lectura de la configuración de agentes. Podés consultar definición, prompt y fuentes, sin editar ni sincronizar.',
     admin_agent_sec_profile_heading: 'Perfil del agente',
     admin_agent_sec_profile_lead:
       'Nombre del perfil RAG en Globant. Tiene que ser único entre tus agentes.',
@@ -444,6 +446,11 @@ var UI_STRINGS = {
     admin_agent_globant_docs: 'Documentos indexados',
     admin_agent_empty_select: 'Elegí un agente en la lista o creá uno nuevo.',
     admin_agent_list_empty: 'Todavía no hay agentes.',
+    agents_ro_empty_select:
+      'Elegí un agente en la lista para ver su configuración.',
+    agents_ro_detail_heading: 'Detalle del agente',
+    admin_agent_last_sync_label: 'Última sincronización',
+    agents_ro_sources_label: 'Fuentes del índice',
     admin_busy_agent_save: 'Guardando agente…',
     admin_busy_agent_seed: 'Generando agentes por defecto…',
     admin_agent_seed_loader_hint:
@@ -1163,6 +1170,8 @@ var UI_STRINGS = {
     page_agents_title: 'Agent administration',
     page_agents_lead:
       'Each agent defines the Globant profile name, model instructions, and sources to index. Save changes and sync when you are ready.',
+    page_agents_readonly_lead:
+      'Read-only view of agent configuration. You can inspect definition, prompt, and sources without editing or syncing.',
     admin_agent_sec_profile_heading: 'Agent profile',
     admin_agent_sec_profile_lead:
       'Globant RAG profile name. It must be unique among your agents.',
@@ -1239,6 +1248,11 @@ var UI_STRINGS = {
     admin_agent_globant_docs: 'Indexed documents',
     admin_agent_empty_select: 'Pick an agent from the list or create a new one.',
     admin_agent_list_empty: 'No agents yet.',
+    agents_ro_empty_select:
+      'Select an agent from the list to inspect its configuration.',
+    agents_ro_detail_heading: 'Agent details',
+    admin_agent_last_sync_label: 'Last sync',
+    agents_ro_sources_label: 'Index sources',
     admin_busy_agent_save: 'Saving agent…',
     admin_busy_agent_seed: 'Generating default agents…',
     admin_agent_seed_loader_hint:

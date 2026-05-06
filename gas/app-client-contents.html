@@ -424,6 +424,7 @@
   function contentsRenderTable() {
     if (!contentsTableBody) return;
     contentsTableBody.innerHTML = '';
+    var canWrite = !!S.get('canWriteContents');
     var typeFilter = (contentsFilterType && contentsFilterType.value) || '';
     var q = ((contentsFilterQ && contentsFilterQ.value) || '').trim().toLowerCase();
     var cache = S.get('contentsItemsCache');
@@ -443,7 +444,7 @@
     if (!rows.length) {
       var tr0 = document.createElement('tr');
       var td0 = document.createElement('td');
-      td0.colSpan = 6;
+      td0.colSpan = canWrite ? 6 : 4;
       td0.className = 'px-3 py-3 text-sm text-slate-500';
       td0.textContent = i18n('contents_list_empty');
       tr0.appendChild(td0);
@@ -454,15 +455,17 @@
           var c = item.common || {};
           var tr = document.createElement('tr');
           tr.className = 'border-t border-slate-100';
-          var cbTd = document.createElement('td');
-          cbTd.className = 'w-8 px-2 py-2';
-          var cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.className = 'contents-row-cb rounded';
-          cb.dataset.id = c.content_id || '';
-          cb.addEventListener('change', contentsBatchUpdateBar);
-          cbTd.appendChild(cb);
-          tr.appendChild(cbTd);
+          if (canWrite) {
+            var cbTd = document.createElement('td');
+            cbTd.className = 'w-8 px-2 py-2';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'contents-row-cb rounded';
+            cb.dataset.id = c.content_id || '';
+            cb.addEventListener('change', contentsBatchUpdateBar);
+            cbTd.appendChild(cb);
+            tr.appendChild(cbTd);
+          }
           function td(txt) {
             var t = document.createElement('td');
             t.className = 'px-3 py-2 align-top text-slate-700';
@@ -489,7 +492,7 @@
           var actTd = document.createElement('td');
           actTd.className = 'px-3 py-2';
           var isRowBusy = rowBusyId && rowBusyId === String(c.content_id || '').trim();
-          if (isRowBusy) {
+          if (isRowBusy && canWrite) {
             var spin = document.createElement('span');
             spin.className = 'inline-flex items-center gap-2 text-xs text-sky-700';
             spin.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>' + i18n('contents_row_busy') + '</span>';
@@ -498,7 +501,6 @@
             contentsTableBody.appendChild(tr);
             return;
           }
-          var canWrite = !!S.get('canWriteContents');
           if (canWrite) {
             var edit = document.createElement('button');
             edit.type = 'button';
@@ -525,7 +527,7 @@
             repairWrap.appendChild(repair);
             actTd.appendChild(repairWrap);
           }
-          if (c.file_name) {
+          if (canWrite && c.file_name) {
             var view = document.createElement('button');
             view.type = 'button';
             view.className = 'btn-admin inline-flex items-center gap-1 text-xs ml-2';
@@ -584,7 +586,7 @@
             del.addEventListener('click', function () { contentsDeleteFromRow(c.content_id || ''); });
             actTd.appendChild(del);
           }
-          tr.appendChild(actTd);
+          if (canWrite) tr.appendChild(actTd);
           contentsTableBody.appendChild(tr);
         })(rows[i]);
       }
@@ -993,6 +995,9 @@
     if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
     var batchSelCol = document.getElementById('contents-th-select');
     if (batchSelCol) batchSelCol.classList.toggle('hidden', !canWrite);
+    var actionsCol = document.getElementById('contents-th-actions');
+    if (actionsCol) actionsCol.classList.toggle('hidden', !canWrite);
+    if (contentsSelectAll) contentsSelectAll.checked = false;
     var badge = document.getElementById('contents-readonly-badge');
     if (badge) badge.classList.toggle('hidden', canWrite);
   }

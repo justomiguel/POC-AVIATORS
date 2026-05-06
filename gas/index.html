@@ -876,9 +876,15 @@
                       <input type="text" id="contents-filter-q" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_filter_query_ph" />
                     </label>
                   </div>
-                  <div id="contents-list-loader" class="hidden flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
+                  <div id="contents-list-loader" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
+                    <div class="loader-flight-inline" aria-hidden="true">
+                      <span class="loader-flight-inline-contrail"></span>
+                      <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2">
                     <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
                     <span id="contents-list-loader-msg"></span>
+                    </div>
                   </div>
                   <div class="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600">
                     <span class="font-medium" data-i18n="contents_legend_title"></span>
@@ -906,7 +912,7 @@
                     <table class="min-w-full text-sm">
                       <thead class="bg-slate-50 text-left text-slate-600">
                         <tr>
-                          <th class="w-8 px-2 py-2"><input type="checkbox" id="contents-select-all" class="rounded" /></th>
+                          <th id="contents-th-select" class="w-8 px-2 py-2"><input type="checkbox" id="contents-select-all" class="rounded" /></th>
                           <th class="px-3 py-2 cursor-pointer select-none hover:bg-slate-100 transition-colors" data-sort-key="title" role="button" tabindex="0">
                             <span class="inline-flex items-center gap-1">
                               <span data-i18n="contents_col_title"></span>
@@ -931,7 +937,7 @@
                               <i class="fa-solid fa-sort text-slate-400 contents-sort-icon" aria-hidden="true"></i>
                             </span>
                           </th>
-                          <th class="px-3 py-2" data-i18n="contents_col_actions"></th>
+                          <th id="contents-th-actions" class="px-3 py-2" data-i18n="contents_col_actions"></th>
                         </tr>
                       </thead>
                       <tbody id="contents-table-body"></tbody>
@@ -968,9 +974,15 @@
                     </li>
                   </ol>
 
-                  <div id="contents-progress-wrap" class="hidden flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
-                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                    <span id="contents-progress-msg"></span>
+                  <div id="contents-progress-wrap" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
+                    <div class="loader-flight-inline" aria-hidden="true">
+                      <span class="loader-flight-inline-contrail"></span>
+                      <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2">
+                      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                      <span id="contents-progress-msg"></span>
+                    </div>
                   </div>
 
                   <input type="hidden" id="contents-content-id" />
@@ -1001,6 +1013,10 @@
                       </div>
                     </div>
                     <div id="contents-uploading" class="hidden rounded-xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-6 text-center">
+                      <div class="loader-flight-inline mb-3" aria-hidden="true">
+                        <span class="loader-flight-inline-contrail"></span>
+                        <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                      </div>
                       <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-sky-100 mb-3">
                         <i id="contents-upload-icon" class="fa-solid fa-file-lines text-2xl text-sky-600 animate-pulse" aria-hidden="true"></i>
                       </div>
@@ -1185,12 +1201,12 @@
                   <table class="w-full text-left text-sm">
                     <thead>
                       <tr class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                        <th class="w-8 px-2 py-3"><input type="checkbox" id="clients-select-all" class="rounded" /></th>
+                        <th id="clients-th-select" class="w-8 px-2 py-3"><input type="checkbox" id="clients-select-all" class="rounded" /></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_name"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_industry"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_country"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_contact"></th>
-                        <th class="px-4 py-3 font-medium text-right" data-i18n="clients_th_actions"></th>
+                        <th id="clients-th-actions" class="px-4 py-3 font-medium text-right" data-i18n="clients_th_actions"></th>
                       </tr>
                     </thead>
                     <tbody id="clients-table-body"></tbody>

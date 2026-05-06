@@ -45,6 +45,15 @@
   var adminAgentProgressWrap = document.getElementById('admin-agent-progress-wrap');
   var adminAgentProgressMsg = document.getElementById('admin-agent-progress-msg');
   var adminAgentApiCatalog = { models: [], strategies: [] };
+  var agentsRoNavList = document.getElementById('agents-ro-nav-list');
+  var agentsRoEmpty = document.getElementById('agents-ro-empty');
+  var agentsRoDetail = document.getElementById('agents-ro-detail');
+  var agentsRoProfile = document.getElementById('agents-ro-profile');
+  var agentsRoLastSync = document.getElementById('agents-ro-last-sync');
+  var agentsRoPrompt = document.getElementById('agents-ro-prompt');
+  var agentsRoSources = document.getElementById('agents-ro-sources');
+  var agentsRoModel = document.getElementById('agents-ro-model');
+  var agentsRoStrategy = document.getElementById('agents-ro-strategy');
   var adminAgentSecProfileHeading = document.getElementById('admin-agent-sec-profile-heading');
   var adminAgentSecPromptHeading = document.getElementById('admin-agent-sec-prompt-heading');
   var adminAgentSecApiHeading = document.getElementById('admin-agent-sec-api-heading');
@@ -60,6 +69,14 @@
   }
   function adminHideBlocking() {
     if (A.hideBlockingModal) A.hideBlockingModal();
+  }
+
+  function agentsIsReadOnlyMode() {
+    return !!(S.get('canViewAgents') && !S.get('canManageAgents'));
+  }
+
+  function agentsCurrentNavList() {
+    return agentsIsReadOnlyMode() ? agentsRoNavList : adminAgentNavList;
   }
 
   function stripIdFromLists(id) {
@@ -167,17 +184,23 @@
         adminAgentEmpty.textContent = i18n('admin_agent_list_empty');
       }
       if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
+      if (agentsRoEmpty) {
+        agentsRoEmpty.classList.remove('hidden');
+        agentsRoEmpty.textContent = i18n('admin_agent_list_empty');
+      }
+      if (agentsRoDetail) agentsRoDetail.classList.add('hidden');
       S.set('adminSelectedAgentId', null);
       if (typeof onDone === 'function') onDone();
       return;
     }
     if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
+    if (agentsRoEmpty) agentsRoEmpty.classList.add('hidden');
     selectAdminAgent(S.get('adminSelectedAgentId') || agents[0].id);
     if (typeof onDone === 'function') onDone();
   }
 
   function loadAdminAgentsList(onDone, skipCache) {
-    if (!adminAgentNavList) return;
+    if (!agentsCurrentNavList()) return;
 
     if (!skipCache) {
       var cached = A.cache.get('agentsList');
@@ -204,9 +227,10 @@
   }
 
   function renderAdminAgentNav() {
-    if (!adminAgentNavList) return;
+    var navList = agentsCurrentNavList();
+    if (!navList) return;
     var canWrite = !!S.get('canManageAgents');
-    adminAgentNavList.innerHTML = '';
+    navList.innerHTML = '';
     var cache = S.get('adminAgentsCache');
     var selId = S.get('adminSelectedAgentId');
     for (var i = 0; i < cache.length; i++) {
@@ -231,7 +255,7 @@
         bt.appendChild(span);
         bt.addEventListener('click', function () { selectAdminAgent(ag.id); });
         li.appendChild(bt);
-        adminAgentNavList.appendChild(li);
+        navList.appendChild(li);
       })(cache[i]);
     }
     agentsBatchUpdateBar();
@@ -377,12 +401,61 @@
     if (adminAgentMeta) adminAgentMeta.textContent = meta;
   }
 
+  function renderReadonlySources_(ag) {
+    if (!agentsRoSources) return;
+    agentsRoSources.innerHTML = '';
+    var folders = (ag && ag.sources && ag.sources.folders) || [];
+    var files = (ag && ag.sources && ag.sources.files) || [];
+    var i;
+    function appendChip(kind, label) {
+      var chip = document.createElement('span');
+      chip.className = 'chip';
+      var ty = document.createElement('span');
+      ty.className = 'chip-type';
+      ty.textContent = kind;
+      var nm = document.createElement('span');
+      nm.textContent = label;
+      chip.appendChild(ty);
+      chip.appendChild(nm);
+      agentsRoSources.appendChild(chip);
+    }
+    for (i = 0; i < folders.length; i++) {
+      appendChip(i18n('chip_folder'), folders[i].name || folders[i].id || i18n('label_em_dash'));
+    }
+    for (i = 0; i < files.length; i++) {
+      appendChip(i18n('chip_file'), files[i].name || files[i].id || i18n('label_em_dash'));
+    }
+    if (!folders.length && !files.length) {
+      var empty = document.createElement('p');
+      empty.className = 'text-sm text-slate-500';
+      empty.textContent = i18n('admin_selection_empty');
+      agentsRoSources.appendChild(empty);
+    }
+  }
+
+  function fillAgentReadonlyDetail_(ag) {
+    if (!ag) return;
+    var cfg = adminAgentApiDefaults(ag.profileName || '', ag.systemPrompt || '');
+    if (ag.globantAgent && typeof ag.globantAgent === 'object') {
+      cfg = Object.assign(cfg, ag.globantAgent);
+    }
+    if (agentsRoProfile) agentsRoProfile.textContent = ag.profileName || i18n('label_em_dash');
+    if (agentsRoLastSync) agentsRoLastSync.textContent = ag.lastSync || i18n('label_em_dash');
+    if (agentsRoPrompt) agentsRoPrompt.textContent = ag.systemPrompt || i18n('label_em_dash');
+    if (agentsRoModel) agentsRoModel.textContent = cfg.modelName || i18n('label_em_dash');
+    if (agentsRoStrategy) agentsRoStrategy.textContent = cfg.strategyName || i18n('label_em_dash');
+    renderReadonlySources_(ag);
+  }
+
   function selectAdminAgent(id) {
     S.set('adminSelectedAgentId', id || null);
     var cache = S.get('adminAgentsCache');
+    var readOnlyMode = agentsIsReadOnlyMode();
     if (!cache.length) {
       if (adminAgentEmpty) adminAgentEmpty.classList.remove('hidden');
       if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
+      if (agentsRoEmpty) agentsRoEmpty.classList.remove('hidden');
+      if (agentsRoDetail) agentsRoDetail.classList.add('hidden');
       return;
     }
     var ag = null;
@@ -392,8 +465,14 @@
     if (!ag) ag = cache[0];
     S.set('adminSelectedAgentId', ag.id);
     if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
-    if (adminAgentEditor) adminAgentEditor.classList.remove('hidden');
-    fillAdminAgentForm(ag);
+    if (adminAgentEditor) adminAgentEditor.classList.toggle('hidden', readOnlyMode);
+    if (agentsRoEmpty) agentsRoEmpty.classList.toggle('hidden', readOnlyMode);
+    if (agentsRoDetail) agentsRoDetail.classList.toggle('hidden', !readOnlyMode);
+    if (readOnlyMode) {
+      fillAgentReadonlyDetail_(ag);
+    } else {
+      fillAdminAgentForm(ag);
+    }
     renderAdminAgentNav();
     if (adminAgentDocsBody) adminAgentDocsBody.innerHTML = '';
     S.set('adminAgentDocsSkip', 0);

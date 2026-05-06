@@ -248,6 +248,66 @@
         opacity: 0.6;
         pointer-events: none;
       }
+      .loader-flight-inline {
+        position: relative;
+        width: 100%;
+        height: 1.05rem;
+        overflow: hidden;
+      }
+      .loader-flight-inline-contrail {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 100%;
+        height: 0.18rem;
+        border-radius: 999px;
+        transform: translateY(-50%);
+        background: linear-gradient(
+          90deg,
+          rgb(14 165 233 / 0.2),
+          rgb(14 165 233 / 0.7),
+          rgb(14 165 233 / 0.2)
+        );
+        animation: loader-inline-contrail 2.1s ease-in-out infinite;
+      }
+      .loader-flight-inline-plane {
+        position: absolute;
+        left: -1.4rem;
+        top: 50%;
+        transform: translateY(-50%) rotate(12deg);
+        color: rgb(2 132 199);
+        font-size: 0.82rem;
+        filter: drop-shadow(0 2px 6px rgb(14 165 233 / 0.25));
+        animation: loader-inline-plane 2.45s cubic-bezier(0.42, 0, 0.24, 1)
+          infinite;
+      }
+      @keyframes loader-inline-plane {
+        0% {
+          left: -1.4rem;
+          transform: translateY(-50%) rotate(14deg);
+        }
+        50% {
+          transform: translateY(calc(-50% - 0.08rem)) rotate(10deg);
+        }
+        100% {
+          left: calc(100% + 1.4rem);
+          transform: translateY(-50%) rotate(14deg);
+        }
+      }
+      @keyframes loader-inline-contrail {
+        0% {
+          opacity: 0.45;
+          transform: translateY(-50%) scaleX(0.96);
+        }
+        50% {
+          opacity: 1;
+          transform: translateY(-50%) scaleX(1);
+        }
+        100% {
+          opacity: 0.45;
+          transform: translateY(-50%) scaleX(0.96);
+        }
+      }
       .blocking-modal-card {
         min-width: 19rem;
       }
@@ -368,6 +428,10 @@
       .dark .blocking-flight-plane {
         color: rgb(56 189 248);
         filter: drop-shadow(0 5px 10px rgb(56 189 248 / 0.35));
+      }
+      .dark .loader-flight-inline-plane {
+        color: rgb(56 189 248);
+        filter: drop-shadow(0 2px 8px rgb(56 189 248 / 0.35));
       }
       .dark #blocking-modal-msg {
         color: rgb(226 232 240);
