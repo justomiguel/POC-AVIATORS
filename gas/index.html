@@ -199,6 +199,15 @@
                 <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600"></i>
                 <span data-i18n="nav_clients"></span>
               </button>
+              <button
+                type="button"
+                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                data-app-page="faq"
+                id="nav-page-faq"
+              >
+                <i class="fa-solid fa-circle-question w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                <span data-i18n="nav_faq"></span>
+              </button>
             </nav>
             <div class="relative mt-3 px-1">
               <div class="relative">
@@ -304,7 +313,7 @@
             <div id="page-home" class="app-page app-page-home space-y-6" data-app-page="home">
             <div id="member-standard-home">
         <!-- Dashboard metrics cards -->
-        <div id="dashboard-metrics" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 hidden">
+        <div id="dashboard-metrics" class="mb-6 hidden md:grid md:grid-cols-2 md:gap-3 xl:grid-cols-3">
           <div id="dash-card-agents" class="dash-card hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex items-center gap-3">
               <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400">
@@ -313,6 +322,11 @@
               <div class="min-w-0 flex-1">
                 <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="dash_agents_title"></p>
                 <p id="dash-agents-count" class="text-lg font-bold text-slate-900 dark:text-slate-100">—</p>
+                <p
+                  id="dash-agents-detail"
+                  class="mt-1 hidden max-w-full text-xs leading-snug text-slate-600 line-clamp-3 whitespace-pre-line break-words dark:text-slate-400"
+                  title=""
+                ></p>
               </div>
             </div>
           </div>
@@ -324,6 +338,11 @@
               <div class="min-w-0 flex-1">
                 <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="dash_contents_title"></p>
                 <p id="dash-contents-count" class="text-lg font-bold text-slate-900 dark:text-slate-100">—</p>
+                <p
+                  id="dash-contents-detail"
+                  class="mt-1 hidden max-w-full text-xs leading-snug text-slate-600 line-clamp-3 whitespace-pre-line break-words dark:text-slate-400"
+                  title=""
+                ></p>
               </div>
             </div>
           </div>
@@ -335,17 +354,11 @@
               <div class="min-w-0 flex-1">
                 <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="dash_clients_title"></p>
                 <p id="dash-clients-count" class="text-lg font-bold text-slate-900 dark:text-slate-100">—</p>
-              </div>
-            </div>
-          </div>
-          <div class="dash-card rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div class="flex items-center gap-3">
-              <div id="dash-llm-icon-wrap" class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400">
-                <i class="fa-solid fa-microchip" aria-hidden="true"></i>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="dash_llm_title"></p>
-                <p id="dash-llm-status" class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">—</p>
+                <p
+                  id="dash-clients-detail"
+                  class="mt-1 hidden max-w-full text-xs leading-snug text-slate-600 line-clamp-3 whitespace-pre-line break-words dark:text-slate-400"
+                  title=""
+                ></p>
               </div>
             </div>
           </div>
@@ -416,8 +429,8 @@
         <div class="chat-input-row">
           <textarea
             id="question"
-            class="q-area w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[15px] text-slate-800 shadow-inner outline-none ring-sky-500/20 transition placeholder:text-slate-400 focus:border-aviators-primary focus:ring-2"
-            rows="3"
+            class="q-area w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[15px] text-slate-800 shadow-inner outline-none ring-sky-500/20 transition placeholder:text-slate-400 focus:border-aviators-primary focus:ring-2"
+            rows="1"
             data-i18n-placeholder="ph_question"
             data-i18n-aria-label="lbl_chat_input_sronly"
             placeholder=""
@@ -1156,6 +1169,216 @@
             </div>
 
             </div>
+
+            <div
+              id="page-faq"
+              class="app-page faq-page hidden mx-auto max-w-6xl space-y-6 pb-8"
+              data-app-page="faq"
+            >
+              <section
+                class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-800/95"
+                aria-labelledby="faq-page-title"
+              >
+                <h2
+                  id="faq-page-title"
+                  class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+                  data-i18n="page_faq_title"
+                ></h2>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_faq_lead"></p>
+              </section>
+
+              <section
+                class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-800/95"
+                aria-labelledby="faq-purpose-heading"
+              >
+                <h3
+                  id="faq-purpose-heading"
+                  class="text-base font-semibold text-slate-900 dark:text-slate-100"
+                  data-i18n="faq_sec_purpose_heading"
+                ></h3>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_sec_purpose_lead"></p>
+              </section>
+
+              <section
+                class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-800/95"
+                aria-labelledby="faq-visual-heading"
+              >
+                <h3
+                  id="faq-visual-heading"
+                  class="text-base font-semibold text-slate-900 dark:text-slate-100"
+                  data-i18n="faq_sec_visual_heading"
+                ></h3>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_sec_visual_lead"></p>
+                <p class="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-500" data-i18n="faq_note_illustrations"></p>
+
+                <div class="mt-6 grid gap-6 md:grid-cols-2">
+                  <figure class="m-0">
+                    <div
+                      class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 560 220" class="mx-auto h-auto w-full max-w-lg" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="2" y="2" width="556" height="216" rx="10" fill="none" stroke="currentColor" stroke-width="2" />
+                        <rect x="14" y="14" width="112" height="192" rx="8" fill="currentColor" fill-opacity="0.07" stroke="currentColor" />
+                        <circle cx="44" cy="38" r="12" fill="currentColor" fill-opacity="0.2" />
+                        <rect x="62" y="30" width="54" height="8" rx="2" fill="currentColor" fill-opacity="0.35" />
+                        <rect x="62" y="44" width="40" height="6" rx="2" fill="currentColor" fill-opacity="0.18" />
+                        <rect x="26" y="72" width="76" height="10" rx="3" fill="currentColor" fill-opacity="0.28" />
+                        <rect x="26" y="88" width="76" height="10" rx="3" fill="currentColor" fill-opacity="0.15" />
+                        <rect x="26" y="104" width="76" height="10" rx="3" fill="currentColor" fill-opacity="0.15" />
+                        <rect x="26" y="120" width="76" height="10" rx="3" fill="currentColor" fill-opacity="0.28" />
+                        <rect x="26" y="174" width="76" height="22" rx="6" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1" />
+                        <rect x="138" y="14" width="408" height="192" rx="8" fill="currentColor" fill-opacity="0.05" stroke="currentColor" />
+                        <rect x="154" y="30" width="180" height="14" rx="4" fill="currentColor" fill-opacity="0.22" />
+                        <rect x="154" y="54" width="320" height="10" rx="3" fill="currentColor" fill-opacity="0.14" />
+                        <rect x="154" y="82" width="376" height="108" rx="8" fill="currentColor" fill-opacity="0.06" stroke="currentColor" stroke-dasharray="4 3" />
+                        <rect x="170" y="98" width="120" height="12" rx="3" fill="currentColor" fill-opacity="0.2" />
+                        <rect x="170" y="118" width="260" height="8" rx="2" fill="currentColor" fill-opacity="0.12" />
+                        <rect x="170" y="132" width="220" height="8" rx="2" fill="currentColor" fill-opacity="0.12" />
+                      </svg>
+                    </div>
+                    <figcaption class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400" data-i18n="faq_fig_shell_caption"></figcaption>
+                  </figure>
+
+                  <figure class="m-0">
+                    <div
+                      class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 560 200" class="mx-auto h-auto w-full max-w-lg" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="2" y="2" width="556" height="196" rx="10" fill="none" stroke="currentColor" stroke-width="2" />
+                        <rect x="20" y="18" width="520" height="36" rx="8" fill="currentColor" fill-opacity="0.12" stroke="currentColor" />
+                        <rect x="36" y="30" width="200" height="12" rx="3" fill="currentColor" fill-opacity="0.35" />
+                        <rect x="20" y="66" width="380" height="118" rx="10" fill="currentColor" fill-opacity="0.06" stroke="currentColor" stroke-dasharray="5 4" />
+                        <rect x="38" y="84" width="240" height="10" rx="2" fill="currentColor" fill-opacity="0.18" />
+                        <rect x="38" y="102" width="180" height="10" rx="2" fill="currentColor" fill-opacity="0.14" />
+                        <rect x="38" y="142" width="280" height="28" rx="8" fill="currentColor" fill-opacity="0.08" stroke="currentColor" />
+                        <rect x="412" y="162" width="112" height="44" rx="10" fill="currentColor" fill-opacity="0.18" stroke="currentColor" />
+                        <path d="M452 148 L452 158 M452 158 L468 158 M452 158 L452 174" stroke="currentColor" stroke-width="2" fill="none" opacity="0.6" />
+                      </svg>
+                    </div>
+                    <figcaption class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400" data-i18n="faq_fig_chat_caption"></figcaption>
+                  </figure>
+                </div>
+
+                <figure class="m-0 mt-6">
+                  <div
+                    class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500"
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 560 120" class="mx-auto h-auto w-full max-w-3xl" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="2" y="2" width="556" height="116" rx="10" fill="none" stroke="currentColor" stroke-width="2" />
+                      <g transform="translate(28 34)">
+                        <rect width="100" height="52" rx="10" fill="currentColor" fill-opacity="0.14" stroke="currentColor" />
+                        <circle cx="24" cy="18" r="5" fill="currentColor" fill-opacity="0.45" />
+                        <rect x="38" y="28" width="48" height="8" rx="2" fill="currentColor" fill-opacity="0.2" />
+                        <rect x="38" y="40" width="36" height="6" rx="2" fill="currentColor" fill-opacity="0.12" />
+                      </g>
+                      <path d="M136 60 H156 M156 56 L168 60 L156 64 Z" fill="currentColor" opacity="0.45" />
+                      <g transform="translate(176 34)">
+                        <rect width="112" height="52" rx="10" fill="currentColor" fill-opacity="0.14" stroke="currentColor" />
+                        <circle cx="26" cy="18" r="5" fill="currentColor" fill-opacity="0.45" />
+                        <rect x="42" y="26" width="54" height="10" rx="2" fill="currentColor" fill-opacity="0.18" />
+                        <rect x="42" y="40" width="54" height="6" rx="2" fill="currentColor" fill-opacity="0.12" />
+                      </g>
+                      <path d="M296 60 H316 M316 56 L328 60 L316 64 Z" fill="currentColor" opacity="0.45" />
+                      <g transform="translate(336 34)">
+                        <rect width="112" height="52" rx="10" fill="currentColor" fill-opacity="0.14" stroke="currentColor" />
+                        <circle cx="26" cy="18" r="5" fill="currentColor" fill-opacity="0.45" />
+                        <rect x="42" y="28" width="40" height="8" rx="2" fill="currentColor" fill-opacity="0.18" />
+                        <rect x="42" y="40" width="62" height="6" rx="2" fill="currentColor" fill-opacity="0.12" />
+                      </g>
+                      <path d="M456 60 H476 M476 56 L488 60 L476 64 Z" fill="currentColor" opacity="0.45" />
+                      <g transform="translate(496 34)">
+                        <rect width="44" height="52" rx="10" fill="currentColor" fill-opacity="0.22" stroke="currentColor" />
+                        <path d="M14 22 L30 38 M22 38 L30 38 L30 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" />
+                      </g>
+                    </svg>
+                  </div>
+                  <figcaption class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400" data-i18n="faq_fig_pipeline_caption"></figcaption>
+                </figure>
+              </section>
+
+              <section
+                class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-800/95"
+                aria-labelledby="faq-q-heading"
+              >
+                <h3
+                  id="faq-q-heading"
+                  class="text-base font-semibold text-slate-900 dark:text-slate-100"
+                  data-i18n="faq_sec_q_heading"
+                ></h3>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_sec_q_lead"></p>
+
+                <div class="mt-4 space-y-2">
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_what"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_what"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_flow"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_flow"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_chat"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_chat"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_drive_ctx"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_drive_ctx"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_contents"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_contents"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_agents_clients"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_agents_clients"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_visibility"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_visibility"></p>
+                    </div>
+                  </details>
+                  <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/90">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span data-i18n="faq_q_misc"></span>
+                    </summary>
+                    <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-600">
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="faq_a_misc"></p>
+                    </div>
+                  </details>
+                </div>
+              </section>
+            </div>
+
             </div>
           </div>
         </div>

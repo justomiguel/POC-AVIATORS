@@ -195,6 +195,34 @@
   .chat-send-actions .btn-row:not(.hidden) {
     @apply flex;
   }
+
+  /* Desktop: input y botón en la misma fila, misma altura, textarea auto-crece */
+  @media (min-width: 768px) {
+    .chat-input-row {
+      @apply flex items-end gap-3;
+    }
+    .chat-input-row .q-area {
+      @apply min-w-0 flex-1;
+      height: auto;
+      min-height: 2.75rem;
+      max-height: 10rem;
+      resize: none;
+    }
+    .chat-send-actions {
+      @apply flex shrink-0 items-end;
+    }
+    .chat-send-actions .btn-row:not(.hidden) {
+      @apply flex;
+    }
+    /* Deshacer el estilo "solo icono" que se aplica fuera de la media mobile */
+    .mobile-send-icon-btn {
+      @apply h-11 w-auto rounded-2xl px-5;
+    }
+    .mobile-send-icon-btn span {
+      @apply inline;
+    }
+  }
+
   .app-mobile-topbar {
     @apply shrink-0;
   }
@@ -231,25 +259,24 @@
       opacity: 1;
       pointer-events: auto;
     }
+    /* pb-28 era para el compositor fijo (ya está en flujo); pb-3 previene el scroll externo */
     .app-content-scroll {
-      @apply px-3 pb-28 pt-3;
+      @apply px-3 pb-3 pt-3;
     }
     .home-chat-shell {
       height: calc(100dvh - 11.5rem);
       max-height: calc(100dvh - 11.5rem);
       min-height: min(68dvh, 31rem);
     }
+    /* Compositor en flujo: el hilo flex-1 termina justo encima del input (evita solape con barra fija). */
     .chat-thread {
       @apply px-3 py-3;
-      padding-bottom: 5.25rem;
     }
     .chat-composer {
-      @apply fixed left-0 right-0 border-t border-slate-200 px-3 py-3 dark:border-slate-700;
-      bottom: 0;
-      z-index: 20;
+      @apply shrink-0 border-t border-slate-200 px-3 py-3 dark:border-slate-700;
       background-color: rgb(248 250 252 / 0.96);
       backdrop-filter: blur(4px);
-      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
     }
     .dark .chat-composer {
       background-color: rgb(15 23 42 / 0.96);

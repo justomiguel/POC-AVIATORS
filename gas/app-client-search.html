@@ -34,12 +34,15 @@
     var q = normalize(term);
     var groups = [];
 
+    var canAgents = !!(state.get('canManageAgents'));
     var agents = state.get('adminAgentsCache') || [];
     var agentHits = [];
-    for (var i = 0; i < agents.length && agentHits.length < MAX_PER_GROUP; i++) {
-      var ag = agents[i];
-      if (normalize(ag.name || '').indexOf(q) >= 0 || normalize(ag.description || '').indexOf(q) >= 0) {
-        agentHits.push({ label: ag.name || ag.agentId, page: 'agents', id: ag.agentId });
+    if (canAgents) {
+      for (var i = 0; i < agents.length && agentHits.length < MAX_PER_GROUP; i++) {
+        var ag = agents[i];
+        if (normalize(ag.name || '').indexOf(q) >= 0 || normalize(ag.description || '').indexOf(q) >= 0) {
+          agentHits.push({ label: ag.name || ag.agentId, page: 'agents', id: ag.agentId });
+        }
       }
     }
     if (agentHits.length) groups.push({ title: i18n('global_search_group_agents'), items: agentHits });
@@ -100,6 +103,9 @@
     var itemId = btn.dataset.itemId;
     _input.value = '';
     _results.classList.add('hidden');
+    if (page === 'agents' && !state.get('canManageAgents')) {
+      page = 'home';
+    }
     if (A.setAppPage) A.setAppPage(page);
     if (page === 'agents' && A.agents && A.agents.selectById) {
       setTimeout(function () { A.agents.selectById(itemId); }, 120);

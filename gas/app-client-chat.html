@@ -161,15 +161,57 @@
         label.className = 'text-slate-700 dark:text-slate-300';
         label.textContent = (ref.contentId || '-') + ' · ' + (ref.title || '');
         line.appendChild(label);
-        if (ref.url) {
+        var directUrl = String(ref.url || '').trim();
+        if (!directUrl && ref.driveFileId) {
+          directUrl =
+            'https://drive.google.com/open?id=' +
+            encodeURIComponent(String(ref.driveFileId || '').trim());
+        }
+        if (directUrl) {
           line.appendChild(document.createTextNode(' · '));
           var a = document.createElement('a');
-          a.href = ref.url;
+          a.href = directUrl;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.className = 'text-sky-700 underline dark:text-sky-300';
           a.textContent = i18n('chat_refs_open_link');
           line.appendChild(a);
+        } else {
+          line.appendChild(document.createTextNode(' · '));
+          (function (refObj) {
+            var openBtn = document.createElement('button');
+            openBtn.type = 'button';
+            openBtn.className = 'inline-flex items-center gap-1 text-sky-700 underline dark:text-sky-300';
+            openBtn.innerHTML =
+              '<i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i><span>' +
+              i18n('chat_refs_open_link') +
+              '</span>';
+            openBtn.addEventListener('click', function () {
+              var candidate = String(refObj.fileName || refObj.title || '').trim();
+              if (!candidate) {
+                if (A.toast) A.toast.error(i18n('chat_ref_not_found'));
+                return;
+              }
+              var opened = window.open('about:blank', '_blank');
+              google.script.run
+                .withSuccessHandler(function (resOpen) {
+                  var url = (resOpen && resOpen.url) || '';
+                  if (url) {
+                    if (opened) opened.location = url;
+                    else window.open(url, '_blank');
+                  } else {
+                    if (opened) opened.close();
+                    if (A.toast) A.toast.error(i18n('chat_ref_not_found'));
+                  }
+                })
+                .withFailureHandler(function () {
+                  if (opened) opened.close();
+                  if (A.toast) A.toast.error(i18n('err_generic'));
+                })
+                .resolveDriveFileUrlByName(candidate);
+            });
+            line.appendChild(openBtn);
+          })(ref);
         }
         refsWrap.appendChild(line);
       }

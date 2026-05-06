@@ -263,7 +263,7 @@ function AdminAgents_getOrCreateApiCatalogSheet_(props) {
  * @return {{ ok: boolean, models: Array<string>, strategies: Array<string>, source: string, spreadsheetId: string, sheetName: string }}
  */
 function AdminAgents_apiCatalog() {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   var props = PropertiesService.getScriptProperties();
   var defaultModels = [
     'vertex_ai/gemini-2.5-pro',
@@ -725,7 +725,7 @@ function AdminAgents_pickDefaultAgents_(reg) {
  * @return {{ ok: boolean, agents: Array<Object> }}
  */
 function AdminAgents_list() {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   var props = PropertiesService.getScriptProperties();
   var reg = AdminAgents_loadRegistry_(props);
   var out = [];
@@ -755,11 +755,57 @@ function AdminAgents_list() {
 }
 
 /**
+ * Lista mínima para métricas del home (sin prompts ni fuentes).
+ * Visible para cualquier usuario con rol en la hoja de roles o admin por allowlist.
+ *
+ * @return {{ ok: boolean, agents: Array<Object> }}
+ */
+function AdminAgents_listForDashboardMetrics() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: true, agents: [] };
+
+  var allowed = false;
+  try {
+    if (RoleDirectory_lookupRole(email)) allowed = true;
+  } catch (eRole) {}
+  if (!allowed && AdminAuth_emailIsAdmin(email)) allowed = true;
+  if (!allowed) return { ok: true, agents: [] };
+
+  var props = PropertiesService.getScriptProperties();
+  var reg = AdminAgents_loadRegistry_(props);
+  var out = [];
+  var i;
+  for (i = 0; i < reg.agents.length; i++) {
+    var a = reg.agents[i];
+    if (!a || typeof a !== 'object') continue;
+    var cfg = AdminAgents_normalizeGlobantAgentConfig_(a.globantAgent, a);
+    out.push({
+      id: String(a.id || ''),
+      profileName: String(a.profileName || ''),
+      globantAgent: {
+        strategyName: String(cfg.strategyName || ''),
+        modelName: String(cfg.modelName || ''),
+      },
+    });
+  }
+  var ragClient = AdminAgents_maybeCreateRagClient_(props);
+  if (ragClient) {
+    var exists = AdminAgents_listRemoteProfilesSet_(ragClient);
+    var filtered = [];
+    for (i = 0; i < out.length; i++) {
+      if (exists[out[i].profileName]) filtered.push(out[i]);
+    }
+    out = filtered;
+  }
+  return { ok: true, agents: out };
+}
+
+/**
  * Solo admin · asegura que existan los agentes por defecto (sin duplicar).
  * @return {{ ok: boolean, created: number, total: number }}
  */
 function AdminAgents_ensureDefaults() {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   var props = PropertiesService.getScriptProperties();
   var reg = AdminAgents_loadRegistry_(props);
   var before = reg.agents.length;
@@ -791,7 +837,7 @@ function AdminAgents_ensureDefaults() {
  * @return {Object}
  */
 function AdminAgents_upsert(agentIn) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   if (!agentIn || typeof agentIn !== 'object')
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_payload'));
 
@@ -879,7 +925,7 @@ function AdminAgents_upsert(agentIn) {
  * @return {{ ok: boolean }}
  */
 function AdminAgents_delete(agentId) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   var aid = ('' + (agentId || '')).trim();
   if (!aid)
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_id'));
@@ -918,7 +964,7 @@ function AdminAgents_delete(agentId) {
  * @return {Object}
  */
 function AdminAgents_sync(agentId) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   var aid = ('' + (agentId || '')).trim();
   if (!aid)
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_id'));

@@ -22,6 +22,7 @@
   var navPageAgents = document.getElementById('nav-page-agents');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageClients = document.getElementById('nav-page-clients');
+  var navPageFaq = document.getElementById('nav-page-faq');
   var adminAgentStatus = document.getElementById('admin-agent-status');
   var appShellView = document.getElementById('view-app');
   var appSidebar = document.getElementById('app-sidebar');
@@ -87,23 +88,44 @@
   }
 
   function setAppPage(page) {
+    var pg = page;
+    if (pg === 'agents' && !S.get('canManageAgents')) {
+      pg = 'home';
+    }
     var nodes = document.querySelectorAll('.app-page');
     var i;
     for (i = 0; i < nodes.length; i++) {
       var p = nodes[i];
       var id = p.id || '';
       var show =
-        (page === 'home' && id === 'page-home') ||
-        (page === 'agents' && id === 'page-agents') ||
-        (page === 'contents' && id === 'page-contents') ||
-        (page === 'clients' && id === 'page-clients');
+        (pg === 'home' && id === 'page-home') ||
+        (pg === 'agents' && id === 'page-agents') ||
+        (pg === 'contents' && id === 'page-contents') ||
+        (pg === 'clients' && id === 'page-clients') ||
+        (pg === 'faq' && id === 'page-faq');
       p.classList.toggle('hidden', !show);
     }
+    if (homeMember) {
+      if (pg === 'faq') {
+        homeMember.classList.add('hidden');
+      } else {
+        homeMember.classList.toggle('hidden', !!S.get('isVisitor'));
+      }
+    }
+    if (homeVisitante) {
+      if (pg === 'faq') {
+        homeVisitante.classList.add('hidden');
+      } else {
+        homeVisitante.classList.toggle('hidden', !S.get('isVisitor'));
+      }
+    }
+    var scrollArea = document.querySelector('.app-content-scroll');
+    if (scrollArea) scrollArea.scrollTop = 0;
     var navItems = document.querySelectorAll('.app-nav-item');
     for (i = 0; i < navItems.length; i++) {
       var nb = navItems[i];
       var ap = nb.getAttribute('data-app-page') || '';
-      var isCurrent = ap === page && !nb.classList.contains('hidden');
+      var isCurrent = ap === pg && !nb.classList.contains('hidden');
       nb.classList.toggle('is-active', isCurrent);
       if (isCurrent) {
         nb.setAttribute('aria-current', 'page');
@@ -111,12 +133,17 @@
         nb.removeAttribute('aria-current');
       }
     }
-    if (page === 'contents') {
+    if (pg === 'home') {
+      if (A.dashboard && typeof A.dashboard.loadMetrics === 'function') {
+        A.dashboard.loadMetrics();
+      }
+    }
+    if (pg === 'contents') {
       A.contents.setScreen('list');
       A.contents.toggleSpecificSections();
       A.contents.loadList();
     }
-    if (page === 'clients') {
+    if (pg === 'clients') {
       A.clients.setScreen('list');
       A.clients.loadList();
     }
@@ -135,10 +162,8 @@
     if (ce && !ce.classList.contains('hidden')) {
       ce.textContent = i18n('chat_empty_hint');
     }
-    var thinking = document.getElementById(A.chat.THINKING_ID);
-    if (thinking) {
-      var tb = thinking.querySelector('.chat-thinking');
-      if (tb) tb.textContent = i18n('chat_thinking');
+    if (A.dashboard && typeof A.dashboard.loadMetrics === 'function') {
+      A.dashboard.loadMetrics();
     }
   }
 
@@ -275,6 +300,7 @@
       }
 
       var isVisitor = !!data.isVisitor;
+      S.set('isVisitor', isVisitor);
       if (homeVisitante) homeVisitante.classList.toggle('hidden', !isVisitor);
       if (homeMember) homeMember.classList.toggle('hidden', isVisitor);
 
@@ -286,19 +312,29 @@
         rk.indexOf('presale') >= 0 ||
         rk.indexOf('pre_sale') >= 0 ||
         rk.indexOf('preventa') >= 0;
-      var isAdm = !!adm.isAdmin;
-      var canManageContents = isAdm || isPresale;
-      if (navPageAgents) navPageAgents.classList.toggle('hidden', !isAdm);
+      var canManageAgents =
+        adm.canManageAgents !== undefined && adm.canManageAgents !== null
+          ? !!adm.canManageAgents
+          : !!adm.isAdmin;
+      S.set('canManageAgents', canManageAgents);
+      var canManageContents = !!adm.isAdmin || isPresale;
+      if (navPageAgents) navPageAgents.classList.toggle('hidden', !canManageAgents);
       if (navPageContents) navPageContents.classList.toggle('hidden', !canManageContents);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canManageContents);
       setAppPage('home');
       syncMobileDrawerViewport();
-      if (A.renderDashboard) A.renderDashboard(bootstrap, { isAdmin: isAdm, canManageContents: canManageContents });
+      var showAgentsDashboard = !isVisitor;
+      if (A.renderDashboard) {
+        A.renderDashboard(bootstrap, {
+          showAgentsCard: showAgentsDashboard,
+          canManageContents: canManageContents,
+        });
+      }
       if (adminAgentStatus) {
         adminAgentStatus.textContent = '\u00a0';
         adminAgentStatus.classList.remove('err');
       }
-      if (isAdm) {
+      if (canManageAgents) {
         A.agents.loadList();
       }
 
@@ -386,6 +422,9 @@
   }
   if (navPageClients) {
     navPageClients.addEventListener('click', function () { setAppPage('clients'); });
+  }
+  if (navPageFaq) {
+    navPageFaq.addEventListener('click', function () { setAppPage('faq'); });
   }
 
   var localeBtnEsEl = document.getElementById('locale-btn-es');

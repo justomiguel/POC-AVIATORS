@@ -82,7 +82,7 @@ function AdminKnowledge_loadSources(props) {
 }
 
 /**
- * @return {{ isAdmin: boolean, sources: Object, folderIds: string[], fileIds: string[], profileName: string, lastSync: string, maxFiles: number }}
+ * @return {{ isAdmin: boolean, canManageAgents: boolean, sources: Object, folderIds: string[], fileIds: string[], profileName: string, lastSync: string, maxFiles: number }}
  */
 function AdminKnowledge_getBootstrapSlice() {
   var p = PropertiesService.getScriptProperties();
@@ -98,8 +98,10 @@ function AdminKnowledge_getBootstrapSlice() {
     if (!isNaN(n) && n > 0) maxFiles = Math.min(n, 80);
   }
 
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
   return {
-    isAdmin: AdminAuth_sessionIsAdmin(),
+    isAdmin: AdminAuth_emailIsAdmin(email),
+    canManageAgents: AdminAuth_canManageAgents(email),
     sources: src,
     folderIds: src.folders.map(function (f) {
       return f.id;

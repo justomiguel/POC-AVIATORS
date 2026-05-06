@@ -253,6 +253,39 @@ function RoleDirectory_lookupRole(email) {
 }
 
 /**
+ * Detecta rol preventa desde clave o etiqueta de hoja (misma heurística que contenidos).
+ *
+ * @param {{ label?: string, key?: string }|null} rec
+ * @return {boolean}
+ */
+function RoleDirectory_roleRecordIsPresale_(rec) {
+  if (!rec) return false;
+  var label = rec.label ? String(rec.label) : '';
+  var key = rec.key ? String(rec.key) : '';
+  var keyNorm = key.toLowerCase();
+  var labelNorm = label.toLowerCase();
+  return (
+    keyNorm.indexOf('presale') >= 0 ||
+    keyNorm.indexOf('pre_sale') >= 0 ||
+    keyNorm.indexOf('preventa') >= 0 ||
+    labelNorm.indexOf('presale') >= 0 ||
+    labelNorm.indexOf('pre sale') >= 0 ||
+    labelNorm.indexOf('pre-') >= 0 ||
+    labelNorm.indexOf('preventa') >= 0
+  );
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function RoleDirectory_emailIsPresale(email) {
+  var em = ('' + (email || '')).trim();
+  if (!em) return false;
+  return RoleDirectory_roleRecordIsPresale_(RoleDirectory_lookupRole(em));
+}
+
+/**
  * Diagnóstico sin exponer filas de datos: ejecutar desde el editor Apps Script
  * (Ejecutar) con tu usuario, o como despliegue «usuario que accede» con la misma cuenta.
  *

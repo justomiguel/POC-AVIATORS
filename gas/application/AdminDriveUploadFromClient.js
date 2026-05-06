@@ -10,7 +10,7 @@ var ADMIN_UPLOAD_LOCAL_MAX_BYTES = 15 * 1024 * 1024;
  * @return {{ id: string, name: string }}
  */
 function AdminAgents_uploadLocalFileForCorpus_(payload) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireAgentsAdmin();
   if (!payload || typeof payload !== 'object') {
     throw new Error(
       UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_payload'),

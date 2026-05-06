@@ -252,6 +252,41 @@ function getContextFiles() {
 }
 
 /**
+ * @param {string} raw
+ * @return {string}
+ */
+function DriveQuery_escapeLiteral_(raw) {
+  return String(raw || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
+}
+
+/**
+ * Resuelve URL de Drive por nombre de archivo.
+ * Prioriza la carpeta raíz de proyecto cuando está disponible.
+ * @param {string} fileName
+ * @return {{ok:boolean,url:string,fileName:string}}
+ */
+function resolveDriveFileUrlByName(fileName) {
+  var name = String(fileName || '').trim();
+  if (!name) return { ok: false, url: '', fileName: '' };
+  var q = 'trashed = false and title = "' + DriveQuery_escapeLiteral_(name) + '"';
+  if (typeof CATALOG_ROOT_FOLDER_ID !== 'undefined' && CATALOG_ROOT_FOLDER_ID) {
+    q =
+      '"' +
+      DriveQuery_escapeLiteral_(String(CATALOG_ROOT_FOLDER_ID)) +
+      '" in parents and ' +
+      q;
+  }
+  var it = DriveApp.searchFiles(q);
+  if (it.hasNext()) {
+    var f = it.next();
+    return { ok: true, url: String(f.getUrl() || ''), fileName: String(f.getName() || name) };
+  }
+  return { ok: false, url: '', fileName: name };
+}
+
+/**
  * @param {string[]} fileIds
  * @return {Array<{contentId:string,title:string,contentType:string,url:string,fileName:string,driveFileId:string}>}
  */
@@ -546,6 +581,15 @@ function contentsDelete(contentId) {
 }
 
 /**
+ * Repara una fila del catálogo reindexando desde Drive; si el archivo ya no
+ * existe, elimina la referencia remota y borra la fila.
+ * @param {string} contentId
+ */
+function contentsRepairIndex(contentId) {
+  return ContentIngestion_repairIndexFromDrive(contentId);
+}
+
+/**
  * Obtiene todos los tags usados en contenidos (para autocompletar).
  */
 function contentsGetAllTags() {
@@ -579,4 +623,13 @@ function clientsEnsureByName(name) {
 
 function clientsDelete(clientId) {
   return ClientsMaster_delete(clientId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard (inicio)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Métricas agregadas para tarjetas del home (admin y/o contributor según rol). */
+function dashboardHomeMetrics() {
+  return DashboardHome_metrics();
 }

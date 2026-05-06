@@ -26,6 +26,8 @@ function ContentCatalog_headersCommon_() {
     'tags_csv',
     'file_name',
     'mime_type',
+    'drive_file_id',
+    'drive_file_url',
     'globant_profile_name',
     'globant_document_id',
     'uploaded_by',
@@ -82,21 +84,11 @@ function ContentCatalog_requireContributor_() {
     return { email: email, roleKey: 'admin', roleLabel: 'Admin' };
   }
   var rec = RoleDirectory_lookupRole(email);
-  var label = rec && rec.label ? String(rec.label) : '';
-  var key = rec && rec.key ? String(rec.key) : '';
-  var keyNorm = key.toLowerCase();
-  var labelNorm = label.toLowerCase();
-  var isPresale =
-    keyNorm.indexOf('presale') >= 0 ||
-    keyNorm.indexOf('pre_sale') >= 0 ||
-    keyNorm.indexOf('preventa') >= 0 ||
-    labelNorm.indexOf('presale') >= 0 ||
-    labelNorm.indexOf('pre sale') >= 0 ||
-    labelNorm.indexOf('pre-') >= 0 ||
-    labelNorm.indexOf('preventa') >= 0;
-  if (!isPresale) {
+  if (!RoleDirectory_roleRecordIsPresale_(rec)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
   }
+  var label = rec && rec.label ? String(rec.label) : '';
+  var key = rec && rec.key ? String(rec.key) : '';
   return {
     email: email,
     roleKey: key || 'presale',
@@ -372,7 +364,10 @@ function ContentCatalog_list(filters) {
   var q = filters && filters.q ? String(filters.q).trim().toLowerCase() : '';
   var type = filters && filters.contentType ? String(filters.contentType).trim() : '';
   var tag = filters && filters.tag ? String(filters.tag).trim().toLowerCase() : '';
+  var shouldReconcile = !(filters && filters.skipReconcile);
   var items = [];
+  var repairClient = null;
+  var repairClientReady = false;
   for (i = 0; i < commonRows.length; i++) {
     var c = commonRows[i];
     var cid = String(c.content_id || '').trim();
@@ -388,6 +383,29 @@ function ContentCatalog_list(filters) {
       if (hay.indexOf(q) < 0) continue;
     }
     if (tag && tagsCsv.toLowerCase().indexOf(tag) < 0) continue;
+    var driveFileId = String(c.drive_file_id || '').trim();
+    var globantProfile = String(c.globant_profile_name || '').trim();
+    var globantDocId = String(c.globant_document_id || '').trim();
+    var driveState = shouldReconcile
+      ? ContentCatalog_getDriveFileState_(driveFileId)
+      : 'exists';
+    if (driveState === 'missing') {
+      ContentCatalog_tryDeleteRemoteIndex_(globantProfile, globantDocId);
+      ContentCatalog_deleteRowsByType_(ss, tabs, ctype, cid);
+      continue;
+    }
+    if (shouldReconcile && !repairClientReady && globantDocId && globantProfile) {
+      repairClientReady = true;
+      try {
+        repairClient = ContentIngestion_createRagClient_();
+      } catch (ignoreRepairClient) {
+        repairClient = null;
+      }
+    }
+    var needsIndexRepair =
+      shouldReconcile &&
+      driveState === 'exists' &&
+      ContentCatalog_needsIndexRepair_(repairClient, globantProfile, globantDocId);
     items.push({
       common: {
         content_id: cid,
@@ -398,8 +416,11 @@ function ContentCatalog_list(filters) {
         tags: ContentCatalog_csvToTags_(tagsCsv),
         file_name: String(c.file_name || ''),
         mime_type: String(c.mime_type || ''),
-        globant_profile_name: String(c.globant_profile_name || ''),
-        globant_document_id: String(c.globant_document_id || ''),
+        drive_file_id: driveFileId,
+        drive_file_url: String(c.drive_file_url || ''),
+        globant_profile_name: globantProfile,
+        globant_document_id: globantDocId,
+        index_repair_needed: needsIndexRepair,
         uploaded_by: String(c.uploaded_by || ''),
         created_at: String(c.created_at || ''),
         updated_at: String(c.updated_at || ''),
@@ -430,12 +451,85 @@ function ContentCatalog_list(filters) {
 }
 
 /**
+ * @param {string} driveFileId
+ * @return {'exists'|'missing'|'unknown'}
+ */
+function ContentCatalog_getDriveFileState_(driveFileId) {
+  var id = String(driveFileId || '').trim();
+  if (!id) return 'missing';
+  try {
+    var f = DriveApp.getFileById(id);
+    return f.isTrashed() ? 'missing' : 'exists';
+  } catch (e) {
+    var msg = e && e.message ? String(e.message) : String(e || '');
+    if (/not found|no item|cannot find/i.test(msg)) return 'missing';
+    return 'unknown';
+  }
+}
+
+/**
+ * @param {Object|null} ragClient
+ * @param {string} profileName
+ * @param {string} documentId
+ * @return {boolean}
+ */
+function ContentCatalog_needsIndexRepair_(ragClient, profileName, documentId) {
+  var pn = String(profileName || '').trim();
+  var doc = String(documentId || '').trim();
+  if (!pn || !doc) return true;
+  if (!ragClient) return false;
+  try {
+    return ragClient.getDocumentIndexStatus(pn, doc) !== 'Success';
+  } catch (e) {
+    return true;
+  }
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {{common:string,proposals:string,successCases:string,clients:string}} tabs
+ * @param {string} contentType
+ * @param {string} contentId
+ * @return {boolean}
+ */
+function ContentCatalog_deleteRowsByType_(ss, tabs, contentType, contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) return false;
+  var commonSheet = ss.getSheetByName(tabs.common);
+  var specificTab =
+    contentType === 'proposal'
+      ? tabs.proposals
+      : contentType === 'success_case'
+        ? tabs.successCases
+        : tabs.clients;
+  var specificSheet = ss.getSheetByName(specificTab);
+  var deletedCommon = commonSheet
+    ? ContentCatalog_deleteRowByContentId_(commonSheet, id)
+    : false;
+  if (specificSheet) ContentCatalog_deleteRowByContentId_(specificSheet, id);
+  return deletedCommon;
+}
+
+/**
+ * @param {string} profileName
+ * @param {string} documentId
+ */
+function ContentCatalog_tryDeleteRemoteIndex_(profileName, documentId) {
+  var pn = String(profileName || '').trim();
+  var doc = String(documentId || '').trim();
+  if (!pn || !doc) return;
+  try {
+    ContentIngestion_createRagClient_().deleteDocument(pn, doc);
+  } catch (ignore) {}
+}
+
+/**
  * @param {string} contentId
  * @return {{ok:boolean,item:Object}}
  */
 function ContentCatalog_get(contentId) {
   var id = String(contentId || '').trim();
-  var list = ContentCatalog_list({});
+  var list = ContentCatalog_list({ skipReconcile: true });
   var i;
   for (i = 0; i < list.items.length; i++) {
     if (list.items[i].common.content_id === id) return { ok: true, item: list.items[i] };
@@ -511,6 +605,8 @@ function ContentCatalog_upsert(payload) {
     tags_csv: ContentCatalog_tagsToCsv_(tagsArray),
     file_name: String(common.file_name || '').trim(),
     mime_type: String(common.mime_type || '').trim(),
+    drive_file_id: String(common.drive_file_id || '').trim(),
+    drive_file_url: String(common.drive_file_url || '').trim(),
     globant_profile_name: String(common.globant_profile_name || '').trim(),
     globant_document_id: String(common.globant_document_id || '').trim(),
     uploaded_by: String(common.uploaded_by || who.email).trim(),
@@ -545,16 +641,7 @@ function ContentCatalog_deleteHard(contentId) {
   var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
   var ss = catalog.spreadsheet;
   var tabs = catalog.tabs;
-  var commonSheet = ss.getSheetByName(tabs.common);
-  var specificSheet = ss.getSheetByName(
-    ctype === 'proposal'
-      ? tabs.proposals
-      : ctype === 'success_case'
-        ? tabs.successCases
-        : tabs.clients,
-  );
-  var deletedCommon = ContentCatalog_deleteRowByContentId_(commonSheet, id);
-  ContentCatalog_deleteRowByContentId_(specificSheet, id);
+  var deletedCommon = ContentCatalog_deleteRowsByType_(ss, tabs, ctype, id);
   return { ok: true, deleted: deletedCommon };
 }
 

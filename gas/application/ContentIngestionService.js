@@ -85,6 +85,60 @@ function ContentIngestion_indexBlob_(client, profileName, pdfBlob) {
 }
 
 /**
+ * @param {GoogleAppsScript.Base.Blob} pdfBlob
+ * @param {string} fileName
+ * @param {string} clientName
+ * @param {string} contentTitle
+ * @param {string} contentType
+ * @return {{id:string,url:string,name:string}}
+ */
+function ContentIngestion_storeBlobInDrive_(
+  pdfBlob,
+  fileName,
+  clientName,
+  contentTitle,
+  contentType,
+) {
+  function safeFolderName_(raw, fallback) {
+    var v = String(raw || '').trim();
+    if (!v) v = String(fallback || '').trim();
+    if (!v) v = 'Sin nombre';
+    // Evita caracteres conflictivos y espacios repetidos.
+    v = v
+      .replace(/[\\\/:*?"<>|#%{}~]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!v) v = 'Sin nombre';
+    if (v.length > 110) v = v.slice(0, 110).trim();
+    return v;
+  }
+
+  function getOrCreateChildFolder_(parent, name) {
+    var it = parent.getFoldersByName(name);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(name);
+  }
+
+  var name = String(fileName || 'content.pdf').trim() || 'content.pdf';
+  var root = DriveApp.getFolderById(CATALOG_ROOT_FOLDER_ID);
+  var clientFolderName = safeFolderName_(clientName, 'Sin cliente');
+  var titleFallback = contentType === 'success_case'
+    ? 'Success Case'
+    : contentType === 'proposal'
+      ? 'Propuesta'
+      : 'Contenido';
+  var titleFolderName = safeFolderName_(contentTitle, titleFallback);
+  var clientFolder = getOrCreateChildFolder_(root, clientFolderName);
+  var targetFolder = getOrCreateChildFolder_(clientFolder, titleFolderName);
+  var file = targetFolder.createFile(pdfBlob.setName(name));
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || name),
+  };
+}
+
+/**
  * @param {string} payloadJson
  * @return {{ok:boolean,item:Object,meta:Object}}
  */
@@ -119,11 +173,21 @@ function ContentIngestion_save(payloadJson) {
     }
 
     var pdfBlob = null;
+    var newDriveFile = null;
+    var oldDriveFileId = existing ? String(existing.common.drive_file_id || '').trim() : '';
+    var oldDriveFileUrl = existing ? String(existing.common.drive_file_url || '').trim() : '';
     if (hasNewFile) {
       var prepared = ContentExtraction_validateAndPrepareBlob_(filePayload);
       pdfBlob = prepared.blob;
       common.file_name = prepared.name;
       common.mime_type = prepared.mimeType;
+      newDriveFile = ContentIngestion_storeBlobInDrive_(
+        pdfBlob,
+        prepared.name,
+        common.client_name || (existing && existing.common && existing.common.client_name) || '',
+        common.title || (existing && existing.common && existing.common.title) || '',
+        contentType,
+      );
     }
 
     var agent = ContentIngestion_findAgentByType_(contentType);
@@ -162,6 +226,12 @@ function ContentIngestion_save(payloadJson) {
           ('content-' + contentType),
         mime_type:
           common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
+        drive_file_id: newDriveFile
+          ? newDriveFile.id
+          : oldDriveFileId,
+        drive_file_url: newDriveFile
+          ? newDriveFile.url
+          : oldDriveFileUrl,
         globant_profile_name: targetProfile,
         globant_document_id: needReindex
           ? newDocId
@@ -176,6 +246,11 @@ function ContentIngestion_save(payloadJson) {
     try {
       saved = ContentCatalog_upsert(toSave);
     } catch (eSave) {
+      if (newDriveFile && newDriveFile.id) {
+        try {
+          DriveApp.getFileById(newDriveFile.id).setTrashed(true);
+        } catch (ignoreDriveRollback) {}
+      }
       if (newDocId) {
         try {
           client.deleteDocument(targetProfile, newDocId);
@@ -188,6 +263,11 @@ function ContentIngestion_save(payloadJson) {
       try {
         client.deleteDocument(oldProfile || targetProfile, oldDocId);
       } catch (ignoreOldDelete) {}
+    }
+    if (newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
+      try {
+        DriveApp.getFileById(oldDriveFileId).setTrashed(true);
+      } catch (ignoreOldDriveDelete) {}
     }
 
     return {
@@ -223,6 +303,97 @@ function ContentIngestion_delete(contentId) {
       client.deleteDocument(profile, docId);
     }
     return ContentCatalog_deleteHard(id);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * @param {string} driveFileId
+ * @return {GoogleAppsScript.Drive.File|null}
+ */
+function ContentIngestion_getLiveDriveFile_(driveFileId) {
+  var id = String(driveFileId || '').trim();
+  if (!id) return null;
+  try {
+    var f = DriveApp.getFileById(id);
+    return f.isTrashed() ? null : f;
+  } catch (e) {
+    var msg = e && e.message ? String(e.message) : String(e || '');
+    if (!/not found|no item|cannot find/i.test(msg)) throw e;
+    return null;
+  }
+}
+
+/**
+ * Repara una fila del catálogo reindexando desde Drive. Si el archivo fuente ya
+ * no existe, limpia el índice remoto y elimina la fila del catálogo.
+ *
+ * @param {string} contentId
+ * @return {{ok:boolean, action:string, item:Object|null, documentId:string}}
+ */
+function ContentIngestion_repairIndexFromDrive(contentId) {
+  ContentCatalog_requireContributor_();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var id = String(contentId || '').trim();
+    if (!id) throw new Error('content_id requerido');
+    var item = ContentCatalog_get(id).item;
+    var common = item.common || {};
+    var profile = String(common.globant_profile_name || '').trim();
+    var oldDocId = String(common.globant_document_id || '').trim();
+    var driveFileId = String(common.drive_file_id || '').trim();
+    var driveFile = ContentIngestion_getLiveDriveFile_(driveFileId);
+
+    if (!driveFile) {
+      ContentCatalog_tryDeleteRemoteIndex_(profile, oldDocId);
+      ContentCatalog_deleteHard(id);
+      return { ok: true, action: 'removed', item: null, documentId: '' };
+    }
+
+    var contentType = String(common.content_type || '').trim();
+    var agent = ContentIngestion_findAgentByType_(contentType);
+    var targetProfile = String(agent.profileName || '').trim();
+    if (!targetProfile) throw new Error('profileName vacio para agente destino');
+
+    var client = ContentIngestion_createRagClient_();
+    var blob = DriveDocuments_getPdfBlobForGlobant(driveFileId);
+    var newDocId = ContentIngestion_indexBlob_(client, targetProfile, blob);
+    var nextCommon = Object.assign({}, common, {
+      file_name: String(driveFile.getName() || common.file_name || ''),
+      mime_type: String(driveFile.getMimeType() || common.mime_type || 'application/pdf'),
+      drive_file_id: driveFileId,
+      drive_file_url: String(driveFile.getUrl() || common.drive_file_url || ''),
+      globant_profile_name: targetProfile,
+      globant_document_id: newDocId,
+    });
+
+    var saved;
+    try {
+      saved = ContentCatalog_upsert({
+        common: nextCommon,
+        specific: item.specific || {},
+      });
+    } catch (eSave) {
+      try {
+        client.deleteDocument(targetProfile, newDocId);
+      } catch (ignoreRollback) {}
+      throw eSave;
+    }
+
+    if (oldDocId && (oldDocId !== newDocId || profile !== targetProfile)) {
+      try {
+        client.deleteDocument(profile || targetProfile, oldDocId);
+      } catch (ignoreOldDelete) {}
+    }
+
+    return {
+      ok: true,
+      action: 'reindexed',
+      item: saved.item,
+      documentId: newDocId,
+    };
   } finally {
     lock.releaseLock();
   }

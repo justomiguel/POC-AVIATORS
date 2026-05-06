@@ -13,6 +13,48 @@ var UI_STRINGS = {
     nav_agents: 'Agentes',
     nav_contents: 'Contenidos',
     nav_clients: 'Clientes',
+    nav_faq: 'Ayuda / FAQ',
+    page_faq_title: 'Preguntas frecuentes',
+    page_faq_lead:
+      'Guía breve para saber para qué sirve Aviators y cómo moverte por la app.',
+    faq_sec_purpose_heading: '¿Para qué está pensado Aviators?',
+    faq_sec_purpose_lead:
+      'Centraliza consultas con IA sobre tu conocimiento en Google Drive, administración de agentes según tu rol y un flujo guiado para subir PDFs, extraer metadata e indexarlos.',
+    faq_sec_visual_heading: 'Referencias visuales',
+    faq_sec_visual_lead:
+      'Esquemas simplificados del layout y los flujos principales (la interfaz real puede variar según tu pantalla e idioma).',
+    faq_note_illustrations:
+      'Son diagramas orientativos, no capturas fotográficas de datos reales.',
+    faq_fig_shell_caption: 'Barra lateral con navegación, idioma y tema; panel principal con la página activa.',
+    faq_fig_chat_caption: 'En Inicio podés chatear y adjuntar contexto desde Drive.',
+    faq_fig_pipeline_caption: 'Flujo típico en Contenidos: tipo → PDF → revisión → guardado e indexación.',
+    faq_sec_q_heading: 'Dudas habituales',
+    faq_sec_q_lead:
+      'Expandí cada pregunta para ver una respuesta corta. Si falta permiso para algo, pedilo a quien administra roles en tu organización.',
+    faq_q_what: '¿Qué es Aviators?',
+    faq_a_what:
+      'Es una Web App de Google Apps Script que te permite conversar con modelos de IA usando documentos de tu Workspace como base, y gestionar agentes, contenidos indexados y clientes cuando tu usuario tiene los roles adecuados.',
+    faq_q_flow: '¿Cómo empiezo después de iniciar sesión?',
+    faq_a_flow:
+      'Usá la barra lateral para ir a Inicio (tablero y chat), o a Agentes, Contenidos y Clientes si aparecen en tu menú. La búsqueda global está debajo de las entradas de navegación.',
+    faq_q_chat: '¿Cómo funciona el chat de Inicio?',
+    faq_a_chat:
+      'Escribís tu pregunta en el área de mensajes y enviás. El modo de consulta (Globant RAG, Assistant o Gemini según configuración) aparece en el cartel superior del chat. Podés mantener turnos sucesivos en la misma conversación.',
+    faq_q_drive_ctx: '¿Qué son los archivos de contexto o Drive?',
+    faq_a_drive_ctx:
+      'Podés explorar carpetas de Drive y adjuntar archivos permitidos para que la respuesta se apoye en ellos, respetando límites de selección y formatos que la integración acepte.',
+    faq_q_contents: '¿Qué hago en Contenidos?',
+    faq_a_contents:
+      'Creás o editás ítems de conocimiento: elegís el tipo (propuesta, success case, cliente), subís un PDF, pedís extraer metadata con IA, revisás los campos y guardás para indexar en el agente correspondiente.',
+    faq_q_agents_clients: '¿Qué son Agentes y Clientes?',
+    faq_a_agents_clients:
+      'Agentes registra y sincroniza configuración de agentes con Globant cuando tenés permiso de administración. Clientes es tu cartera comercial con datos como industria y contacto; ambos suelen ser visibles solo para perfiles admin o preventa según la política del proyecto.',
+    faq_q_visibility: '¿Por qué no veo Agentes, Contenidos o Clientes?',
+    faq_a_visibility:
+      'Esas secciones dependen del rol asignado en el directorio interno. Si solo ves el aviso de visitante, tu cuenta aún no tiene permisos de miembro; contactá al equipo que gestiona la planilla o lista de acceso.',
+    faq_q_misc: '¿Dónde cambio idioma, tema oscuro o exporto datos?',
+    faq_a_misc:
+      'Idioma y modo claro/oscuro están al pie del panel lateral. En listas de Contenidos y Clientes hay acciones de exportación/importación CSV cuando correspondan.',
     page_contents_title: 'Contenidos del agente',
     page_contents_lead:
       'Subí contenido, extraé metadata, revisá y guardá para indexar automáticamente en el agente correspondiente.',
@@ -96,6 +138,8 @@ var UI_STRINGS = {
     contents_btn_cancel: 'Cancelar',
     contents_busy_loading: 'Cargando contenidos…',
     contents_busy_opening: 'Abriendo contenido…',
+    contents_file_opening: 'Abriendo archivo en Drive…',
+    contents_file_not_found: 'No encontré el archivo en Drive.',
     contents_busy_uploading: 'Subiendo archivo…',
     contents_busy_extracting: 'Extrayendo metadata…',
     contents_busy_saving: 'Indexando y guardando…',
@@ -118,6 +162,13 @@ var UI_STRINGS = {
       'Primero cargá y extraé metadata para obtener el archivo de trabajo.',
     contents_err_pick_row: 'Elegí una fila para eliminar.',
     contents_row_busy: 'Procesando…',
+    contents_index_repair_needed: 'No indexado',
+    contents_btn_repair_index: 'Arreglar',
+    contents_busy_repairing_index: 'Reindexando desde Drive…',
+    contents_repair_done: 'Contenido reindexado desde Drive.',
+    contents_repair_removed:
+      'El archivo ya no existe en Drive: se limpió el índice y se quitó la fila.',
+    contents_repair_failed: 'No se pudo reparar el índice.',
     admin_contents_empty:
       'No hay agentes todavía. Creá uno en la pestaña Agentes.',
     note_no_email:
@@ -160,7 +211,15 @@ var UI_STRINGS = {
     dash_agents_title: 'Agentes',
     dash_contents_title: 'Contenidos',
     dash_clients_title: 'Clientes',
-    dash_llm_title: 'LLM',
+    dash_detail_empty: 'Sin desglose todavía.',
+    dash_agent_kind_orchestrator: 'Orquestador',
+    dash_agent_kind_success_cases: 'Success cases',
+    dash_agent_kind_proposals: 'Propuestas',
+    dash_agent_kind_clients: 'Clientes (corpus)',
+    dash_agent_kind_other: 'Personalizado',
+    dash_agent_kind_other_named: '{name}',
+    dash_agents_strategies_line: 'Estrategias: {list}',
+    dash_industry_unknown: 'Sin industria',
     global_search_ph: 'Buscar en todo…',
     global_search_no_results: 'Sin resultados.',
     global_search_group_agents: 'Agentes',
@@ -264,6 +323,7 @@ var UI_STRINGS = {
     chat_sr_agent: 'Asistente',
     chat_refs_title: 'Fuentes relacionadas',
     chat_refs_open_link: 'Abrir archivo',
+    chat_ref_not_found: 'No encontré el archivo en Drive.',
     home_chat_banner_setup:
       'El asistente no está disponible por ahora. Si el problema sigue, contactá a quien administra Aviators.',
     ph_question: 'Escribí tu mensaje…',
@@ -668,6 +728,48 @@ var UI_STRINGS = {
     nav_agents: 'Agents',
     nav_contents: 'Content',
     nav_clients: 'Clients',
+    nav_faq: 'Help / FAQ',
+    page_faq_title: 'Frequently asked questions',
+    page_faq_lead:
+      'Short guide to what Aviators is for and how to move around the app.',
+    faq_sec_purpose_heading: 'What is Aviators for?',
+    faq_sec_purpose_lead:
+      'It brings together AI Q&A over knowledge in Google Drive, agent administration by role, and a guided flow to upload PDFs, extract metadata, and index them.',
+    faq_sec_visual_heading: 'Visual reference',
+    faq_sec_visual_lead:
+      'Simplified sketches of layout and main flows (your actual UI may vary by screen size and language).',
+    faq_note_illustrations:
+      'These are illustrative diagrams, not photographic screenshots of real data.',
+    faq_fig_shell_caption: 'Sidebar with navigation, locale and theme; main panel shows the active page.',
+    faq_fig_chat_caption: 'On Home you can chat and attach context from Drive.',
+    faq_fig_pipeline_caption: 'Typical Content flow: type → PDF → review → save and index.',
+    faq_sec_q_heading: 'Common questions',
+    faq_sec_q_lead:
+      'Expand each question for a short answer. If something is missing, ask whoever manages roles in your organization.',
+    faq_q_what: 'What is Aviators?',
+    faq_a_what:
+      'A Google Apps Script web app to chat with AI models grounded in your Workspace documents, and to manage agents, indexed content, and clients when your account has the right roles.',
+    faq_q_flow: 'What should I do right after signing in?',
+    faq_a_flow:
+      'Use the sidebar for Home (dashboard and chat), or Agents, Content and Clients if they appear. Global search sits below the nav items.',
+    faq_q_chat: 'How does Home chat work?',
+    faq_a_chat:
+      'Type in the message area and send. The consultation mode (Globant RAG, Assistant or Gemini depending on setup) is shown in the banner above the chat. You can keep multiple turns in one thread.',
+    faq_q_drive_ctx: 'What about Drive or context files?',
+    faq_a_drive_ctx:
+      'You can browse Drive folders and attach allowed files so answers use them, within selection limits and formats the integration accepts.',
+    faq_q_contents: 'What do I do under Content?',
+    faq_a_contents:
+      'Create or edit knowledge items: pick a type (proposal, success case, client), upload a PDF, run AI metadata extraction, review fields, then save to index into the right agent.',
+    faq_q_agents_clients: 'What are Agents and Clients?',
+    faq_a_agents_clients:
+      'Agents registers and syncs agent configuration with Globant when you have admin permission. Clients is your commercial account list (industry, contact, etc.); both are often limited to admin or presales profiles.',
+    faq_q_visibility: "Why don't I see Agents, Content or Clients?",
+    faq_a_visibility:
+      'Those areas depend on your role in the internal directory. If you only see the visitor notice, your account is not a full member yet—ask whoever manages the roster or access list.',
+    faq_q_misc: 'Where do I change language, dark mode or export data?',
+    faq_a_misc:
+      'Locale and light/dark mode are at the bottom of the sidebar. Content and Clients lists include CSV export/import actions when available.',
     page_contents_title: 'Agent content',
     page_contents_lead:
       'Upload content, extract metadata, review and save it to auto-index into the matching agent.',
@@ -751,6 +853,8 @@ var UI_STRINGS = {
     contents_btn_cancel: 'Cancel',
     contents_busy_loading: 'Loading content…',
     contents_busy_opening: 'Opening content…',
+    contents_file_opening: 'Opening file in Drive…',
+    contents_file_not_found: 'I could not find that file in Drive.',
     contents_busy_uploading: 'Uploading file…',
     contents_busy_extracting: 'Extracting metadata…',
     contents_busy_saving: 'Indexing and saving…',
@@ -773,6 +877,13 @@ var UI_STRINGS = {
       'Upload and extract metadata first to get a working file.',
     contents_err_pick_row: 'Pick a row to delete.',
     contents_row_busy: 'Processing…',
+    contents_index_repair_needed: 'Not indexed',
+    contents_btn_repair_index: 'Fix',
+    contents_busy_repairing_index: 'Re-indexing from Drive…',
+    contents_repair_done: 'Content re-indexed from Drive.',
+    contents_repair_removed:
+      'The file no longer exists in Drive: the index was cleaned and the row was removed.',
+    contents_repair_failed: 'Could not repair the index.',
     admin_contents_empty:
       'No agents yet. Create one in the Agents tab.',
     note_no_email:
@@ -814,7 +925,15 @@ var UI_STRINGS = {
     dash_agents_title: 'Agents',
     dash_contents_title: 'Contents',
     dash_clients_title: 'Clients',
-    dash_llm_title: 'LLM',
+    dash_detail_empty: 'No breakdown yet.',
+    dash_agent_kind_orchestrator: 'Orchestrator',
+    dash_agent_kind_success_cases: 'Success cases',
+    dash_agent_kind_proposals: 'Proposals',
+    dash_agent_kind_clients: 'Clients (corpus)',
+    dash_agent_kind_other: 'Custom',
+    dash_agent_kind_other_named: '{name}',
+    dash_agents_strategies_line: 'Strategies: {list}',
+    dash_industry_unknown: 'No industry',
     global_search_ph: 'Search everything…',
     global_search_no_results: 'No results.',
     global_search_group_agents: 'Agents',
@@ -912,6 +1031,7 @@ var UI_STRINGS = {
     chat_sr_agent: 'Assistant',
     chat_refs_title: 'Related sources',
     chat_refs_open_link: 'Open file',
+    chat_ref_not_found: 'I could not find that file in Drive.',
     home_chat_banner_setup:
       'The assistant is not available right now. If this keeps happening, contact your Aviators admin.',
     lbl_question_sronly: 'Question',

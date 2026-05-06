@@ -73,6 +73,32 @@ function AdminAuth_sessionIsAdmin() {
   return AdminAuth_emailIsAdmin(email);
 }
 
+/**
+ * Administración de agentes RAG / Agent API: excluye filas de rol preventa aunque
+ * el correo esté en allowlist o la etiqueta cuente como admin en hoja.
+ *
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_canManageAgents(email) {
+  if (!AdminAuth_emailIsAdmin(email)) return false;
+  return !RoleDirectory_emailIsPresale(email);
+}
+
+/**
+ * @return {boolean}
+ */
+function AdminAuth_sessionCanManageAgents() {
+  var email = Session.getActiveUser().getEmail();
+  return AdminAuth_canManageAgents(email);
+}
+
+function AdminAuth_requireAgentsAdmin() {
+  if (!AdminAuth_sessionCanManageAgents()) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  }
+}
+
 function AdminAuth_requireAdmin() {
   if (!AdminAuth_sessionIsAdmin()) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));

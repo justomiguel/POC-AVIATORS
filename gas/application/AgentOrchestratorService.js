@@ -239,7 +239,7 @@ function AgentOrchestrator_normText_(s) {
 /**
  * @param {string} answerText
  * @param {Array<string>} preferredTypes
- * @return {Array<{contentId:string,title:string,contentType:string,url:string,fileName:string}>}
+ * @return {Array<{contentId:string,title:string,contentType:string,url:string,fileName:string,driveFileId:string}>}
  */
 function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
   var text = AgentOrchestrator_normText_(answerText);
@@ -269,7 +269,7 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
     return [];
   }
 
-  /** @type {Array<{score:number,ref:{contentId:string,title:string,contentType:string,url:string,fileName:string}}>} */
+  /** @type {Array<{score:number,ref:{contentId:string,title:string,contentType:string,url:string,fileName:string,driveFileId:string}}>} */
   var scored = [];
   for (i = 0; i < items.length; i++) {
     var c = items[i] && items[i].common ? items[i].common : {};
@@ -277,6 +277,8 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
     var client = String(c.client_name || '').trim();
     var docId = String(c.globant_document_id || '').trim();
     var fileName = String(c.file_name || '').trim();
+    var driveFileId = String(c.drive_file_id || '').trim();
+    var driveFileUrl = String(c.drive_file_url || '').trim();
     var cType = String(c.content_type || '').trim();
     var cId = String(c.content_id || '').trim();
     if (!cId) continue;
@@ -289,7 +291,7 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
     if (docId && text.indexOf(AgentOrchestrator_normText_(docId)) >= 0) score += 4;
     if (score <= 0) continue;
 
-    var url = AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
+    var url = driveFileUrl || AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
     scored.push({
       score: score,
       ref: {
@@ -298,6 +300,7 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
         contentType: cType,
         url: url,
         fileName: fileName,
+        driveFileId: driveFileId,
       },
     });
   }
