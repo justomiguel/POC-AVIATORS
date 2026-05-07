@@ -7,12 +7,14 @@ var CATALOG_PROP_TAB_COMMON = 'CATALOG_TAB_COMMON';
 var CATALOG_PROP_TAB_PROPOSALS = 'CATALOG_TAB_PROPOSALS';
 var CATALOG_PROP_TAB_SUCCESS_CASES = 'CATALOG_TAB_SUCCESS_CASES';
 var CATALOG_PROP_TAB_CLIENTS = 'CATALOG_TAB_CLIENTS';
+var CATALOG_PROP_TAB_ONBOARDING = 'CATALOG_TAB_ONBOARDING';
 var CATALOG_PROP_TAGS_JSON = 'CATALOG_CONTROLLED_TAGS_JSON';
 
 var CATALOG_TAB_COMMON_DEFAULT = 'common';
 var CATALOG_TAB_PROPOSALS_DEFAULT = 'proposals';
 var CATALOG_TAB_SUCCESS_CASES_DEFAULT = 'success_cases';
 var CATALOG_TAB_CLIENTS_DEFAULT = 'clients';
+var CATALOG_TAB_ONBOARDING_DEFAULT = 'onboarding';
 var CATALOG_ROOT_FOLDER_ID = '1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG';
 
 /** @return {string[]} */
@@ -57,6 +59,15 @@ function ContentCatalog_headersByType_(contentType) {
       'impact_metric',
       'impact_value',
       'evidence',
+      'notes',
+    ];
+  }
+  if (contentType === 'onboarding') {
+    return [
+      'content_id',
+      'topic',
+      'category',
+      'audience',
       'notes',
     ];
   }
@@ -116,7 +127,7 @@ function ContentCatalog_requireAnyRole_() {
 
 /**
  * @param {GoogleAppsScript.Properties.Properties} props
- * @return {{common:string, proposals:string, successCases:string, clients:string}}
+ * @return {{common:string, proposals:string, successCases:string, clients:string, onboarding:string}}
  */
 function ContentCatalog_resolveTabNames_(props) {
   return {
@@ -132,6 +143,9 @@ function ContentCatalog_resolveTabNames_(props) {
     clients:
       (props.getProperty(CATALOG_PROP_TAB_CLIENTS) || '').trim() ||
       CATALOG_TAB_CLIENTS_DEFAULT,
+    onboarding:
+      (props.getProperty(CATALOG_PROP_TAB_ONBOARDING) || '').trim() ||
+      CATALOG_TAB_ONBOARDING_DEFAULT,
   };
 }
 
@@ -209,6 +223,10 @@ function ContentCatalog_getOrCreateSpreadsheet_(props) {
     ensureSheet(tabs.clients),
     ContentCatalog_headersByType_('client'),
   );
+  ContentCatalog_ensureSheetHeaders_(
+    ensureSheet(tabs.onboarding),
+    ContentCatalog_headersByType_('onboarding'),
+  );
 
   return { spreadsheet: ss, tabs: tabs };
 }
@@ -221,7 +239,8 @@ function ContentCatalog_isValidType_(contentType) {
   return (
     contentType === 'proposal' ||
     contentType === 'success_case' ||
-    contentType === 'client'
+    contentType === 'client' ||
+    contentType === 'onboarding'
   );
 }
 
@@ -367,6 +386,10 @@ function ContentCatalog_list(filters) {
     ss.getSheetByName(tabs.clients),
     ContentCatalog_headersByType_('client'),
   );
+  var onboardingRows = ContentCatalog_readRows_(
+    ss.getSheetByName(tabs.onboarding),
+    ContentCatalog_headersByType_('onboarding'),
+  );
   var byIdSpecific = {};
   var i;
   for (i = 0; i < proposalsRows.length; i++) {
@@ -377,6 +400,9 @@ function ContentCatalog_list(filters) {
   }
   for (i = 0; i < clientRows.length; i++) {
     byIdSpecific[String(clientRows[i].content_id || '').trim()] = clientRows[i];
+  }
+  for (i = 0; i < onboardingRows.length; i++) {
+    byIdSpecific[String(onboardingRows[i].content_id || '').trim()] = onboardingRows[i];
   }
 
   var q = filters && filters.q ? String(filters.q).trim().toLowerCase() : '';
@@ -420,10 +446,16 @@ function ContentCatalog_list(filters) {
         repairClient = null;
       }
     }
+    var globantIndexStatus =
+      shouldReconcile && driveState === 'exists'
+        ? ContentCatalog_getIndexStatus_(repairClient, globantProfile, globantDocId)
+        : '';
     var needsIndexRepair =
-      shouldReconcile &&
-      driveState === 'exists' &&
-      ContentCatalog_needsIndexRepair_(repairClient, globantProfile, globantDocId);
+      globantIndexStatus === 'missing' ||
+      (globantIndexStatus !== '' &&
+        globantIndexStatus !== 'Success' &&
+        globantIndexStatus !== 'Pending' &&
+        globantIndexStatus !== 'Processing');
     items.push({
       common: {
         content_id: cid,
@@ -438,6 +470,7 @@ function ContentCatalog_list(filters) {
         drive_file_url: String(c.drive_file_url || ''),
         globant_profile_name: globantProfile,
         globant_document_id: globantDocId,
+        globant_index_status: globantIndexStatus,
         index_repair_needed: needsIndexRepair,
         uploaded_by: String(c.uploaded_by || ''),
         created_at: String(c.created_at || ''),
@@ -491,15 +524,23 @@ function ContentCatalog_getDriveFileState_(driveFileId) {
  * @param {string} documentId
  * @return {boolean}
  */
-function ContentCatalog_needsIndexRepair_(ragClient, profileName, documentId) {
+/**
+ * Devuelve el estado de indexación real del documento en Globant.
+ * Valores posibles: 'Success', 'Failed', 'Pending', 'Processing', 'missing', '' (desconocido).
+ * @param {Object|null} ragClient
+ * @param {string} profileName
+ * @param {string} documentId
+ * @return {string}
+ */
+function ContentCatalog_getIndexStatus_(ragClient, profileName, documentId) {
   var pn = String(profileName || '').trim();
   var doc = String(documentId || '').trim();
-  if (!pn || !doc) return true;
-  if (!ragClient) return false;
+  if (!pn || !doc) return 'missing';
+  if (!ragClient) return '';
   try {
-    return ragClient.getDocumentIndexStatus(pn, doc) !== 'Success';
+    return String(ragClient.getDocumentIndexStatus(pn, doc) || '');
   } catch (e) {
-    return true;
+    return '';
   }
 }
 
@@ -519,7 +560,9 @@ function ContentCatalog_deleteRowsByType_(ss, tabs, contentType, contentId) {
       ? tabs.proposals
       : contentType === 'success_case'
         ? tabs.successCases
-        : tabs.clients;
+        : contentType === 'onboarding'
+          ? tabs.onboarding
+          : tabs.clients;
   var specificSheet = ss.getSheetByName(specificTab);
   var deletedCommon = commonSheet
     ? ContentCatalog_deleteRowByContentId_(commonSheet, id)
@@ -583,7 +626,9 @@ function ContentCatalog_upsert(payload) {
       ? tabs.proposals
       : ctype === 'success_case'
         ? tabs.successCases
-        : tabs.clients;
+        : ctype === 'onboarding'
+          ? tabs.onboarding
+          : tabs.clients;
   var specificSheet = ss.getSheetByName(specificTab);
   var commonHeaders = ContentCatalog_headersCommon_();
   var specificHeaders = ContentCatalog_headersByType_(ctype);
@@ -606,7 +651,9 @@ function ContentCatalog_upsert(payload) {
         ? tabs.proposals
         : prevContentType === 'success_case'
           ? tabs.successCases
-          : tabs.clients;
+          : prevContentType === 'onboarding'
+            ? tabs.onboarding
+            : tabs.clients;
     var oldSheet = ss.getSheetByName(oldTab);
     if (oldSheet) {
       ContentCatalog_deleteRowByContentId_(oldSheet, contentId);
@@ -753,5 +800,73 @@ function ContentCatalog_setControlledTags(tags) {
     JSON.stringify(normalized),
   );
   return { ok: true, tags: normalized };
+}
+
+/**
+ * Busca documentos en el catálogo por nombre de cliente (búsqueda flexible).
+ * Devuelve los document IDs de Globant y metadata adicional incluyendo summary y link de Drive.
+ * @param {string} clientQuery — texto a buscar en client_name
+ * @return {{docs: Array<{documentId:string, profileName:string, clientName:string, fileName:string, title:string, summary:string, contentType:string, driveUrl:string}>}}
+ */
+function ContentCatalog_findDocsByClient(clientQuery) {
+  var q = String(clientQuery || '').trim().toLowerCase();
+  if (!q) return { docs: [] };
+
+  var props = PropertiesService.getScriptProperties();
+  var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
+  var ss = catalog.spreadsheet;
+  var tabs = catalog.tabs;
+  var commonHeaders = ContentCatalog_headersCommon_();
+  var commonRows = ContentCatalog_readRows_(ss.getSheetByName(tabs.common), commonHeaders);
+
+  var results = [];
+  for (var i = 0; i < commonRows.length; i++) {
+    var row = commonRows[i];
+    var clientName = String(row.client_name || '').trim();
+    var globantDocId = String(row.globant_document_id || '').trim();
+    var profileName = String(row.globant_profile_name || '').trim();
+
+    if (!globantDocId || !profileName) continue;
+
+    var clientLower = clientName.toLowerCase();
+    var match = false;
+
+    if (clientLower.indexOf(q) >= 0) {
+      match = true;
+    } else {
+      var words = clientLower.split(/\s+/);
+      for (var w = 0; w < words.length; w++) {
+        if (words[w].length >= 3 && q.indexOf(words[w]) >= 0) {
+          match = true;
+          break;
+        }
+      }
+      if (!match) {
+        var qWords = q.split(/\s+/);
+        for (var qw = 0; qw < qWords.length; qw++) {
+          if (qWords[qw].length >= 3 && clientLower.indexOf(qWords[qw]) >= 0) {
+            match = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (match) {
+      results.push({
+        documentId: globantDocId,
+        profileName: profileName,
+        clientName: clientName,
+        fileName: String(row.file_name || '').trim(),
+        title: String(row.title || '').trim(),
+        summary: String(row.summary || '').trim(),
+        contentType: String(row.content_type || '').trim(),
+        driveUrl: String(row.drive_file_url || '').trim(),
+      });
+    }
+  }
+
+  console.log('[CATALOG-SEARCH] Query: "' + q + '", Found: ' + results.length + ' docs');
+  return { docs: results };
 }
 

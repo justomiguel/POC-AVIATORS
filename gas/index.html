@@ -13,6 +13,11 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
     <script>
       (function () {
         var dark = false;
@@ -96,7 +101,7 @@
       >
         <aside
           id="app-sidebar"
-          class="app-sidebar flex h-full min-h-0 w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 md:min-h-0 md:w-72 md:border-b-0 md:border-r md:py-4 md:pl-4 md:pr-3"
+          class="app-sidebar flex h-full min-h-0 w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-800 md:min-h-0 md:w-72 md:border-b-0 md:border-r md:py-4 md:pl-4 md:pr-3"
           data-i18n-aria-label="sidebar_aria_profile"
           aria-label=""
           aria-hidden="false"
@@ -147,70 +152,70 @@
                 ?
               </div>
             </div>
-            <p id="user-display-name" class="mb-1 text-center text-sm font-semibold text-slate-800">
+            <p id="user-display-name" class="mb-1 text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
               —
             </p>
             <p class="mb-3 text-center">
               <span id="sidebar-role" class="role-badge">—</span>
             </p>
             <p
-              class="mb-1 text-center text-xs text-slate-500"
+              class="mb-1 text-center text-xs text-slate-500 dark:text-slate-400"
               data-i18n="sidebar_account"
             ></p>
-            <p class="mb-4 break-all text-center text-sm text-slate-700" id="email">—</p>
+            <p class="mb-4 break-all text-center text-sm text-slate-700 dark:text-slate-300" id="email">—</p>
 
             <nav
-              class="app-sidebar-nav mb-2 flex flex-col gap-1 rounded-2xl border border-slate-200/80 bg-white/80 p-2 shadow-sm"
+              class="app-sidebar-nav mb-2 flex flex-col gap-1 rounded-2xl border border-slate-200/80 bg-white/80 p-2 shadow-sm dark:border-slate-600 dark:bg-slate-900/55 dark:shadow-md dark:shadow-black/25"
               aria-label="main"
             >
               <button
                 type="button"
-                class="app-nav-item is-active flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50"
+                class="app-nav-item is-active flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-100 dark:hover:bg-slate-700/80"
                 data-app-page="home"
                 id="nav-btn-home"
               >
-                <i class="fa-solid fa-house w-5 shrink-0 text-center text-sky-600"></i>
+                <i class="fa-solid fa-house w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_home"></span>
               </button>
               <button
                 type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50"
+                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 data-app-page="agents"
                 id="nav-page-agents"
               >
-                <i class="fa-solid fa-robot w-5 shrink-0 text-center text-sky-600"></i>
+                <i class="fa-solid fa-robot w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_agents"></span>
               </button>
               <button
                 type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50"
+                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 data-app-page="contents"
                 id="nav-page-contents"
               >
-                <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600"></i>
+                <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_contents"></span>
               </button>
               <button
                 type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50"
+                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 data-app-page="clients"
                 id="nav-page-clients"
               >
-                <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600"></i>
+                <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_clients"></span>
               </button>
               <button
                 type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50"
+                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 data-app-page="metrics"
                 id="nav-page-metrics"
               >
-                <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600"></i>
+                <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_metrics"></span>
               </button>
               <button
                 type="button"
-                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700"
+                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 data-app-page="faq"
                 id="nav-page-faq"
               >
@@ -220,7 +225,7 @@
             </nav>
             <div class="relative mt-3 px-1">
               <div class="relative">
-                <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+                <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
                 <input
                   type="search"
                   id="global-search"
@@ -234,30 +239,30 @@
           </div>
 
           <div
-            class="app-sidebar-footer shrink-0 space-y-3 border-t border-slate-200/80 bg-slate-50 px-4 pb-4 pt-3 md:px-2"
+            class="app-sidebar-footer shrink-0 space-y-3 border-t border-slate-200/80 bg-slate-50 px-4 pb-4 pt-3 dark:border-slate-600 dark:bg-slate-900 md:px-2"
           >
             <div>
               <p
-                class="mb-2 text-center text-xs font-medium text-slate-500"
+                class="mb-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400"
                 data-i18n="sidebar_language"
               ></p>
               <div class="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50"
+                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                   id="locale-btn-es"
                   data-ui-locale="es"
                 >
-                  <i class="fa-solid fa-language shrink-0 text-sky-600" aria-hidden="true"></i>
+                  <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
                   <span data-i18n="lang_option_es"></span>
                 </button>
                 <button
                   type="button"
-                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50"
+                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                   id="locale-btn-en"
                   data-ui-locale="en"
                 >
-                  <i class="fa-solid fa-language shrink-0 text-sky-600" aria-hidden="true"></i>
+                  <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
                   <span data-i18n="lang_option_en"></span>
                 </button>
               </div>
@@ -405,14 +410,57 @@
                 id="dashboard-lead"
               ></p>
             </div>
-            <button
-              type="button"
-              id="chat-new-btn"
-              class="btn btn-sm btn-secondary shrink-0 text-xs"
-            >
-              <i class="fa-solid fa-plus" aria-hidden="true"></i>
-              <span data-i18n="chat_new_conversation"></span>
-            </button>
+            <div class="flex shrink-0 items-center gap-2">
+              <div class="relative">
+                <button
+                  type="button"
+                  id="chat-history-toggle-btn"
+                  class="btn btn-sm btn-secondary text-xs"
+                  data-i18n-aria-label="chat_history_open_btn"
+                  aria-label=""
+                >
+                  <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  <span data-i18n="chat_history_open_btn"></span>
+                </button>
+                <!-- History panel (dropdown) -->
+                <div
+                  id="chat-history-panel"
+                  class="hidden absolute right-0 top-full z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
+                  role="dialog"
+                  aria-labelledby="chat-history-heading"
+                >
+                  <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+                    <h3 id="chat-history-heading" class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="chat_history_heading"></h3>
+                  </div>
+                  <div
+                    id="chat-history-loading"
+                    class="hidden px-3 py-3 text-xs text-slate-400"
+                    role="status"
+                    aria-live="polite"
+                    data-i18n="chat_history_loading"
+                  ></div>
+                  <p
+                    id="chat-history-empty"
+                    class="hidden px-3 py-3 text-xs text-slate-400"
+                    data-i18n="chat_history_empty"
+                  ></p>
+                  <ul
+                    id="chat-history-list"
+                    class="max-h-72 overflow-y-auto px-1 py-1"
+                    aria-label=""
+                    data-i18n-aria-label="chat_history_heading"
+                  ></ul>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="chat-new-btn"
+                class="btn btn-sm btn-secondary text-xs"
+              >
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span data-i18n="chat_new_conversation"></span>
+              </button>
+            </div>
           </div>
           <h2
             class="sr-only"
@@ -438,6 +486,16 @@
           class="chat-composer-lead mb-3 text-sm leading-relaxed text-slate-600"
           data-i18n="static_consult_lead"
         ></p>
+        <!-- Quick prompts chips -->
+        <div
+          id="chat-quick-prompts"
+          class="hidden mb-3"
+          aria-label=""
+          data-i18n-aria-label="chat_quick_prompts_label"
+        >
+          <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500" data-i18n="chat_quick_prompts_label"></p>
+          <div class="chat-qp-list flex flex-wrap gap-1.5"></div>
+        </div>
         <label
           for="question"
           class="label-sr-only"
@@ -693,6 +751,7 @@
                               <i class="fa-solid fa-cloud-arrow-up mb-2 block text-3xl text-sky-600" aria-hidden="true"></i>
                             </p>
                             <p data-i18n="admin_agent_dropzone_hint"></p>
+                            <p id="admin-agent-upload-size-hint" class="mt-2 text-xs text-slate-500" aria-live="polite"></p>
                             <button type="button" id="admin-agent-browse-local-btn" class="btn-admin mt-4 inline-flex items-center gap-2">
                               <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
                               <span data-i18n="btn_admin_agent_upload_pdf"></span>
@@ -745,6 +804,27 @@
                   </main>
                 </div>
               </div>
+
+              <!-- Quick prompts admin panel -->
+              <section
+                class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6"
+                aria-labelledby="admin-qp-heading"
+              >
+                <h3 id="admin-qp-heading" class="mb-1 text-base font-semibold text-slate-900" data-i18n="admin_quick_prompts_sec_heading"></h3>
+                <p class="mb-4 text-sm leading-relaxed text-slate-600" data-i18n="admin_quick_prompts_sec_lead"></p>
+                <div id="admin-qp-list" class="space-y-3 mb-4"></div>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" id="admin-qp-add-btn" class="btn-admin flex items-center gap-2">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span data-i18n="admin_quick_prompts_add_btn"></span>
+                  </button>
+                  <button type="button" id="admin-qp-save-btn" class="btn-admin primary flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    <span data-i18n="admin_quick_prompts_save_btn"></span>
+                  </button>
+                  <p id="admin-qp-status" class="status-msg text-sm"></p>
+                </div>
+              </section>
             </div>
 
             <div
@@ -869,6 +949,7 @@
                         <option value="proposal" data-i18n="contents_type_proposal"></option>
                         <option value="success_case" data-i18n="contents_type_success_case"></option>
                         <option value="client" data-i18n="contents_type_client"></option>
+                        <option value="onboarding" data-i18n="contents_type_onboarding"></option>
                       </select>
                     </label>
                     <label class="text-sm text-slate-700 md:col-span-2">
@@ -899,6 +980,10 @@
                     <span class="inline-flex items-center gap-1">
                       <i class="fa-solid fa-building text-amber-500" aria-hidden="true"></i>
                       <span data-i18n="contents_type_client"></span>
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                      <i class="fa-solid fa-graduation-cap text-violet-500" aria-hidden="true"></i>
+                      <span data-i18n="contents_type_onboarding"></span>
                     </span>
                   </div>
                   <div id="contents-batch-bar" class="hidden mb-2 flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
@@ -937,6 +1022,7 @@
                               <i class="fa-solid fa-sort text-slate-400 contents-sort-icon" aria-hidden="true"></i>
                             </span>
                           </th>
+                          <th class="px-3 py-2 text-slate-600" data-i18n="contents_col_rag_status"></th>
                           <th id="contents-th-actions" class="px-3 py-2" data-i18n="contents_col_actions"></th>
                         </tr>
                       </thead>
@@ -995,6 +1081,7 @@
                         <option value="proposal" data-i18n="contents_type_proposal"></option>
                         <option value="success_case" data-i18n="contents_type_success_case"></option>
                         <option value="client" data-i18n="contents_type_client"></option>
+                        <option value="onboarding" data-i18n="contents_type_onboarding"></option>
                       </select>
                     </label>
                     <p class="text-xs text-slate-500" data-i18n="contents_type_helper"></p>
@@ -1132,6 +1219,14 @@
                       <textarea id="contents-client-notes" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
                     </section>
 
+                    <section id="contents-specific-onboarding" class="hidden space-y-2">
+                      <h4 class="text-sm font-semibold text-slate-800" data-i18n="contents_specific_onboarding_heading"></h4>
+                      <input type="text" id="contents-onboarding-topic" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_onboarding_topic_ph" />
+                      <input type="text" id="contents-onboarding-category" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_onboarding_category_ph" />
+                      <input type="text" id="contents-onboarding-audience" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_onboarding_audience_ph" />
+                      <textarea id="contents-onboarding-notes" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
+                    </section>
+
                     <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                       <button type="button" id="contents-cancel-btn" class="btn-admin inline-flex items-center gap-2">
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -1186,9 +1281,15 @@
               </div>
 
               <div id="clients-screen-list" class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6">
-                <div id="clients-list-loader" class="hidden flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 mb-3" role="status" aria-live="polite">
-                  <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                  <span id="clients-list-loader-msg"></span>
+                <div id="clients-list-loader" class="hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 mb-3" role="status" aria-live="polite">
+                  <div class="loader-flight-inline" aria-hidden="true">
+                    <span class="loader-flight-inline-contrail"></span>
+                    <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                  </div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span id="clients-list-loader-msg"></span>
+                  </div>
                 </div>
                 <div id="clients-batch-bar" class="hidden mb-2 flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
                   <span id="clients-batch-count" class="font-medium text-sky-800 dark:text-sky-300"></span>
@@ -1240,7 +1341,14 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label class="block text-sm">
                     <span class="font-medium text-slate-800" data-i18n="clients_lbl_industry"></span>
-                    <input type="text" id="clients-industry" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                    <select id="clients-industry" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                      <option value="" data-i18n="clients_industry_placeholder"></option>
+                      <option value="Agencias de Turismo" data-i18n="clients_industry_tourism_agencies"></option>
+                      <option value="Logistica" data-i18n="clients_industry_logistics"></option>
+                      <option value="Agencias AeroEspaciales" data-i18n="clients_industry_aerospace_agencies"></option>
+                      <option value="Aeropuertos" data-i18n="clients_industry_airports"></option>
+                      <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
+                    </select>
                   </label>
                   <label class="block text-sm">
                     <span class="font-medium text-slate-800" data-i18n="clients_lbl_country"></span>
@@ -1311,8 +1419,14 @@
                   </button>
                 </div>
                 <div id="metrics-status" class="mt-3 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
-                  <i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i>
-                  <span id="metrics-status-text"></span>
+                  <div class="loader-flight-inline" aria-hidden="true">
+                    <span class="loader-flight-inline-contrail"></span>
+                    <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                  </div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <i id="metrics-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span id="metrics-status-text"></span>
+                  </div>
                 </div>
               </section>
 
@@ -1536,6 +1650,16 @@
                       data-i18n-html="faq_agent_clients_detail_html"
                     ></div>
                   </div>
+                  <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-900/40">
+                    <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <i class="fa-solid fa-graduation-cap text-violet-500" aria-hidden="true"></i>
+                      <span data-i18n="faq_agent_onboarding_title"></span>
+                    </h4>
+                    <div
+                      class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                      data-i18n-html="faq_agent_onboarding_detail_html"
+                    ></div>
+                  </div>
                 </div>
                 <p class="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-i18n="faq_agents_admin_note"></p>
               </section>
@@ -1705,17 +1829,7 @@
       <div class="blocking-modal-card flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-6 shadow-xl">
         <div class="blocking-flight" aria-hidden="true">
           <span class="blocking-flight-contrail"></span>
-          <svg
-            class="blocking-flight-plane"
-            viewBox="0 0 1280 640"
-            role="img"
-            aria-label="Plane in flight"
-          >
-            <path
-              d="M844 40c0-5 52-150 115-323 115-314 115-315 97-340-10-14-238-334-506-711l-487-687-47-6c-26-3-249-26-497-51-247-25-558-57-690-70-270-28-722-74-1080-110-609-62-923-61-1405 1-219 28-340 52-417 83-67 26-170 78-176 88-3 5 5 67 19 138 13 72 24 138 24 148 0 15-13 17-124 17h-123l-37-55c-20-30-42-55-49-55-17 0-203 168-477 431-191 183-471 466-1025 1037l-101 103-207-52c-114-28-207-54-207-58 0-3 264-523 585-1156 641-1261 600-1166 513-1180-21-4-42-13-45-21-3-7 5-46 17-85 12-39 18-75 13-79-17-14-111-43-533-160-615-171-1254-355-1398-401-127-42-192-82-192-119 0-20 60-77 96-90 12-5 94-16 181-25l158-17 935 252c514 138 952 256 972 262 34 10 46 6 185-55 293-129 825-333 1133-434 102-33 165-47 260-58 69-7 262-30 430-50 305-37 305-37 590-31 244 5 283 4 270-8-818-302-1799-655-1637-589-1785-640-1805-627-11 7-100 82-196 166l-175 152-80-6c-44-3-137-11-207-17l-127-12 196-201c107-110 231-248 274-306 84-114 103-129 194-156 49-15 92-19 235-18h175l615 203c338 111 1133 373 1765 582 633 208 1312 432 1510 499 198 66 367 120 376 120 8 0 26-12 40-26 13-14 36-35 51-45l27-19 13 27c18 37 63 61 131 69 70 8 72 0 18-64-50-61-73-107-69-140 3-28 18-32 92-21 27 4 32-1 59-53 38-76 96-134 162-164 72-33 248-48 460-40 88 4 255 11 370 15 116 4 222 13 237 19 34 14 208 134 230 159 45 49 118 254 118 330 0 42-48 230-70 274-25 48-86 101-143 125-46 19-55 28-39 38 9 5 560 71 842 101 74 8 308 28 520 45 1073 85 2210 206 2553 271 285 53 578 200 840 419 112 94 155 148 182 226 17 51 17 55 1 99-32 83-156 184-401 325-60 35-130 81-155 103-71 62-244 140-425 192-269 78-423 114-575 136-139 21-158 21-425 10-444-19-1299-84-1931-147-39-4-64-3-68 4-4 6 86 296 199 644 113 348 204 642 202 653-2 11-99 161-216 333l-213 312h-169c-93 0-169-3-169-7z"
-              fill="currentColor"
-            />
-          </svg>
+          <i class="fa-solid fa-plane blocking-flight-plane" aria-hidden="true"></i>
         </div>
         <p id="blocking-modal-msg" class="text-sm font-medium text-slate-700"></p>
       </div>

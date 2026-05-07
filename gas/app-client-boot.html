@@ -124,6 +124,8 @@
       homeMember.classList.toggle('hidden', pg === 'faq');
     }
     if (homeVisitante) homeVisitante.classList.add('hidden');
+    var viewApp = document.getElementById('view-app');
+    if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
     var scrollArea = document.querySelector('.app-content-scroll');
     if (scrollArea) scrollArea.scrollTop = 0;
     var navItems = document.querySelectorAll('.app-nav-item');
@@ -169,6 +171,12 @@
     if (llm) {
       A.chat.applyConsultModeLabels(llm);
       A.chat.updateHomeChatBanner(llm);
+    }
+    var qp = S.get('quickPrompts');
+    if (A.chat && A.chat.applyQuickPrompts && qp && qp.length) {
+      var ci = S.get('cachedI18n');
+      var locUi = ci && ci._locale === 'en' ? 'en' : 'es';
+      A.chat.applyQuickPrompts(qp, locUi);
     }
     var ce = document.getElementById('chat-empty');
     if (ce && !ce.classList.contains('hidden')) {
@@ -332,6 +340,18 @@
       S.set('canViewCatalog', canViewCatalog);
       S.set('canViewMetrics', canViewMetrics);
       S.set('canResetMetrics', canResetMetrics);
+      var adm = bootstrap.admin || {};
+      var maxUp =
+        adm.adminUploadMaxBytes != null
+          ? parseInt(String(adm.adminUploadMaxBytes), 10)
+          : 0;
+      S.set(
+        'adminUploadMaxBytes',
+        !isNaN(maxUp) && maxUp > 0 ? maxUp : 50 * 1024 * 1024,
+      );
+      if (A.agents && A.agents.refreshUploadLimitHint) {
+        A.agents.refreshUploadLimitHint();
+      }
       console.log('[Aviators:permissions]', JSON.stringify({
         raw: bootstrap.permissions,
         canManageAgents: canManageAgents,
@@ -362,6 +382,19 @@
       }
 
       A.chat.applyConsultModeInitialState(llmCfg);
+
+      // Apply quick prompts from bootstrap (guardados para refresco al cambiar idioma)
+      var qpBootstrap = bootstrap.quickPrompts || [];
+      S.set('quickPrompts', qpBootstrap);
+      if (A.chat.applyQuickPrompts && qpBootstrap.length) {
+        var locale = (bootstrap.i18n && bootstrap.i18n._locale) || 'es';
+        A.chat.applyQuickPrompts(qpBootstrap, locale);
+      }
+
+      // Load quick prompts admin section if admin
+      if (canManageAgents && A.adminQuickPrompts && A.adminQuickPrompts.init) {
+        A.adminQuickPrompts.init(bootstrap.quickPrompts || []);
+      }
 
       loadContextFilesLazy();
 

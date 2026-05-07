@@ -60,12 +60,22 @@ function getBootstrap() {
     }
   } catch (ePerms) {}
 
+  var adminSlice = AdminKnowledge_getBootstrapSlice();
+  adminSlice.adminUploadMaxBytes =
+    typeof ADMIN_UPLOAD_LOCAL_MAX_BYTES !== 'undefined'
+      ? ADMIN_UPLOAD_LOCAL_MAX_BYTES
+      : 50 * 1024 * 1024;
+
+  var quickPrompts = [];
+  try { quickPrompts = MetricsService_quickPromptsGet_(); } catch (eQp) {}
+
   return {
     session: getSessionInfo(),
     llm: LlmOrchestrator_getUiConfig(),
-    admin: AdminKnowledge_getBootstrapSlice(),
+    admin: adminSlice,
     i18n: UiStrings_getClientPack_(),
     permissions: perms,
+    quickPrompts: quickPrompts,
   };
 }
 
@@ -418,7 +428,7 @@ function askAboutDocuments(question, fileIds, historyJson) {
   var refs = ChatReferences_merge_(catalogRefs, selectedRefs);
   var answerText = String(ans.answer || '').trim();
   var isUnanswered = !answerText;
-  MetricsService_trackQuestionEvent({
+  var tracked = MetricsService_trackQuestionEvent({
     mode: 'drive_docs',
     agentId: 'drive_docs',
     agentName: 'Drive Docs',
@@ -428,6 +438,7 @@ function askAboutDocuments(question, fileIds, historyJson) {
   });
   return {
     answer: ans.answer,
+    eventId: (tracked && tracked.eventId) || '',
     meta: {
       model: ans.model,
       location: ans.providerLabel,
@@ -455,7 +466,7 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
   var history = [];
   try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
   var r = AgentOrchestrator_answerWith(prompt, agentId, history);
-  MetricsService_trackQuestionEvent({
+  var tracked = MetricsService_trackQuestionEvent({
     mode: 'globant_agent',
     agentId: agentId,
     agentName: r.agentName || '',
@@ -466,6 +477,7 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
   return {
     answer: r.answer,
     agentName: r.agentName || '',
+    eventId: (tracked && tracked.eventId) || '',
     meta: {
       model: r.model,
       location: r.providerLabel,
@@ -487,7 +499,7 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
   try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
   var results = AgentOrchestrator_answerMulti(prompt, agentIds, history);
   var multiAgentId = 'multi:' + (Array.isArray(agentIds) ? agentIds.join(',') : '');
-  MetricsService_trackQuestionEvent({
+  var tracked = MetricsService_trackQuestionEvent({
     mode: 'globant_multi',
     agentId: multiAgentId,
     agentName: 'Multi-agent',
@@ -495,12 +507,14 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
     isUnanswered: !results || !results.length,
     unansweredCode: !results || !results.length ? 'NO_RELEVANT_CONTENT' : '',
   });
+  var sharedEventId = (tracked && tracked.eventId) || '';
   var out = [];
   for (var i = 0; i < results.length; i++) {
     var r = results[i];
     out.push({
       answer: r.answer,
       agentName: r.agentName || '',
+      eventId: sharedEventId,
       meta: {
         model: r.model,
         location: r.providerLabel,
@@ -671,6 +685,15 @@ function contentsRepairIndex(contentId) {
 }
 
 /**
+ * Reindexa un documento existente en Globant con metadata actualizada
+ * (sin re-subir el archivo). Usa los datos del catalogo.
+ * @param {string} contentId
+ */
+function contentsReindexWithMetadata(contentId) {
+  return ContentIngestion_reindexWithMetadata(contentId);
+}
+
+/**
  * Obtiene todos los tags usados en contenidos (para autocompletar).
  */
 function contentsGetAllTags() {
@@ -752,4 +775,97 @@ function metricsLeaderboardList(kind, filters) {
 /** Reset total de métricas (solo admin). */
 function metricsResetAll() {
   return MetricsService_resetAll();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feedback de chat
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Guarda feedback del usuario para una respuesta del chat.
+ * @param {string} eventId
+ * @param {string} rating  'up' | 'down'
+ * @param {string} agentId
+ * @param {string} agentName
+ * @param {string} questionText
+ * @return {{ok:boolean}}
+ */
+function metricsTrackFeedback(eventId, rating, agentId, agentName, questionText) {
+  return MetricsService_trackFeedback_({
+    eventId: eventId,
+    rating: rating,
+    agentId: agentId,
+    agentName: agentName,
+    questionText: questionText,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Historial de conversaciones
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Guarda o actualiza una conversación del usuario activo.
+ * @param {string} convId
+ * @param {string} title
+ * @param {string} messagesJson
+ * @return {{ok:boolean}}
+ */
+function chatHistorySave(convId, title, messagesJson) {
+  return MetricsService_chatHistorySave_(convId, title, messagesJson);
+}
+
+/**
+ * Lista las conversaciones del usuario activo (sin mensajes, solo metadatos).
+ * @return {{ok:boolean,items:Array<{convId:string,title:string,tsCreated:string}>}}
+ */
+function chatHistoryList() {
+  return MetricsService_chatHistoryList_();
+}
+
+/**
+ * Carga los mensajes de una conversación.
+ * @param {string} convId
+ * @return {{ok:boolean,messagesJson:string}}
+ */
+function chatHistoryLoad(convId) {
+  return MetricsService_chatHistoryLoad_(convId);
+}
+
+/**
+ * Elimina una conversación.
+ * @param {string} convId
+ * @return {{ok:boolean}}
+ */
+function chatHistoryDelete(convId) {
+  return MetricsService_chatHistoryDelete_(convId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick prompts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Devuelve los prompts rápidos configurados (o los de ejemplo si la hoja está vacía).
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function quickPromptsGet() {
+  return MetricsService_quickPromptsGet_();
+}
+
+/**
+ * Guarda los prompts rápidos. Solo admin.
+ * @param {string} promptsJson  JSON array de {id,es,en,order}
+ * @return {{ok:boolean}}
+ */
+function quickPromptsSave(promptsJson) {
+  AdminAuth_requireAdmin();
+  var prompts = [];
+  try { prompts = JSON.parse(promptsJson); } catch (e) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+  }
+  if (!Array.isArray(prompts)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+  }
+  return MetricsService_quickPromptsSave_(prompts);
 }

@@ -50,6 +50,9 @@ var UI_STRINGS = {
     faq_agent_clients_title: 'Clientes y proyectos',
     faq_agent_clients_detail_html:
       '<p>Toma como única fuente la <strong>nómina indexada de clientes actuales y proyectos en mantenimiento</strong>. Objetivo: responder por cuenta, obra vigente, estado y continuidad de la relación.</p><p>No mezcla clientes ni proyectos sin evidencia en el índice; si el nombre es ambiguo, conviene aclarar la entidad antes de afirmar. Cuando aplica, organiza en bloques: Cliente, Proyectos vigentes, Estado, Riesgos o pendientes. No debe inventar contratos, revenue, alcance ni fechas.</p><p>Si el cliente o proyecto no aparece en el índice, la respuesta indica <strong>falta de información indexada</strong>, en lugar de suponer datos comerciales.</p>',
+    faq_agent_onboarding_title: 'Onboarding',
+    faq_agent_onboarding_detail_html:
+      '<p>Toma como fuente el <strong>repositorio indexado de onboarding</strong> que incluye conceptos de aviación, modelos de negocio de aerolíneas, terminología de dominio (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.) y metodología del Aviation Studio.</p><p>Objetivo: ayudar a nuevos integrantes y al equipo a comprender la industria de aviación y cómo opera el estudio. Explica conceptos de forma clara y didáctica, usando ejemplos del material indexado cuando estén disponibles.</p><p>Si el concepto o tema no aparece en el índice, indica que <strong>no hay información indexada</strong> en lugar de inventar definiciones o procesos.</p>',
     faq_agents_admin_note:
       'Los administradores pueden ajustar instrucciones, perfiles Globant y carpetas de Drive en la sección Agentes; esta descripción refleja el comportamiento previsto por defecto en el código del sistema.',
     faq_q_what: '¿Qué es Aviators?',
@@ -96,6 +99,8 @@ var UI_STRINGS = {
     contents_type_helper:
       'Esto define a qué agente se va a indexar el contenido.',
     contents_dropzone_title: 'Arrastrá un PDF o elegí uno',
+    err_contents_upload_too_large:
+      'El archivo «{name}» supera el tamaño máximo permitido ({max_mb} MB).',
     contents_current_file_label: 'Archivo procesado',
     contents_btn_replace_file: 'Reemplazar',
     contents_list_heading: 'Lista de contenidos',
@@ -109,12 +114,19 @@ var UI_STRINGS = {
     contents_type_proposal: 'Propuesta',
     contents_type_success_case: 'Success case',
     contents_type_client: 'Cliente',
+    contents_type_onboarding: 'Onboarding',
     contents_legend_title: 'Agentes:',
     contents_col_title: 'Título',
     contents_col_type: 'Tipo',
     contents_col_client: 'Cliente',
     contents_col_updated: 'Actualizado',
+    contents_col_rag_status: 'Estado RAG',
     contents_col_actions: 'Acciones',
+    contents_rag_status_success: 'Indexado',
+    contents_rag_status_failed: 'Error',
+    contents_rag_status_processing: 'Procesando',
+    contents_rag_status_pending: 'Pendiente',
+    contents_rag_status_missing: 'Sin documento',
     contents_btn_edit: 'Editar',
     contents_list_empty: 'No hay contenidos cargados todavía.',
     contents_list_count: '{n} contenido(s).',
@@ -146,6 +158,13 @@ var UI_STRINGS = {
     contents_btn_add_tag: 'Agregar',
     contents_specific_proposal_heading: 'Campos de propuesta',
     contents_specific_success_heading: 'Campos de success case',
+    contents_specific_onboarding_heading: 'Campos de onboarding',
+    contents_onboarding_topic: 'Tópico',
+    contents_onboarding_topic_ph: 'Ej: PSS, NDC, Loyalty, Revenue Management',
+    contents_onboarding_category: 'Categoría',
+    contents_onboarding_category_ph: 'Ej: Negocio, Aerolínea, Dominio, Concepto',
+    contents_onboarding_audience: 'Audiencia',
+    contents_onboarding_audience_ph: 'Ej: Nuevos integrantes, Técnicos, Comercial',
     contents_specific_client_heading: 'Campos de cliente',
     contents_lbl_stage: 'Stage',
     contents_lbl_pricing_model: 'Modelo de pricing',
@@ -193,6 +212,15 @@ var UI_STRINGS = {
     contents_repair_removed:
       'El archivo ya no existe en Drive: se limpió el índice y se quitó la fila.',
     contents_repair_failed: 'No se pudo reparar el índice.',
+    contents_btn_reindex_metadata: 'Actualizar metadata',
+    contents_busy_reindexing_metadata: 'Actualizando metadata en RAG…',
+    contents_reindex_metadata_done: 'Metadata actualizada.',
+    contents_reindex_metadata_failed: 'No se pudo actualizar la metadata.',
+    contents_tooltip_edit: 'Editar',
+    contents_tooltip_view: 'Abrir archivo',
+    contents_tooltip_repair: 'Reindexar desde Drive',
+    contents_tooltip_reindex_meta: 'Actualizar metadata',
+    contents_tooltip_delete: 'Eliminar',
     admin_contents_empty:
       'No hay agentes todavía. Creá uno en la pestaña Agentes.',
     note_no_email:
@@ -245,6 +273,7 @@ var UI_STRINGS = {
     dash_agent_kind_success_cases: 'Success cases',
     dash_agent_kind_proposals: 'Propuestas',
     dash_agent_kind_clients: 'Clientes (corpus)',
+    dash_agent_kind_onboarding: 'Onboarding',
     dash_agent_kind_other: 'Personalizado',
     dash_agent_kind_other_named: '{name}',
     dash_agents_strategies_line: 'Estrategias: {list}',
@@ -380,26 +409,37 @@ var UI_STRINGS = {
       'Estos campos guardan la definición editable del agente para create/update vía API: modelo, estrategia, prompt y parámetros LLM.',
     admin_agent_sec_actions_heading: 'Guardar y sincronizar',
     admin_agent_sec_actions_lead:
-      'Primero guardá perfil, instrucciones y PDF elegidos. Después sincronizá para subirlos al índice en Globant. Eliminar saca el agente del registro en Aviators.',
+      'Primero guardá perfil e instrucciones. Los PDF que elegís desde tu equipo se indexan en Globant al subirlos (no van a Drive). Las carpetas/archivos de Drive siguen requiriendo sincronizar el corpus. Eliminar saca el agente del registro en Aviators.',
     admin_agent_sec_sources_heading: 'Fuentes para el índice',
     admin_agent_sec_sources_lead:
-      'Arrastrá o elegí PDF aquí; se suben a tu Drive y aparecen como chips abajo.',
+      'Arrastrá o elegí PDF del equipo: se indexan en el perfil RAG de Globant (Enterprise AI) y aparecen como chips. Completá antes el nombre del perfil. Si agregás carpetas o archivos desde Drive, usá solo ese tipo de fuente en este agente o bien solo PDF locales — no mezclar.',
     admin_agent_sec_indexed_lead:
       'Listado remoto en Globant para este perfil. Refrescá la lista después de sincronizar.',
     admin_agent_dropzone_aria: 'Zona para arrastrar archivos PDF',
     admin_agent_dropzone_hint:
       'Arrastrá uno o varios PDF aquí, o elegí archivos en tu equipo.',
+    admin_agent_pdf_max_size_hint: 'Tamaño máximo por PDF desde esta pantalla: {mb} MB.',
     btn_admin_agent_upload_pdf: 'Elegir PDF',
     btn_go_agents: 'Ir a Agentes',
     admin_upload_progress: 'Subiendo archivo {current} de {total}…',
+    admin_upload_progress_globant:
+      'Indexando en Globant archivo {current} de {total}… (puede tardar)',
     admin_upload_done_added:
-      'Se añadieron {n} archivo(s) a la selección. Guardá el agente si querés persistir.',
+      'Se añadieron {n} PDF al índice RAG de Globant. Guardá el agente para persistir la selección.',
     err_admin_upload_only_pdf:
       'Solo se pueden subir archivos PDF para este corpus.',
+    err_admin_upload_profile_required:
+      'Indicá el nombre del perfil del agente antes de subir PDF desde tu equipo.',
+    err_admin_agent_sync_mixed_sources:
+      'No podés mezclar en el mismo agente carpetas o archivos de Drive con PDF subidos directo a Globant. Usá solo un tipo de fuente o separá en dos agentes.',
+    admin_agent_sync_rag_only_note:
+      'Los PDF locales ya están en Globant; solo se actualizó la marca de sincronización.',
     err_admin_upload_empty: 'Archivo vacío: «{name}».',
     err_admin_upload_decode: 'No se pudo leer el archivo «{name}».',
     err_admin_upload_too_large:
-      'El archivo «{name}» supera el tamaño máximo permitido.',
+      'El archivo «{name}» supera el tamaño máximo permitido ({max_mb} MB). No se indexa nada en Globant hasta que uses un PDF más chico.',
+    err_admin_upload_rpc_lost:
+      'No se completó la subida (suele pasar si el PDF supera el límite o la red corta). Máximo {max_mb} MB por archivo. No se creó índice parcial en Globant.',
     err_admin_upload_mime:
       'Tipo no válido para el corpus («{name}»: {mime}). Usá PDF.',
     err_admin_upload_failed: 'No se pudo subir «{name}».',
@@ -514,6 +554,7 @@ var UI_STRINGS = {
     btn_close: 'Cerrar',
     chip_folder: 'CARPETA',
     chip_file: 'ARCHIVO',
+    chip_file_globant: 'GLOBANT',
     chip_remove_aria: 'Quitar',
     admin_need_email_drive: 'Necesitás sesión con email para explorar Drive.',
     admin_search_no_results:
@@ -718,6 +759,9 @@ var UI_STRINGS = {
     meta_filter_profile: 'perfil = {profile}',
     meta_orchestrator_selected_agent:
       'Enrutado a {agent} · confianza {confidence}',
+    meta_filter_client_docs: 'Filtrando por {client} ({count} docs)',
+    meta_filter_direct_context: 'Contexto directo: {client} ({count} docs)',
+    meta_provider_globant_chat: 'Globant Chat',
     meta_provider_gemini_api: 'Gemini API',
     llm_gemini_system_preamble:
       'Respondé en español usando solo información de los documentos. Si algo no aparece ahí, decilo claramente. Podés usar viñetas.',
@@ -738,6 +782,12 @@ var UI_STRINGS = {
     clients_th_actions: 'Acciones',
     clients_lbl_name: 'Nombre del cliente',
     clients_lbl_industry: 'Industria',
+    clients_industry_placeholder: 'Seleccionar industria…',
+    clients_industry_tourism_agencies: 'Agencias de Turismo',
+    clients_industry_logistics: 'Logistica',
+    clients_industry_aerospace_agencies: 'Agencias AeroEspaciales',
+    clients_industry_airports: 'Aeropuertos',
+    clients_industry_airlines: 'Aerolineas',
     clients_lbl_country: 'País',
     clients_lbl_contact_name: 'Nombre del contacto',
     clients_lbl_contact_email: 'Email del contacto',
@@ -751,6 +801,7 @@ var UI_STRINGS = {
     clients_saved: 'Cliente guardado.',
     clients_deleted: 'Cliente eliminado.',
     clients_err_name_required: 'El nombre del cliente es requerido.',
+    clients_err_industry_invalid: 'La industria debe ser una de las opciones permitidas.',
     clients_confirm_delete: '¿Eliminar este cliente permanentemente?',
     clients_no_items: 'No hay clientes registrados.',
     clients_load_more: 'Cargar más',
@@ -815,6 +866,31 @@ var UI_STRINGS = {
     err_metrics_reset_only:
       'Solo administradores pueden resetear métricas.',
     context_files_loading: 'Cargando archivos de contexto…',
+    chat_feedback_up: 'Útil',
+    chat_feedback_down: 'No fue útil',
+    chat_feedback_done: 'Gracias por tu feedback',
+    chat_feedback_error: 'No se pudo guardar el feedback',
+    chat_history_heading: 'Conversaciones anteriores',
+    chat_history_open_btn: 'Historial',
+    chat_history_empty: 'Sin conversaciones guardadas',
+    chat_history_loading: 'Cargando historial…',
+    chat_history_delete: 'Eliminar conversación',
+    chat_history_save_error: 'No se pudo guardar la conversación',
+    chat_history_load_error: 'No se pudo cargar la conversación',
+    chat_quick_prompts_label: 'Preguntas frecuentes',
+    admin_quick_prompts_sec_heading: 'Prompts rápidos',
+    admin_quick_prompts_sec_lead: 'Configurá las preguntas sugeridas que aparecen en el chat. Cada prompt tiene texto en español e inglés.',
+    admin_quick_prompts_save_btn: 'Guardar prompts',
+    admin_quick_prompts_add_btn: 'Agregar prompt',
+    admin_quick_prompts_save_busy: 'Guardando prompts…',
+    admin_quick_prompts_save_done: 'Prompts guardados.',
+    admin_quick_prompts_save_error: 'No se pudieron guardar los prompts.',
+    admin_quick_prompts_lbl_es: 'Español',
+    admin_quick_prompts_lbl_en: 'Inglés',
+    admin_quick_prompts_ph_es: 'Pregunta en español…',
+    admin_quick_prompts_ph_en: 'Question in English…',
+    admin_quick_prompts_delete_btn: 'Eliminar',
+    err_quick_prompts_parse: 'Los prompts no tienen un formato válido.',
   },
   en: {
     app_title: 'Aviators',
@@ -859,6 +935,9 @@ var UI_STRINGS = {
     faq_agent_clients_title: 'Clients and projects',
     faq_agent_clients_detail_html:
       '<p>Uses only the indexed roster of <strong>current clients and maintenance projects</strong>. Goal: answer by account, active work, status and relationship continuity.</p><p>It does not mix clients or projects without evidence in the index; ambiguous names should be clarified before stating facts. When it helps, it organizes into Client, Active projects, Status, and Risks or open items. It must not invent contracts, revenue, scope or dates.</p><p>If the client or project is not in the index, the reply signals <strong>missing indexed information</strong> instead of guessing commercial details.</p>',
+    faq_agent_onboarding_title: 'Onboarding',
+    faq_agent_onboarding_detail_html:
+      '<p>Sources from the <strong>indexed onboarding repository</strong> which includes aviation concepts, airline business models, domain terminology (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.) and Aviation Studio methodology.</p><p>Goal: help new joiners and the team understand the aviation industry and how the studio operates. Explains concepts clearly and didactically, using examples from indexed material when available.</p><p>If the concept or topic is not in the index, it indicates <strong>no indexed information</strong> rather than inventing definitions or processes.</p>',
     faq_agents_admin_note:
       'Administrators can edit prompts, Globant profiles and Drive folders under Agents; this page reflects the default behavior shipped with the system.',
     faq_q_what: 'What is Aviators?',
@@ -905,6 +984,8 @@ var UI_STRINGS = {
     contents_type_helper:
       'This decides which agent the content gets indexed into.',
     contents_dropzone_title: 'Drop a PDF or pick one',
+    err_contents_upload_too_large:
+      'File «{name}» exceeds the maximum allowed size ({max_mb} MB).',
     contents_current_file_label: 'Processed file',
     contents_btn_replace_file: 'Replace',
     contents_list_heading: 'Content list',
@@ -918,12 +999,19 @@ var UI_STRINGS = {
     contents_type_proposal: 'Proposal',
     contents_type_success_case: 'Success case',
     contents_type_client: 'Client',
+    contents_type_onboarding: 'Onboarding',
     contents_legend_title: 'Agents:',
     contents_col_title: 'Title',
     contents_col_type: 'Type',
     contents_col_client: 'Client',
     contents_col_updated: 'Updated',
+    contents_col_rag_status: 'RAG Status',
     contents_col_actions: 'Actions',
+    contents_rag_status_success: 'Indexed',
+    contents_rag_status_failed: 'Error',
+    contents_rag_status_processing: 'Processing',
+    contents_rag_status_pending: 'Pending',
+    contents_rag_status_missing: 'No document',
     contents_btn_edit: 'Edit',
     contents_list_empty: 'No content items yet.',
     contents_list_count: '{n} item(s).',
@@ -955,6 +1043,13 @@ var UI_STRINGS = {
     contents_btn_add_tag: 'Add',
     contents_specific_proposal_heading: 'Proposal fields',
     contents_specific_success_heading: 'Success case fields',
+    contents_specific_onboarding_heading: 'Onboarding fields',
+    contents_onboarding_topic: 'Topic',
+    contents_onboarding_topic_ph: 'E.g.: PSS, NDC, Loyalty, Revenue Management',
+    contents_onboarding_category: 'Category',
+    contents_onboarding_category_ph: 'E.g.: Business, Airline, Domain, Concept',
+    contents_onboarding_audience: 'Audience',
+    contents_onboarding_audience_ph: 'E.g.: New joiners, Technical, Commercial',
     contents_specific_client_heading: 'Client fields',
     contents_lbl_stage: 'Stage',
     contents_lbl_pricing_model: 'Pricing model',
@@ -1002,6 +1097,15 @@ var UI_STRINGS = {
     contents_repair_removed:
       'The file no longer exists in Drive: the index was cleaned and the row was removed.',
     contents_repair_failed: 'Could not repair the index.',
+    contents_btn_reindex_metadata: 'Update metadata',
+    contents_busy_reindexing_metadata: 'Updating metadata in RAG…',
+    contents_reindex_metadata_done: 'Metadata updated.',
+    contents_reindex_metadata_failed: 'Could not update metadata.',
+    contents_tooltip_edit: 'Edit',
+    contents_tooltip_view: 'Open file',
+    contents_tooltip_repair: 'Re-index from Drive',
+    contents_tooltip_reindex_meta: 'Update metadata',
+    contents_tooltip_delete: 'Delete',
     admin_contents_empty:
       'No agents yet. Create one in the Agents tab.',
     note_no_email:
@@ -1053,6 +1157,7 @@ var UI_STRINGS = {
     dash_agent_kind_success_cases: 'Success cases',
     dash_agent_kind_proposals: 'Proposals',
     dash_agent_kind_clients: 'Clients (corpus)',
+    dash_agent_kind_onboarding: 'Onboarding',
     dash_agent_kind_other: 'Custom',
     dash_agent_kind_other_named: '{name}',
     dash_agents_strategies_line: 'Strategies: {list}',
@@ -1183,25 +1288,36 @@ var UI_STRINGS = {
       'These fields store the editable agent definition for create/update through API: model, strategy, prompt, and LLM parameters.',
     admin_agent_sec_actions_heading: 'Save and sync',
     admin_agent_sec_actions_lead:
-      'Save profile, instructions, and PDF selection first. Then sync to upload them to the Globant index. Delete removes the agent from Aviators.',
+      'Save profile and instructions first. PDFs you pick from your computer are indexed in Globant when you upload them (they are not saved to Drive). Drive folders and files still require a corpus sync. Delete removes the agent from Aviators.',
     admin_agent_sec_sources_heading: 'Sources for the index',
     admin_agent_sec_sources_lead:
-      'Drag or choose PDFs here; they upload to your Drive and appear as chips below.',
+      'Drag or choose PDFs from your computer: they are indexed into the Globant RAG profile (Enterprise AI) and appear as chips below. Fill in the profile name first. If you add Drive folders or files, use only that source type on this agent or only local PDFs — do not mix.',
     admin_agent_sec_indexed_lead:
       'Remote Globant listing for this profile. Refresh the list after syncing.',
     admin_agent_dropzone_aria: 'Drop PDF files here',
     admin_agent_dropzone_hint:
       'Drop one or more PDFs here, or choose files on your computer.',
+    admin_agent_pdf_max_size_hint: 'Maximum PDF size from this screen: {mb} MB.',
     btn_admin_agent_upload_pdf: 'Choose PDF',
     btn_go_agents: 'Go to Agents',
     admin_upload_progress: 'Uploading file {current} of {total}…',
+    admin_upload_progress_globant:
+      'Indexing in Globant file {current} of {total}… (may take a moment)',
     admin_upload_done_added:
-      '{n} file(s) added to the selection. Save the agent to persist.',
+      '{n} PDF(s) were added to the Globant RAG index. Save the agent to persist the selection.',
     err_admin_upload_only_pdf: 'Only PDF files can be uploaded for this corpus.',
+    err_admin_upload_profile_required:
+      'Set the agent profile name before uploading PDFs from your computer.',
+    err_admin_agent_sync_mixed_sources:
+      'You cannot mix Drive folders or files with PDFs uploaded straight to Globant on the same agent. Use only one source type or split across two agents.',
+    admin_agent_sync_rag_only_note:
+      'Local PDFs are already in Globant; only the sync timestamp was updated.',
     err_admin_upload_empty: 'Empty file: «{name}».',
     err_admin_upload_decode: 'Could not read file «{name}».',
     err_admin_upload_too_large:
-      'File «{name}» exceeds the maximum allowed size.',
+      'File «{name}» exceeds the maximum allowed size ({max_mb} MB). Nothing is indexed in Globant until you use a smaller PDF.',
+    err_admin_upload_rpc_lost:
+      'Upload did not finish (often if the PDF is over the limit or the network timed out). Maximum is {max_mb} MB per file. No partial index was created in Globant.',
     err_admin_upload_mime:
       'Unsupported type for the corpus («{name}»: {mime}). Use PDF.',
     err_admin_upload_failed: 'Could not upload «{name}».',
@@ -1316,6 +1432,7 @@ var UI_STRINGS = {
     btn_close: 'Close',
     chip_folder: 'FOLDER',
     chip_file: 'FILE',
+    chip_file_globant: 'GLOBANT',
     chip_remove_aria: 'Remove',
     admin_need_email_drive: 'You need a session with email to browse Drive.',
     admin_search_no_results:
@@ -1517,6 +1634,9 @@ var UI_STRINGS = {
     meta_filter_profile: 'profile = {profile}',
     meta_orchestrator_selected_agent:
       'Routed to {agent} · confidence {confidence}',
+    meta_filter_client_docs: 'Filtering by {client} ({count} docs)',
+    meta_filter_direct_context: 'Direct context: {client} ({count} docs)',
+    meta_provider_globant_chat: 'Globant Chat',
     meta_provider_gemini_api: 'Gemini API',
     llm_gemini_system_preamble:
       'Answer in English using only information from the documents. If something is not there, say so clearly. You may use bullet points.',
@@ -1537,6 +1657,12 @@ var UI_STRINGS = {
     clients_th_actions: 'Actions',
     clients_lbl_name: 'Client name',
     clients_lbl_industry: 'Industry',
+    clients_industry_placeholder: 'Select industry…',
+    clients_industry_tourism_agencies: 'Travel Agencies',
+    clients_industry_logistics: 'Logistics',
+    clients_industry_aerospace_agencies: 'Aerospace Agencies',
+    clients_industry_airports: 'Airports',
+    clients_industry_airlines: 'Airlines',
     clients_lbl_country: 'Country',
     clients_lbl_contact_name: 'Contact name',
     clients_lbl_contact_email: 'Contact email',
@@ -1550,6 +1676,7 @@ var UI_STRINGS = {
     clients_saved: 'Client saved.',
     clients_deleted: 'Client deleted.',
     clients_err_name_required: 'Client name is required.',
+    clients_err_industry_invalid: 'Industry must be one of the allowed options.',
     clients_confirm_delete: 'Delete this client permanently?',
     clients_no_items: 'No clients registered.',
     clients_load_more: 'Load more',
@@ -1614,6 +1741,31 @@ var UI_STRINGS = {
     err_metrics_reset_only:
       'Only administrators can reset metrics.',
     context_files_loading: 'Loading context files…',
+    chat_feedback_up: 'Helpful',
+    chat_feedback_down: 'Not helpful',
+    chat_feedback_done: 'Thanks for your feedback',
+    chat_feedback_error: 'Could not save feedback',
+    chat_history_heading: 'Previous conversations',
+    chat_history_open_btn: 'History',
+    chat_history_empty: 'No saved conversations',
+    chat_history_loading: 'Loading history…',
+    chat_history_delete: 'Delete conversation',
+    chat_history_save_error: 'Could not save conversation',
+    chat_history_load_error: 'Could not load conversation',
+    chat_quick_prompts_label: 'Quick prompts',
+    admin_quick_prompts_sec_heading: 'Quick prompts',
+    admin_quick_prompts_sec_lead: 'Configure the suggested questions that appear in the chat. Each prompt has text in Spanish and English.',
+    admin_quick_prompts_save_btn: 'Save prompts',
+    admin_quick_prompts_add_btn: 'Add prompt',
+    admin_quick_prompts_save_busy: 'Saving prompts…',
+    admin_quick_prompts_save_done: 'Prompts saved.',
+    admin_quick_prompts_save_error: 'Could not save prompts.',
+    admin_quick_prompts_lbl_es: 'Spanish',
+    admin_quick_prompts_lbl_en: 'English',
+    admin_quick_prompts_ph_es: 'Pregunta en español…',
+    admin_quick_prompts_ph_en: 'Question in English…',
+    admin_quick_prompts_delete_btn: 'Delete',
+    err_quick_prompts_parse: 'Quick prompts format is invalid.',
   },
 };
 

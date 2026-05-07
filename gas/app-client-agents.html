@@ -108,13 +108,16 @@
 
   function addFileToState(item) {
     if (!item || !item.id || item.mimeType === A.MIME_FOLDER) return;
+    var sourceKind = item.source === 'rag' ? 'rag' : 'drive';
     stripIdFromLists(item.id);
     var src = S.get('adminSourcesState');
     var k;
     for (k = 0; k < src.files.length; k++) {
       if (src.files[k].id === item.id) { renderAgentSourceChips(); return; }
     }
-    src.files.push({ id: item.id, name: item.name || item.id });
+    var row = { id: item.id, name: item.name || item.id };
+    if (sourceKind === 'rag') row.source = 'rag';
+    src.files.push(row);
     renderAgentSourceChips();
   }
 
@@ -153,7 +156,12 @@
     wrap.className = 'chip';
     var ty = document.createElement('span');
     ty.className = 'chip-type';
-    ty.textContent = kind === 'folder' ? i18n('chip_folder') : i18n('chip_file');
+    ty.textContent =
+      kind === 'folder'
+        ? i18n('chip_folder')
+        : entry.source === 'rag'
+          ? i18n('chip_file_globant')
+          : i18n('chip_file');
     var nm = document.createElement('span');
     nm.textContent = entry.name;
     wrap.appendChild(ty);
@@ -423,7 +431,10 @@
       appendChip(i18n('chip_folder'), folders[i].name || folders[i].id || i18n('label_em_dash'));
     }
     for (i = 0; i < files.length; i++) {
-      appendChip(i18n('chip_file'), files[i].name || files[i].id || i18n('label_em_dash'));
+      var fSrc = files[i];
+      var fk =
+        fSrc && fSrc.source === 'rag' ? i18n('chip_file_globant') : i18n('chip_file');
+      appendChip(fk, fSrc.name || fSrc.id || i18n('label_em_dash'));
     }
     if (!folders.length && !files.length) {
       var empty = document.createElement('p');
@@ -439,10 +450,29 @@
     if (ag.globantAgent && typeof ag.globantAgent === 'object') {
       cfg = Object.assign(cfg, ag.globantAgent);
     }
+    function resolveModelLabel_() {
+      var gg = ag && ag.globantAgent && typeof ag.globantAgent === 'object'
+        ? ag.globantAgent
+        : {};
+      var models = gg && Array.isArray(gg.models) ? gg.models : [];
+      var m0 = models.length ? models[0] : null;
+      return String(
+        cfg.modelName ||
+          ag.modelName ||
+          gg.modelName ||
+          gg.model ||
+          gg.model_name ||
+          (m0 && m0.name) ||
+          '',
+      ).trim();
+    }
     if (agentsRoProfile) agentsRoProfile.textContent = ag.profileName || i18n('label_em_dash');
     if (agentsRoLastSync) agentsRoLastSync.textContent = ag.lastSync || i18n('label_em_dash');
     if (agentsRoPrompt) agentsRoPrompt.textContent = ag.systemPrompt || i18n('label_em_dash');
-    if (agentsRoModel) agentsRoModel.textContent = cfg.modelName || i18n('label_em_dash');
+    if (agentsRoModel) {
+      var modelLabel = resolveModelLabel_();
+      agentsRoModel.textContent = modelLabel || i18n('label_em_dash');
+    }
     if (agentsRoStrategy) agentsRoStrategy.textContent = cfg.strategyName || i18n('label_em_dash');
     renderReadonlySources_(ag);
   }
@@ -544,7 +574,11 @@
       },
       sources: {
         folders: src.folders.slice(),
-        files: src.files.slice(),
+        files: src.files.map(function (f) {
+          var row = { id: f.id, name: f.name };
+          if (f.source === 'rag') row.source = 'rag';
+          return row;
+        }),
       },
     };
   }
@@ -698,7 +732,26 @@
     return out;
   }
 
-  function uploadAdminLocalPdfQueue(files, index, successCount) {
+  function refreshUploadLimitHint() {
+    var el = document.getElementById('admin-agent-upload-size-hint');
+    if (!el) return;
+    var maxB = S.get('adminUploadMaxBytes') || 50 * 1024 * 1024;
+    var mb = Math.floor(maxB / (1024 * 1024));
+    el.textContent = i18nFmt('admin_agent_pdf_max_size_hint', { mb: String(mb) });
+  }
+
+  function adminUploadMaxBytesOrDefault() {
+    return S.get('adminUploadMaxBytes') || 50 * 1024 * 1024;
+  }
+
+  function adminUploadFailMessage_(e) {
+    if (e && e.message) return e.message;
+    return i18nFmt('err_admin_upload_rpc_lost', {
+      max_mb: String(Math.floor(adminUploadMaxBytesOrDefault() / (1024 * 1024))),
+    });
+  }
+
+  function uploadAdminLocalPdfQueue(files, index, successCount, profileName) {
     successCount = successCount || 0;
     if (!files.length) return;
     if (index >= files.length) {
@@ -713,18 +766,24 @@
       return;
     }
     var f = files[index];
-    setAdminAgentBusy(true, i18nFmt('admin_upload_progress', { current: index + 1, total: files.length }));
+    setAdminAgentBusy(true, i18nFmt('admin_upload_progress_globant', { current: index + 1, total: files.length }));
     var reader = new FileReader();
     reader.onload = function () {
       var s = reader.result;
       var b64 = typeof s === 'string' && s.indexOf(',') >= 0 ? s.split(',')[1] : '';
       var mime = f.type && f.type.indexOf('pdf') >= 0 ? f.type : 'application/pdf';
-      var payload = JSON.stringify({ name: f.name, mimeType: mime, dataBase64: b64 });
+      var payload = JSON.stringify({
+        name: f.name,
+        mimeType: mime,
+        dataBase64: b64,
+        profileName: profileName || '',
+        systemPrompt: (adminAgentPrompt && adminAgentPrompt.value) || '',
+      });
       google.script.run
         .withSuccessHandler(function (res) {
           if (res && res.id) {
-            addFileToState({ id: res.id, name: res.name || f.name });
-            uploadAdminLocalPdfQueue(files, index + 1, successCount + 1);
+            addFileToState({ id: res.id, name: res.name || f.name, source: 'rag' });
+            uploadAdminLocalPdfQueue(files, index + 1, successCount + 1, profileName);
           } else {
             setAdminAgentBusy(false, '\u00a0');
             if (adminAgentStatus) {
@@ -736,8 +795,7 @@
         .withFailureHandler(function (e) {
           setAdminAgentBusy(false, '\u00a0');
           if (adminAgentStatus) {
-            adminAgentStatus.textContent =
-              e && e.message ? e.message : i18nFmt('err_admin_upload_failed', { name: f.name });
+            adminAgentStatus.textContent = adminUploadFailMessage_(e);
             adminAgentStatus.classList.add('err');
           }
         })
@@ -746,7 +804,7 @@
     reader.onerror = function () {
       setAdminAgentBusy(false, '\u00a0');
       if (adminAgentStatus) {
-        adminAgentStatus.textContent = i18nFmt('err_admin_upload_failed', { name: f.name });
+        adminAgentStatus.textContent = adminUploadFailMessage_(null);
         adminAgentStatus.classList.add('err');
       }
     };
@@ -763,6 +821,14 @@
       }
       return;
     }
+    var profile = (adminAgentProfile && adminAgentProfile.value || '').trim();
+    if (!profile) {
+      if (adminAgentStatus) {
+        adminAgentStatus.textContent = i18n('err_admin_upload_profile_required');
+        adminAgentStatus.classList.add('err');
+      }
+      return;
+    }
     var valid = adminUploadFilterPdfFiles(fileList);
     if (!valid.length) {
       if (adminAgentStatus) {
@@ -771,8 +837,22 @@
       }
       return;
     }
+    var maxB = adminUploadMaxBytesOrDefault();
+    var zi;
+    for (zi = 0; zi < valid.length; zi++) {
+      if (valid[zi].size > maxB) {
+        if (adminAgentStatus) {
+          adminAgentStatus.textContent = i18nFmt('err_admin_upload_too_large', {
+            name: valid[zi].name || 'PDF',
+            max_mb: String(Math.floor(maxB / (1024 * 1024))),
+          });
+          adminAgentStatus.classList.add('err');
+        }
+        return;
+      }
+    }
     if (adminAgentStatus) adminAgentStatus.classList.remove('err');
-    uploadAdminLocalPdfQueue(valid, 0, 0);
+    uploadAdminLocalPdfQueue(valid, 0, 0, profile);
   }
 
   function bindAdminAgentDropzone() {
@@ -998,6 +1078,7 @@
   }
   bindAdminAgentDropzone();
   applyAgentsWriteAccess();
+  refreshUploadLimitHint();
   renderAdminApiCatalog('', 'Chain of Thought');
   loadAdminApiCatalog();
   if (adminAgentProfile) {
@@ -1251,6 +1332,144 @@
     selectById: function (id) { selectAdminAgent(id); },
     addFolderToState: addFolderToState,
     addFileToState: addFileToState,
+    refreshUploadLimitHint: refreshUploadLimitHint,
   };
+
+  // ── Quick prompts admin ───────────────────────────────────────────────────
+  (function () {
+    var qpList = document.getElementById('admin-qp-list');
+    var qpAddBtn = document.getElementById('admin-qp-add-btn');
+    var qpSaveBtn = document.getElementById('admin-qp-save-btn');
+    var qpStatus = document.getElementById('admin-qp-status');
+
+    function qpRenderItem(prompt, index) {
+      if (!qpList) return;
+      var item = document.createElement('div');
+      item.className = 'admin-qp-item flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-800';
+      item.dataset.qpIndex = String(index);
+
+      var topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between gap-2';
+
+      var labelSpan = document.createElement('span');
+      labelSpan.className = 'text-xs font-medium text-slate-500 dark:text-slate-400';
+      labelSpan.textContent = '#' + (index + 1);
+      topRow.appendChild(labelSpan);
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30';
+      delBtn.setAttribute('aria-label', i18n('admin_quick_prompts_delete_btn'));
+      delBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span data-i18n="admin_quick_prompts_delete_btn">' + i18n('admin_quick_prompts_delete_btn') + '</span>';
+      delBtn.addEventListener('click', function () {
+        item.remove();
+        qpRenumberItems_();
+      });
+      topRow.appendChild(delBtn);
+      item.appendChild(topRow);
+
+      var esRow = document.createElement('div');
+      esRow.className = 'flex flex-col gap-0.5';
+      var esLabel = document.createElement('label');
+      esLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
+      esLabel.textContent = i18n('admin_quick_prompts_lbl_es');
+      var esInput = document.createElement('input');
+      esInput.type = 'text';
+      esInput.className = 'admin-qp-es w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100';
+      esInput.placeholder = i18n('admin_quick_prompts_ph_es');
+      esInput.value = String(prompt.es || '');
+      esRow.appendChild(esLabel);
+      esRow.appendChild(esInput);
+      item.appendChild(esRow);
+
+      var enRow = document.createElement('div');
+      enRow.className = 'flex flex-col gap-0.5';
+      var enLabel = document.createElement('label');
+      enLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
+      enLabel.textContent = i18n('admin_quick_prompts_lbl_en');
+      var enInput = document.createElement('input');
+      enInput.type = 'text';
+      enInput.className = 'admin-qp-en w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100';
+      enInput.placeholder = i18n('admin_quick_prompts_ph_en');
+      enInput.value = String(prompt.en || '');
+      enRow.appendChild(enLabel);
+      enRow.appendChild(enInput);
+      item.appendChild(enRow);
+
+      qpList.appendChild(item);
+    }
+
+    function qpRenumberItems_() {
+      if (!qpList) return;
+      var items = qpList.querySelectorAll('.admin-qp-item');
+      for (var i = 0; i < items.length; i++) {
+        var lbl = items[i].querySelector('span.text-xs.font-medium');
+        if (lbl) lbl.textContent = '#' + (i + 1);
+      }
+    }
+
+    function qpCollectPrompts_() {
+      if (!qpList) return [];
+      var items = qpList.querySelectorAll('.admin-qp-item');
+      var out = [];
+      for (var i = 0; i < items.length; i++) {
+        var esEl = items[i].querySelector('.admin-qp-es');
+        var enEl = items[i].querySelector('.admin-qp-en');
+        var es = esEl ? esEl.value.trim() : '';
+        var en = enEl ? enEl.value.trim() : '';
+        if (!es && !en) continue;
+        out.push({ id: 'qp' + (i + 1), es: es, en: en, order: i + 1 });
+      }
+      return out;
+    }
+
+    function qpInit(initialPrompts) {
+      if (!qpList) return;
+      qpList.innerHTML = '';
+      var prompts = Array.isArray(initialPrompts) ? initialPrompts : [];
+      for (var i = 0; i < prompts.length; i++) {
+        qpRenderItem(prompts[i], i);
+      }
+    }
+
+    if (qpAddBtn) {
+      qpAddBtn.addEventListener('click', function () {
+        if (!qpList) return;
+        var idx = qpList.querySelectorAll('.admin-qp-item').length;
+        qpRenderItem({ es: '', en: '', order: idx + 1 }, idx);
+      });
+    }
+
+    if (qpSaveBtn) {
+      qpSaveBtn.addEventListener('click', function () {
+        if (!S.get('canManageAgents')) return;
+        var prompts = qpCollectPrompts_();
+        qpSaveBtn.disabled = true;
+        if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_busy');
+        adminShowBlocking(i18n('admin_quick_prompts_save_busy'));
+        google.script.run
+          .withSuccessHandler(function () {
+            adminHideBlocking();
+            qpSaveBtn.disabled = false;
+            if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_done');
+            if (A.chat && A.chat.applyQuickPrompts) {
+              S.set('quickPrompts', prompts);
+              var ci = S.get('cachedI18n');
+              var localeUi = ci && ci._locale === 'en' ? 'en' : 'es';
+              A.chat.applyQuickPrompts(prompts, localeUi);
+            }
+          })
+          .withFailureHandler(function (e) {
+            adminHideBlocking();
+            qpSaveBtn.disabled = false;
+            if (qpStatus) qpStatus.textContent = e && e.message ? e.message : i18n('admin_quick_prompts_save_error');
+          })
+          .quickPromptsSave(JSON.stringify(prompts));
+      });
+    }
+
+    A.adminQuickPrompts = { init: qpInit };
+  })();
+
 })(window.Aviators);
 </script>

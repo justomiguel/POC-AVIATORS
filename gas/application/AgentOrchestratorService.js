@@ -3,6 +3,231 @@
  */
 
 var _ORCH_NO_CONTENT_SENTINEL = '[[NO_RELEVANT_CONTENT]]';
+var _ORCH_PROFILE_DOC_CACHE = {};
+
+/**
+ * Verifica si un perfil RAG tiene documentos indexados.
+ * Cachea el resultado en memoria para evitar llamadas repetidas.
+ * @param {string} profileName
+ * @return {boolean}
+ */
+function AgentOrchestrator_profileHasDocuments_(profileName) {
+  if (!profileName) return false;
+  if (_ORCH_PROFILE_DOC_CACHE.hasOwnProperty(profileName)) {
+    return _ORCH_PROFILE_DOC_CACHE[profileName];
+  }
+  try {
+    var p = PropertiesService.getScriptProperties();
+    var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
+    var baseUrl = (p.getProperty('GLOBANT_AGENTS_BASE_URL') || '').trim();
+    if (!apiKey) {
+      _ORCH_PROFILE_DOC_CACHE[profileName] = true;
+      return true;
+    }
+    var client = GlobantRagApiClient_create({
+      apiKey: apiKey,
+      baseUrl: baseUrl || undefined,
+    });
+    var result = client.listProfileDocuments(profileName, 0, 1);
+    var hasDocuments = !!(result && result.documents && result.documents.length > 0);
+    _ORCH_PROFILE_DOC_CACHE[profileName] = hasDocuments;
+    console.log('[ORCH] Profile "' + profileName + '" hasDocuments=' + hasDocuments);
+    return hasDocuments;
+  } catch (e) {
+    console.log('[ORCH] Error checking documents for profile "' + profileName + '": ' + e.message);
+    _ORCH_PROFILE_DOC_CACHE[profileName] = true;
+    return true;
+  }
+}
+
+/**
+ * Detecta cliente mencionado en la query y busca sus documentos en el catálogo.
+ * Devuelve los documentos con sus resúmenes para usar como contexto directo.
+ * @param {string} question
+ * @return {{docs: Array<Object>, clientName: string, docCount: number}}
+ */
+function AgentOrchestrator_detectClientDocs_(question) {
+  var q = String(question || '').toLowerCase();
+  if (!q) return { docs: [], clientName: '', docCount: 0 };
+
+  try {
+    var clients = ClientsMaster_listForCombo();
+    if (!clients || !clients.clients || !clients.clients.length) {
+      console.log('[CLIENT-DETECT] No clients found in master');
+      return { docs: [], clientName: '', docCount: 0 };
+    }
+
+    var detectedClient = null;
+    for (var i = 0; i < clients.clients.length; i++) {
+      var c = clients.clients[i];
+      var name = String(c.name || '').trim();
+      if (!name) continue;
+      var nameLower = name.toLowerCase();
+      if (q.indexOf(nameLower) >= 0) {
+        detectedClient = name;
+        break;
+      }
+      var words = nameLower.split(/\s+/);
+      for (var w = 0; w < words.length; w++) {
+        if (words[w].length >= 4 && q.indexOf(words[w]) >= 0) {
+          detectedClient = name;
+          break;
+        }
+      }
+      if (detectedClient) break;
+    }
+
+    if (!detectedClient) {
+      console.log('[CLIENT-DETECT] No client detected in query: "' + q + '"');
+      return { docs: [], clientName: '', docCount: 0 };
+    }
+
+    console.log('[CLIENT-DETECT] Detected client: "' + detectedClient + '"');
+
+    var catalogResult = ContentCatalog_findDocsByClient(detectedClient);
+    var docs = catalogResult.docs || [];
+
+    if (!docs.length) {
+      console.log('[CLIENT-DETECT] No documents found for client: "' + detectedClient + '"');
+      return { docs: [], clientName: detectedClient, docCount: 0 };
+    }
+
+    console.log('[CLIENT-DETECT] Found ' + docs.length + ' docs for "' + detectedClient + '"');
+
+    return {
+      docs: docs,
+      clientName: detectedClient,
+      docCount: docs.length,
+    };
+  } catch (e) {
+    console.log('[CLIENT-DETECT] Error: ' + e.message);
+  }
+  return { docs: [], clientName: '', docCount: 0 };
+}
+
+/**
+ * Construye el contexto de documentos para el LLM basado en los resúmenes del catálogo.
+ * @param {Array<Object>} docs - documentos con title, summary, contentType, clientName, driveUrl
+ * @return {string}
+ */
+function AgentOrchestrator_buildDocsContext_(docs) {
+  if (!docs || !docs.length) return '';
+  var parts = [];
+  for (var i = 0; i < docs.length; i++) {
+    var d = docs[i];
+    var docInfo = '--- DOCUMENTO ' + (i + 1) + ' ---\n';
+    docInfo += 'Título: ' + (d.title || d.fileName || 'Sin título') + '\n';
+    docInfo += 'Tipo: ' + (d.contentType || 'desconocido') + '\n';
+    docInfo += 'Cliente: ' + (d.clientName || 'N/A') + '\n';
+    if (d.driveUrl) {
+      docInfo += 'Link: ' + d.driveUrl + '\n';
+    }
+    if (d.summary) {
+      docInfo += 'Resumen:\n' + d.summary + '\n';
+    }
+    parts.push(docInfo);
+  }
+  return parts.join('\n');
+}
+
+/** Umbral de documentos para usar contexto directo vs RAG semántico */
+var _ORCH_DIRECT_CONTEXT_MAX_DOCS = 5;
+
+/**
+ * Responde usando contexto directo de los resúmenes del catálogo (sin búsqueda RAG).
+ * Incluye links a los documentos en Drive.
+ * @param {string} question
+ * @param {Object} agent - agente con id, profileName, systemPrompt
+ * @param {Array<Object>} docs - documentos del catálogo con summary y driveUrl
+ * @param {string} clientName - nombre del cliente detectado
+ * @param {Array=} history
+ * @return {{answer:string, model:string, agentName:string, references:Array, filterLabel:string, isUnanswered:boolean, unansweredCode:string}}
+ */
+function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientName, history) {
+  var q = String(question || '').trim();
+  var docsContext = AgentOrchestrator_buildDocsContext_(docs);
+
+  var systemPrompt = agent.systemPrompt || '';
+  systemPrompt += '\n' + AgentOrchestrator_languageInstruction_(q);
+  systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
+  systemPrompt += '\n\n[CONTEXTO DE DOCUMENTOS DEL CLIENTE "' + clientName + '"]\n' + docsContext + '\n[/CONTEXTO DE DOCUMENTOS]\n';
+  systemPrompt += '\nINSTRUCCIONES DE RESPUESTA:';
+  systemPrompt += '\n1. Usa ÚNICAMENTE la información de los documentos proporcionados arriba.';
+  systemPrompt += '\n2. Formula una respuesta clara y bien estructurada.';
+  systemPrompt += '\n3. Si la información no está en el contexto, indica que no tienes datos disponibles.';
+
+  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
+  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
+
+  var histArr = Array.isArray(history) ? history : [];
+  var userMessage = rolePrefix + q;
+  if (histArr.length > 0) {
+    var histLines = [];
+    for (var h = 0; h < histArr.length; h++) {
+      var entry = histArr[h];
+      if (entry && entry.role && entry.content) {
+        histLines.push('[' + entry.role.toUpperCase() + ']\n' + entry.content);
+      }
+    }
+    if (histLines.length > 0) {
+      userMessage = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
+    }
+  }
+
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
+  var baseUrl = (p.getProperty('GLOBANT_AGENTS_BASE_URL') || '').trim();
+
+  var client = GlobantAssistantApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  console.log('[ORCH] Using direct context for client "' + clientName + '" with ' + docs.length + ' docs');
+
+  var chatResult = client.chatSimple(systemPrompt, userMessage);
+
+  var answer = chatResult.text || '';
+  var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
+  answer = AgentOrchestrator_sanitizeAnswer_(answer);
+
+  var rawA = JSON.stringify(chatResult.parsed, null, 2);
+  if (rawA.length > 6000) {
+    rawA = rawA.substring(0, 6000) + '...(truncado)';
+  }
+
+  var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
+    agent: agent.profileName,
+    confidence: 'routed',
+  });
+  filterLabel += ' | ' + UiStrings_fmt_('meta_filter_direct_context', {
+    client: clientName,
+    count: docs.length,
+  });
+
+  var references = [];
+  for (var i = 0; i < docs.length; i++) {
+    references.push({
+      title: docs[i].title || docs[i].fileName || 'Documento',
+      contentType: docs[i].contentType || '',
+      clientName: docs[i].clientName || '',
+      url: docs[i].driveUrl || '',
+      matched: true,
+    });
+  }
+
+  return {
+    answer: answer,
+    model: 'globant-chat',
+    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
+    rawJson: rawA,
+    agentName: agent.profileName,
+    references: references,
+    filterLabel: filterLabel,
+    isUnanswered: isUnanswered,
+    unansweredCode: isUnanswered ? 'NO_RELEVANT_CONTENT' : '',
+  };
+}
 
 /**
  * Paso 1: clasifica la consulta y devuelve el/los agente(s) elegido(s).
@@ -39,6 +264,7 @@ function AgentOrchestrator_routeOnly(question) {
 
 /**
  * Paso 2: responde la consulta usando un agente especifico (por id).
+ * Si detecta cliente con pocos docs, usa contexto directo; si no, RAG semántico.
  * @param {string} question
  * @param {string} agentId
  * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string, agentName: string, references?: Array<Object> }}
@@ -50,6 +276,34 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
 
   var ctx = AgentOrchestrator_loadContext_();
   var chosen = ctx.byId[agentId] || ctx.orchestrator;
+
+  if (chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
+      !AgentOrchestrator_profileHasDocuments_(chosen.profileName)) {
+    console.log('[ORCH] Agent "' + chosen.id + '" has no indexed documents - returning empty response');
+    return {
+      answer: UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content'),
+      model: '',
+      agentName: chosen.profileName,
+      references: [],
+      isUnanswered: true,
+      unansweredCode: 'NO_INDEXED_DOCUMENTS',
+      filterLabel: UiStrings_fmt_('meta_orchestrator_selected_agent', {
+        agent: chosen.profileName,
+        confidence: 'routed',
+      }),
+    };
+  }
+
+  var clientDetection = AgentOrchestrator_detectClientDocs_(q);
+
+  if (clientDetection.clientName &&
+      clientDetection.docCount > 0 &&
+      clientDetection.docCount <= _ORCH_DIRECT_CONTEXT_MAX_DOCS &&
+      chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR) {
+    console.log('[ORCH] Using direct context for "' + clientDetection.clientName + '" (' + clientDetection.docCount + ' docs)');
+    return AgentOrchestrator_answerWithDocContext_(q, chosen, clientDetection.docs, clientDetection.clientName, history);
+  }
+
   var systemPrompt = chosen.systemPrompt;
   if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
     systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
@@ -79,16 +333,18 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     chosen.profileName,
     promptWithHistory,
     systemPrompt,
+    [],
   );
 
   var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer.answer);
   answer.answer = AgentOrchestrator_sanitizeAnswer_(answer.answer);
   answer.isUnanswered = isUnanswered;
   answer.unansweredCode = isUnanswered ? 'NO_RELEVANT_CONTENT' : '';
-  answer.filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
+  var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
     agent: chosen.profileName,
     confidence: 'routed',
   });
+  answer.filterLabel = filterLabel;
   answer.agentName = chosen.profileName;
   answer.references = AgentOrchestrator_matchCatalogReferences_(
     answer.answer,
@@ -99,6 +355,7 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
 
 /**
  * Consulta multiples agentes y devuelve solo los que tengan contenido relevante.
+ * Si detecta cliente con pocos docs, usa contexto directo; si no, RAG semántico.
  * @param {string} question
  * @param {Array<string>} agentIds
  * @return {Array<{answer:string, agentName:string, model:string, providerLabel:string, rawJson:string, filterLabel:string, references?:Array<Object>}>}
@@ -127,40 +384,62 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
     }
   }
 
+  var clientDetection = AgentOrchestrator_detectClientDocs_(q);
+  var useDirectContext = clientDetection.clientName &&
+      clientDetection.docCount > 0 &&
+      clientDetection.docCount <= _ORCH_DIRECT_CONTEXT_MAX_DOCS;
+
   var results = [];
   for (var i = 0; i < agentIds.length; i++) {
     var chosen = ctx.byId[agentIds[i]];
     if (!chosen) continue;
 
-    var systemPrompt = chosen.systemPrompt;
-    if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
-      systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
+    if (chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
+        !AgentOrchestrator_profileHasDocuments_(chosen.profileName)) {
+      console.log('[ORCH] Skipping agent "' + chosen.id + '" - no indexed documents');
+      continue;
     }
-    systemPrompt += '\n' + langInstr;
-    systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
 
     try {
-      var answer = LlmProviderGlobant_consultPromptWithAgent(
-        chosen.profileName,
-        promptWithHistory,
-        systemPrompt,
-      );
-      answer.agentName = chosen.profileName;
-      answer.filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
-        agent: chosen.profileName,
-        confidence: 'routed',
-      });
+      var answer;
+
+      if (useDirectContext && chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR) {
+        console.log('[ORCH-MULTI] Using direct context for agent "' + chosen.id + '"');
+        answer = AgentOrchestrator_answerWithDocContext_(q, chosen, clientDetection.docs, clientDetection.clientName, history);
+      } else {
+        var systemPrompt = chosen.systemPrompt;
+        if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
+          systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
+        }
+        systemPrompt += '\n' + langInstr;
+        systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
+
+        answer = LlmProviderGlobant_consultPromptWithAgent(
+          chosen.profileName,
+          promptWithHistory,
+          systemPrompt,
+          [],
+        );
+        answer.agentName = chosen.profileName;
+        var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
+          agent: chosen.profileName,
+          confidence: 'routed',
+        });
+        answer.filterLabel = filterLabel;
+      }
 
       if (!AgentOrchestrator_isEmptyResponse_(answer.answer)) {
         answer.answer = AgentOrchestrator_sanitizeAnswer_(answer.answer);
-        answer.references = AgentOrchestrator_matchCatalogReferences_(
-          answer.answer,
-          [AgentOrchestrator_mapAgentIdToContentType_(chosen.id)],
-        );
+        if (!answer.references || !answer.references.length) {
+          answer.references = AgentOrchestrator_matchCatalogReferences_(
+            answer.answer,
+            [AgentOrchestrator_mapAgentIdToContentType_(chosen.id)],
+          );
+        }
         results.push(answer);
       }
     } catch (e) {
-      // Si falla un agente, no abortar la ejecucion completa
+      console.log('[ORCH-MULTI] Error with agent "' + chosen.id + '": ' + e.message);
     }
   }
 
@@ -200,6 +479,7 @@ function AgentOrchestrator_mapAgentIdToContentType_(agentId) {
   if (agentId === _ADMIN_AGENT_ID_PROPOSALS) return 'proposal';
   if (agentId === _ADMIN_AGENT_ID_SUCCESS_CASES) return 'success_case';
   if (agentId === _ADMIN_AGENT_ID_CLIENTS) return 'client';
+  if (agentId === _ADMIN_AGENT_ID_ONBOARDING) return 'onboarding';
   return '';
 }
 
@@ -352,18 +632,89 @@ function AgentOrchestrator_answer(question) {
 }
 
 /**
- * Genera una instrucción de idioma basada en la consulta del usuario.
- * @param {string} question
+ * Devuelve instrucción de idioma para que el LLM responda en el mismo idioma de la pregunta.
  * @return {string}
  */
-function AgentOrchestrator_languageInstruction_(question) {
-  var q = (question || '').trim();
-  var spanishPattern = /[áéíóúñ¿¡]|(\b(hola|qué|cómo|cuál|dónde|por qué|tenemos|dame|quiero|para|sobre|del|los|las|con)\b)/i;
-  var lang = spanishPattern.test(q) ? 'es' : 'en';
-  if (lang === 'es') {
-    return 'IMPORTANTE: Respondé SIEMPRE en español.';
+function AgentOrchestrator_languageInstruction_() {
+  return 'REGLA DE IDIOMA: Respondé SIEMPRE en el mismo idioma en que el usuario te escribió. Si preguntó en español, respondé en español. Si preguntó en inglés, respondé en inglés. No mezcles idiomas.';
+}
+
+/** Cache de métricas para no recalcular en cada consulta */
+var _ORCH_METRICS_CACHE = null;
+var _ORCH_METRICS_CACHE_TS = 0;
+var _ORCH_METRICS_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Obtiene métricas del catálogo de contenidos para incluir en el prompt.
+ * @return {{successCases:number, proposals:number, clients:number, onboarding:number, total:number, clientNames:Array<string>}}
+ */
+function AgentOrchestrator_getMetrics_() {
+  var now = Date.now();
+  if (_ORCH_METRICS_CACHE && (now - _ORCH_METRICS_CACHE_TS) < _ORCH_METRICS_TTL_MS) {
+    return _ORCH_METRICS_CACHE;
   }
-  return 'IMPORTANT: Always respond in English.';
+  
+  try {
+    var res = ContentCatalog_list({ skip: 0, limit: 0, skipReconcile: true });
+    var items = (res && res.items) || [];
+    
+    var successCases = 0;
+    var proposals = 0;
+    var clients = 0;
+    var onboarding = 0;
+    var clientNamesSet = {};
+    
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var cm = it && it.common ? it.common : {};
+      var ct = String(cm.content_type || '').toLowerCase();
+      
+      if (ct === 'success_case') successCases++;
+      else if (ct === 'proposal') proposals++;
+      else if (ct === 'client') clients++;
+      else if (ct === 'onboarding') onboarding++;
+      
+      var clientName = String(cm.client_name || '').trim();
+      if (clientName) clientNamesSet[clientName] = true;
+    }
+    
+    var clientNames = Object.keys(clientNamesSet);
+    
+    _ORCH_METRICS_CACHE = {
+      successCases: successCases,
+      proposals: proposals,
+      clients: clients,
+      onboarding: onboarding,
+      total: items.length,
+      clientNames: clientNames,
+    };
+    _ORCH_METRICS_CACHE_TS = now;
+    
+    return _ORCH_METRICS_CACHE;
+  } catch (e) {
+    console.log('[ORCH] Error getting metrics: ' + e.message);
+    return { successCases: 0, proposals: 0, clients: 0, onboarding: 0, total: 0, clientNames: [] };
+  }
+}
+
+/**
+ * Construye el contexto de métricas para agregar al prompt.
+ * @return {string}
+ */
+function AgentOrchestrator_buildMetricsContext_() {
+  var m = AgentOrchestrator_getMetrics_();
+  var ctx = '\n[MÉTRICAS DEL REPOSITORIO AVIATORS]\n';
+  ctx += 'Total de documentos indexados: ' + m.total + '\n';
+  ctx += '- Casos de éxito: ' + m.successCases + '\n';
+  ctx += '- Propuestas: ' + m.proposals + '\n';
+  ctx += '- Clientes: ' + m.clients + '\n';
+  ctx += '- Onboarding: ' + m.onboarding + '\n';
+  ctx += 'Clientes con documentación: ' + m.clientNames.length + '\n';
+  if (m.clientNames.length > 0 && m.clientNames.length <= 30) {
+    ctx += 'Lista de clientes: ' + m.clientNames.join(', ') + '\n';
+  }
+  ctx += '[/MÉTRICAS DEL REPOSITORIO]\n';
+  return ctx;
 }
 
 /* ── helpers internos ── */
@@ -603,6 +954,9 @@ function AgentOrchestrator_buildSelfAnswerPrompt_() {
   lines.push('Si el usuario saluda o hace charla breve, respondé cordialmente y en pocas líneas.');
   lines.push('Si la consulta es general/ambigua, respondé con claridad.');
   lines.push('No inventes datos no verificados.');
+  lines.push('');
+
+  lines.push(AgentOrchestrator_buildMetricsContext_());
 
   return lines.join('\n');
 }

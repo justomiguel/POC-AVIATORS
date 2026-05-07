@@ -39,19 +39,22 @@ function GlobantRagApiClient_create(config) {
     return { code: code, text: text };
   }
 
-  function executeQueryDetailedImpl(profileName, question, documentId) {
+  /**
+   * @param {string} profileName
+   * @param {string} question
+   * @param {Array<{key:string,operator:string,value:string|number}>} [filters] - Filtros opcionales
+   */
+  function executeQueryDetailedImpl(profileName, question, filters) {
+    var finalFilters = [];
+    if (Array.isArray(filters)) {
+      finalFilters = filters;
+    } else if (typeof filters === 'string' && filters) {
+      finalFilters = [{ key: 'id', operator: '$eq', value: filters }];
+    }
     var payload = {
       profile: profileName,
       question: question,
-      filters: documentId
-        ? [
-            {
-              key: 'id',
-              operator: '$eq',
-              value: documentId,
-            },
-          ]
-        : [],
+      filters: finalFilters,
     };
     var r = request('post', '/v1/search/execute', {
       contentType: 'application/json',
@@ -281,24 +284,62 @@ function GlobantRagApiClient_create(config) {
     /**
      * @param {string} profileName
      * @param {Blob} pdfBlob
+     * @param {Object} [metadata] - Metadata custom para indexacion (client_name, content_type, etc.)
      * @return {{ id: string }}
      */
-    uploadPdfDocument: function (profileName, pdfBlob) {
+    uploadPdfDocument: function (profileName, pdfBlob, metadata) {
       var path =
         '/v1/search/profile/' +
         encodeURIComponent(profileName) +
         '/document';
-      var r = BearerHttp_fetch(baseUrl + path, {
-        method: 'post',
-        contentType: 'application/pdf',
-        headers: Object.assign(authHeaders(), {
-          filename: pdfBlob.getName(),
-        }),
-        payload: pdfBlob.getBytes(),
-        muteHttpExceptions: true,
-        followRedirects: true,
-        validateHttpsCertificates: true,
-      });
+      var url = baseUrl + path;
+      var r;
+
+      if (metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0) {
+        var boundary = '----GlobantUpload' + Utilities.getUuid().replace(/-/g, '');
+        var metadataJson = JSON.stringify(metadata);
+        var fileName = pdfBlob.getName() || 'document.pdf';
+        var pdfBytes = pdfBlob.getBytes();
+
+        var parts = [];
+        parts.push('--' + boundary);
+        parts.push('Content-Disposition: form-data; name="metadata"');
+        parts.push('');
+        parts.push(metadataJson);
+        parts.push('--' + boundary);
+        parts.push('Content-Disposition: form-data; name="file"; filename="' + fileName + '"');
+        parts.push('Content-Type: application/pdf');
+        parts.push('');
+
+        var preFileBlob = Utilities.newBlob(parts.join('\r\n') + '\r\n');
+        var postFileBlob = Utilities.newBlob('\r\n--' + boundary + '--');
+        var fullPayload = Utilities.newBlob(
+          [].concat(preFileBlob.getBytes(), pdfBytes, postFileBlob.getBytes()),
+        ).getBytes();
+
+        r = BearerHttp_fetch(url, {
+          method: 'post',
+          contentType: 'multipart/form-data; boundary=' + boundary,
+          headers: authHeaders(),
+          payload: fullPayload,
+          muteHttpExceptions: true,
+          followRedirects: true,
+          validateHttpsCertificates: true,
+        });
+      } else {
+        r = BearerHttp_fetch(url, {
+          method: 'post',
+          contentType: 'application/pdf',
+          headers: Object.assign(authHeaders(), {
+            filename: pdfBlob.getName(),
+          }),
+          payload: pdfBlob.getBytes(),
+          muteHttpExceptions: true,
+          followRedirects: true,
+          validateHttpsCertificates: true,
+        });
+      }
+
       var code = r.getResponseCode();
       var text = r.getContentText() || '';
       if (!BearerHttp_isSuccess(code)) {
@@ -355,6 +396,65 @@ function GlobantRagApiClient_create(config) {
     },
 
     /**
+     * Reindexa un documento existente con nueva metadata (sin re-subir el archivo).
+     * @param {string} profileName
+     * @param {string} documentId
+     * @param {Object} metadata - Metadata custom para indexacion
+     * @return {{ id: string, indexStatus: string }}
+     */
+    reindexDocumentWithMetadata: function (profileName, documentId, metadata) {
+      var path =
+        '/v1/search/profile/' +
+        encodeURIComponent(profileName) +
+        '/document';
+      var url = baseUrl + path;
+
+      var boundary = '----GlobantReindex' + Utilities.getUuid().replace(/-/g, '');
+      var metadataJson = JSON.stringify(metadata || {});
+
+      var parts = [];
+      parts.push('--' + boundary);
+      parts.push('Content-Disposition: form-data; name="metadata"');
+      parts.push('');
+      parts.push(metadataJson);
+      parts.push('--' + boundary + '--');
+
+      var fullPayload = Utilities.newBlob(parts.join('\r\n')).getBytes();
+
+      var r = BearerHttp_fetch(url, {
+        method: 'put',
+        contentType: 'multipart/form-data; boundary=' + boundary,
+        headers: Object.assign(authHeaders(), {
+          documentId: documentId,
+        }),
+        payload: fullPayload,
+        muteHttpExceptions: true,
+        followRedirects: true,
+        validateHttpsCertificates: true,
+      });
+
+      var code = r.getResponseCode();
+      var text = r.getContentText() || '';
+      if (!BearerHttp_isSuccess(code)) {
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path:
+              '/v1/search/profile/' +
+              encodeURIComponent(profileName) +
+              '/document (reindex)',
+            code: String(code),
+            detail: text,
+          }),
+        );
+      }
+      var parsed = JSON.parse(text);
+      return {
+        id: String(parsed.id || documentId),
+        indexStatus: String(parsed.indexStatus || 'Unknown'),
+      };
+    },
+
+    /**
      * @param {string} profileName
      * @param {string} documentId
      * @return {string} indexStatus
@@ -386,7 +486,7 @@ function GlobantRagApiClient_create(config) {
     /**
      * @param {string} profileName
      * @param {string} question
-     * @param {string} [documentId]
+     * @param {Array<{key:string,operator:string,value:string|number}>|string} [filters] - Array de filtros o documentId (backwards compatible)
      * @return {{ text: string, parsed: Object }}
      */
     executeQueryDetailed: executeQueryDetailedImpl,
@@ -394,11 +494,11 @@ function GlobantRagApiClient_create(config) {
     /**
      * @param {string} profileName
      * @param {string} question
-     * @param {string} documentId
+     * @param {Array<{key:string,operator:string,value:string|number}>|string} [filters] - Array de filtros o documentId (backwards compatible)
      * @return {string}
      */
-    executeQuery: function (profileName, question, documentId) {
-      return executeQueryDetailedImpl(profileName, question, documentId).text;
+    executeQuery: function (profileName, question, filters) {
+      return executeQueryDetailedImpl(profileName, question, filters).text;
     },
   };
 }

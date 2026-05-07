@@ -6,7 +6,11 @@ var METRICS_PROP_SPREADSHEET_ID = 'METRICS_SPREADSHEET_ID';
 var METRICS_TAB_USAGE_EVENTS = 'usage_events';
 var METRICS_TAB_UNANSWERED = 'unanswered_queries';
 var METRICS_TAB_MONTHLY = 'monthly_agg';
+var METRICS_TAB_FEEDBACK = 'feedback_events';
+var METRICS_TAB_CHAT_HISTORY = 'chat_history';
+var METRICS_TAB_QUICK_PROMPTS = 'quick_prompts';
 var METRICS_ROOT_FOLDER_ID = '1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG';
+var METRICS_CHAT_HISTORY_MAX_PER_USER = 30;
 
 /** @return {string[]} */
 function MetricsService_usageHeaders_() {
@@ -49,6 +53,31 @@ function MetricsService_unansweredHeaders_() {
 /** @return {string[]} */
 function MetricsService_monthlyHeaders_() {
   return ['year_month', 'questions_total', 'unanswered_total', 'updated_at'];
+}
+
+/** @return {string[]} */
+function MetricsService_feedbackHeaders_() {
+  return [
+    'feedback_id',
+    'event_id',
+    'ts_iso',
+    'user_email',
+    'role_key',
+    'rating',
+    'agent_id',
+    'agent_name',
+    'question_text',
+  ];
+}
+
+/** @return {string[]} */
+function MetricsService_chatHistoryHeaders_() {
+  return ['conv_id', 'user_email', 'ts_created', 'title', 'messages_json'];
+}
+
+/** @return {string[]} */
+function MetricsService_quickPromptsHeaders_() {
+  return ['id', 'es', 'en', 'order'];
 }
 
 /**
@@ -99,7 +128,7 @@ function MetricsService_ensureHeaders_(sheet, headers) {
 }
 
 /**
- * @return {{spreadsheet:GoogleAppsScript.Spreadsheet.Spreadsheet,usageSheet:GoogleAppsScript.Spreadsheet.Sheet,unansweredSheet:GoogleAppsScript.Spreadsheet.Sheet,monthlySheet:GoogleAppsScript.Spreadsheet.Sheet}}
+ * @return {{spreadsheet:GoogleAppsScript.Spreadsheet.Spreadsheet,usageSheet:GoogleAppsScript.Spreadsheet.Sheet,unansweredSheet:GoogleAppsScript.Spreadsheet.Sheet,monthlySheet:GoogleAppsScript.Spreadsheet.Sheet,feedbackSheet:GoogleAppsScript.Spreadsheet.Sheet,chatHistorySheet:GoogleAppsScript.Spreadsheet.Sheet,quickPromptsSheet:GoogleAppsScript.Spreadsheet.Sheet}}
  */
 function MetricsService_getOrCreateSpreadsheet_() {
   var props = PropertiesService.getScriptProperties();
@@ -129,16 +158,28 @@ function MetricsService_getOrCreateSpreadsheet_() {
   if (!unansweredSheet) unansweredSheet = ss.insertSheet(METRICS_TAB_UNANSWERED);
   var monthlySheet = ss.getSheetByName(METRICS_TAB_MONTHLY);
   if (!monthlySheet) monthlySheet = ss.insertSheet(METRICS_TAB_MONTHLY);
+  var feedbackSheet = ss.getSheetByName(METRICS_TAB_FEEDBACK);
+  if (!feedbackSheet) feedbackSheet = ss.insertSheet(METRICS_TAB_FEEDBACK);
+  var chatHistorySheet = ss.getSheetByName(METRICS_TAB_CHAT_HISTORY);
+  if (!chatHistorySheet) chatHistorySheet = ss.insertSheet(METRICS_TAB_CHAT_HISTORY);
+  var quickPromptsSheet = ss.getSheetByName(METRICS_TAB_QUICK_PROMPTS);
+  if (!quickPromptsSheet) quickPromptsSheet = ss.insertSheet(METRICS_TAB_QUICK_PROMPTS);
 
   MetricsService_ensureHeaders_(usageSheet, MetricsService_usageHeaders_());
   MetricsService_ensureHeaders_(unansweredSheet, MetricsService_unansweredHeaders_());
   MetricsService_ensureHeaders_(monthlySheet, MetricsService_monthlyHeaders_());
+  MetricsService_ensureHeaders_(feedbackSheet, MetricsService_feedbackHeaders_());
+  MetricsService_ensureHeaders_(chatHistorySheet, MetricsService_chatHistoryHeaders_());
+  MetricsService_ensureHeaders_(quickPromptsSheet, MetricsService_quickPromptsHeaders_());
 
   return {
     spreadsheet: ss,
     usageSheet: usageSheet,
     unansweredSheet: unansweredSheet,
     monthlySheet: monthlySheet,
+    feedbackSheet: feedbackSheet,
+    chatHistorySheet: chatHistorySheet,
+    quickPromptsSheet: quickPromptsSheet,
   };
 }
 
@@ -565,4 +606,282 @@ function MetricsService_resetAll() {
       monthly: monthlyCleared,
     },
   };
+}
+
+// ─── Feedback ────────────────────────────────────────────────────────────────
+
+/**
+ * Guarda feedback (👍/👎) para un event_id de usage_events.
+ * Si ya existe una fila con el mismo event_id, actualiza el rating.
+ * @param {{eventId:string,rating:string,agentId:string,agentName:string,questionText:string}} payload
+ * @return {{ok:boolean}}
+ */
+function MetricsService_trackFeedback_(payload) {
+  var p = payload || {};
+  var eventId = String(p.eventId || '').trim();
+  if (!eventId) return { ok: false };
+  var rating = String(p.rating || '').trim();
+  if (rating !== 'up' && rating !== 'down') return { ok: false };
+
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false };
+
+  var roleRec = null;
+  try { roleRec = RoleDirectory_lookupRole(email); } catch (ignoreRole) {}
+  var roleKey = roleRec && roleRec.key ? String(roleRec.key) : 'visitante';
+
+  var nowIso = new Date().toISOString();
+  var agentId = String(p.agentId || '').trim();
+  var agentName = String(p.agentName || '').trim();
+  var questionText = String(p.questionText || '').trim().slice(0, 500);
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.feedbackSheet;
+  var lastRow = sheet.getLastRow();
+
+  // Check for existing row with same event_id to update (idempotent)
+  if (lastRow >= 2) {
+    var eventIdCol = 2; // column index of event_id (1-based)
+    var ratingCol = 6;  // column index of rating
+    var vals = sheet.getRange(2, 1, lastRow - 1, MetricsService_feedbackHeaders_().length).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][1] || '') === eventId) {
+        sheet.getRange(i + 2, ratingCol).setValue(rating);
+        sheet.getRange(i + 2, 3).setValue(nowIso);
+        return { ok: true };
+      }
+    }
+  }
+
+  sheet.appendRow([
+    Utilities.getUuid(),
+    eventId,
+    nowIso,
+    email,
+    roleKey,
+    rating,
+    agentId,
+    agentName,
+    questionText,
+  ]);
+  return { ok: true };
+}
+
+// ─── Chat History ─────────────────────────────────────────────────────────────
+
+/**
+ * Guarda o actualiza una conversación para el usuario activo.
+ * Topa en METRICS_CHAT_HISTORY_MAX_PER_USER por usuario (elimina las más antiguas).
+ * @param {string} convId
+ * @param {string} title
+ * @param {string} messagesJson
+ * @return {{ok:boolean}}
+ */
+function MetricsService_chatHistorySave_(convId, title, messagesJson) {
+  var cid = String(convId || '').trim();
+  if (!cid) return { ok: false };
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false };
+
+  var safeTitle = String(title || '').trim().slice(0, 80) || '(sin título)';
+  var safeJson = String(messagesJson || '[]').trim();
+  var nowIso = new Date().toISOString();
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.chatHistorySheet;
+  var lastRow = sheet.getLastRow();
+  var headers = MetricsService_chatHistoryHeaders_();
+
+  // Check for existing conv_id to update
+  if (lastRow >= 2) {
+    var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
+        sheet.getRange(i + 2, 3).setValue(nowIso);
+        sheet.getRange(i + 2, 4).setValue(safeTitle);
+        sheet.getRange(i + 2, 5).setValue(safeJson);
+        return { ok: true };
+      }
+    }
+  }
+
+  // New row: append
+  sheet.appendRow([cid, email, nowIso, safeTitle, safeJson]);
+
+  // Enforce per-user cap: delete oldest rows if over limit
+  var newLastRow = sheet.getLastRow();
+  if (newLastRow >= 2) {
+    var allVals = sheet.getRange(2, 1, newLastRow - 1, headers.length).getValues();
+    var userRows = [];
+    for (var j = 0; j < allVals.length; j++) {
+      if (String(allVals[j][1] || '') === email) {
+        userRows.push({ rowIndex: j + 2, ts: String(allVals[j][2] || '') });
+      }
+    }
+    if (userRows.length > METRICS_CHAT_HISTORY_MAX_PER_USER) {
+      userRows.sort(function (a, b) { return String(a.ts).localeCompare(String(b.ts)); });
+      var toDelete = userRows.length - METRICS_CHAT_HISTORY_MAX_PER_USER;
+      // Delete from bottom to top to avoid index shifting
+      var toDeleteRows = userRows.slice(0, toDelete).map(function (r) { return r.rowIndex; });
+      toDeleteRows.sort(function (a, b) { return b - a; });
+      for (var d = 0; d < toDeleteRows.length; d++) {
+        sheet.deleteRow(toDeleteRows[d]);
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Lista las conversaciones del usuario activo (sin messages_json), ordenadas más reciente primero.
+ * @return {{ok:boolean,items:Array<{convId:string,title:string,tsCreated:string}>}}
+ */
+function MetricsService_chatHistoryList_() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false, items: [] };
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.chatHistorySheet;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, items: [] };
+
+  var headers = MetricsService_chatHistoryHeaders_();
+  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  var items = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1] || '') !== email) continue;
+    items.push({
+      convId: String(vals[i][0] || ''),
+      tsCreated: String(vals[i][2] || ''),
+      title: String(vals[i][3] || ''),
+    });
+  }
+  items.sort(function (a, b) { return String(b.tsCreated).localeCompare(String(a.tsCreated)); });
+  return { ok: true, items: items };
+}
+
+/**
+ * Carga los mensajes de una conversación (solo si pertenece al usuario activo).
+ * @param {string} convId
+ * @return {{ok:boolean,messagesJson:string}}
+ */
+function MetricsService_chatHistoryLoad_(convId) {
+  var cid = String(convId || '').trim();
+  if (!cid) return { ok: false, messagesJson: '[]' };
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false, messagesJson: '[]' };
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.chatHistorySheet;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: false, messagesJson: '[]' };
+
+  var headers = MetricsService_chatHistoryHeaders_();
+  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
+      return { ok: true, messagesJson: String(vals[i][4] || '[]') };
+    }
+  }
+  return { ok: false, messagesJson: '[]' };
+}
+
+/**
+ * Elimina una conversación (solo si pertenece al usuario activo).
+ * @param {string} convId
+ * @return {{ok:boolean}}
+ */
+function MetricsService_chatHistoryDelete_(convId) {
+  var cid = String(convId || '').trim();
+  if (!cid) return { ok: false };
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false };
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.chatHistorySheet;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: false };
+
+  var headers = MetricsService_chatHistoryHeaders_();
+  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
+      sheet.deleteRow(i + 2);
+      return { ok: true };
+    }
+  }
+  return { ok: false };
+}
+
+// ─── Quick Prompts ─────────────────────────────────────────────────────────────
+
+var METRICS_QUICK_PROMPTS_DEFAULTS_ = [
+  { id: 'qp1', es: '¿Casos de éxito en banca?', en: 'Success cases in banking?', order: 1 },
+  { id: 'qp2', es: '¿Propuestas para retail con IA?', en: 'Proposals for retail with AI?', order: 2 },
+  { id: 'qp3', es: '¿Qué clientes tiene Globant en aviación?', en: 'Which clients does Globant have in aviation?', order: 3 },
+];
+
+/**
+ * Lee la hoja quick_prompts y devuelve el array ordenado.
+ * Si la hoja está vacía devuelve los prompts de ejemplo.
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function MetricsService_quickPromptsGet_() {
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.quickPromptsSheet;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+
+  var headers = MetricsService_quickPromptsHeaders_();
+  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    var row = vals[i];
+    var id = String(row[0] || '').trim();
+    var es = String(row[1] || '').trim();
+    var en = String(row[2] || '').trim();
+    var order = Number(row[3] || 0) || (i + 1);
+    if (!id || (!es && !en)) continue;
+    out.push({ id: id, es: es, en: en, order: order });
+  }
+  if (!out.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+  out.sort(function (a, b) { return a.order - b.order; });
+  return out;
+}
+
+/**
+ * Reemplaza todos los prompts rápidos (clear + re-append).
+ * Solo admin.
+ * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
+ * @return {{ok:boolean}}
+ */
+function MetricsService_quickPromptsSave_(prompts) {
+  if (!Array.isArray(prompts)) return { ok: false };
+
+  var db = MetricsService_getOrCreateSpreadsheet_();
+  var sheet = db.quickPromptsSheet;
+
+  // Clear data rows (keep header)
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    sheet.getRange(2, 1, lastRow - 1, MetricsService_quickPromptsHeaders_().length).clearContent();
+  }
+
+  var rows = [];
+  for (var i = 0; i < prompts.length; i++) {
+    var p = prompts[i] || {};
+    var id = String(p.id || '').trim() || Utilities.getUuid().slice(0, 8);
+    var es = String(p.es || '').trim();
+    var en = String(p.en || '').trim();
+    var order = Number(p.order || 0) || (i + 1);
+    if (!es && !en) continue;
+    rows.push([id, es, en, order]);
+  }
+
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+  }
+
+  return { ok: true };
 }

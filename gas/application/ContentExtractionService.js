@@ -2,8 +2,16 @@
  * @fileoverview Extraccion de metadata desde un archivo (vía LLM multimodal con archivo inline).
  */
 
-/** @type {number} */
-var CONTENT_UPLOAD_LOCAL_MAX_BYTES = 20 * 1024 * 1024;
+/**
+ * Mismo tope que `ADMIN_UPLOAD_LOCAL_MAX_BYTES` (cuota UrlFetch POST de Apps Script: 50 MB).
+ * Si el otro módulo no está cargado, se usa 50 MB.
+ *
+ * @type {number}
+ */
+var CONTENT_UPLOAD_LOCAL_MAX_BYTES =
+  typeof ADMIN_UPLOAD_LOCAL_MAX_BYTES !== 'undefined'
+    ? ADMIN_UPLOAD_LOCAL_MAX_BYTES
+    : 50 * 1024 * 1024;
 
 /**
  * Normaliza tags: inglés, camelCase, sin espacios, con #.
@@ -51,7 +59,16 @@ function ContentExtraction_validateAndPrepareBlob_(payload) {
   }
   var bytes = Utilities.base64Decode(b64);
   if (!bytes || bytes.length === 0) throw new Error('Archivo vacio');
-  if (bytes.length > CONTENT_UPLOAD_LOCAL_MAX_BYTES) throw new Error('Archivo demasiado grande');
+  if (bytes.length > CONTENT_UPLOAD_LOCAL_MAX_BYTES) {
+    throw new Error(
+      UiStrings_fmt_('err_contents_upload_too_large', {
+        name: name,
+        max_mb: String(
+          Math.floor(CONTENT_UPLOAD_LOCAL_MAX_BYTES / (1024 * 1024)),
+        ),
+      }),
+    );
+  }
   var stem = DriveDocuments_safeFileStem_(name);
   if ((mime === MimeType.PDF || mime === 'application/pdf') && !/\.pdf$/i.test(stem)) {
     stem += '.pdf';
@@ -69,6 +86,14 @@ function ContentExtraction_validateAndPrepareBlob_(payload) {
 var CONTENT_PROPOSAL_STAGES = ['PRESENTED', 'NEGOTIATION', 'WIN', 'LOST', 'ON_HOLD'];
 /** @type {Array<string>} Valores válidos para pricing_model */
 var CONTENT_PRICING_MODELS = ['TIME_AND_MATERIALS', 'STAFF_AUGMENTATION', 'FIXED_PRICE', 'SUBSCRIPTION'];
+/** @type {Array<string>} Valores válidos para industria del cliente */
+var CONTENT_ALLOWED_CLIENT_INDUSTRIES = [
+  'Agencias de Turismo',
+  'Logistica',
+  'Agencias AeroEspaciales',
+  'Aeropuertos',
+  'Aerolineas',
+];
 
 /**
  * @param {string} contentType
@@ -83,25 +108,30 @@ function ContentExtraction_promptForType_(contentType) {
   var commonInstructions = [
     'Analyze the document and return ONLY valid JSON.',
     'No markdown, no comments.',
-    'If a value is missing, use empty string.',
+    'If a value is missing, use empty string unless a field is explicitly mandatory below.',
     'TAGS RULES:',
     '- Always in English',
     '- camelCase format (e.g. #dataAnalytics, #cloudMigration)',
     '- No spaces, no special chars except #',
     '- Reuse existing tags when meaning matches. Do NOT create synonyms.',
     tagsHint,
+    'INDUSTRY RULES:',
+    '- common.industry MUST be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
+    '- No synonyms, no translations, no free text.',
     'Common structure:',
-    '{"common":{"title":"","summary":"","client_name":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
+    '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
   ];
   if (contentType === 'proposal') {
     commonInstructions.push(
       'specific for proposal: {"stage":"","pricing_model":"","effort_estimate":"","timeline":"","win_probability":"","notes":""}',
       'stage MUST be one of: ' + CONTENT_PROPOSAL_STAGES.join(', ') + '. If unclear, use PRESENTED.',
       'pricing_model MUST be one of: ' + CONTENT_PRICING_MODELS.join(', ') + '. If unclear, use TIME_AND_MATERIALS.',
+      'For proposal, common.industry is mandatory and MUST be one of the allowed values.',
     );
   } else if (contentType === 'success_case') {
     commonInstructions.push(
       'specific for success_case: {"challenge":"","solution":"","impact_metric":"","impact_value":"","evidence":"","notes":""}',
+      'For success_case, common.industry is mandatory and MUST be one of the allowed values.',
     );
   } else if (contentType === 'client') {
     commonInstructions.push(
@@ -115,6 +145,33 @@ function ContentExtraction_promptForType_(contentType) {
 }
 
 /**
+ * Finds the end index (inclusive) of the first balanced JSON object starting at `start`
+ * in `raw`, correctly skipping `{` and `}` inside string literals.
+ * Returns -1 if no balanced closing brace is found.
+ * @param {string} raw
+ * @param {number} start index of the opening `{`
+ * @return {number}
+ */
+function ContentExtraction_findJsonEnd_(raw, start) {
+  var depth = 0;
+  var inStr = false;
+  var escape = false;
+  for (var i = start; i < raw.length; i++) {
+    var c = raw[i];
+    if (escape) { escape = false; continue; }
+    if (c === '\\' && inStr) { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') { depth++; continue; }
+    if (c === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * @param {string} text
  * @return {Object}
  */
@@ -122,8 +179,9 @@ function ContentExtraction_parseJson_(text) {
   var raw = String(text || '').trim();
   if (!raw) throw new Error('Extraccion vacia');
   var start = raw.indexOf('{');
-  var end = raw.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('Extraccion invalida');
+  if (start < 0) throw new Error('Extraccion invalida');
+  var end = ContentExtraction_findJsonEnd_(raw, start);
+  if (end < 0) throw new Error('Extraccion invalida');
   var body = raw.substring(start, end + 1);
   var parsed = JSON.parse(body);
   if (!parsed || typeof parsed !== 'object') throw new Error('Extraccion invalida');
@@ -137,6 +195,7 @@ function ContentExtraction_parseJson_(text) {
     parsed.common.tags = legacyTags;
   }
   parsed.common.tags = ContentExtraction_normalizeTags_(parsed.common.tags);
+  parsed.common.industry = ClientsMaster_resolveIndustry_(parsed.common.industry || '');
   delete parsed.common.tags_controlled;
   delete parsed.common.tags_free;
   if (!Array.isArray(parsed.warnings)) parsed.warnings = [];

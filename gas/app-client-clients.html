@@ -49,6 +49,20 @@
     clientsEditorStatus.classList.toggle('err', !!isErr);
   }
 
+  function clientsEnsureIndustryOption(value) {
+    if (!clientsIndustry) return;
+    var v = String(value || '').trim();
+    if (!v) return;
+    var opts = clientsIndustry.options || [];
+    for (var i = 0; i < opts.length; i++) {
+      if (String(opts[i].value || '') === v) return;
+    }
+    var opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    clientsIndustry.appendChild(opt);
+  }
+
   function clientsResetForm() {
     S.set('clientsSelectedId', null);
     if (clientsId) clientsId.value = '';
@@ -66,6 +80,7 @@
     S.set('clientsSelectedId', item.client_id || null);
     if (clientsId) clientsId.value = item.client_id || '';
     if (clientsName) clientsName.value = item.client_name || '';
+    clientsEnsureIndustryOption(item.industry || '');
     if (clientsIndustry) clientsIndustry.value = item.industry || '';
     if (clientsCountry) clientsCountry.value = item.country || '';
     if (clientsContactName) clientsContactName.value = item.main_contact_name || '';
@@ -76,8 +91,8 @@
   function clientsCollectPayload() {
     return {
       client_id: (clientsId && clientsId.value) || '',
-      client_name: (clientsName && clientsName.value) || '',
-      industry: (clientsIndustry && clientsIndustry.value) || '',
+      client_name: ((clientsName && clientsName.value) || '').trim(),
+      industry: ((clientsIndustry && clientsIndustry.value) || '').trim(),
       country: (clientsCountry && clientsCountry.value) || '',
       main_contact_name: (clientsContactName && clientsContactName.value) || '',
       main_contact_email: (clientsContactEmail && clientsContactEmail.value) || '',

@@ -8,6 +8,7 @@
   var refreshBtn = document.getElementById('metrics-refresh-btn');
   var resetBtn = document.getElementById('metrics-reset-btn');
   var statusWrap = document.getElementById('metrics-status');
+  var statusIcon = document.getElementById('metrics-status-icon');
   var statusText = document.getElementById('metrics-status-text');
 
   var totalQuestionsEl = document.getElementById('metrics-total-questions');
@@ -48,7 +49,7 @@
     }
     statusWrap.classList.remove('hidden');
     statusText.textContent = t;
-    var icon = statusWrap.querySelector('i');
+    var icon = statusIcon;
     if (icon) {
       icon.classList.toggle('fa-spin', !!busy);
       icon.classList.toggle('fa-spinner', !!busy);

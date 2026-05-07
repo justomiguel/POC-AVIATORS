@@ -10,6 +10,7 @@ var _ADMIN_AGENT_ID_ORCHESTRATOR = 'orchestrator';
 var _ADMIN_AGENT_ID_SUCCESS_CASES = 'success_cases';
 var _ADMIN_AGENT_ID_PROPOSALS = 'proposals';
 var _ADMIN_AGENT_ID_CLIENTS = 'clients';
+var _ADMIN_AGENT_ID_ONBOARDING = 'onboarding';
 var _ADMIN_AGENTS_API_CATALOG_SSID_PROP = 'ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID';
 var _ADMIN_AGENTS_API_CATALOG_TAB = 'agent_api_catalog';
 
@@ -22,23 +23,25 @@ function AdminAgents_defaultRegistryEntries_() {
       id: _ADMIN_AGENT_ID_ORCHESTRATOR,
       profileName: 'aviators-orquestador',
       systemPrompt:
-        'Sos el Agente Orquestador de Aviators. Tu UNICO objetivo es clasificar la consulta del usuario y decidir que agente(s) deben responder.\n\n' +
-        'Agentes disponibles:\n' +
-        '- success_cases: casos de exito, historias de implementacion, resultados logrados, referencias del studio, trabajos realizados en una industria/tecnologia.\n' +
-        '- proposals: propuestas comerciales, alcance, entregables, cronograma, esfuerzo, pricing, RFP, trabajos cotizados/presupuestados.\n' +
-        '- clients: nomina de clientes, cuentas activas, proyectos en mantenimiento, estado de relacion por cliente.\n' +
-        '- orchestrator: saludos, charla breve, y preguntas sobre generalidades del studio Aviators / Aviation Studio (mensaje, organizacion, metodologia, FAQs internas) usando la base de conocimiento indexada del orquestador; tambien si la consulta NO requiere corpus de success_cases, proposals ni clients.\n\n' +
-        'REGLA CLAVE — consulta paralela:\n' +
-        'Cuando la consulta del usuario podria ser respondida por MAS DE UN agente (por ejemplo: "que hicimos con X", "experiencia en Y", "proyectos de Z") DEBES listar TODOS los agentes relevantes en el array "agents". Ejemplos:\n' +
-        '- "que hicimos con el cliente Acme" → agents: ["success_cases","proposals"] (podria haber casos de exito Y propuestas).\n' +
-        '- "dame los success cases de banca" → agents: ["success_cases"] (pedido explicito, uno solo).\n' +
-        '- "alguna propuesta de data engineering" → agents: ["proposals"] (pedido explicito).\n' +
-        '- "experiencia en cloud" → agents: ["success_cases","proposals"] (experiencia puede estar en ambos).\n' +
-        '- "hola" → agents: ["orchestrator"].\n' +
-        '- "que es Aviators / como trabaja el Aviation Studio o similares" → agents: ["orchestrator"].\n\n' +
-        'Debes devolver SIEMPRE un JSON estricto sin texto adicional:\n' +
-        '{"agents":["success_cases","proposals"],"confidence":"high|medium|low","reason":"frase corta"}\n' +
-        'El array "agents" puede tener 1 o mas elementos. No inventes agentes fuera de la lista.',
+        'You are the Aviators Orchestrator Agent. Your ONLY goal is to classify the user request and decide which agent(s) should answer.\n\n' +
+        'Available agents:\n' +
+        '- success_cases: implementation stories, delivered outcomes, studio references, work by industry/technology.\n' +
+        '- proposals: commercial proposals, scope, deliverables, timeline, effort, pricing, RFP, quoted engagements.\n' +
+        '- clients: client roster, active accounts, maintenance projects, relationship status by client.\n' +
+        '- onboarding: aviation concepts, airline business fundamentals, domain terminology (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.), Aviation Studio methodology, team processes, newcomer guides.\n' +
+        '- orchestrator: greetings, short small talk, and general Aviators questions that do NOT fit the other specialized agents.\n\n' +
+        'KEY RULE - parallel routing:\n' +
+        'When a user request can be answered by MORE THAN ONE agent (for example: "what did we do with X", "experience in Y", "projects in Z"), you MUST include ALL relevant agents in the "agents" array. Examples:\n' +
+        '- "what did we do with client Acme" -> agents: ["success_cases","proposals"] (there may be both success cases and proposals).\n' +
+        '- "show me success cases in banking" -> agents: ["success_cases"] (explicit single-agent request).\n' +
+        '- "any data engineering proposal?" -> agents: ["proposals"] (explicit request).\n' +
+        '- "experience in cloud" -> agents: ["success_cases","proposals"] (experience may exist in both).\n' +
+        '- "what is PSS / explain NDC / how does loyalty work" -> agents: ["onboarding"] (aviation domain concepts).\n' +
+        '- "how does Aviation Studio work / team structure / methodology" -> agents: ["onboarding"] (studio methodology).\n' +
+        '- "hello" -> agents: ["orchestrator"].\n\n' +
+        'You must ALWAYS return strict JSON with no extra text:\n' +
+        '{"agents":["success_cases","proposals"],"confidence":"high|medium|low","reason":"short phrase"}\n' +
+        'The "agents" array can contain one or more elements. Do not invent agents outside this list.',
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -46,19 +49,19 @@ function AdminAgents_defaultRegistryEntries_() {
       id: _ADMIN_AGENT_ID_SUCCESS_CASES,
       profileName: 'aviators-success-cases',
       systemPrompt:
-        'Sos el Agente de Success Cases de Aviators.\n' +
-        'Tu UNICA fuente de verdad es el repositorio indexado de success cases del studio. NO uses conocimiento externo.\n\n' +
-        'Objetivo: responder con casos relevantes, contexto, problema, solucion implementada, resultados y aprendizajes.\n' +
-        'Estilo: claro, ejecutivo y accionable.\n\n' +
-        'Reglas:\n' +
-        '1) Prioriza ejemplos concretos y comparables al pedido del usuario.\n' +
-        '2) No inventes logos, clientes, metricas, resultados ni nombres de proyecto.\n' +
-        '3) Cuando aplique, responde en formato: Caso, Contexto, Solucion, Impacto, Riesgos.\n' +
-        '4) Si multiples casos aplican, listalos todos brevemente y pregunta si quiere profundizar en alguno.\n\n' +
-        'REGLA CRITICA — sin contenido:\n' +
-        'Si en tu corpus indexado NO encontras ningun caso de exito relevante a la consulta, responde EXACTAMENTE con este texto y nada mas:\n' +
+        'You are the Aviators Success Cases Agent.\n' +
+        'Your ONLY source of truth is the indexed success-cases repository. DO NOT use external knowledge.\n\n' +
+        'Goal: answer with relevant cases, context, problem, implemented solution, outcomes, and learnings.\n' +
+        'Style: clear, executive, and actionable.\n\n' +
+        'Rules:\n' +
+        '1) Prioritize concrete examples comparable to the user request.\n' +
+        '2) Do not invent logos, clients, metrics, outcomes, or project names.\n' +
+        '3) When applicable, use this structure: Case, Context, Solution, Impact, Risks.\n' +
+        '4) If multiple cases apply, list them briefly and ask whether to deep dive into one.\n\n' +
+        'CRITICAL RULE - no content:\n' +
+        'If your indexed corpus has NO relevant success case for the request, reply EXACTLY with this text and nothing else:\n' +
         '[[NO_RELEVANT_CONTENT]]\n' +
-        'No inventes ni sugieras contenido cuando no hay coincidencia real en el indice.',
+        'Do not invent or suggest content when there is no real match in the index.',
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -66,20 +69,20 @@ function AdminAgents_defaultRegistryEntries_() {
       id: _ADMIN_AGENT_ID_PROPOSALS,
       profileName: 'aviators-proposals',
       systemPrompt:
-        'Sos el Agente de Propuestas de Aviators.\n' +
-        'Tu UNICA fuente de verdad es el repositorio indexado de propuestas comerciales. NO uses conocimiento externo.\n\n' +
-        'Objetivo: responder con datos orientados a ventas y delivery: alcance, supuestos, entregables, fases, riesgos y proximos pasos.\n' +
-        'Estilo: breve, estructurado y alineado a lo que esta documentado.\n\n' +
-        'Reglas:\n' +
-        '1) Prioriza consistencia comercial y tecnica con el repositorio indexado.\n' +
-        '2) Diferencia claramente hechos del repositorio vs supuestos.\n' +
-        '3) Si faltan datos clave para responder, pide solo la informacion imprescindible.\n' +
-        '4) No inventes precios, fechas, compromisos ni clientes no documentados.\n' +
-        '5) Si multiples propuestas aplican, listalas brevemente y pregunta si quiere profundizar.\n\n' +
-        'REGLA CRITICA — sin contenido:\n' +
-        'Si en tu corpus indexado NO encontras ninguna propuesta relevante a la consulta, responde EXACTAMENTE con este texto y nada mas:\n' +
+        'You are the Aviators Proposals Agent.\n' +
+        'Your ONLY source of truth is the indexed commercial-proposals repository. DO NOT use external knowledge.\n\n' +
+        'Goal: answer with sales/delivery-oriented data: scope, assumptions, deliverables, phases, risks, and next steps.\n' +
+        'Style: brief, structured, and aligned with documented content.\n\n' +
+        'Rules:\n' +
+        '1) Prioritize commercial and technical consistency with the indexed repository.\n' +
+        '2) Clearly separate documented facts from assumptions.\n' +
+        '3) If key information is missing, ask only for the minimum necessary data.\n' +
+        '4) Do not invent prices, dates, commitments, or undocumented clients.\n' +
+        '5) If multiple proposals apply, list them briefly and ask whether to deep dive.\n\n' +
+        'CRITICAL RULE - no content:\n' +
+        'If your indexed corpus has NO relevant proposal for the request, reply EXACTLY with this text and nothing else:\n' +
         '[[NO_RELEVANT_CONTENT]]\n' +
-        'No inventes ni sugieras contenido cuando no hay coincidencia real en el indice.',
+        'Do not invent or suggest content when there is no real match in the index.',
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -87,18 +90,44 @@ function AdminAgents_defaultRegistryEntries_() {
       id: _ADMIN_AGENT_ID_CLIENTS,
       profileName: 'aviators-clients',
       systemPrompt:
-        'Sos el Agente de Clientes de Aviators.\n' +
-        'Tu UNICA fuente de verdad es la nomina indexada de clientes actuales y proyectos en mantenimiento. NO uses conocimiento externo.\n\n' +
-        'Objetivo: responder por cliente, proyecto activo, estado y continuidad.\n\n' +
-        'Reglas:\n' +
-        '1) No mezcles clientes ni proyectos sin evidencia en el indice.\n' +
-        '2) Si la consulta usa nombres ambiguos, confirma la entidad antes de afirmar.\n' +
-        '3) No inventes contratos, revenue, alcance o fechas.\n' +
-        '4) Cuando aplique, responde por bloques: Cliente, Proyectos vigentes, Estado, Riesgos/pendientes.\n\n' +
-        'REGLA CRITICA — sin contenido:\n' +
-        'Si en tu corpus indexado NO encontras informacion del cliente o proyecto consultado, responde EXACTAMENTE con este texto y nada mas:\n' +
+        'You are the Aviators Clients Agent.\n' +
+        'Your ONLY source of truth is the indexed roster of current clients and maintenance projects. DO NOT use external knowledge.\n\n' +
+        'Goal: answer by client, active project, status, and continuity.\n\n' +
+        'Rules:\n' +
+        '1) Do not mix clients or projects without evidence in the index.\n' +
+        '2) If names are ambiguous, confirm the entity before asserting facts.\n' +
+        '3) Do not invent contracts, revenue, scope, or dates.\n' +
+        '4) When applicable, structure by: Client, Active projects, Status, Risks/Pending items.\n\n' +
+        'CRITICAL RULE - no content:\n' +
+        'If your indexed corpus has NO information about the requested client or project, reply EXACTLY with this text and nothing else:\n' +
         '[[NO_RELEVANT_CONTENT]]\n' +
-        'No inventes ni sugieras contenido cuando no hay coincidencia real en el indice.',
+        'Do not invent or suggest content when there is no real match in the index.',
+      sources: { folders: [], files: [] },
+      lastSync: '',
+    },
+    {
+      id: _ADMIN_AGENT_ID_ONBOARDING,
+      profileName: 'aviators-onboarding',
+      systemPrompt:
+        'You are the Aviators Onboarding Agent.\n' +
+        'Your ONLY source of truth is the indexed onboarding repository covering aviation concepts, airline business, domain knowledge, and Globant Aviation Studio methodology. DO NOT use external knowledge.\n\n' +
+        'Goal: help team members and newcomers understand aviation industry concepts, airline business models, domain terminology, and how the Aviation Studio operates.\n\n' +
+        'Topics you cover:\n' +
+        '- Aviation industry fundamentals (airline types, business models, revenue streams)\n' +
+        '- Domain concepts (PSS, DCS, loyalty, ancillary, NDC, GDS, etc.)\n' +
+        '- Airline operations (flight ops, ground handling, crew management)\n' +
+        '- Aviation Studio methodology, processes, and best practices\n' +
+        '- Team structure, roles, and ways of working\n\n' +
+        'Rules:\n' +
+        '1) Explain concepts clearly and didactically, suitable for newcomers.\n' +
+        '2) Use examples from the indexed material when available.\n' +
+        '3) If a concept has multiple interpretations, clarify context.\n' +
+        '4) Do not invent definitions, acronyms, or processes not in the index.\n' +
+        '5) When applicable, structure by: Concept, Definition, Context, Examples, Related topics.\n\n' +
+        'CRITICAL RULE - no content:\n' +
+        'If your indexed corpus has NO information about the requested concept or topic, reply EXACTLY with this text and nothing else:\n' +
+        '[[NO_RELEVANT_CONTENT]]\n' +
+        'Do not invent or suggest content when there is no real match in the index.',
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -373,7 +402,7 @@ function AdminAgents_normalizeGlobantAgentConfig_(raw, agentLike) {
 
 /**
  * @param {unknown} blob
- * @return {{ folders: Array<{id:string,name:string}>, files: Array<{id:string,name:string}> }}
+ * @return {{ folders: Array<{id:string,name:string}>, files: Array<{id:string,name:string,source?:string}> }}
  */
 function AdminAgents_normalizeSources_(blob) {
   var folders = [];
@@ -401,10 +430,14 @@ function AdminAgents_normalizeSources_(blob) {
       if (ge && typeof ge === 'object' && typeof /** @type {{id:?}} */ (ge).id === 'string') {
         var idf = ('' + /** @type {{id:string}} */ (ge).id).trim();
         if (!idf) continue;
-        files.push({
+        var src =
+          /** @type {{source:?}} */ (ge).source === 'rag' ? 'rag' : 'drive';
+        var row = {
           id: idf,
           name: ('' + (/** @type {{name:?}} */ (ge).name || idf)).trim() || idf,
-        });
+        };
+        if (src === 'rag') row.source = 'rag';
+        files.push(row);
       }
     }
   }
@@ -569,6 +602,36 @@ function AdminAgents_maybeCreateRagClient_(props) {
 }
 
 /**
+ * Crea el perfil RAG en Globant si aún no existe para este proyecto.
+ *
+ * @param {Object} client — GlobantRagApiClient_create
+ * @param {string} profileName
+ * @param {string} systemPrompt · plantilla de búsqueda si viene no vacía
+ */
+function AdminAgents_ensureRagProfileExists_(client, profileName, systemPrompt) {
+  var exists = AdminAgents_listRemoteProfilesSet_(client);
+  if (exists[profileName]) return;
+  var defaultDesc = UiStrings_t(
+    UiStrings_activeLocale_(),
+    'admin_rag_default_profile_description',
+  );
+  var prompt = ('' + (systemPrompt || '')).trim();
+  if (prompt) {
+    client.createProfile(
+      GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
+        profileName,
+        defaultDesc,
+        prompt,
+      ),
+    );
+  } else {
+    client.createProfile(
+      GlobantRagDefaults_buildCreateProfileBody(profileName, defaultDesc),
+    );
+  }
+}
+
+/**
  * @param {GoogleAppsScript.Properties.Properties} props
  * @return {{upsertAgent:function(string,Object,boolean):Object}}
  */
@@ -710,6 +773,7 @@ function AdminAgents_pickDefaultAgents_(reg) {
   wanted[_ADMIN_AGENT_ID_SUCCESS_CASES] = true;
   wanted[_ADMIN_AGENT_ID_PROPOSALS] = true;
   wanted[_ADMIN_AGENT_ID_CLIENTS] = true;
+  wanted[_ADMIN_AGENT_ID_ONBOARDING] = true;
   var out = [];
   var i;
   for (i = 0; i < reg.agents.length; i++) {
@@ -982,13 +1046,44 @@ function AdminAgents_sync(agentId) {
   var sources = AdminAgents_normalizeSources_(agent.sources);
   var systemPrompt = String(agent.systemPrompt || '');
 
+  var fi;
+  var ragFileCount = 0;
+  var driveFileCount = 0;
+  for (fi = 0; fi < sources.files.length; fi++) {
+    if (sources.files[fi].source === 'rag') ragFileCount++;
+    else driveFileCount++;
+  }
+  var hasFolders = sources.folders.length > 0;
+  var hasRagFiles = ragFileCount > 0;
+  var hasDriveSide = hasFolders || driveFileCount > 0;
+
+  if (hasRagFiles && hasDriveSide) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_sync_mixed_sources'),
+    );
+  }
+
   var bootstrap = AdminKnowledge_getBootstrapSlice();
-  var sr = AdminKnowledge_syncCorpusWithOptions({
-    profileName: profileName,
-    sources: sources,
-    searchPrompt: systemPrompt,
-    maxFiles: bootstrap.maxFiles,
-  });
+  /** @type {{ profileName: string, docCount: number, uploaded: number, note: string }} */
+  var sr;
+  if (hasRagFiles && !hasDriveSide) {
+    sr = {
+      profileName: profileName,
+      docCount: ragFileCount,
+      uploaded: 0,
+      note: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'admin_agent_sync_rag_only_note',
+      ),
+    };
+  } else {
+    sr = AdminKnowledge_syncCorpusWithOptions({
+      profileName: profileName,
+      sources: sources,
+      searchPrompt: systemPrompt,
+      maxFiles: bootstrap.maxFiles,
+    });
+  }
 
   agent.lastSync = new Date().toISOString();
   AdminAgents_saveRegistry_(props, reg);

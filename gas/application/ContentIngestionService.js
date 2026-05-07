@@ -56,10 +56,11 @@ var CONTENT_INGESTION_INDEX_DELAY_MS = 2500;
  * @param {Object} client
  * @param {string} profileName
  * @param {GoogleAppsScript.Base.Blob} pdfBlob
+ * @param {Object} [metadata] - Metadata para indexacion (client_name, content_type, etc.)
  * @return {string}
  */
-function ContentIngestion_indexBlob_(client, profileName, pdfBlob) {
-  var up = client.uploadPdfDocument(profileName, pdfBlob);
+function ContentIngestion_indexBlob_(client, profileName, pdfBlob, metadata) {
+  var up = client.uploadPdfDocument(profileName, pdfBlob, metadata || null);
   var indexed = false;
   try {
     indexed = GlobantRagApiClient_waitIndexed(
@@ -82,6 +83,24 @@ function ContentIngestion_indexBlob_(client, profileName, pdfBlob) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_globant_indexing_failed'));
   }
   return up.id;
+}
+
+/**
+ * Construye metadata para indexacion en Globant RAG.
+ * @param {Object} common - Datos comunes del contenido
+ * @param {string} contentType
+ * @return {Object}
+ */
+function ContentIngestion_buildMetadata_(common, contentType) {
+  var meta = {
+    client_name: String(common.client_name || '').trim(),
+    content_type: String(contentType || '').trim(),
+    industry: String(common.industry || '').trim(),
+    title: String(common.title || '').trim(),
+    file_name: String(common.file_name || '').trim(),
+  };
+  console.log('[RAG-META] Building metadata: ' + JSON.stringify(meta));
+  return meta;
 }
 
 /**
@@ -155,8 +174,9 @@ function ContentIngestion_save(payloadJson) {
     if (!ContentCatalog_isValidType_(contentType)) throw new Error('content_type invalido');
 
     var clientName = String(common.client_name || '').trim();
+    var clientIndustry = String(common.industry || '').trim();
     if (clientName) {
-      ClientsMaster_ensureByName(clientName);
+      ClientsMaster_ensureByName(clientName, clientIndustry);
     }
 
     var contentId = String(common.content_id || '').trim();
@@ -209,7 +229,15 @@ function ContentIngestion_save(payloadJson) {
       if (!pdfBlob) {
         throw new Error('Se requiere archivo para reindexar');
       }
-      newDocId = ContentIngestion_indexBlob_(client, targetProfile, pdfBlob);
+      var docMetadata = ContentIngestion_buildMetadata_(
+        {
+          client_name: common.client_name,
+          industry: clientIndustry,
+          title: common.title,
+        },
+        contentType,
+      );
+      newDocId = ContentIngestion_indexBlob_(client, targetProfile, pdfBlob, docMetadata);
     }
 
     var toSave = {
@@ -219,6 +247,7 @@ function ContentIngestion_save(payloadJson) {
         title: common.title,
         summary: common.summary,
         client_name: common.client_name,
+        industry: clientIndustry,
         tags: common.tags || [],
         file_name:
           common.file_name ||
@@ -375,7 +404,8 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
 
     var client = ContentIngestion_createRagClient_();
     var blob = DriveDocuments_getPdfBlobForGlobant(driveFileId);
-    var newDocId = ContentIngestion_indexBlob_(client, targetProfile, blob);
+    var docMetadata = ContentIngestion_buildMetadata_(common, contentType);
+    var newDocId = ContentIngestion_indexBlob_(client, targetProfile, blob, docMetadata);
     var nextCommon = Object.assign({}, common, {
       file_name: String(driveFile.getName() || common.file_name || ''),
       mime_type: String(driveFile.getMimeType() || common.mime_type || 'application/pdf'),
@@ -409,6 +439,45 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
       action: 'reindexed',
       item: saved.item,
       documentId: newDocId,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Reindexa un documento existente con metadata actualizada (sin re-subir el archivo).
+ * Usa la metadata del catalogo (client_name, content_type, industry, title).
+ *
+ * @param {string} contentId
+ * @return {{ok:boolean, action:string, indexStatus:string}}
+ */
+function ContentIngestion_reindexWithMetadata(contentId) {
+  ContentCatalog_requireContributor_();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var id = String(contentId || '').trim();
+    if (!id) throw new Error('content_id requerido');
+    var item = ContentCatalog_get(id).item;
+    var common = item.common || {};
+    var profile = String(common.globant_profile_name || '').trim();
+    var docId = String(common.globant_document_id || '').trim();
+
+    if (!profile || !docId) {
+      throw new Error('Documento no tiene profile/docId para reindexar');
+    }
+
+    var contentType = String(common.content_type || '').trim();
+    var docMetadata = ContentIngestion_buildMetadata_(common, contentType);
+
+    var client = ContentIngestion_createRagClient_();
+    var result = client.reindexDocumentWithMetadata(profile, docId, docMetadata);
+
+    return {
+      ok: true,
+      action: 'metadata_updated',
+      indexStatus: result.indexStatus,
     };
   } finally {
     lock.releaseLock();

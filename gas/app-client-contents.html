@@ -50,6 +50,7 @@
   var contentsSpecificProposal = document.getElementById('contents-specific-proposal');
   var contentsSpecificSuccess = document.getElementById('contents-specific-success');
   var contentsSpecificClient = document.getElementById('contents-specific-client');
+  var contentsSpecificOnboarding = document.getElementById('contents-specific-onboarding');
   var contentsProposalStage = document.getElementById('contents-proposal-stage');
   var contentsProposalPricing = document.getElementById('contents-proposal-pricing');
   var contentsProposalEffort = document.getElementById('contents-proposal-effort');
@@ -62,6 +63,10 @@
   var contentsClientProjects = document.getElementById('contents-client-projects');
   var contentsClientHealth = document.getElementById('contents-client-health');
   var contentsClientNotes = document.getElementById('contents-client-notes');
+  var contentsOnboardingTopic = document.getElementById('contents-onboarding-topic');
+  var contentsOnboardingCategory = document.getElementById('contents-onboarding-category');
+  var contentsOnboardingAudience = document.getElementById('contents-onboarding-audience');
+  var contentsOnboardingNotes = document.getElementById('contents-onboarding-notes');
   var contentsSaveBtn = document.getElementById('contents-save-btn');
   var contentsDeleteBtn = document.getElementById('contents-delete-btn');
   var contentsCancelBtn = document.getElementById('contents-cancel-btn');
@@ -234,6 +239,14 @@
         notes: (contentsSuccessNotes && contentsSuccessNotes.value) || '',
       };
     }
+    if (t === 'onboarding') {
+      return {
+        topic: (contentsOnboardingTopic && contentsOnboardingTopic.value) || '',
+        category: (contentsOnboardingCategory && contentsOnboardingCategory.value) || '',
+        audience: (contentsOnboardingAudience && contentsOnboardingAudience.value) || '',
+        notes: (contentsOnboardingNotes && contentsOnboardingNotes.value) || '',
+      };
+    }
     return {
       account_status: (contentsClientStatus && contentsClientStatus.value) || '',
       active_projects: (contentsClientProjects && contentsClientProjects.value) || '',
@@ -257,6 +270,7 @@
         title: (contentsTitle && contentsTitle.value) || '',
         summary: (contentsSummary && contentsSummary.value) || '',
         client_name: contentsGetClientName(),
+        industry: String(S.get('contentsDetectedIndustry') || '').trim(),
         tags: S.get('contentsCurrentTags').slice(),
         file_name: (curFile && curFile.name) || '',
         mime_type: (curFile && curFile.mimeType) || 'application/pdf',
@@ -273,6 +287,7 @@
     if (contentsSpecificProposal) contentsSpecificProposal.classList.toggle('hidden', t !== 'proposal');
     if (contentsSpecificSuccess) contentsSpecificSuccess.classList.toggle('hidden', t !== 'success_case');
     if (contentsSpecificClient) contentsSpecificClient.classList.toggle('hidden', t !== 'client');
+    if (contentsSpecificOnboarding) contentsSpecificOnboarding.classList.toggle('hidden', t !== 'onboarding');
   }
 
   function contentsSetClientValue(name) {
@@ -305,6 +320,7 @@
     S.set('contentsCurrentFile', null);
     S.set('contentsUploadCancelled', false);
     S.set('contentsCurrentTags', []);
+    S.set('contentsDetectedIndustry', '');
     if (contentsContentId) contentsContentId.value = '';
     if (contentsType) contentsType.value = '';
     if (contentsTitle) contentsTitle.value = '';
@@ -324,6 +340,10 @@
     if (contentsClientProjects) contentsClientProjects.value = '';
     if (contentsClientHealth) contentsClientHealth.value = '';
     if (contentsClientNotes) contentsClientNotes.value = '';
+    if (contentsOnboardingTopic) contentsOnboardingTopic.value = '';
+    if (contentsOnboardingCategory) contentsOnboardingCategory.value = '';
+    if (contentsOnboardingAudience) contentsOnboardingAudience.value = '';
+    if (contentsOnboardingNotes) contentsOnboardingNotes.value = '';
     if (contentsCurrentFileName) contentsCurrentFileName.textContent = '\u00a0';
     if (contentsFileInput) contentsFileInput.value = '';
     if (contentsBlockType) contentsBlockType.classList.remove('hidden');
@@ -341,6 +361,7 @@
     var s = item.specific || {};
     S.set('contentsSelectedId', c.content_id || null);
     S.set('contentsCurrentFile', { name: c.file_name || '', mimeType: c.mime_type || 'application/pdf' });
+    S.set('contentsDetectedIndustry', String(c.industry || '').trim());
     if (contentsContentId) contentsContentId.value = c.content_id || '';
     if (contentsType) contentsType.value = c.content_type || '';
     if (contentsTitle) contentsTitle.value = c.title || '';
@@ -361,6 +382,10 @@
     if (contentsClientProjects) contentsClientProjects.value = s.active_projects || '';
     if (contentsClientHealth) contentsClientHealth.value = s.health_score || '';
     if (contentsClientNotes) contentsClientNotes.value = s.notes || '';
+    if (contentsOnboardingTopic) contentsOnboardingTopic.value = s.topic || '';
+    if (contentsOnboardingCategory) contentsOnboardingCategory.value = s.category || '';
+    if (contentsOnboardingAudience) contentsOnboardingAudience.value = s.audience || '';
+    if (contentsOnboardingNotes) contentsOnboardingNotes.value = s.notes || '';
     contentsToggleSpecificSections();
     contentsSetEditorMode('edit');
     if (contentsBlockType) contentsBlockType.classList.add('hidden');
@@ -444,7 +469,7 @@
     if (!rows.length) {
       var tr0 = document.createElement('tr');
       var td0 = document.createElement('td');
-      td0.colSpan = canWrite ? 6 : 4;
+      td0.colSpan = canWrite ? 7 : 5;
       td0.className = 'px-3 py-3 text-sm text-slate-500';
       td0.textContent = i18n('contents_list_empty');
       tr0.appendChild(td0);
@@ -485,10 +510,34 @@
             t.innerHTML = '<span class="inline-flex items-center gap-2">' + getTypeIcon(type) + '<span>' + label + '</span></span>';
             return t;
           }
+          function tdRagStatus(status) {
+            var t = document.createElement('td');
+            t.className = 'px-3 py-2 align-top';
+            var s = String(status || '').trim();
+            var cfg = {
+              Success:    { bg: 'bg-emerald-50 text-emerald-700', icon: 'fa-circle-check',       key: 'contents_rag_status_success' },
+              Failed:     { bg: 'bg-red-50 text-red-700',         icon: 'fa-circle-xmark',        key: 'contents_rag_status_failed' },
+              Processing: { bg: 'bg-sky-50 text-sky-700',         icon: 'fa-spinner fa-spin',      key: 'contents_rag_status_processing' },
+              Pending:    { bg: 'bg-sky-50 text-sky-700',         icon: 'fa-clock',               key: 'contents_rag_status_pending' },
+              missing:    { bg: 'bg-amber-50 text-amber-700',     icon: 'fa-triangle-exclamation', key: 'contents_rag_status_missing' },
+            };
+            var c2 = cfg[s];
+            if (c2) {
+              t.innerHTML =
+                '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ' + c2.bg + '">' +
+                '<i class="fa-solid ' + c2.icon + '" aria-hidden="true"></i>' +
+                '<span>' + i18n(c2.key) + '</span>' +
+                '</span>';
+            } else {
+              t.innerHTML = '<span class="text-slate-400 text-[11px]">—</span>';
+            }
+            return t;
+          }
           tr.appendChild(td(c.title || ''));
           tr.appendChild(tdType(c.content_type || ''));
           tr.appendChild(td(c.client_name || ''));
           tr.appendChild(td(c.updated_at || c.created_at || ''));
+          tr.appendChild(tdRagStatus(c.globant_index_status));
           var actTd = document.createElement('td');
           actTd.className = 'px-3 py-2';
           var isRowBusy = rowBusyId && rowBusyId === String(c.content_id || '').trim();
@@ -502,89 +551,46 @@
             return;
           }
           if (canWrite) {
-            var edit = document.createElement('button');
-            edit.type = 'button';
-            edit.className = 'btn-admin inline-flex items-center gap-1 text-xs';
-            edit.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i><span>' + i18n('contents_btn_edit') + '</span>';
-            edit.addEventListener('click', function () { contentsOpenEditorFromRow(c.content_id || ''); });
-            actTd.appendChild(edit);
-          }
-          if (canWrite && c.index_repair_needed) {
-            var repairWrap = document.createElement('span');
-            repairWrap.className = 'ml-2 inline-flex items-center gap-2';
-            var repairBadge = document.createElement('span');
-            repairBadge.className = 'inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700';
-            repairBadge.innerHTML =
-              '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>' +
-              i18n('contents_index_repair_needed') +
-              '</span>';
-            repairWrap.appendChild(repairBadge);
-            var repair = document.createElement('button');
-            repair.type = 'button';
-            repair.className = 'btn-admin inline-flex items-center gap-1 text-xs';
-            repair.innerHTML = '<i class="fa-solid fa-wrench" aria-hidden="true"></i><span>' + i18n('contents_btn_repair_index') + '</span>';
-            repair.addEventListener('click', function () { contentsRepairFromRow(c.content_id || ''); });
-            repairWrap.appendChild(repair);
-            actTd.appendChild(repairWrap);
-          }
-          if (canWrite && c.file_name) {
-            var view = document.createElement('button');
-            view.type = 'button';
-            view.className = 'btn-admin inline-flex items-center gap-1 text-xs ml-2';
-            view.innerHTML =
-              '<i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i><span>' +
-              i18n('chat_refs_open_link') +
-              '</span>';
-            view.addEventListener('click', function () {
-              var fileName = String(c.file_name || '').trim();
-              var directUrl = String(c.drive_file_url || '').trim();
-              var driveFileId = String(c.drive_file_id || '').trim();
-              if (directUrl) {
-                window.open(directUrl, '_blank');
-                contentsSetListStatus('\u00a0', false);
-                return;
-              }
-              if (driveFileId) {
-                window.open('https://drive.google.com/open?id=' + encodeURIComponent(driveFileId), '_blank');
-                contentsSetListStatus('\u00a0', false);
-                return;
-              }
-              if (!fileName) {
-                contentsSetListStatus(i18n('contents_file_not_found'), true);
-                if (A.toast) A.toast.error(i18n('contents_file_not_found'));
-                return;
-              }
-              contentsSetListStatus(i18n('contents_file_opening'), false);
-              var opened = window.open('about:blank', '_blank');
-              google.script.run
-                .withSuccessHandler(function (resOpen) {
-                  var url = (resOpen && resOpen.url) || '';
-                  if (url) {
-                    if (opened) opened.location = url;
-                    else window.open(url, '_blank');
-                    contentsSetListStatus('\u00a0', false);
-                  } else {
-                    if (opened) opened.close();
-                    contentsSetListStatus(i18n('contents_file_not_found'), true);
-                    if (A.toast) A.toast.error(i18n('contents_file_not_found'));
-                  }
-                })
-                .withFailureHandler(function (eOpen) {
-                  if (opened) opened.close();
-                  contentsSetListStatus((eOpen && eOpen.message) || i18n('err_generic'), true);
-                  if (A.toast) A.toast.error((eOpen && eOpen.message) || i18n('err_generic'));
-                })
-                .resolveDriveFileUrlByName(fileName);
-            });
-            actTd.appendChild(view);
-          }
-          if (canWrite) {
-            var del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'btn-admin danger inline-flex items-center gap-1 text-xs ml-2';
-            del.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span>' + i18n('contents_btn_delete') + '</span>';
-            del.addEventListener('click', function () { contentsDeleteFromRow(c.content_id || ''); });
-            actTd.appendChild(del);
+            var actWrap = document.createElement('span');
+            actWrap.className = 'inline-flex items-center gap-1';
+            function iconBtn(icon, tooltip, handler, extra) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'btn-icon ' + (extra || '');
+              b.title = tooltip;
+              b.innerHTML = '<i class="fa-solid ' + icon + '" aria-hidden="true"></i>';
+              b.addEventListener('click', handler);
+              return b;
+            }
+            actWrap.appendChild(iconBtn('fa-pen', i18n('contents_tooltip_edit'), function () { contentsOpenEditorFromRow(c.content_id || ''); }));
+            if (c.file_name || c.drive_file_url || c.drive_file_id) {
+              actWrap.appendChild(iconBtn('fa-up-right-from-square', i18n('contents_tooltip_view'), function () {
+                var fileName = String(c.file_name || '').trim();
+                var directUrl = String(c.drive_file_url || '').trim();
+                var driveFileId = String(c.drive_file_id || '').trim();
+                if (directUrl) { window.open(directUrl, '_blank'); return; }
+                if (driveFileId) { window.open('https://drive.google.com/open?id=' + encodeURIComponent(driveFileId), '_blank'); return; }
+                if (!fileName) { if (A.toast) A.toast.error(i18n('contents_file_not_found')); return; }
+                contentsSetListStatus(i18n('contents_file_opening'), false);
+                var opened = window.open('about:blank', '_blank');
+                google.script.run
+                  .withSuccessHandler(function (resOpen) {
+                    var url = (resOpen && resOpen.url) || '';
+                    if (url) { if (opened) opened.location = url; else window.open(url, '_blank'); contentsSetListStatus('\u00a0', false); }
+                    else { if (opened) opened.close(); if (A.toast) A.toast.error(i18n('contents_file_not_found')); }
+                  })
+                  .withFailureHandler(function (eOpen) { if (opened) opened.close(); if (A.toast) A.toast.error((eOpen && eOpen.message) || i18n('err_generic')); })
+                  .resolveDriveFileUrlByName(fileName);
+              }));
+            }
+            if (c.index_repair_needed) {
+              actWrap.appendChild(iconBtn('fa-wrench', i18n('contents_tooltip_repair'), function () { contentsRepairFromRow(c.content_id || ''); }, 'btn-icon-warn'));
+            }
+            if (c.globant_document_id) {
+              actWrap.appendChild(iconBtn('fa-rotate', i18n('contents_tooltip_reindex_meta'), function () { contentsReindexMetadataFromRow(c.content_id || ''); }));
+            }
+            actWrap.appendChild(iconBtn('fa-trash', i18n('contents_tooltip_delete'), function () { contentsDeleteFromRow(c.content_id || ''); }, 'btn-icon-danger'));
+            actTd.appendChild(actWrap);
           }
           if (canWrite) tr.appendChild(actTd);
           contentsTableBody.appendChild(tr);
@@ -749,12 +755,38 @@
       .contentsRepairIndex(id);
   }
 
+  function contentsReindexMetadataFromRow(contentId) {
+    var id = String(contentId || '').trim();
+    if (!id) return;
+    contentsSetRowBusy(id, true);
+    A.showBlockingModal(i18n('contents_busy_reindexing_metadata'));
+    A.cache.invalidate('contentsList');
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        contentsSetRowBusy(id, false);
+        contentsLoadList({ skipCache: true });
+        var doneMsg = i18n('contents_reindex_metadata_done');
+        contentsSetListStatus(doneMsg, false);
+        if (A.toast) A.toast.success(doneMsg);
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        contentsSetRowBusy(id, false);
+        var msg = (e && e.message) || i18n('contents_reindex_metadata_failed');
+        contentsSetListStatus(msg, true);
+        if (A.toast) A.toast.error(msg);
+      })
+      .contentsReindexWithMetadata(id);
+  }
+
   function contentsApplyDraftToForm_(draft, type) {
     var d = draft || {};
     var c = d.common || {};
     if (contentsTitle) contentsTitle.value = c.title || '';
     if (contentsSummary) contentsSummary.value = c.summary || '';
     contentsSetClientValue(c.client_name || '');
+    S.set('contentsDetectedIndustry', String(c.industry || '').trim());
     var tags = [];
     if (Array.isArray(c.tags)) {
       tags = c.tags.slice();
@@ -782,6 +814,11 @@
       if (contentsClientProjects) contentsClientProjects.value = sp.active_projects || '';
       if (contentsClientHealth) contentsClientHealth.value = sp.health_score || '';
       if (contentsClientNotes) contentsClientNotes.value = sp.notes || '';
+    } else if (type === 'onboarding') {
+      if (contentsOnboardingTopic) contentsOnboardingTopic.value = sp.topic || '';
+      if (contentsOnboardingCategory) contentsOnboardingCategory.value = sp.category || '';
+      if (contentsOnboardingAudience) contentsOnboardingAudience.value = sp.audience || '';
+      if (contentsOnboardingNotes) contentsOnboardingNotes.value = sp.notes || '';
     }
   }
 

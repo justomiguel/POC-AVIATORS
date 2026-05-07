@@ -5,6 +5,53 @@
 var CLIENTS_PROP_SPREADSHEET_ID = 'CLIENTS_MASTER_SPREADSHEET_ID';
 var CLIENTS_TAB_NAME = 'clients';
 var CLIENTS_ROOT_FOLDER_ID = '1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG';
+var CLIENTS_ALLOWED_INDUSTRIES = [
+  'Agencias de Turismo',
+  'Logistica',
+  'Agencias AeroEspaciales',
+  'Aeropuertos',
+  'Aerolineas',
+];
+
+/**
+ * @param {string} text
+ * @return {string}
+ */
+function ClientsMaster_normalizeIndustryToken_(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * @param {string} raw
+ * @return {string} Canonical industry value or empty string
+ */
+function ClientsMaster_resolveIndustry_(raw) {
+  var token = ClientsMaster_normalizeIndustryToken_(raw);
+  if (!token) return '';
+  var i;
+  for (i = 0; i < CLIENTS_ALLOWED_INDUSTRIES.length; i++) {
+    var canonical = CLIENTS_ALLOWED_INDUSTRIES[i];
+    if (ClientsMaster_normalizeIndustryToken_(canonical) === token) return canonical;
+  }
+  var map = {
+    agenciasdeturismo: 'Agencias de Turismo',
+    travelagencies: 'Agencias de Turismo',
+    tourismagencies: 'Agencias de Turismo',
+    logistica: 'Logistica',
+    logistics: 'Logistica',
+    agenciasaeroespaciales: 'Agencias AeroEspaciales',
+    aerospaceagencies: 'Agencias AeroEspaciales',
+    aeropuertos: 'Aeropuertos',
+    airports: 'Aeropuertos',
+    aerolineas: 'Aerolineas',
+    airlines: 'Aerolineas',
+  };
+  return map[token] || '';
+}
 
 /** @return {string[]} */
 function ClientsMaster_headers_() {
@@ -94,7 +141,7 @@ function ClientsMaster_readRows_(sheet, headers) {
  * @return {{ok:boolean, items:Array<Object>}}
  */
 function ClientsMaster_list(filters) {
-  ContentCatalog_requireContributor_();
+  ContentCatalog_requireAnyRole_();
   var f = filters || {};
   var q = String(f.q || '').toLowerCase().trim();
   var catalog = ClientsMaster_getOrCreateSpreadsheet_();
@@ -161,6 +208,7 @@ function ClientsMaster_listForCombo() {
  * @return {{ok:boolean, item:Object}}
  */
 function ClientsMaster_get(clientId) {
+  ContentCatalog_requireAnyRole_();
   var id = String(clientId || '').trim();
   if (!id) throw new Error('client_id requerido');
   var res = ClientsMaster_list({});
@@ -200,6 +248,11 @@ function ClientsMaster_upsert(data) {
   var clientId = String(data.client_id || '').trim();
   var clientName = String(data.client_name || '').trim();
   if (!clientName) throw new Error('client_name requerido');
+  var rawIndustry = String(data.industry || '').trim();
+  var resolvedIndustry = ClientsMaster_resolveIndustry_(rawIndustry);
+  if (rawIndustry && !resolvedIndustry) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'clients_err_industry_invalid'));
+  }
   var normalized = ClientsMaster_normalizeName_(clientName);
 
   var catalog = ClientsMaster_getOrCreateSpreadsheet_();
@@ -233,7 +286,7 @@ function ClientsMaster_upsert(data) {
     client_id: clientId,
     client_name: clientName,
     normalized_name: normalized,
-    industry: String(data.industry || '').trim(),
+    industry: resolvedIndustry,
     country: String(data.country || '').trim(),
     main_contact_name: String(data.main_contact_name || '').trim(),
     main_contact_email: String(data.main_contact_email || '').trim(),
@@ -260,14 +313,25 @@ function ClientsMaster_upsert(data) {
 /**
  * Crea cliente rápido (solo nombre) si no existe — para uso inline.
  * @param {string} name
+ * @param {string=} industry
  * @return {{ok:boolean, item:Object, created:boolean}}
  */
-function ClientsMaster_ensureByName(name) {
+function ClientsMaster_ensureByName(name, industry) {
+  var resolvedIndustry = ClientsMaster_resolveIndustry_(industry || '');
   var existing = ClientsMaster_findByName(name);
   if (existing) {
+    if (resolvedIndustry && String(existing.industry || '').trim() !== resolvedIndustry) {
+      var merged = Object.assign({}, existing, {
+        client_id: existing.client_id,
+        client_name: existing.client_name,
+        industry: resolvedIndustry,
+      });
+      var upd = ClientsMaster_upsert(merged);
+      return { ok: true, item: upd.item, created: false };
+    }
     return { ok: true, item: existing, created: false };
   }
-  var res = ClientsMaster_upsert({ client_name: name });
+  var res = ClientsMaster_upsert({ client_name: name, industry: resolvedIndustry });
   return { ok: true, item: res.item, created: true };
 }
 

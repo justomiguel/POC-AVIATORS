@@ -342,12 +342,14 @@ function LlmProviderGlobant_consultPromptOnly(prompt) {
  * @param {string} profileName
  * @param {string} prompt
  * @param {string} [systemPrompt]
+ * @param {Array<{key:string,operator:string,value:string|number}>} [filters] - Filtros opcionales para el RAG
  * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string }}
  */
 function LlmProviderGlobant_consultPromptWithAgent(
   profileName,
   prompt,
   systemPrompt,
+  filters,
 ) {
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
@@ -371,16 +373,16 @@ function LlmProviderGlobant_consultPromptWithAgent(
     );
   }
 
-  var finalPrompt = q;
   var sp = ('' + (systemPrompt || '')).trim();
+  var finalPrompt = q;
   if (sp) {
     finalPrompt =
-      '[SYSTEM]\n' +
-      sp +
-      '\n[/SYSTEM]\n\n' +
-      '[USER]\n' +
+      '[QUERY]\n' +
       q +
-      '\n[/USER]';
+      '\n[/QUERY]\n\n' +
+      '[INSTRUCTIONS]\n' +
+      sp +
+      '\n[/INSTRUCTIONS]';
   }
 
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
@@ -417,7 +419,9 @@ function LlmProviderGlobant_consultPromptWithAgent(
     apiKey: apiKey,
     baseUrl: baseUrl || undefined,
   });
-  var detail = client.executeQueryDetailed(pn, finalPrompt, '');
+  var appliedFilters = filters || [];
+  console.log('[RAG-QUERY] Profile: ' + pn + ', Filters: ' + JSON.stringify(appliedFilters));
+  var detail = client.executeQueryDetailed(pn, finalPrompt, appliedFilters);
   var rawStr = JSON.stringify(detail.parsed, null, 2);
   if (rawStr.length > 6000) {
     rawStr = rawStr.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');

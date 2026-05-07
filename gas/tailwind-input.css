@@ -84,7 +84,7 @@
     @apply flex flex-col gap-4 md:flex-row md:gap-6 md:items-stretch;
   }
   .app-sidebar {
-    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:w-64 dark:border-slate-700 dark:bg-slate-800;
+    @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:w-64 dark:border-slate-600 dark:bg-slate-800;
   }
   .app-content {
     @apply min-w-0 flex-1;
@@ -258,7 +258,7 @@
       overflow: hidden;
     }
     .app-sidebar {
-      @apply fixed inset-y-0 left-0 z-50 w-[min(86vw,22rem)] max-w-[22rem] rounded-none border-b-0 border-r border-slate-200 bg-slate-50 py-4 pl-4 pr-3 dark:border-slate-700 dark:bg-slate-800;
+      @apply fixed inset-y-0 left-0 z-50 w-[min(86vw,22rem)] max-w-[22rem] rounded-none border-b-0 border-r border-slate-200 bg-slate-50 py-4 pl-4 pr-3 dark:border-slate-600 dark:bg-slate-800;
       height: 100dvh;
       transform: translateX(-105%);
       transition: transform 0.24s ease;
@@ -286,6 +286,44 @@
       max-height: calc(100dvh - 11.5rem);
       min-height: min(68dvh, 31rem);
     }
+
+    /*
+     * Mobile + page=home: layout "chat full-height".
+     * El scroll externo se desactiva, la bienvenida queda compacta y fija
+     * arriba, el shell del chat ocupa todo el alto restante. Así el input
+     * (composer) queda anclado al fondo del viewport y el thread scrollea
+     * por dentro, sin requerir scroll del padre para llegar al input.
+     */
+    .app-shell-view[data-active-page="home"] .app-content-scroll {
+      @apply flex flex-col px-0 pt-0 pb-0;
+      overflow: hidden;
+    }
+    .app-shell-view[data-active-page="home"] #home-member {
+      @apply flex min-h-0 flex-1 flex-col;
+      max-width: none;
+    }
+    .app-shell-view[data-active-page="home"] #page-home,
+    .app-shell-view[data-active-page="home"] #member-standard-home {
+      @apply flex min-h-0 flex-1 flex-col;
+    }
+    .app-shell-view[data-active-page="home"] #page-home {
+      @apply space-y-0;
+    }
+    .app-shell-view[data-active-page="home"] #home-welcome {
+      @apply mb-0 shrink-0 px-3 pt-3 pb-2 text-left;
+    }
+    .app-shell-view[data-active-page="home"] #home-welcome h1 {
+      @apply text-lg font-semibold;
+    }
+    .app-shell-view[data-active-page="home"] #home-welcome p {
+      @apply mx-0 mt-0.5 line-clamp-2 max-w-none text-xs leading-snug;
+    }
+    .app-shell-view[data-active-page="home"] .home-chat-shell {
+      @apply mb-0 min-h-0 flex-1 rounded-none border-x-0 border-b-0 shadow-none;
+      height: auto;
+      max-height: none;
+    }
+
     /* Compositor en flujo: el hilo flex-1 termina justo encima del input (evita solape con barra fija). */
     .chat-thread {
       @apply px-3 py-3;
@@ -419,5 +457,32 @@
   .dark .app-content-panel .bg-slate-50\/60,
   .dark .app-content-panel .bg-slate-50\/40 {
     background-color: rgb(30 41 59 / 0.82);
+  }
+
+  /* ── Chat feedback ─────────────────────────────────────────────────── */
+  .chat-feedback-btn {
+    @apply inline-flex items-center justify-center h-7 w-7 rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300;
+  }
+  .chat-feedback-btn:disabled {
+    @apply cursor-default;
+  }
+  .chat-feedback-btn-active {
+    @apply bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400;
+  }
+
+  /* ── Chat history panel ────────────────────────────────────────────── */
+  .chat-history-item {
+    @apply cursor-pointer;
+  }
+  .chat-history-del-btn {
+    @apply opacity-0;
+  }
+  .chat-history-item:hover .chat-history-del-btn {
+    @apply opacity-100;
+  }
+
+  /* ── Quick prompts chips ───────────────────────────────────────────── */
+  .chat-qp-chip {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:bg-sky-900/20 dark:hover:text-sky-400;
   }
 }

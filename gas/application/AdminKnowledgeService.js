@@ -271,6 +271,8 @@ function AdminKnowledge_buildSyncFileIdsFromSources(sources, maxFiles) {
 
   var fi = 0;
   for (; fi < src.files.length && out.length < maxFiles; fi++) {
+    var fent = src.files[fi];
+    if (fent && /** @type {{source?:string}} */ (fent).source === 'rag') continue;
     try {
       var fobj = DriveApp.getFileById(src.files[fi].id);
       if (DriveDocuments_mimeEligibleForGlobantRag(fobj.getMimeType())) {

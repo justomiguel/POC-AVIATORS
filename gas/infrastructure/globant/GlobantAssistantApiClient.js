@@ -336,6 +336,54 @@ function GlobantAssistantApiClient_create(config) {
     return { text: answer, parsed: result };
   }
 
+  /**
+   * Chat completion simple sin RAG. Envía un prompt con contexto directo.
+   * @param {string} systemPrompt
+   * @param {string} userMessage
+   * @param {string=} model — modelo a usar, default 'vertex_ai/gemini-2.0-flash-exp'
+   * @return {{text:string, parsed:Object}}
+   */
+  function chatSimple(systemPrompt, userMessage, model) {
+    var mdl = model || 'vertex_ai/gemini-2.0-flash-exp';
+    var messages = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: userMessage });
+    var payload = JSON.stringify({
+      model: mdl,
+      messages: messages,
+      stream: false,
+      max_tokens: 8192,
+      temperature: 0.2,
+    });
+    var r = BearerHttp_fetch(baseUrl + '/chat', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: authHeaders({}),
+      payload: payload,
+    });
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/chat (simple)',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
+    }
+    var result = JSON.parse(text);
+    var answer = '';
+    if (result.choices && result.choices.length > 0) {
+      answer = (result.choices[0].message && result.choices[0].message.content) || '';
+    } else if (result.text) {
+      answer = result.text;
+    }
+    return { text: answer, parsed: result };
+  }
+
   return {
     getOrganizationAndProjectIds: getOrganizationAndProjectIds,
     uploadFile: uploadFile,
@@ -343,6 +391,7 @@ function GlobantAssistantApiClient_create(config) {
     listAllFiles: listAllFiles,
     sendMessageDetailed: sendMessageDetailed,
     chatWithFileInline: chatWithFileInline,
+    chatSimple: chatSimple,
     refreshAccessIds: function () {
       GlobantAssistantApiClient_invalidateAccessCache();
       memAccessIds = null;
