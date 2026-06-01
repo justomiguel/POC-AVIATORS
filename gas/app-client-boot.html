@@ -161,6 +161,9 @@
       if (A.clients.applyWriteAccess) A.clients.applyWriteAccess();
       A.clients.loadList();
     }
+    if (pg === 'agents' && S.get('canViewAgents') && A.agents && A.agents.loadList) {
+      A.agents.loadList();
+    }
     closeMobileDrawer({ restoreFocus: false });
   }
 

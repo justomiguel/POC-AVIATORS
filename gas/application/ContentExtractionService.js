@@ -137,6 +137,11 @@ function ContentExtraction_promptForType_(contentType) {
     commonInstructions.push(
       'specific for client: {"account_status":"","active_projects":"","health_score":"","renewal_date":"","notes":""}',
     );
+  } else if (contentType === 'onboarding') {
+    commonInstructions.push(
+      'specific for onboarding: {"topic":"","category":"","audience":"","notes":""}',
+      'topic: main concept or theme (e.g. PSS, NDC, loyalty). category: business/domain/concept/studio as fits. audience: who the material is for.',
+    );
   } else {
     throw new Error('content_type invalido');
   }

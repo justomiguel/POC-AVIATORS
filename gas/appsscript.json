@@ -3,7 +3,7 @@
   "dependencies": {},
   "webapp": {
     "access": "DOMAIN",
-    "executeAs": "USER_ACCESSING"
+    "executeAs": "USER_DEPLOYING"
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
@@ -17,6 +17,7 @@
   "urlFetchWhitelist": [
     "https://www.googleapis.com/",
     "https://api.agents.globant.com/",
+    "https://api.clients.geai.globant.com/",
     "https://generativelanguage.googleapis.com/"
   ]
 }

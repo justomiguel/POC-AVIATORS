@@ -14,7 +14,9 @@ function ContentIngestion_findAgentByType_(contentType) {
         ? _ADMIN_AGENT_ID_SUCCESS_CASES
         : contentType === 'client'
           ? _ADMIN_AGENT_ID_CLIENTS
-          : '';
+          : contentType === 'onboarding'
+            ? _ADMIN_AGENT_ID_ONBOARDING
+            : '';
   if (!wantedId) throw new Error('content_type invalido');
   var props = PropertiesService.getScriptProperties();
   var reg = AdminAgents_loadRegistry_(props);

@@ -66,7 +66,7 @@ var UI_STRINGS = {
       'Escribís tu pregunta en el área de mensajes y enviás. El modo de consulta técnico (Globant RAG, Assistant o Gemini según configuración) aparece en el cartel superior del chat. Cuando el despliegue usa varios perfiles indexados, un orquestador puede dirigir la pregunta a uno o más agentes —success cases, propuestas o clientes— según el tema. Podés mantener turnos sucesivos en la misma conversación.',
     faq_q_drive_ctx: '¿Qué son los archivos de contexto o Drive?',
     faq_a_drive_ctx:
-      'Podés explorar carpetas de Drive y adjuntar archivos permitidos para que la respuesta se apoye en ellos, respetando límites de selección y formatos que la integración acepte.',
+      'En el chat, la lista de documentos de contexto corresponde a la cuenta de Google bajo la que corre la aplicación (quien desplegó Aviators), para pedir menos permisos a cada visitante. Podés marcar hasta el límite permitido y formatos que la integración acepte.',
     faq_q_contents: '¿Qué hago en Contenidos?',
     faq_a_contents:
       'Creás o editás ítems de conocimiento: elegís el tipo (propuesta, success case, cliente), subís un PDF, pedís extraer metadata con IA, revisás los campos y guardás para indexar en el agente correspondiente.',
@@ -98,7 +98,8 @@ var UI_STRINGS = {
     contents_step_review: 'Revisión',
     contents_type_helper:
       'Esto define a qué agente se va a indexar el contenido.',
-    contents_dropzone_title: 'Arrastrá un PDF o elegí uno',
+    contents_dropzone_title: 'Arrastrá PDFs o elegí uno o más',
+    contents_dropzone_aria: 'Zona para soltar PDFs o elegir archivos',
     err_contents_upload_too_large:
       'El archivo «{name}» supera el tamaño máximo permitido ({max_mb} MB).',
     contents_current_file_label: 'Archivo procesado',
@@ -194,6 +195,13 @@ var UI_STRINGS = {
     contents_deleted: 'Contenido eliminado.',
     contents_confirm_delete:
       'Se eliminará del catálogo y del índice del agente. ¿Continuar?',
+    contents_batch_upload_extracting: 'Extrayendo {current} de {total}: {name}',
+    contents_batch_upload_saving: 'Guardando {current} de {total}: {name}',
+    contents_batch_done_all_ok: 'Se cargaron {n} archivos correctamente.',
+    contents_batch_done_partial: '{ok} archivos cargados; {fail} fallaron.',
+    contents_batch_skipped_non_pdf: 'Se omitieron {n} archivo(s) que no son PDF.',
+    contents_batch_err_replace_one_file: 'Al editar solo podés reemplazar un PDF a la vez.',
+    contents_batch_too_many: 'Elegí como máximo {max} archivos por lote.',
     contents_err_pick_file: 'Elegí un archivo PDF.',
     contents_err_pick_type: 'Elegí un tipo de contenido.',
     contents_err_upload_first: 'Primero subí un archivo.',
@@ -392,7 +400,7 @@ var UI_STRINGS = {
     ask_btn: 'Enviar con documentos',
     static_drive_files_heading: 'Archivos de contexto',
     static_drive_files_lead:
-      'Marcá hasta 5 archivos recientes para que entren en esta respuesta.',
+      'La lista muestra documentos de la cuenta de Google con la que corre Aviators (dueño del despliegue), no archivos privados de cada visitante. Marcá hasta 5 para incluir en esta respuesta.',
     page_agents_title: 'Administración de agentes',
     page_agents_lead:
       'Cada agente define el nombre del perfil en Globant, las instrucciones del modelo y las fuentes para indexar. Guardá los cambios y sincronizá cuando estés listo.',
@@ -824,6 +832,15 @@ var UI_STRINGS = {
     metrics_reset_busy: 'Reseteando métricas…',
     metrics_reset_done: 'Métricas reseteadas.',
     metrics_reset_error: 'No se pudieron resetear las métricas.',
+    admin_reset_all_heading: 'Restablecer todo',
+    admin_reset_all_lead:
+      'Borra el contenido de los spreadsheets operativos (catálogo de contenidos, métricas, clientes y catálogo API de agentes). Se conservan las cabeceras y la planilla de roles. Esta acción no se puede deshacer.',
+    admin_reset_all_btn: 'Restablecer todo',
+    admin_reset_all_confirm:
+      'Vas a borrar TODOS los datos operativos en spreadsheets (contenidos, métricas, clientes, catálogo API). La planilla de roles no se toca. ¿Confirmás?',
+    admin_reset_all_busy: 'Restableciendo datos…',
+    admin_reset_all_done: 'Datos operativos restablecidos.',
+    admin_reset_all_error: 'No se pudo restablecer todo.',
     metrics_overview_heading: 'Resumen',
     metrics_overview_lead:
       'Indicadores globales para entender volumen de preguntas y consultas sin respuesta.',
@@ -951,7 +968,7 @@ var UI_STRINGS = {
       'Type in the message area and send. The technical consultation mode (Globant RAG, Assistant or Gemini depending on setup) is shown in the banner above the chat. When several indexed profiles are enabled, an orchestrator may route the question to one or more agents—success cases, proposals or clients—based on the topic. You can keep multiple turns in one thread.',
     faq_q_drive_ctx: 'What about Drive or context files?',
     faq_a_drive_ctx:
-      'You can browse Drive folders and attach allowed files so answers use them, within selection limits and formats the integration accepts.',
+      'In Home chat, the context file list comes from the Google account that runs the app (who deployed Aviators), so visitors are asked for fewer permissions. You can select up to the allowed limit and formats the integration accepts.',
     faq_q_contents: 'What do I do under Content?',
     faq_a_contents:
       'Create or edit knowledge items: pick a type (proposal, success case, client), upload a PDF, run AI metadata extraction, review fields, then save to index into the right agent.',
@@ -1079,6 +1096,13 @@ var UI_STRINGS = {
     contents_deleted: 'Content deleted.',
     contents_confirm_delete:
       'This removes the item from catalog and agent index. Continue?',
+    contents_batch_upload_extracting: 'Extracting {current} of {total}: {name}',
+    contents_batch_upload_saving: 'Saving {current} of {total}: {name}',
+    contents_batch_done_all_ok: '{n} files uploaded successfully.',
+    contents_batch_done_partial: '{ok} files uploaded; {fail} failed.',
+    contents_batch_skipped_non_pdf: 'Skipped {n} non-PDF file(s).',
+    contents_batch_err_replace_one_file: 'When editing you can only replace one PDF at a time.',
+    contents_batch_too_many: 'Select at most {max} files per batch.',
     contents_err_pick_file: 'Choose a PDF file.',
     contents_err_pick_type: 'Choose a content type.',
     contents_err_upload_first: 'Upload a file first.',
@@ -1271,7 +1295,7 @@ var UI_STRINGS = {
     ask_btn: 'Send with documents',
     static_drive_files_heading: 'Context files',
     static_drive_files_lead:
-      'Select up to 5 recent files to include in this answer.',
+      'The list shows documents in the Google account that runs Aviators (deployment owner), not each visitor’s private Drive. Select up to 5 to include in this answer.',
     page_agents_title: 'Agent administration',
     page_agents_lead:
       'Each agent defines the Globant profile name, model instructions, and sources to index. Save changes and sync when you are ready.',
@@ -1699,6 +1723,15 @@ var UI_STRINGS = {
     metrics_reset_busy: 'Resetting metrics…',
     metrics_reset_done: 'Metrics reset complete.',
     metrics_reset_error: 'Metrics could not be reset.',
+    admin_reset_all_heading: 'Reset everything',
+    admin_reset_all_lead:
+      'Clears data rows in operational spreadsheets (content catalog, metrics, clients, and agent API catalog). Headers are kept and the roles spreadsheet is not modified. This cannot be undone.',
+    admin_reset_all_btn: 'Reset everything',
+    admin_reset_all_confirm:
+      'You are about to delete ALL operational spreadsheet data (contents, metrics, clients, API catalog). The roles spreadsheet will not be touched. Continue?',
+    admin_reset_all_busy: 'Resetting data…',
+    admin_reset_all_done: 'Operational data has been reset.',
+    admin_reset_all_error: 'Full reset failed.',
     metrics_overview_heading: 'Overview',
     metrics_overview_lead:
       'Top-level indicators to understand total question volume and unanswered requests.',

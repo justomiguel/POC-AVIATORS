@@ -777,6 +777,11 @@ function metricsResetAll() {
   return MetricsService_resetAll();
 }
 
+/** Restablece todos los spreadsheets operativos (solo admin). */
+function adminResetAllSpreadsheetData() {
+  return AdminReset_resetAllSpreadsheetData();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Feedback de chat
 // ─────────────────────────────────────────────────────────────────────────────

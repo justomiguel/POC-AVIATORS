@@ -1,0 +1,11 @@
+---
+description: No subir ni publicar a producción (Apps Script / Web App) sin consentimiento explícito del usuario
+alwaysApply: true
+---
+
+# Producción Apps Script — consentimiento obligatorio
+
+- **No ejecutar** `clasp push`, `./deploy`, `clasp deploy`, ni cualquier comando o flujo que **sincronice código al proyecto de Apps Script en la nube** o **publique / actualice la Web App**, salvo que el usuario lo pida **explícitamente** en ese turno (p. ej. «hacé push», «desplegá a prod», «clasp push autorizado»).
+- **Sí está permitido** sin pedir permiso extra: edición local en `gas/`, `npm run build:css`, pruebas locales, lectura de estado git, comandos que **no** alteren el proyecto remoto de Google.
+- Si el usuario pide un cambio de código pero **no** menciona despliegue, terminar en el repo local y **ofrecer** el push como siguiente paso, sin ejecutarlo por defecto.
+- Tras un `clasp push` accidental en el pasado, **no asumir** que está autorizado para los siguientes pushes: cada envío a prod requiere confirmación clara cuando aplique esta regla.

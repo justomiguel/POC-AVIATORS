@@ -573,6 +573,7 @@
         askStatus.classList.add('err');
         return;
       }
+      homeChatHideQuickPromptStarters_();
       var ids = A.getSelectedIds();
       homeChatAppendUser(q);
       pushHistory('user', q);
@@ -617,6 +618,7 @@
         askStatus.classList.add('err');
         return;
       }
+      homeChatHideQuickPromptStarters_();
       homeChatAppendUser(gp);
       pushHistory('user', gp);
       questionEl.value = '';

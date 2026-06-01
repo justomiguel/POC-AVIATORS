@@ -282,6 +282,228 @@
     };
   }
 
+  /** @const Maximum PDFs per multi-upload batch (sequential RPC + quotas). */
+  var CONTENTS_BATCH_MAX_FILES = 20;
+
+  function contentsTagsFromDraftCommon_(common) {
+    var c = common || {};
+    var tags = [];
+    if (Array.isArray(c.tags)) tags = c.tags.slice();
+    else if (typeof c.tags === 'string') {
+      tags = c.tags
+        .split(',')
+        .map(function (x) {
+          return String(x || '').trim();
+        })
+        .filter(function (x) {
+          return !!x;
+        });
+    }
+    return tags;
+  }
+
+  /**
+   * Arma el payload de guardado para contenido nuevo a partir del draft de IA + archivo.
+   * @param {Object|null} draft
+   * @param {{name:string,mimeType:string,dataBase64:string}} fileWrap
+   * @param {string} contentType
+   * @return {Object}
+   */
+  function contentsBuildPayloadFromDraft_(draft, fileWrap, contentType) {
+    var d = draft || {};
+    var c = d.common || {};
+    var sp = d.specific && typeof d.specific === 'object' ? d.specific : {};
+    var title = String(c.title || '').trim();
+    if (!title && fileWrap && fileWrap.name) {
+      title = String(fileWrap.name.replace(/\.pdf$/i, '').trim() || fileWrap.name || '').trim();
+    }
+    var mime = (fileWrap && fileWrap.mimeType) || 'application/pdf';
+    var fname = (fileWrap && fileWrap.name) || 'content.pdf';
+    return {
+      common: {
+        content_id: '',
+        content_type: contentType,
+        title: title,
+        summary: String(c.summary || '').trim(),
+        client_name: String(c.client_name || '').trim(),
+        industry: String(c.industry || '').trim(),
+        tags: contentsTagsFromDraftCommon_(c),
+        file_name: fname,
+        mime_type: mime,
+      },
+      file: fileWrap.dataBase64
+        ? { name: fname, mimeType: mime, dataBase64: fileWrap.dataBase64 }
+        : null,
+      specific: sp,
+    };
+  }
+
+  function contentsFilterPdfFiles_(fileList) {
+    var pdfs = [];
+    var badCount = 0;
+    var i;
+    for (i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      var okPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+      if (okPdf) pdfs.push(f);
+      else badCount++;
+    }
+    return { pdfs: pdfs, badCount: badCount };
+  }
+
+  function contentsReadFileAsBase64_(file, onOk, onErr) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var s = reader.result;
+      var b64 = typeof s === 'string' && s.indexOf(',') >= 0 ? s.split(',')[1] : '';
+      if (!b64) {
+        if (onErr) onErr();
+        return;
+      }
+      if (onOk) onOk(b64);
+    };
+    reader.onerror = function () {
+      if (onErr) onErr();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function contentsProcessBatch_(pdfFiles, type) {
+    var total = pdfFiles.length;
+    var idx = 0;
+    var okCount = 0;
+    var failCount = 0;
+
+    function finishBatch() {
+      A.hideBlockingModal();
+      contentsSetEditorBusy(false, '');
+      contentsResetForm();
+      contentsSetScreen('list');
+      A.cache.invalidate('contentsList');
+      contentsLoadList({ skipCache: true });
+      var msg =
+        failCount === 0
+          ? i18nFmt('contents_batch_done_all_ok', { n: okCount })
+          : i18nFmt('contents_batch_done_partial', { ok: okCount, fail: failCount });
+      contentsSetListStatus(msg, failCount > 0);
+      if (A.toast) {
+        if (failCount === 0 && okCount > 0) A.toast.success(msg);
+        else if (okCount === 0 && failCount > 0) A.toast.error(msg);
+        else A.toast.info(msg);
+      }
+    }
+
+    function processNext() {
+      if (idx >= total) {
+        finishBatch();
+        return;
+      }
+      var f = pdfFiles[idx];
+      var cur = idx + 1;
+      A.showBlockingModal(i18nFmt('contents_batch_upload_extracting', { current: cur, total: total, name: f.name }));
+      contentsReadFileAsBase64_(
+        f,
+        function (b64) {
+          var extractPayload = JSON.stringify({
+            name: f.name,
+            mimeType: f.type || 'application/pdf',
+            dataBase64: b64,
+          });
+          google.script.run
+            .withSuccessHandler(function (res) {
+              var draft = res && res.draft;
+              var fileWrap = {
+                name: f.name,
+                mimeType: f.type || 'application/pdf',
+                dataBase64: b64,
+              };
+              var savePayload = contentsBuildPayloadFromDraft_(draft, fileWrap, type);
+              if (!savePayload.common.title) {
+                failCount++;
+                idx++;
+                processNext();
+                return;
+              }
+              A.showBlockingModal(i18nFmt('contents_batch_upload_saving', { current: cur, total: total, name: f.name }));
+              google.script.run
+                .withSuccessHandler(function () {
+                  okCount++;
+                  idx++;
+                  processNext();
+                })
+                .withFailureHandler(function () {
+                  failCount++;
+                  idx++;
+                  processNext();
+                })
+                .contentsSaveDraft(JSON.stringify(savePayload));
+            })
+            .withFailureHandler(function () {
+              failCount++;
+              idx++;
+              processNext();
+            })
+            .contentsExtractDraft(extractPayload, type);
+        },
+        function () {
+          failCount++;
+          idx++;
+          processNext();
+        },
+      );
+    }
+
+    contentsSetEditorBusy(true, '');
+    processNext();
+  }
+
+  /**
+   * @param {FileList|Array<File>} files
+   * @param {string} type content_type
+   */
+  function contentsHandleFileList_(files, type) {
+    if (!type) {
+      contentsSetEditorStatus(i18n('contents_err_pick_type'), true);
+      return;
+    }
+    var arr = [];
+    var i;
+    for (i = 0; i < files.length; i++) arr.push(files[i]);
+    if (!arr.length) return;
+
+    var isEdit = !!(S.get('contentsSelectedId') || (contentsContentId && contentsContentId.value));
+    if (isEdit && arr.length > 1) {
+      contentsSetEditorStatus(i18n('contents_batch_err_replace_one_file'), true);
+      return;
+    }
+
+    var filtered = contentsFilterPdfFiles_(arr);
+    if (filtered.badCount > 0 && A.toast) {
+      A.toast.info(i18nFmt('contents_batch_skipped_non_pdf', { n: filtered.badCount }));
+    }
+    if (!filtered.pdfs.length) {
+      contentsSetEditorStatus(i18n('contents_err_pick_file'), true);
+      return;
+    }
+
+    if (isEdit) {
+      contentsProcessPickedFile_(filtered.pdfs[0], type);
+      return;
+    }
+
+    if (filtered.pdfs.length === 1) {
+      contentsProcessPickedFile_(filtered.pdfs[0], type);
+      return;
+    }
+
+    if (filtered.pdfs.length > CONTENTS_BATCH_MAX_FILES) {
+      contentsSetEditorStatus(i18nFmt('contents_batch_too_many', { max: CONTENTS_BATCH_MAX_FILES }), true);
+      return;
+    }
+
+    contentsProcessBatch_(filtered.pdfs, type);
+  }
+
   function contentsToggleSpecificSections() {
     var t = (contentsType && contentsType.value) || '';
     if (contentsSpecificProposal) contentsSpecificProposal.classList.toggle('hidden', t !== 'proposal');
@@ -935,14 +1157,9 @@
     var type = (contentsType && contentsType.value) || '';
     if (!type) { contentsSetEditorStatus(i18n('contents_err_pick_type'), true); return; }
     if (!contentsFileInput || !contentsFileInput.files || !contentsFileInput.files.length) return;
-    var f = contentsFileInput.files[0];
-    var okPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
-    if (!okPdf) {
-      contentsSetEditorStatus(i18n('err_admin_upload_only_pdf'), true);
-      contentsFileInput.value = '';
-      return;
-    }
-    contentsProcessPickedFile_(f, type);
+    var files = contentsFileInput.files;
+    contentsHandleFileList_(files, type);
+    contentsFileInput.value = '';
   }
 
   function contentsSaveCurrent() {
@@ -1081,6 +1298,58 @@
   }
   if (contentsFileInput) {
     contentsFileInput.addEventListener('change', function () { contentsHandlePickedFile(); });
+  }
+  if (contentsDropzone) {
+    contentsDropzone.addEventListener('click', function (ev) {
+      if (!contentsBrowseBtn || !contentsFileInput || contentsBrowseBtn.disabled) return;
+      var t = ev.target;
+      if (t === contentsBrowseBtn || (contentsBrowseBtn.contains && contentsBrowseBtn.contains(t))) return;
+      if (t === contentsFileInput) return;
+      contentsFileInput.click();
+    });
+    contentsDropzone.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var t = e.target;
+      if (t === contentsDropzone || (contentsDropzone.contains && contentsDropzone.contains(t))) {
+        if (t !== contentsBrowseBtn && !(contentsBrowseBtn && contentsBrowseBtn.contains && contentsBrowseBtn.contains(t))) {
+          e.preventDefault();
+          if (contentsBrowseBtn && !contentsBrowseBtn.disabled) contentsBrowseBtn.click();
+        }
+      }
+    });
+    contentsDropzone.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      contentsDropzone.classList.add('is-dragover');
+    });
+    contentsDropzone.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var rect = contentsDropzone.getBoundingClientRect();
+      var x = e.clientX;
+      var y = e.clientY;
+      if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+        contentsDropzone.classList.remove('is-dragover');
+      }
+    });
+    contentsDropzone.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      contentsDropzone.classList.add('is-dragover');
+    });
+    contentsDropzone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      contentsDropzone.classList.remove('is-dragover');
+      var dt = e.dataTransfer;
+      if (!dt || !dt.files || !dt.files.length) return;
+      var type = (contentsType && contentsType.value) || '';
+      if (!type) {
+        contentsSetEditorStatus(i18n('contents_err_pick_type'), true);
+        return;
+      }
+      contentsHandleFileList_(dt.files, type);
+    });
   }
   if (contentsSaveBtn) {
     contentsSaveBtn.addEventListener('click', function () { contentsSaveCurrent(); });

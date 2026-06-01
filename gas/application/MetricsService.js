@@ -584,27 +584,11 @@ function MetricsService_leaderboardList(kind, filters) {
  */
 function MetricsService_resetAll() {
   MetricsAuth_requireReset();
-  var db = MetricsService_getOrCreateSpreadsheet_();
-
-  function clearSheetKeepHeaders_(sheet) {
-    var last = sheet.getLastRow();
-    if (last <= 1) return 0;
-    var rows = last - 1;
-    sheet.getRange(2, 1, rows, sheet.getLastColumn()).clearContent();
-    return rows;
-  }
-
-  var usageCleared = clearSheetKeepHeaders_(db.usageSheet);
-  var unansweredCleared = clearSheetKeepHeaders_(db.unansweredSheet);
-  var monthlyCleared = clearSheetKeepHeaders_(db.monthlySheet);
-
+  var props = PropertiesService.getScriptProperties();
+  var cleared = AdminReset_clearMetrics_(props);
   return {
     ok: true,
-    cleared: {
-      usage: usageCleared,
-      unanswered: unansweredCleared,
-      monthly: monthlyCleared,
-    },
+    cleared: cleared,
   };
 }
 

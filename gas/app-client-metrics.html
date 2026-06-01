@@ -7,6 +7,8 @@
   var rangeEl = document.getElementById('metrics-range');
   var refreshBtn = document.getElementById('metrics-refresh-btn');
   var resetBtn = document.getElementById('metrics-reset-btn');
+  var resetAllSection = document.getElementById('admin-reset-all-section');
+  var resetAllBtn = document.getElementById('admin-reset-all-btn');
   var statusWrap = document.getElementById('metrics-status');
   var statusIcon = document.getElementById('metrics-status-icon');
   var statusText = document.getElementById('metrics-status-text');
@@ -62,6 +64,7 @@
     if (rangeEl) rangeEl.disabled = busy;
     if (refreshBtn) refreshBtn.disabled = busy;
     if (resetBtn) resetBtn.disabled = busy;
+    if (resetAllBtn) resetAllBtn.disabled = busy;
     if (unansweredPrevBtn) unansweredPrevBtn.disabled = busy || unansweredPage.skip <= 0;
     if (unansweredNextBtn) unansweredNextBtn.disabled = busy || !unansweredPage.hasMore;
   }
@@ -341,6 +344,37 @@
         .metricsResetAll();
     });
   }
+  if (resetAllBtn) {
+    resetAllBtn.addEventListener('click', function () {
+      if (!window.confirm(i18n('admin_reset_all_confirm'))) return;
+      A.showBlockingModal(i18n('admin_reset_all_busy'));
+      loadingDashboard = true;
+      loadingUnanswered = true;
+      syncBusyControls();
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          loadingDashboard = false;
+          loadingUnanswered = false;
+          if (A.cache) {
+            A.cache.invalidate('contentsList');
+            A.cache.invalidate('clientsList');
+            A.cache.invalidate('agentsList');
+            A.cache.invalidate('contextFiles');
+          }
+          setStatus(i18n('admin_reset_all_done'), false);
+          loadAll(true);
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          loadingDashboard = false;
+          loadingUnanswered = false;
+          setStatus((e && e.message) || i18n('admin_reset_all_error'), false);
+          syncBusyControls();
+        })
+        .adminResetAllSpreadsheetData();
+    });
+  }
   if (rangeEl) {
     rangeEl.addEventListener('change', function () {
       loadAll(true);
@@ -363,7 +397,9 @@
 
   A.metrics = {
     loadDashboard: function () {
-      if (resetBtn) resetBtn.classList.toggle('hidden', !S.get('canResetMetrics'));
+      var isAdmin = !!S.get('canResetMetrics');
+      if (resetBtn) resetBtn.classList.toggle('hidden', !isAdmin);
+      if (resetAllSection) resetAllSection.classList.toggle('hidden', !isAdmin);
       loadAll(false);
     },
   };

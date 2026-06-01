@@ -18,18 +18,22 @@ disable-model-invocation: false
 
 ## Before / after `clasp push`
 
+0. **Consentimiento**: No ejecutar `clasp push`, `./deploy` ni publicar la Web App **sin que el usuario lo pida explícitamente** en ese momento. Regla del repo: `.cursor/rules/no-production-push-without-consent.mdc`.
 1. **Scopes & network**: If you add new Google or Sheets APIs or new external hosts, update `gas/appsscript.json`:
    - `oauthScopes` — least privilege ([scopes](https://developers.google.com/apps-script/concepts/scopes)).
    - `urlFetchWhitelist` — add each HTTPS origin used by `UrlFetchApp` (e.g. Globant API host already listed).
 2. **Runtime**: Keep `"runtimeVersion": "V8"`.
-3. **Web app**: Changing `Code.js` `doGet`, HTML, or permissions usually requires a **new deployment** (Manage deployments) and users may need to **re-authorize** if scopes changed.
+3. **Web app**: Changing `Code.js` `doGet`, HTML, or permissions usually requires a **new deployment** (Manage deployments) and users may need to **re-authorize** if scopes changed. **`webapp.executeAs`** in `gas/appsscript.json` must match el despliegue («Ejecutar como yo» = `USER_DEPLOYING`): la identidad de Drive/Sheets es la del despliegue; tras cambiarlo, publicar una nueva versión y comprobar en el cuadro de despliegue que coincida.
 4. **Secrets**: API keys and tokens belong in **Script Properties** (or team vault); never commit them.
 
-## Commands (agent may run in terminal)
+## Commands (terminal)
+
+**Solo tras consentimiento explícito del usuario** para tocar producción: `clasp push`, `./deploy`, publicar Web App. Sin ese OK, limitarse a edición local y `npm run build:css`.
 
 ```bash
 # From repository root (where .clasp.json is)
-clasp push
+clasp status      # local vs remoto (sin escribir en Google)
+clasp push        # solo si el usuario lo pidió en este turno
 clasp open        # optional: open script in browser
 clasp deployments # list deployments
 ```

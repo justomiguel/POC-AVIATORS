@@ -9,7 +9,8 @@
  * - **LLM_PROVIDER** (opcional) — `globant` o `gemini`: fuerza el proveedor si definiste
  *   ambas claves. Si no está definido y hay las dos, prevalece Globant.
  *
- * Opcionales Globant: GLOBANT_RAG_BASE_URL, **GLOBANT_API_MODE**, GLOBANT_RAG_PROFILE_NAME,
+ * Opcionales Globant: GLOBANT_RAG_BASE_URL (ej. `https://api.clients.geai.globant.com`; debe estar en
+ * `appsscript.json` → `urlFetchWhitelist`), **GLOBANT_API_MODE**, GLOBANT_RAG_PROFILE_NAME,
  * GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD, GLOBANT_RAG_EXECUTE_MAX_RETRIES,
  * GLOBANT_RAG_SKIP_AUTO_PROFILE. Opcional Gemini: GEMINI_MODEL.
  *

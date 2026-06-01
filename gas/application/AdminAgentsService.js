@@ -735,6 +735,45 @@ function AdminAgents_listRemoteProfilesSet_(ragClient) {
 }
 
 /**
+ * Cliente RAG opcional para listados (no falla si falta API key o la red).
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {Object|null}
+ */
+function AdminAgents_tryMaybeCreateRagClient_(props) {
+  try {
+    return AdminAgents_maybeCreateRagClient_(props);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * @param {Object} ragClient
+ * @return {Object<string, boolean>|null} null si no se pudo consultar Globant
+ */
+function AdminAgents_tryListRemoteProfilesSet_(ragClient) {
+  try {
+    return AdminAgents_listRemoteProfilesSet_(ragClient);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Marca si el perfil RAG existe en Globant (informativo; no oculta agentes).
+ * @param {Array<Object>} agents
+ * @param {Object<string, boolean>|null} remoteSet
+ */
+function AdminAgents_annotateRagProfileOnRemote_(agents, remoteSet) {
+  if (!remoteSet || !agents || !agents.length) return;
+  var i;
+  for (i = 0; i < agents.length; i++) {
+    var pn = String(agents[i].profileName || '').trim();
+    agents[i].ragProfileOnRemote = !!remoteSet[pn];
+  }
+}
+
+/**
  * @param {Object} ragClient
  * @param {Array<Object>} defaultsInRegistry
  * @return {number}
@@ -807,14 +846,12 @@ function AdminAgents_list() {
       lastSync: String(a.lastSync || ''),
     });
   }
-  var ragClient = AdminAgents_maybeCreateRagClient_(props);
+  var ragClient = AdminAgents_tryMaybeCreateRagClient_(props);
   if (ragClient) {
-    var exists = AdminAgents_listRemoteProfilesSet_(ragClient);
-    var filtered = [];
-    for (i = 0; i < out.length; i++) {
-      if (exists[out[i].profileName]) filtered.push(out[i]);
-    }
-    out = filtered;
+    AdminAgents_annotateRagProfileOnRemote_(
+      out,
+      AdminAgents_tryListRemoteProfilesSet_(ragClient),
+    );
   }
   return { ok: true, agents: out };
 }
@@ -848,14 +885,12 @@ function AdminAgents_listForDashboardMetrics() {
       },
     });
   }
-  var ragClient = AdminAgents_maybeCreateRagClient_(props);
+  var ragClient = AdminAgents_tryMaybeCreateRagClient_(props);
   if (ragClient) {
-    var exists = AdminAgents_listRemoteProfilesSet_(ragClient);
-    var filtered = [];
-    for (i = 0; i < out.length; i++) {
-      if (exists[out[i].profileName]) filtered.push(out[i]);
-    }
-    out = filtered;
+    AdminAgents_annotateRagProfileOnRemote_(
+      out,
+      AdminAgents_tryListRemoteProfilesSet_(ragClient),
+    );
   }
   return { ok: true, agents: out };
 }
