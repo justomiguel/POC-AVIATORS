@@ -79,7 +79,8 @@ google.script.run.adminSalesforceAccountsInstallDailyTrigger();
 O en el editor: `adminSalesforceAccountsInstallDailyTrigger` / `SalesforceAccounts_installDailyTrigger`.
 
 - Programación: **cada día a las 06:00** (huso horario del proyecto Apps Script → *Configuración del proyecto* → zona horaria).
-- El job solo sincroniza si detecta un nuevo `Completed Successfully` en la pestaña **Automatic Operations Events Log** o si cambió el hash de **Sheet1**.
+- El job solo sincroniza datos si detecta un nuevo `Completed Successfully` en la pestaña **Automatic Operations Events Log** o si cambió el hash de **Sheet1**.
+- **Embeddings**: en cada corrida automática se indexan lotes hasta ~4,5 min; si queda cola, un **trigger encadenado** (cada ~2 min) sigue hasta terminar. Sin cambios en la planilla, el job puede retomar solo la cola pendiente.
 
 ### 5. Prompt del agente Clients
 
@@ -109,7 +110,8 @@ El sync **no** crea filas en `roles`. El Account Owner queda como texto en el ro
 ## Operación y fallos
 
 - Estado del último sync: `app_settings` clave `salesforce_accounts_sync`.
-- Logs: Apps Script → *Ejecuciones* → `SalesforceAccounts_dailySyncJob_`.
+- Logs: Apps Script → *Ejecuciones* → `SalesforceAccounts_dailySyncJob_` y `SalesforceAccounts_embeddingsContinuationJob_`.
+- Estado parcial: `last_sync_status = ok_partial` y mensaje con `emb_pending` / `continuation=scheduled` hasta completar la cola.
 - Si falla Supabase o falta `SALESFORCE_ACCOUNTS_SPREADSHEET_ID`, el job registra error en `last_sync_status`.
 
 ## Prueba del agente

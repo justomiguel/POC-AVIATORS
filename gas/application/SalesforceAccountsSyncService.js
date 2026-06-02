@@ -7,6 +7,23 @@ var SALESFORCE_ACCOUNTS_SHEET_EVENTS = 'Automatic Operations Events Log';
 var SALESFORCE_ACCOUNTS_SYNC_ACTOR = 'salesforce-sync';
 var SALESFORCE_ACCOUNTS_CONTENT_PROFILE = 'aviators-clients';
 
+/** Cuentas por lote al indexar embeddings (manual con progreso en UI). */
+var SALESFORCE_ACCOUNTS_EMBEDDING_BATCH_SIZE = 8;
+
+/** Presupuesto de tiempo por ejecución de trigger (ms); margen bajo el límite ~6 min de GAS. */
+var SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_ = 270000;
+
+/** Minutos entre ejecuciones encadenadas si la cola de embeddings no terminó. */
+var SALESFORCE_ACCOUNTS_EMBEDDING_CONTINUATION_MINUTES_ = 2;
+
+var SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_KEY_ = 'sf_sync_emb_queue_v1';
+
+var SALESFORCE_ACCOUNTS_EMB_OFFSET_CACHE_KEY_ = 'sf_sync_emb_offset_v1';
+
+var SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_SEC_ = 21600;
+
+var SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_ = 'SalesforceAccounts_embeddingsContinuationJob_';
+
 /** @type {Object<string, number>} */
 var SALESFORCE_ACCOUNTS_COL_ = {
   ACCOUNT_OWNER: 0,
@@ -375,10 +392,92 @@ function SalesforceAccounts_latestCompletedEventRow_(ss) {
 }
 
 /**
- * @param {boolean} force
- * @return {{ok:boolean, skipped:boolean, reason:string, accounts:number, inactivated:number, embeddings:number}}
+ * @return {Object<string, Object>}
  */
-function SalesforceAccounts_runFullSync(force) {
+function SalesforceAccounts_buildExistingIndex_() {
+  var rows = SalesforceAccountsStore_listAll();
+  var map = {};
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var key = String(rows[i].account_key || '').trim();
+    if (key) map[key] = rows[i];
+  }
+  return map;
+}
+
+/**
+ * @param {Array<string>} ids
+ */
+function SalesforceAccounts_storeEmbeddingQueue_(ids) {
+  var list = ids || [];
+  try {
+    CacheService.getScriptCache().put(
+      SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_KEY_,
+      JSON.stringify(list),
+      SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_SEC_,
+    );
+    SalesforceAccounts_storeEmbeddingOffset_(0);
+  } catch (ignoreCache) {}
+}
+
+/**
+ * @param {number} offset
+ */
+function SalesforceAccounts_storeEmbeddingOffset_(offset) {
+  try {
+    CacheService.getScriptCache().put(
+      SALESFORCE_ACCOUNTS_EMB_OFFSET_CACHE_KEY_,
+      String(Math.max(0, Number(offset) || 0)),
+      SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_SEC_,
+    );
+  } catch (ignoreOff) {}
+}
+
+/**
+ * @return {number}
+ */
+function SalesforceAccounts_loadEmbeddingOffset_() {
+  try {
+    var raw = CacheService.getScriptCache().get(SALESFORCE_ACCOUNTS_EMB_OFFSET_CACHE_KEY_);
+    return Math.max(0, Number(raw) || 0);
+  } catch (ignoreLoad) {
+    return 0;
+  }
+}
+
+function SalesforceAccounts_clearEmbeddingOffset_() {
+  try {
+    CacheService.getScriptCache().remove(SALESFORCE_ACCOUNTS_EMB_OFFSET_CACHE_KEY_);
+  } catch (ignoreClr) {}
+}
+
+/**
+ * @return {Array<string>}
+ */
+function SalesforceAccounts_loadEmbeddingQueue_() {
+  try {
+    var raw = CacheService.getScriptCache().get(SALESFORCE_ACCOUNTS_EMB_QUEUE_CACHE_KEY_);
+    if (!raw) return [];
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (ignoreParse) {
+    return [];
+  }
+}
+
+/**
+ * @param {boolean} force
+ * @return {{
+ *   ok: boolean,
+ *   skipped: boolean,
+ *   reason: string,
+ *   accounts: number,
+ *   inactivated: number,
+ *   total: number,
+ *   embeddingTotal: number
+ * }}
+ */
+function SalesforceAccounts_runSyncData_(force) {
   if (!AviatorsDataBackend_supabaseConfigured_()) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_supabase_not_configured'));
   }
@@ -394,20 +493,23 @@ function SalesforceAccounts_runFullSync(force) {
   if (!shouldSync && sheetHash && sheetHash !== state.last_sheet_hash) shouldSync = true;
 
   if (!shouldSync) {
+    SalesforceAccounts_storeEmbeddingQueue_([]);
     return {
       ok: true,
       skipped: true,
       reason: 'no_changes',
       accounts: 0,
       inactivated: 0,
-      embeddings: 0,
+      total: 0,
+      embeddingTotal: 0,
     };
   }
 
   var accounts = sheetPayload.accounts;
+  var existingIndex = SalesforceAccounts_buildExistingIndex_();
   var activeKeys = [];
   var upserted = 0;
-  var embeddings = 0;
+  var embeddingContentIds = [];
   var i;
 
   for (i = 0; i < accounts.length; i++) {
@@ -415,7 +517,7 @@ function SalesforceAccounts_runFullSync(force) {
     var key = acc.account_key;
     activeKeys.push(key);
 
-    var existing = SalesforceAccountsStore_getByKey(key);
+    var existing = existingIndex[key] || null;
     var contentId = existing && existing.content_id
       ? String(existing.content_id)
       : Utilities.getUuid();
@@ -444,24 +546,13 @@ function SalesforceAccounts_runFullSync(force) {
     if (hashChanged || !existing || !existing.content_id) {
       contentId = SalesforceAccounts_upsertCatalogRow_(acc, contentId, true);
       rowPayload.content_id = contentId;
-      if (hashChanged) {
-        try {
-          ContentEmbedding_refreshForContentId_(contentId);
-          embeddings++;
-        } catch (eEmb) {
-          console.log(
-            '[SF-SYNC] embedding deferred ' +
-              contentId +
-              ': ' +
-              String(eEmb.message || eEmb).slice(0, 120),
-          );
-        }
-      }
+      if (hashChanged) embeddingContentIds.push(contentId);
     } else {
       rowPayload.content_id = contentId;
     }
 
     SalesforceAccountsStore_upsert(rowPayload);
+    existingIndex[key] = rowPayload;
     upserted++;
   }
 
@@ -488,10 +579,6 @@ function SalesforceAccounts_runFullSync(force) {
     };
     var cid = String(inRow.content_id || '').trim() || Utilities.getUuid();
     SalesforceAccounts_upsertCatalogRow_(inactiveAcc, cid, false);
-    try {
-      ContentEmbedding_refreshForContentId_(cid);
-      embeddings++;
-    } catch (ignoreEmb) {}
     SalesforceAccountsStore_upsert({
       account_key: iKey,
       account_name: inactiveAcc.account_name,
@@ -516,12 +603,14 @@ function SalesforceAccounts_runFullSync(force) {
     inactivated++;
   }
 
+  SalesforceAccounts_storeEmbeddingQueue_(embeddingContentIds);
+
   SalesforceAccountsSyncStateStore_save_({
     last_event_row: eventRow,
     last_sheet_hash: sheetHash,
     last_sync_at: new Date().toISOString(),
     last_sync_status: 'ok',
-    last_sync_message: 'accounts=' + upserted,
+    last_sync_message: 'accounts=' + upserted + ',emb_pending=' + embeddingContentIds.length,
     accounts_upserted: upserted,
     accounts_inactivated: inactivated,
   });
@@ -532,7 +621,230 @@ function SalesforceAccounts_runFullSync(force) {
     reason: 'synced',
     accounts: upserted,
     inactivated: inactivated,
-    embeddings: embeddings,
+    total: accounts.length,
+    embeddingTotal: embeddingContentIds.length,
+  };
+}
+
+/**
+ * @param {number} start
+ * @param {number} limit
+ * @return {{
+ *   ok: boolean,
+ *   processed: number,
+ *   failed: number,
+ *   done: number,
+ *   total: number,
+ *   hasMore: boolean,
+ *   errors: Array<string>
+ * }}
+ */
+function SalesforceAccounts_runSyncEmbeddingsBatch_(start, limit) {
+  var ids = SalesforceAccounts_loadEmbeddingQueue_();
+  var total = ids.length;
+  var skip = Math.max(0, Number(start) || 0);
+  var size = Math.max(1, Math.min(20, Number(limit) || SALESFORCE_ACCOUNTS_EMBEDDING_BATCH_SIZE));
+  var end = Math.min(total, skip + size);
+  var processed = 0;
+  var failed = 0;
+  var errors = [];
+  var i;
+
+  for (i = skip; i < end; i++) {
+    var cid = String(ids[i] || '').trim();
+    if (!cid) continue;
+    try {
+      ContentEmbedding_refreshForContentId_(cid);
+      processed++;
+    } catch (eEmb) {
+      failed++;
+      if (errors.length < 5) {
+        errors.push(String(eEmb.message || eEmb).slice(0, 120));
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    processed: processed,
+    failed: failed,
+    done: end,
+    total: total,
+    hasMore: end < total,
+    errors: errors,
+  };
+}
+
+/**
+ * @param {number} startOffset
+ * @param {number} maxMs
+ * @return {{processed:number, failed:number, offset:number, hasMore:boolean, total:number}}
+ */
+function SalesforceAccounts_drainEmbeddingsWithTimeBudget_(startOffset, maxMs) {
+  var budget = Math.max(60000, Number(maxMs) || SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_);
+  var startMs = Date.now();
+  var skip = Math.max(0, Number(startOffset) || 0);
+  var totalProcessed = 0;
+  var totalFailed = 0;
+  var hasMore = false;
+  var total = 0;
+
+  while (Date.now() - startMs < budget) {
+    var batch = SalesforceAccounts_runSyncEmbeddingsBatch_(
+      skip,
+      SALESFORCE_ACCOUNTS_EMBEDDING_BATCH_SIZE,
+    );
+    totalProcessed += batch.processed;
+    totalFailed += batch.failed;
+    skip = batch.done;
+    total = batch.total;
+    hasMore = batch.hasMore;
+    if (!hasMore) break;
+  }
+
+  return {
+    processed: totalProcessed,
+    failed: totalFailed,
+    offset: skip,
+    hasMore: hasMore,
+    total: total,
+  };
+}
+
+/**
+ * @return {boolean}
+ */
+function SalesforceAccounts_embeddingsContinuationTriggerInstalled_() {
+  var listed = SalesforceAccounts_listTriggersSafe_();
+  if (!listed.ok) return false;
+  var i;
+  for (i = 0; i < listed.triggers.length; i++) {
+    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function SalesforceAccounts_deleteEmbeddingsContinuationTriggers_() {
+  var listed = SalesforceAccounts_listTriggersSafe_();
+  if (!listed.ok) return;
+  var i;
+  for (i = 0; i < listed.triggers.length; i++) {
+    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_) {
+      ScriptApp.deleteTrigger(listed.triggers[i]);
+    }
+  }
+}
+
+function SalesforceAccounts_scheduleEmbeddingsContinuation_() {
+  var listed = SalesforceAccounts_listTriggersSafe_();
+  if (!listed.ok) {
+    console.log('[SF-SYNC] cannot schedule embedding continuation: ScriptApp scope');
+    return;
+  }
+  SalesforceAccounts_deleteEmbeddingsContinuationTriggers_();
+  ScriptApp.newTrigger(SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_)
+    .timeBased()
+    .afterMinutes(SALESFORCE_ACCOUNTS_EMBEDDING_CONTINUATION_MINUTES_)
+    .create();
+}
+
+/**
+ * @param {Object} dataRes resultado de runSyncData_
+ * @param {{processed:number, failed:number, offset:number, hasMore:boolean, total:number}} embStats
+ */
+function SalesforceAccounts_recordEmbeddingDrainState_(dataRes, embStats) {
+  var state = SalesforceAccountsSyncStateStore_load_();
+  var pending = embStats.hasMore
+    ? Math.max(0, (embStats.total || 0) - (embStats.offset || 0))
+    : 0;
+  var msg =
+    'accounts=' +
+    (dataRes && dataRes.accounts != null ? dataRes.accounts : 0) +
+    ',emb=' +
+    (embStats.processed || 0) +
+    ',emb_fail=' +
+    (embStats.failed || 0);
+  if (embStats.hasMore) {
+    msg += ',emb_pending=' + pending + ',continuation=scheduled';
+  }
+  state.last_sync_at = new Date().toISOString();
+  state.last_sync_status = embStats.hasMore ? 'ok_partial' : 'ok';
+  state.last_sync_message = msg;
+  if (dataRes && !dataRes.skipped) {
+    state.accounts_upserted = dataRes.accounts;
+    state.accounts_inactivated = dataRes.inactivated;
+  }
+  SalesforceAccountsSyncStateStore_save_(state);
+}
+
+/**
+ * @param {boolean} force
+ * @return {{ok:boolean, skipped:boolean, reason:string, accounts:number, inactivated:number, embeddings:number, embeddingsPending:number, continuationScheduled:boolean}}
+ */
+function SalesforceAccounts_runFullSync(force) {
+  return SalesforceAccounts_runAutomaticSync_(!!force);
+}
+
+/**
+ * Sync automático: datos + drenaje de embeddings por presupuesto de tiempo; si queda cola, trigger encadenado.
+ * @param {boolean} force
+ */
+function SalesforceAccounts_runAutomaticSync_(force) {
+  var data = SalesforceAccounts_runSyncData_(force);
+  if (data.skipped) {
+    var qLen = SalesforceAccounts_loadEmbeddingQueue_().length;
+    if (qLen === 0) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'no_changes',
+        accounts: 0,
+        inactivated: 0,
+        embeddings: 0,
+        embeddingsPending: 0,
+        continuationScheduled: false,
+      };
+    }
+    data = {
+      ok: true,
+      skipped: true,
+      reason: 'embeddings_resume',
+      accounts: 0,
+      inactivated: 0,
+      total: qLen,
+      embeddingTotal: qLen,
+    };
+  }
+
+  var skip = data.skipped ? SalesforceAccounts_loadEmbeddingOffset_() : 0;
+  var embStats = SalesforceAccounts_drainEmbeddingsWithTimeBudget_(
+    skip,
+    SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_,
+  );
+  var cont = false;
+  if (embStats.hasMore) {
+    SalesforceAccounts_storeEmbeddingOffset_(embStats.offset);
+    SalesforceAccounts_scheduleEmbeddingsContinuation_();
+    cont = true;
+  } else {
+    SalesforceAccounts_clearEmbeddingOffset_();
+    SalesforceAccounts_storeEmbeddingQueue_([]);
+  }
+  SalesforceAccounts_recordEmbeddingDrainState_(data, embStats);
+  var pending = embStats.hasMore
+    ? Math.max(0, (embStats.total || 0) - embStats.offset)
+    : 0;
+  return {
+    ok: true,
+    skipped: data.reason === 'no_changes',
+    reason: data.reason || 'synced',
+    accounts: data.accounts || 0,
+    inactivated: data.inactivated || 0,
+    embeddings: embStats.processed,
+    embeddingsPending: pending,
+    continuationScheduled: cont,
   };
 }
 
@@ -541,7 +853,7 @@ function SalesforceAccounts_runFullSync(force) {
  */
 function SalesforceAccounts_dailySyncJob_() {
   try {
-    SalesforceAccounts_runFullSync(false);
+    SalesforceAccounts_runAutomaticSync_(false);
   } catch (e) {
     console.error('[SF-SYNC] daily job failed: ' + (e.message || e));
     var state = SalesforceAccountsSyncStateStore_load_();
@@ -549,6 +861,48 @@ function SalesforceAccounts_dailySyncJob_() {
     state.last_sync_status = 'error';
     state.last_sync_message = String(e.message || e).slice(0, 500);
     SalesforceAccountsSyncStateStore_save_(state);
+    throw e;
+  }
+}
+
+/**
+ * Continúa indexando embeddings pendientes (trigger one-shot encadenado).
+ */
+function SalesforceAccounts_embeddingsContinuationJob_() {
+  SalesforceAccounts_deleteEmbeddingsContinuationTriggers_();
+  try {
+    var skip = SalesforceAccounts_loadEmbeddingOffset_();
+    var q = SalesforceAccounts_loadEmbeddingQueue_();
+    if (!q.length || skip >= q.length) {
+      SalesforceAccounts_clearEmbeddingOffset_();
+      SalesforceAccounts_storeEmbeddingQueue_([]);
+      return;
+    }
+    var embStats = SalesforceAccounts_drainEmbeddingsWithTimeBudget_(
+      skip,
+      SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_,
+    );
+    var resumeData = {
+      skipped: true,
+      reason: 'embeddings_resume',
+      accounts: 0,
+      inactivated: 0,
+    };
+    if (embStats.hasMore) {
+      SalesforceAccounts_storeEmbeddingOffset_(embStats.offset);
+      SalesforceAccounts_scheduleEmbeddingsContinuation_();
+    } else {
+      SalesforceAccounts_clearEmbeddingOffset_();
+      SalesforceAccounts_storeEmbeddingQueue_([]);
+    }
+    SalesforceAccounts_recordEmbeddingDrainState_(resumeData, embStats);
+  } catch (e) {
+    console.error('[SF-SYNC] embedding continuation failed: ' + (e.message || e));
+    var errState = SalesforceAccountsSyncStateStore_load_();
+    errState.last_sync_at = new Date().toISOString();
+    errState.last_sync_status = 'error';
+    errState.last_sync_message = String(e.message || e).slice(0, 500);
+    SalesforceAccountsSyncStateStore_save_(errState);
     throw e;
   }
 }
@@ -610,6 +964,9 @@ function SalesforceAccounts_getSyncStatus() {
       }
     }
   }
+  var q = SalesforceAccounts_loadEmbeddingQueue_();
+  var off = SalesforceAccounts_loadEmbeddingOffset_();
+  var embPending = Math.max(0, q.length - off);
   return {
     ok: true,
     triggerInstalled: installed,
@@ -617,6 +974,8 @@ function SalesforceAccounts_getSyncStatus() {
     scheduleHour: SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR,
     scheduleEveryDays: 1,
     spreadsheetConfigured: !!AviatorsConfig_salesforceAccountsSpreadsheetId_(),
+    embeddingsPending: embPending,
+    embeddingsContinuationScheduled: SalesforceAccounts_embeddingsContinuationTriggerInstalled_(),
     state: SalesforceAccountsSyncStateStore_load_(),
   };
 }
@@ -631,7 +990,11 @@ function SalesforceAccounts_installDailyTrigger() {
   }
   var i;
   for (i = 0; i < listed.triggers.length; i++) {
-    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
+    var handler = listed.triggers[i].getHandlerFunction();
+    if (
+      handler === SALESFORCE_ACCOUNTS_DAILY_HANDLER_ ||
+      handler === SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_
+    ) {
       ScriptApp.deleteTrigger(listed.triggers[i]);
     }
   }

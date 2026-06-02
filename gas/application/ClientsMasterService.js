@@ -72,21 +72,33 @@ function ClientsMaster_headers_() {
   ];
 }
 
+/** @const {number} */
+var CLIENTS_LIST_MAX_LIMIT_ = 100;
+
 /**
- * Lista todos los clientes.
- * @param {{q?:string}} filters
- * @return {{ok:boolean, items:Array<Object>}}
+ * Lista clientes con filtros y paginación.
+ * @param {{q?:string, industry?:string, sub_industry?:string, skip?:number, limit?:number}} filters
+ * @return {{ok:boolean, items:Array<Object>, total:number, skip:number, limit:number, hasMore:boolean}}
  */
 function ClientsMaster_list(filters) {
   ContentCatalog_requireAnyRole_();
   var f = filters || {};
   var q = String(f.q || '').toLowerCase().trim();
+  var industryFilter = String(f.industry || '').trim();
+  var subIndustryFilter = String(f.sub_industry || '').toLowerCase().trim();
 
   var dbRows = ClientsMasterStore_listAll();
   var items = [];
   for (var si = 0; si < dbRows.length; si++) {
     var apiItem = ClientsMasterStore_toApiItem_(dbRows[si]);
     if (!apiItem.client_id) continue;
+    if (industryFilter && String(apiItem.industry || '').trim() !== industryFilter) {
+      continue;
+    }
+    if (subIndustryFilter) {
+      var subHay = String(apiItem.sub_industry || '').toLowerCase();
+      if (subHay.indexOf(subIndustryFilter) < 0) continue;
+    }
     if (q) {
       var hayDb =
         (
@@ -96,7 +108,11 @@ function ClientsMaster_list(filters) {
           ' ' +
           apiItem.sub_industry +
           ' ' +
-          apiItem.country
+          apiItem.country +
+          ' ' +
+          apiItem.main_contact_name +
+          ' ' +
+          apiItem.main_contact_email
         ).toLowerCase();
       if (hayDb.indexOf(q) < 0) continue;
     }
@@ -107,14 +123,26 @@ function ClientsMaster_list(filters) {
   });
   var totalDb = items.length;
   var skipDb = f.skip != null ? Math.max(0, Number(f.skip)) : 0;
-  var limitDb = f.limit != null && Number(f.limit) > 0 ? Number(f.limit) : 0;
+  var limitRaw = f.limit != null ? Number(f.limit) : 0;
+  var limitDb =
+    limitRaw > 0 ? Math.min(CLIENTS_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
   var pagedDb = items;
   var hasMoreDb = false;
   if (limitDb > 0) {
     pagedDb = items.slice(skipDb, skipDb + limitDb);
-    hasMoreDb = skipDb + limitDb < totalDb;
+    hasMoreDb = skipDb + pagedDb.length < totalDb;
+  } else {
+    limitDb = totalDb;
+    skipDb = 0;
   }
-  return { ok: true, items: pagedDb, total: totalDb, hasMore: hasMoreDb };
+  return {
+    ok: true,
+    items: pagedDb,
+    total: totalDb,
+    skip: skipDb,
+    limit: limitDb,
+    hasMore: hasMoreDb,
+  };
 }
 
 /**

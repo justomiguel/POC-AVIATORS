@@ -583,7 +583,7 @@
       if (!st.last_sync_at) {
         sfSyncLastVal.textContent = i18n('admin_sf_sync_last_none');
       } else {
-        sfSyncLastVal.textContent = i18nFmt('admin_sf_sync_last_line', {
+        var lastLine = i18nFmt('admin_sf_sync_last_line', {
           at: sfSyncFormatDateTime_(st.last_sync_at),
           status: String(st.last_sync_status || '—'),
           accounts: String(st.accounts_upserted != null ? st.accounts_upserted : '—'),
@@ -591,6 +591,18 @@
             st.accounts_inactivated != null ? st.accounts_inactivated : '—',
           ),
         });
+        var embPending = info.embeddingsPending != null ? Number(info.embeddingsPending) : 0;
+        if (embPending > 0) {
+          lastLine +=
+            ' ' +
+            i18nFmt('admin_sf_sync_emb_pending_suffix', {
+              pending: String(embPending),
+            });
+        }
+        if (info.embeddingsContinuationScheduled) {
+          lastLine += ' ' + i18n('admin_sf_sync_emb_continuation_scheduled');
+        }
+        sfSyncLastVal.textContent = lastLine;
       }
     }
   }
@@ -1248,37 +1260,88 @@
     });
   }
 
+  function sfSyncShowProgress_(msg) {
+    A.showBlockingModal(msg);
+    setSfSyncStatus(msg, false);
+  }
+
+  function sfSyncFinish_(dataRes, embeddingsDone, embeddingsFailed) {
+    A.hideBlockingModal();
+    sfSyncBusy = false;
+    if (sfSyncBtn) sfSyncBtn.disabled = false;
+    if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
+    if (A.cache) {
+      A.cache.invalidate('contentsList');
+      A.cache.invalidate('clientsList');
+    }
+    var failed = Number(embeddingsFailed) || 0;
+    var msgKey = failed > 0 ? 'admin_sf_sync_done_with_failures' : 'admin_sf_sync_done';
+    setSfSyncStatus(
+      i18nFmt(msgKey, {
+        accounts: String((dataRes && dataRes.accounts) || 0),
+        inactivated: String((dataRes && dataRes.inactivated) || 0),
+        embeddings: String(embeddingsDone || 0),
+        failed: String(failed),
+      }),
+      failed > 0,
+    );
+    sfSyncLoadStatusPanel_();
+  }
+
+  function sfSyncEmbeddingsBatch_(start, doneAcc, failedAcc, total, dataRes) {
+    var limit = 8;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var processed = res && res.processed ? res.processed : 0;
+        var failed = failedAcc + (res && res.failed ? res.failed : 0);
+        var done = doneAcc + processed;
+        var tot = res && res.total != null ? res.total : total;
+        var progress = res && res.done != null ? res.done : start + limit;
+        if (res && res.hasMore) {
+          var busyMsg = i18nFmt('admin_sf_sync_busy_embeddings', {
+            done: String(progress),
+            total: String(tot),
+          });
+          sfSyncShowProgress_(busyMsg);
+          sfSyncEmbeddingsBatch_(progress, done, failed, tot, dataRes);
+          return;
+        }
+        sfSyncFinish_(dataRes, done, failed);
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        sfSyncBusy = false;
+        if (sfSyncBtn) sfSyncBtn.disabled = false;
+        if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
+        setSfSyncStatus((e && e.message) || i18n('admin_sf_sync_error'), true);
+      })
+      .adminSalesforceAccountsRunSyncEmbeddingsBatch(start, limit);
+  }
+
   if (sfSyncBtn) {
     sfSyncBtn.addEventListener('click', function () {
       if (!S.get('canSyncSalesforceAccounts') || sfSyncBusy) return;
       sfSyncBusy = true;
       sfSyncBtn.disabled = true;
       if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = true;
-      setSfSyncStatus(i18n('admin_sf_sync_busy'), false);
-      A.showBlockingModal(i18n('admin_sf_sync_busy'));
+      sfSyncShowProgress_(i18n('admin_sf_sync_busy_reading'));
       google.script.run
         .withSuccessHandler(function (res) {
-          A.hideBlockingModal();
-          sfSyncBusy = false;
-          sfSyncBtn.disabled = false;
-          if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
-          if (A.cache) {
-            A.cache.invalidate('contentsList');
-            A.cache.invalidate('clientsList');
-          }
           if (res && res.skipped) {
+            A.hideBlockingModal();
+            sfSyncBusy = false;
+            sfSyncBtn.disabled = false;
+            if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
             setSfSyncStatus(i18n('admin_sf_sync_skipped'), false);
-          } else {
-            setSfSyncStatus(
-              i18nFmt('admin_sf_sync_done', {
-                accounts: String((res && res.accounts) || 0),
-                inactivated: String((res && res.inactivated) || 0),
-                embeddings: String((res && res.embeddings) || 0),
-              }),
-              false,
-            );
+            sfSyncLoadStatusPanel_();
+            return;
           }
-          sfSyncLoadStatusPanel_();
+          var embTotal = res && res.embeddingTotal != null ? Number(res.embeddingTotal) : 0;
+          if (embTotal > 0) {
+            sfSyncEmbeddingsBatch_(0, 0, 0, embTotal, res);
+            return;
+          }
+          sfSyncFinish_(res, 0, 0);
         })
         .withFailureHandler(function (e) {
           A.hideBlockingModal();
@@ -1287,7 +1350,7 @@
           if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
           setSfSyncStatus((e && e.message) || i18n('admin_sf_sync_error'), true);
         })
-        .adminSalesforceAccountsRunSync();
+        .adminSalesforceAccountsRunSyncData(true);
     });
   }
 

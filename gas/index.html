@@ -1747,36 +1747,90 @@
                     <span id="clients-list-loader-msg"></span>
                   </div>
                 </div>
-                <div id="clients-batch-bar" class="hidden mb-2 flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                <div id="clients-batch-bar" class="hidden mb-3 flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
                   <span id="clients-batch-count" class="font-medium text-sky-800 dark:text-sky-300"></span>
                   <button type="button" id="clients-batch-delete-btn" class="btn btn-sm btn-danger">
                     <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     <span data-i18n="batch_delete_selected"></span>
                   </button>
                 </div>
-                <div class="overflow-x-auto rounded-xl border border-slate-200">
-                  <table class="w-full text-left text-sm">
-                    <thead>
-                      <tr class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                        <th id="clients-th-select" class="w-8 px-2 py-3"><input type="checkbox" id="clients-select-all" class="rounded" /></th>
-                        <th class="w-14 px-2 py-3 font-medium" data-i18n="clients_th_logo"></th>
-                        <th class="px-4 py-3 font-medium" data-i18n="clients_th_name"></th>
-                        <th class="px-4 py-3 font-medium" data-i18n="clients_th_industry"></th>
-                        <th class="px-4 py-3 font-medium" data-i18n="clients_th_country"></th>
-                        <th class="px-4 py-3 font-medium" data-i18n="clients_th_contact"></th>
-                        <th id="clients-th-actions" class="px-4 py-3 font-medium text-right" data-i18n="clients_th_actions"></th>
-                      </tr>
-                    </thead>
-                    <tbody id="clients-table-body"></tbody>
-                  </table>
+
+                <div class="mb-4 rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm dark:border-slate-700 dark:from-slate-800/60 dark:to-slate-900/40">
+                  <div class="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
+                    <label class="md:col-span-5 block text-sm text-slate-700 dark:text-slate-300" for="clients-filter-q">
+                      <span class="mb-1 block font-medium" data-i18n="clients_filter_search"></span>
+                      <span class="relative block">
+                        <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+                        <input type="search" id="clients-filter-q" class="aviators-field w-full pl-9 text-sm" autocomplete="off" data-i18n-placeholder="clients_filter_search_placeholder" />
+                      </span>
+                    </label>
+                    <label class="md:col-span-3 block text-sm text-slate-700 dark:text-slate-300" for="clients-filter-industry">
+                      <span class="mb-1 block font-medium" data-i18n="clients_filter_industry"></span>
+                      <select id="clients-filter-industry" class="aviators-field w-full text-sm">
+                        <option value="" data-i18n="clients_filter_industry_all"></option>
+                        <option value="Agencias de Turismo" data-i18n="clients_industry_tourism_agencies"></option>
+                        <option value="Logistica" data-i18n="clients_industry_logistics"></option>
+                        <option value="Agencias AeroEspaciales" data-i18n="clients_industry_aerospace_agencies"></option>
+                        <option value="Aeropuertos" data-i18n="clients_industry_airports"></option>
+                        <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
+                      </select>
+                    </label>
+                    <label class="md:col-span-3 block text-sm text-slate-700 dark:text-slate-300" for="clients-filter-sub-industry">
+                      <span class="mb-1 block font-medium" data-i18n="clients_filter_sub_industry"></span>
+                      <input type="text" id="clients-filter-sub-industry" class="aviators-field w-full text-sm" autocomplete="off" data-i18n-placeholder="clients_filter_sub_industry_placeholder" />
+                    </label>
+                    <div class="md:col-span-1 flex md:justify-end">
+                      <button type="button" id="clients-filter-clear-btn" class="btn btn-sm btn-outline w-full inline-flex items-center justify-center gap-2 md:w-auto" data-i18n-aria-label="clients_filter_clear">
+                        <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+                        <span class="hidden md:inline" data-i18n="clients_filter_clear"></span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div class="mt-3 text-center">
-                  <button type="button" id="clients-load-more-btn" class="hidden btn btn-sm btn-outline">
-                    <i class="fa-solid fa-angles-down" aria-hidden="true"></i>
-                    <span data-i18n="clients_load_more"></span>
-                  </button>
+
+                <div
+                  id="clients-list-empty"
+                  class="hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center dark:border-slate-600 dark:bg-slate-800/50"
+                  role="status"
+                >
+                  <i class="fa-solid fa-building-circle-xmark mb-3 text-3xl text-slate-300 dark:text-slate-500" aria-hidden="true"></i>
+                  <p id="clients-list-empty-msg" class="text-sm text-slate-600 dark:text-slate-400"></p>
                 </div>
-                <p id="clients-list-status" class="mt-3 text-xs text-slate-500">&nbsp;</p>
+
+                <div id="clients-table-wrap" class="overflow-hidden rounded-xl border border-slate-200 shadow-sm dark:border-slate-700">
+                  <div class="overflow-x-auto">
+                    <table class="clients-data-table min-w-full text-left text-sm">
+                      <thead class="sticky top-0 z-[1] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur dark:bg-slate-800/95 dark:text-slate-400">
+                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                          <th id="clients-th-select" class="w-10 px-3 py-3"><input type="checkbox" id="clients-select-all" class="rounded border-slate-300" /></th>
+                          <th class="w-14 px-2 py-3" data-i18n="clients_th_logo"></th>
+                          <th class="min-w-[10rem] px-4 py-3" data-i18n="clients_th_name"></th>
+                          <th class="min-w-[8rem] px-4 py-3" data-i18n="clients_th_industry"></th>
+                          <th class="min-w-[8rem] px-4 py-3" data-i18n="clients_th_sub_industry"></th>
+                          <th class="min-w-[6rem] px-4 py-3" data-i18n="clients_th_country"></th>
+                          <th class="min-w-[9rem] px-4 py-3" data-i18n="clients_th_contact"></th>
+                          <th id="clients-th-actions" class="w-24 px-4 py-3 text-right" data-i18n="clients_th_actions"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="clients-table-body" class="divide-y divide-slate-100 bg-white dark:divide-slate-700 dark:bg-slate-900/30"></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="clients-pagination" class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p id="clients-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status"></p>
+                  <div class="flex gap-2">
+                    <button type="button" id="clients-prev-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                      <span data-i18n="pagination_prev"></span>
+                    </button>
+                    <button type="button" id="clients-next-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                      <span data-i18n="pagination_next"></span>
+                      <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+                <p id="clients-list-status" class="mt-2 text-xs text-slate-500">&nbsp;</p>
               </div>
 
               <div id="clients-screen-editor" class="hidden rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 space-y-4">
@@ -1829,7 +1883,7 @@
                   <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_name"></span>
                   <input type="text" id="clients-name" class="aviators-field w-full text-sm" />
                 </label>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <label class="block text-sm" for="clients-industry">
                     <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_industry"></span>
                     <select id="clients-industry" class="aviators-field w-full text-sm">
@@ -1840,6 +1894,10 @@
                       <option value="Aeropuertos" data-i18n="clients_industry_airports"></option>
                       <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
                     </select>
+                  </label>
+                  <label class="block text-sm" for="clients-sub-industry">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_sub_industry"></span>
+                    <input type="text" id="clients-sub-industry" class="aviators-field w-full text-sm" />
                   </label>
                   <label class="block text-sm" for="clients-country">
                     <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_country"></span>

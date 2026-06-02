@@ -1319,6 +1319,22 @@ function adminSalesforceAccountsRunSync() {
   });
 }
 
+/** Solo admin · fase 1: lee planilla y persiste cuentas (sin embeddings). */
+function adminSalesforceAccountsRunSyncData(force) {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsRunSyncData', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_runSyncData_(!!force);
+  });
+}
+
+/** Solo admin · fase 2: indexa embeddings del último sync (lotes con progreso). */
+function adminSalesforceAccountsRunSyncEmbeddingsBatch(start, limit) {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsRunSyncEmbeddingsBatch', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_runSyncEmbeddingsBatch_(start, limit);
+  });
+}
+
 /** Solo admin · actualiza prompt del agente clients en el registry. */
 function adminSalesforceAccountsRefreshClientsPrompt() {
   return AviatorsCode_runRpc_('adminSalesforceAccountsRefreshClientsPrompt', function () {
