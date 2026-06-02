@@ -379,7 +379,7 @@ function SalesforceAccounts_latestCompletedEventRow_(ss) {
  * @return {{ok:boolean, skipped:boolean, reason:string, accounts:number, inactivated:number, embeddings:number}}
  */
 function SalesforceAccounts_runFullSync(force) {
-  if (!AviatorsDataBackend_isSupabase_()) {
+  if (!AviatorsDataBackend_supabaseConfigured_()) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_supabase_not_configured'));
   }
   var ssId = SalesforceAccounts_requireSpreadsheetId_();
