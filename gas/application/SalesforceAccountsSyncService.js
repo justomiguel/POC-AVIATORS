@@ -556,11 +556,42 @@ function SalesforceAccounts_dailySyncJob_() {
 /** Hora local del proyecto Apps Script para el trigger diario (0–23). */
 var SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR = 6;
 
+var SALESFORCE_ACCOUNTS_DAILY_HANDLER_ = 'SalesforceAccounts_dailySyncJob_';
+
+/**
+ * @return {{ok:boolean, triggers:Array, error:string}}
+ */
+function SalesforceAccounts_listTriggersSafe_() {
+  try {
+    return { ok: true, triggers: ScriptApp.getProjectTriggers(), error: '' };
+  } catch (e) {
+    var msg = e && e.message ? String(e.message) : String(e);
+    console.log('[SF-SYNC] ScriptApp.getProjectTriggers failed: ' + msg);
+    return { ok: false, triggers: [], error: msg };
+  }
+}
+
+/**
+ * @return {boolean}
+ */
+function SalesforceAccounts_dailyTriggerInstalled_() {
+  var listed = SalesforceAccounts_listTriggersSafe_();
+  if (!listed.ok) return false;
+  var i;
+  for (i = 0; i < listed.triggers.length; i++) {
+    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Estado del sync automático (trigger + última corrida en app_settings).
  * @return {{
  *   ok: boolean,
  *   triggerInstalled: boolean,
+ *   triggerPermissionsOk: boolean,
  *   scheduleHour: number,
  *   scheduleEveryDays: number,
  *   spreadsheetConfigured: boolean,
@@ -568,19 +599,21 @@ var SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR = 6;
  * }}
  */
 function SalesforceAccounts_getSyncStatus() {
-  var handler = 'SalesforceAccounts_dailySyncJob_';
-  var triggers = ScriptApp.getProjectTriggers();
+  var listed = SalesforceAccounts_listTriggersSafe_();
   var installed = false;
-  var i;
-  for (i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === handler) {
-      installed = true;
-      break;
+  if (listed.ok) {
+    var ti;
+    for (ti = 0; ti < listed.triggers.length; ti++) {
+      if (listed.triggers[ti].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
+        installed = true;
+        break;
+      }
     }
   }
   return {
     ok: true,
     triggerInstalled: installed,
+    triggerPermissionsOk: listed.ok,
     scheduleHour: SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR,
     scheduleEveryDays: 1,
     spreadsheetConfigured: !!AviatorsConfig_salesforceAccountsSpreadsheetId_(),
@@ -592,20 +625,26 @@ function SalesforceAccounts_getSyncStatus() {
  * @return {{ok:boolean, triggerCount:number}}
  */
 function SalesforceAccounts_installDailyTrigger() {
-  var handler = 'SalesforceAccounts_dailySyncJob_';
-  var existing = ScriptApp.getProjectTriggers();
+  var listed = SalesforceAccounts_listTriggersSafe_();
+  if (!listed.ok) {
+    AviatorsError_throw_('ERR_SCRIPTAPP_SCOPE', 'SalesforceAccounts_installDailyTrigger');
+  }
   var i;
-  for (i = 0; i < existing.length; i++) {
-    if (existing[i].getHandlerFunction() === handler) {
-      ScriptApp.deleteTrigger(existing[i]);
+  for (i = 0; i < listed.triggers.length; i++) {
+    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
+      ScriptApp.deleteTrigger(listed.triggers[i]);
     }
   }
-  ScriptApp.newTrigger(handler)
+  ScriptApp.newTrigger(SALESFORCE_ACCOUNTS_DAILY_HANDLER_)
     .timeBased()
     .everyDays(1)
     .atHour(SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR)
     .create();
-  return { ok: true, triggerCount: ScriptApp.getProjectTriggers().length };
+  var after = SalesforceAccounts_listTriggersSafe_();
+  return {
+    ok: true,
+    triggerCount: after.ok ? after.triggers.length : 0,
+  };
 }
 
 /**

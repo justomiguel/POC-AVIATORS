@@ -15,7 +15,7 @@ Sincronización automática (diaria) desde la planilla de Google Sheets conectad
    | `GLOBANT_AGENTS_API_KEY` | Para embeddings | Sí (búsqueda semántica) |
 3. **Acceso de la cuenta que ejecuta el script** a la planilla (la Web App suele desplegarse como *Ejecutar como: usuario que accede*; el **trigger diario** corre como el usuario que lo instaló — recomendado: cuenta de servicio o admin con acceso a la sheet).
 
-4. **Scopes**: el manifiesto ya incluye `spreadsheets`.
+4. **Scopes**: el manifiesto incluye `spreadsheets` y `script.scriptapp` (triggers diarios). Tras `clasp push`, hay que **publicar nueva versión** y que los usuarios **re-autoricen** la Web App.
 
 ## Despliegue del código
 

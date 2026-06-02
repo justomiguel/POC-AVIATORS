@@ -562,13 +562,19 @@
         : i18nFmt('admin_sf_sync_schedule_value', { hour: hour });
     }
     if (sfSyncTriggerVal) {
-      sfSyncTriggerVal.textContent = info.triggerInstalled
-        ? i18n('admin_sf_sync_trigger_on')
-        : i18n('admin_sf_sync_trigger_off');
+      if (info.triggerPermissionsOk === false) {
+        sfSyncTriggerVal.textContent = i18n('admin_sf_sync_trigger_scope_required');
+      } else {
+        sfSyncTriggerVal.textContent = info.triggerInstalled
+          ? i18n('admin_sf_sync_trigger_on')
+          : i18n('admin_sf_sync_trigger_off');
+      }
     }
     if (sfSyncActivateAutoBtn) {
       var showActivate =
-        !!info.spreadsheetConfigured && !info.triggerInstalled;
+        !!info.spreadsheetConfigured &&
+        info.triggerPermissionsOk !== false &&
+        !info.triggerInstalled;
       sfSyncActivateAutoBtn.classList.toggle('hidden', !showActivate);
       sfSyncActivateAutoBtn.disabled = !showActivate || sfSyncBusy;
     }

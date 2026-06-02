@@ -424,6 +424,10 @@ var UI_STRINGS = {
       'Falta configurar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Propiedades del script).',
     err_salesforce_sheet_not_configured:
       'Falta configurar SALESFORCE_ACCOUNTS_SPREADSHEET_ID en Propiedades del script (ID de la planilla Airlines Accounts).',
+    err_scriptapp_scope:
+      'Faltan permisos para gestionar triggers (script.scriptapp). Volvé a autorizar la Web App tras actualizar el despliegue.',
+    admin_sf_sync_trigger_scope_required:
+      'No se puede verificar el trigger: falta autorizar el permiso script.scriptapp (nueva versión de la app).',
     err_supabase_sheets_disabled:
       'El backend en planillas está deshabilitado. Configurá AVIATORS_DATA_BACKEND=supabase.',
     err_role_supabase: 'No se pudo consultar roles en Supabase.',
@@ -1695,6 +1699,10 @@ var UI_STRINGS = {
       'Supabase is not configured (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Script Properties).',
     err_salesforce_sheet_not_configured:
       'Set SALESFORCE_ACCOUNTS_SPREADSHEET_ID in Script Properties (Airlines Accounts spreadsheet ID).',
+    err_scriptapp_scope:
+      'Missing permission to manage triggers (script.scriptapp). Re-authorize the Web App after deploying the update.',
+    admin_sf_sync_trigger_scope_required:
+      'Cannot verify trigger: authorize script.scriptapp permission (new app version required).',
     err_supabase_sheets_disabled:
       'Sheets backend is disabled. Set AVIATORS_DATA_BACKEND=supabase.',
     err_role_supabase: 'Could not load roles from Supabase.',
