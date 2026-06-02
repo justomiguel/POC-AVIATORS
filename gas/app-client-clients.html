@@ -21,10 +21,82 @@
   var clientsContactName = document.getElementById('clients-contact-name');
   var clientsContactEmail = document.getElementById('clients-contact-email');
   var clientsNotes = document.getElementById('clients-notes');
+  var clientsLogoUrl = document.getElementById('clients-logo-url');
+  var clientsLogoFile = document.getElementById('clients-logo-file');
+  var clientsLogoPickBtn = document.getElementById('clients-logo-pick-btn');
+  var clientsLogoRemoveBtn = document.getElementById('clients-logo-remove-btn');
+  var clientsLogoPreview = document.getElementById('clients-logo-preview');
+  var clientsLogoPreviewWrap = document.getElementById('clients-logo-preview-wrap');
+  var clientsLogoEmpty = document.getElementById('clients-logo-empty');
   var clientsSaveBtn = document.getElementById('clients-save-btn');
   var clientsDeleteBtn = document.getElementById('clients-delete-btn');
   var clientsCancelBtn = document.getElementById('clients-cancel-btn');
   var clientsEditorStatus = document.getElementById('clients-editor-status');
+  var clientsEditorReadonlyBanner = document.getElementById('clients-editor-readonly-banner');
+  var clientsLogoActions = document.getElementById('clients-logo-actions');
+  var clientsLogoLead = document.querySelector('#clients-logo-heading + p');
+
+  function clientsCanViewDetail_() {
+    return !!S.get('canViewCatalog');
+  }
+
+  function clientsIsEditorReadonly_() {
+    return clientsCanViewDetail_() && !S.get('canWriteContents');
+  }
+
+  function clientsTableColSpan_() {
+    if (S.get('canWriteContents')) return 7;
+    if (clientsCanViewDetail_()) return 6;
+    return 5;
+  }
+
+  function clientsSetEditorTitles_(mode, item) {
+    var isView = mode === 'view';
+    var isNew = mode === 'new';
+    if (clientsEditorTitle) {
+      if (isView) {
+        clientsEditorTitle.textContent = i18n('clients_editor_title_view');
+      } else if (isNew) {
+        clientsEditorTitle.textContent = i18n('clients_btn_new');
+      } else {
+        clientsEditorTitle.textContent = (item && item.client_name) || '';
+      }
+    }
+    if (clientsEditorSubtitle) {
+      if (isView) {
+        clientsEditorSubtitle.textContent = i18n('clients_editor_subtitle_view');
+      } else if (isNew) {
+        clientsEditorSubtitle.textContent = '\u00a0';
+      } else {
+        clientsEditorSubtitle.textContent = i18n('clients_btn_back_list');
+      }
+    }
+  }
+
+  function clientsSetEditorReadonly(on) {
+    var ro = !!on;
+    S.set('clientsEditorReadonly', ro);
+    if (clientsScreenEditor) {
+      clientsScreenEditor.classList.toggle('clients-editor-readonly', ro);
+    }
+    if (clientsEditorReadonlyBanner) {
+      clientsEditorReadonlyBanner.classList.toggle('hidden', !ro);
+    }
+    if (clientsLogoActions) clientsLogoActions.classList.toggle('hidden', ro);
+    if (clientsLogoLead) clientsLogoLead.classList.toggle('hidden', ro);
+    var writeIds = ['clients-save-btn', 'clients-delete-btn', 'clients-cancel-btn'];
+    for (var wi = 0; wi < writeIds.length; wi++) {
+      var el = document.getElementById(writeIds[wi]);
+      if (el) el.classList.toggle('hidden', ro);
+    }
+    var fields = document.querySelectorAll(
+      '#clients-screen-editor input:not([type="hidden"]), #clients-screen-editor select, #clients-screen-editor textarea',
+    );
+    for (var fi = 0; fi < fields.length; fi++) {
+      if (fields[fi].id === 'clients-logo-file') continue;
+      fields[fi].disabled = ro;
+    }
+  }
 
   function clientsSetScreen(mode) {
     var isList = mode === 'list';
@@ -63,6 +135,22 @@
     clientsIndustry.appendChild(opt);
   }
 
+  var CLIENTS_LOGO_MAX_BYTES = 400000;
+
+  function clientsSetLogoPreview(url) {
+    var u = String(url || '').trim();
+    if (clientsLogoUrl) clientsLogoUrl.value = u;
+    var has = !!u;
+    if (clientsLogoPreviewWrap) clientsLogoPreviewWrap.classList.toggle('hidden', !has);
+    if (clientsLogoEmpty) clientsLogoEmpty.classList.toggle('hidden', has);
+    if (clientsLogoRemoveBtn) clientsLogoRemoveBtn.classList.toggle('hidden', !has);
+    if (clientsLogoPreview && has) {
+      clientsLogoPreview.src = u;
+      clientsLogoPreview.alt = (clientsName && clientsName.value) || '';
+    }
+    if (clientsLogoFile) clientsLogoFile.value = '';
+  }
+
   function clientsResetForm() {
     S.set('clientsSelectedId', null);
     if (clientsId) clientsId.value = '';
@@ -72,6 +160,10 @@
     if (clientsContactName) clientsContactName.value = '';
     if (clientsContactEmail) clientsContactEmail.value = '';
     if (clientsNotes) clientsNotes.value = '';
+    clientsSetLogoPreview('');
+    clientsSetEditorReadonly(false);
+    if (clientsLogoActions) clientsLogoActions.classList.remove('hidden');
+    if (clientsLogoLead) clientsLogoLead.classList.remove('hidden');
     clientsSetEditorStatus('\u00a0', false);
   }
 
@@ -86,6 +178,7 @@
     if (clientsContactName) clientsContactName.value = item.main_contact_name || '';
     if (clientsContactEmail) clientsContactEmail.value = item.main_contact_email || '';
     if (clientsNotes) clientsNotes.value = item.notes || '';
+    clientsSetLogoPreview(item.logo_url || '');
   }
 
   function clientsCollectPayload() {
@@ -96,6 +189,7 @@
       country: (clientsCountry && clientsCountry.value) || '',
       main_contact_name: (clientsContactName && clientsContactName.value) || '',
       main_contact_email: (clientsContactEmail && clientsContactEmail.value) || '',
+      logo_url: (clientsLogoUrl && clientsLogoUrl.value) || '',
       notes: (clientsNotes && clientsNotes.value) || '',
     };
   }
@@ -104,11 +198,13 @@
     if (!clientsTableBody) return;
     clientsTableBody.innerHTML = '';
     var canWrite = !!S.get('canWriteContents');
+    var canViewDetail = clientsCanViewDetail_();
+    var showActions = canWrite || canViewDetail;
     var cache = S.get('clientsItemsCache');
     if (!cache || cache.length === 0) {
       var tr = document.createElement('tr');
       var td = document.createElement('td');
-      td.colSpan = canWrite ? 6 : 4;
+      td.colSpan = clientsTableColSpan_();
       td.className = 'px-4 py-6 text-center text-sm text-slate-400 dark:text-slate-400';
       td.textContent = i18n('clients_no_items');
       tr.appendChild(td);
@@ -130,6 +226,20 @@
           cbTd.appendChild(cb);
           tr.appendChild(cbTd);
         }
+        var tdLogo = document.createElement('td');
+        tdLogo.className = 'w-14 px-2 py-3';
+        var logoUrl = String(item.logo_url || '').trim();
+        if (logoUrl) {
+          var img = document.createElement('img');
+          img.src = logoUrl;
+          img.alt = '';
+          img.className = 'h-9 w-9 rounded-lg border border-slate-200 object-contain bg-white dark:border-slate-600';
+          tdLogo.appendChild(img);
+        } else {
+          tdLogo.innerHTML =
+            '<span class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-slate-200 text-slate-300 dark:border-slate-600" aria-hidden="true"><i class="fa-solid fa-building text-sm"></i></span>';
+        }
+        tr.appendChild(tdLogo);
         var tdName = document.createElement('td');
         tdName.className = 'px-4 py-3 font-medium text-slate-900 dark:text-slate-100';
         tdName.textContent = item.client_name || '';
@@ -152,11 +262,20 @@
           var editBtn = document.createElement('button');
           editBtn.type = 'button';
           editBtn.className = 'btn btn-sm btn-outline';
+          editBtn.setAttribute('aria-label', i18n('clients_tooltip_edit'));
           editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
           editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
           tdActions.appendChild(editBtn);
+        } else if (canViewDetail) {
+          var viewBtn = document.createElement('button');
+          viewBtn.type = 'button';
+          viewBtn.className = 'btn btn-sm btn-outline';
+          viewBtn.setAttribute('aria-label', i18n('clients_tooltip_view_detail'));
+          viewBtn.innerHTML = '<i class="fa-solid fa-eye" aria-hidden="true"></i>';
+          viewBtn.addEventListener('click', function () { clientsOpenEditor(item); });
+          tdActions.appendChild(viewBtn);
         }
-        if (canWrite) tr.appendChild(tdActions);
+        if (showActions) tr.appendChild(tdActions);
         clientsTableBody.appendChild(tr);
       })(cache[i]);
     }
@@ -225,17 +344,22 @@
   }
 
   function clientsOpenEditor(item) {
+    if (!item && !S.get('canWriteContents')) return;
+    if (item && !S.get('canWriteContents') && !clientsCanViewDetail_()) {
+      if (A.toast) A.toast.error(i18n('err_admin_only'));
+      return;
+    }
     clientsResetForm();
+    var ro = item && clientsIsEditorReadonly_();
     if (item) {
       clientsFillForm(item);
-      if (clientsEditorTitle) clientsEditorTitle.textContent = item.client_name || '';
-      if (clientsEditorSubtitle) clientsEditorSubtitle.textContent = i18n('clients_btn_back_list');
-      if (clientsDeleteBtn) clientsDeleteBtn.classList.remove('hidden');
+      clientsSetEditorTitles_(ro ? 'view' : 'edit', item);
+      if (clientsDeleteBtn) clientsDeleteBtn.classList.toggle('hidden', ro);
     } else {
-      if (clientsEditorTitle) clientsEditorTitle.textContent = i18n('clients_btn_new');
-      if (clientsEditorSubtitle) clientsEditorSubtitle.textContent = '';
+      clientsSetEditorTitles_('new', null);
       if (clientsDeleteBtn) clientsDeleteBtn.classList.add('hidden');
     }
+    clientsSetEditorReadonly(ro);
     clientsSetScreen('editor');
   }
 
@@ -286,23 +410,58 @@
 
   function clientsApplyWriteAccess() {
     var canWrite = !!S.get('canWriteContents');
+    var canViewDetail = clientsCanViewDetail_();
     if (clientsNewBtn) clientsNewBtn.classList.toggle('hidden', !canWrite);
-    var exportBtn = document.getElementById('clients-export-btn');
-    var importBtn = document.getElementById('clients-import-btn');
-    if (exportBtn) exportBtn.classList.toggle('hidden', !canWrite);
-    if (importBtn) importBtn.classList.toggle('hidden', !canWrite);
     var batchDel = document.getElementById('clients-batch-delete-btn');
     if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
     var selectCol = document.getElementById('clients-th-select');
     if (selectCol) selectCol.classList.toggle('hidden', !canWrite);
     var actionsCol = document.getElementById('clients-th-actions');
-    if (actionsCol) actionsCol.classList.toggle('hidden', !canWrite);
+    if (actionsCol) actionsCol.classList.toggle('hidden', !(canWrite || canViewDetail));
     if (clientsSelectAll) clientsSelectAll.checked = false;
     var badge = document.getElementById('clients-readonly-badge');
     if (badge) badge.classList.toggle('hidden', canWrite);
+    if (clientsLogoPickBtn) clientsLogoPickBtn.disabled = !canWrite;
+    if (clientsLogoRemoveBtn) clientsLogoRemoveBtn.disabled = !canWrite;
+  }
+
+  function clientsOnLogoFileSelected(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/i.test(file.type || '')) {
+      clientsSetEditorStatus(i18n('clients_err_logo_invalid'), true);
+      return;
+    }
+    if (file.size > CLIENTS_LOGO_MAX_BYTES) {
+      clientsSetEditorStatus(i18n('clients_err_logo_too_large'), true);
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      clientsSetLogoPreview(String(ev.target.result || ''));
+      clientsSetEditorStatus('\u00a0', false);
+    };
+    reader.onerror = function () {
+      clientsSetEditorStatus(i18n('err_generic'), true);
+    };
+    reader.readAsDataURL(file);
   }
 
   // --- Event listeners ---
+
+  if (clientsLogoPickBtn && clientsLogoFile) {
+    clientsLogoPickBtn.addEventListener('click', function () {
+      clientsLogoFile.click();
+    });
+    clientsLogoFile.addEventListener('change', function () {
+      var file = clientsLogoFile.files && clientsLogoFile.files[0];
+      clientsOnLogoFileSelected(file);
+    });
+  }
+  if (clientsLogoRemoveBtn) {
+    clientsLogoRemoveBtn.addEventListener('click', function () {
+      clientsSetLogoPreview('');
+    });
+  }
 
   if (clientsNewBtn) {
     clientsNewBtn.addEventListener('click', function () { clientsOpenEditor(null); });

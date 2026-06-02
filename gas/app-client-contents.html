@@ -7,6 +7,8 @@
   var btnGotoAgentsTab = document.getElementById('btn-goto-agents-tab');
   var contentsScreenList = document.getElementById('contents-screen-list');
   var contentsScreenEditor = document.getElementById('contents-screen-editor');
+  var contentsEditorReadonlyBanner = document.getElementById('contents-editor-readonly-banner');
+  var contentsViewDriveBtn = document.getElementById('contents-view-drive-btn');
   var contentsBackBtn = document.getElementById('contents-back-btn');
   var contentsEditorTitle = document.getElementById('contents-editor-title');
   var contentsEditorSubtitle = document.getElementById('contents-editor-subtitle');
@@ -40,6 +42,7 @@
   var contentsSummary = document.getElementById('contents-summary');
   var contentsClient = document.getElementById('contents-client');
   var contentsClientNew = document.getElementById('contents-client-new');
+  var contentsClientNewWrap = document.getElementById('contents-client-new-wrap');
   var contentsClientToggleNew = document.getElementById('contents-client-toggle-new');
   var contentsTagsChips = document.getElementById('contents-tags-chips');
   var contentsTagInput = document.getElementById('contents-tag-input');
@@ -115,10 +118,33 @@
     if (contentsScreenEditor) contentsScreenEditor.classList.toggle('hidden', isList);
   }
 
+  function contentsCanViewDetail_() {
+    return !!S.get('canViewCatalog');
+  }
+
+  function contentsIsEditorReadonly_() {
+    return contentsCanViewDetail_() && !S.get('canWriteContents');
+  }
+
+  function contentsTableColSpan_() {
+    if (S.get('canWriteContents')) return 7;
+    if (contentsCanViewDetail_()) return 6;
+    return 5;
+  }
+
   function contentsSetEditorMode(mode) {
     var isEdit = mode === 'edit';
-    var titleKey = isEdit ? 'contents_editor_title_edit' : 'contents_editor_title_new';
-    var subtitleKey = isEdit ? 'contents_editor_subtitle_edit' : 'contents_editor_subtitle_new';
+    var isView = mode === 'view';
+    var titleKey = isView
+      ? 'contents_editor_title_view'
+      : isEdit
+        ? 'contents_editor_title_edit'
+        : 'contents_editor_title_new';
+    var subtitleKey = isView
+      ? 'contents_editor_subtitle_view'
+      : isEdit
+        ? 'contents_editor_subtitle_edit'
+        : 'contents_editor_subtitle_new';
     if (contentsEditorTitle) {
       contentsEditorTitle.setAttribute('data-i18n', titleKey);
       contentsEditorTitle.textContent = i18n(titleKey);
@@ -127,7 +153,68 @@
       contentsEditorSubtitle.setAttribute('data-i18n', subtitleKey);
       contentsEditorSubtitle.textContent = i18n(subtitleKey);
     }
-    if (contentsDeleteBtn) contentsDeleteBtn.classList.toggle('hidden', !isEdit);
+    if (contentsDeleteBtn) contentsDeleteBtn.classList.toggle('hidden', !isEdit || isView);
+  }
+
+  function contentsSetEditorReadonly(on) {
+    var ro = !!on;
+    S.set('contentsEditorReadonly', ro);
+    if (contentsScreenEditor) {
+      contentsScreenEditor.classList.toggle('contents-editor-readonly', ro);
+    }
+    if (contentsEditorReadonlyBanner) {
+      contentsEditorReadonlyBanner.classList.toggle('hidden', !ro);
+    }
+    var stepper = document.getElementById('contents-stepper');
+    if (stepper) stepper.classList.toggle('hidden', ro);
+    if (contentsProgressWrap) contentsProgressWrap.classList.add('hidden');
+    var writeIds = [
+      'contents-save-btn',
+      'contents-delete-btn',
+      'contents-replace-file-btn',
+      'contents-add-tag-btn',
+      'contents-client-toggle-new',
+      'contents-cancel-btn',
+    ];
+    for (var wi = 0; wi < writeIds.length; wi++) {
+      var el = document.getElementById(writeIds[wi]);
+      if (el) el.classList.toggle('hidden', ro);
+    }
+    if (contentsTagInput) {
+      contentsTagInput.disabled = ro;
+      contentsTagInput.closest('label') &&
+        contentsTagInput.closest('label').classList.toggle('hidden', ro);
+    }
+    var fields = document.querySelectorAll(
+      '#contents-block-form input, #contents-block-form select, #contents-block-form textarea, #contents-block-type input, #contents-block-type select, #contents-block-type textarea',
+    );
+    for (var fi = 0; fi < fields.length; fi++) {
+      fields[fi].disabled = ro;
+    }
+    if (contentsType && ro) contentsType.disabled = true;
+    contentsRenderTagsChips();
+  }
+
+  function contentsUpdateViewDriveBtn_(common) {
+    if (!contentsViewDriveBtn) return;
+    var c = common || {};
+    var show =
+      contentsIsEditorReadonly_() &&
+      c.content_type === 'success_case' &&
+      (c.drive_file_url || c.drive_file_id);
+    contentsViewDriveBtn.classList.toggle('hidden', !show);
+    if (!show) return;
+    contentsViewDriveBtn.onclick = function () {
+      var directUrl = String(c.drive_file_url || '').trim();
+      var driveFileId = String(c.drive_file_id || '').trim();
+      if (directUrl) {
+        window.open(directUrl, '_blank');
+        return;
+      }
+      if (driveFileId) {
+        window.open('https://drive.google.com/open?id=' + encodeURIComponent(driveFileId), '_blank');
+      }
+    };
   }
 
   function contentsSetStep(activeStep, completedThrough) {
@@ -174,13 +261,15 @@
         var label = document.createElement('span');
         label.textContent = tag;
         chip.appendChild(label);
-        var removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'ml-1 text-sky-600 hover:text-sky-900 focus:outline-none';
-        removeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-        removeBtn.setAttribute('aria-label', 'Remove ' + tag);
-        removeBtn.addEventListener('click', function () { contentsRemoveTag(idx); });
-        chip.appendChild(removeBtn);
+        if (!S.get('contentsEditorReadonly')) {
+          var removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'ml-1 text-sky-600 hover:text-sky-900 focus:outline-none';
+          removeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+          removeBtn.setAttribute('aria-label', 'Remove ' + tag);
+          removeBtn.addEventListener('click', function () { contentsRemoveTag(idx); });
+          chip.appendChild(removeBtn);
+        }
         contentsTagsChips.appendChild(chip);
       })(tags[i], i);
     }
@@ -570,7 +659,9 @@
     contentsShowUploading(false, '');
     contentsToggleSpecificSections();
     contentsSetStep(1, 0);
+    contentsSetEditorReadonly(false);
     contentsSetEditorStatus('\u00a0', false);
+    if (contentsViewDriveBtn) contentsViewDriveBtn.classList.add('hidden');
   }
 
   function contentsFillForm(item) {
@@ -605,10 +696,13 @@
     if (contentsOnboardingAudience) contentsOnboardingAudience.value = s.audience || '';
     if (contentsOnboardingNotes) contentsOnboardingNotes.value = s.notes || '';
     contentsToggleSpecificSections();
-    contentsSetEditorMode('edit');
-    if (contentsBlockType) contentsBlockType.classList.add('hidden');
+    var ro = contentsIsEditorReadonly_();
+    contentsSetEditorMode(ro ? 'view' : 'edit');
+    if (contentsBlockType) contentsBlockType.classList.toggle('hidden', !ro);
     contentsShowFormBlock();
     contentsSetStep(3, 2);
+    contentsSetEditorReadonly(ro);
+    contentsUpdateViewDriveBtn_(c);
     contentsSetScreen('editor');
   }
 
@@ -668,6 +762,8 @@
     if (!contentsTableBody) return;
     contentsTableBody.innerHTML = '';
     var canWrite = !!S.get('canWriteContents');
+    var canViewDetail = contentsCanViewDetail_();
+    var showActions = canWrite || canViewDetail;
     var typeFilter = (contentsFilterType && contentsFilterType.value) || '';
     var q = ((contentsFilterQ && contentsFilterQ.value) || '').trim().toLowerCase();
     var cache = S.get('contentsItemsCache');
@@ -687,7 +783,7 @@
     if (!rows.length) {
       var tr0 = document.createElement('tr');
       var td0 = document.createElement('td');
-      td0.colSpan = canWrite ? 7 : 5;
+      td0.colSpan = contentsTableColSpan_();
       td0.className = 'px-3 py-3 text-sm text-slate-500 dark:text-slate-400';
       td0.textContent = i18n('contents_list_empty');
       tr0.appendChild(td0);
@@ -797,8 +893,44 @@
             }
             actWrap.appendChild(iconBtn('fa-trash', i18n('contents_tooltip_delete'), function () { contentsDeleteFromRow(c.content_id || ''); }, 'btn-icon-danger'));
             actTd.appendChild(actWrap);
+          } else if (canViewDetail) {
+            var viewWrap = document.createElement('span');
+            viewWrap.className = 'inline-flex items-center gap-1';
+            function viewIconBtn(icon, tooltip, handler) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'btn-icon';
+              b.title = tooltip;
+              b.innerHTML = '<i class="fa-solid ' + icon + '" aria-hidden="true"></i>';
+              b.addEventListener('click', handler);
+              return b;
+            }
+            viewWrap.appendChild(
+              viewIconBtn('fa-eye', i18n('contents_tooltip_view_detail'), function () {
+                contentsOpenEditorFromRow(c.content_id || '');
+              }),
+            );
+            if (c.content_type === 'success_case' && (c.drive_file_url || c.drive_file_id)) {
+              viewWrap.appendChild(
+                viewIconBtn('fa-up-right-from-square', i18n('contents_tooltip_view'), function () {
+                  var directUrl = String(c.drive_file_url || '').trim();
+                  var driveFileId = String(c.drive_file_id || '').trim();
+                  if (directUrl) {
+                    window.open(directUrl, '_blank');
+                    return;
+                  }
+                  if (driveFileId) {
+                    window.open(
+                      'https://drive.google.com/open?id=' + encodeURIComponent(driveFileId),
+                      '_blank',
+                    );
+                  }
+                }),
+              );
+            }
+            actTd.appendChild(viewWrap);
           }
-          if (canWrite) tr.appendChild(actTd);
+          if (showActions) tr.appendChild(actTd);
           contentsTableBody.appendChild(tr);
         })(rows[i]);
       }
@@ -886,6 +1018,10 @@
   function contentsOpenEditorFromRow(contentId) {
     var id = String(contentId || '').trim();
     if (!id) return;
+    if (!S.get('canWriteContents') && !contentsCanViewDetail_()) {
+      if (A.toast) A.toast.error(i18n('err_admin_only'));
+      return;
+    }
     contentsSetRowBusy(id, true);
     contentsSetListStatus(i18n('contents_busy_opening'), false);
     google.script.run
@@ -991,10 +1127,31 @@
       .contentsReindexWithMetadata(id);
   }
 
-  function contentsApplyDraftToForm_(draft, type) {
+  function contentsFormatExtractionStatus_(draft) {
+    var d = draft || {};
+    var conf = String(d.confidence || 'low').toLowerCase();
+    var confKey =
+      conf === 'high'
+        ? 'contents_confidence_high'
+        : conf === 'medium'
+          ? 'contents_confidence_medium'
+          : 'contents_confidence_low';
+    var msg = i18nFmt('contents_extraction_done_confidence', { confidence: i18n(confKey) });
+    var warnings = d.warnings || [];
+    if (warnings.length) {
+      msg += ' ' + i18n('contents_extraction_warnings_prefix') + ' ' + warnings.join('; ');
+    }
+    return msg;
+  }
+
+  function contentsApplyDraftToForm_(draft, type, fileName) {
     var d = draft || {};
     var c = d.common || {};
-    if (contentsTitle) contentsTitle.value = c.title || '';
+    var title = String(c.title || '').trim();
+    if (!title && fileName) {
+      title = String(fileName.replace(/\.pdf$/i, '').trim() || fileName || '').trim();
+    }
+    if (contentsTitle) contentsTitle.value = title;
     if (contentsSummary) contentsSummary.value = c.summary || '';
     contentsSetClientValue(c.client_name || '');
     S.set('contentsDetectedIndustry', String(c.industry || '').trim());
@@ -1105,7 +1262,7 @@
             S.set('contentsCurrentFile', { name: f.name, mimeType: f.type || 'application/pdf', dataBase64: b64 });
             if (contentsCurrentFileName) contentsCurrentFileName.textContent = f.name || '\u00a0';
             try {
-              contentsApplyDraftToForm_(res && res.draft, type);
+              contentsApplyDraftToForm_(res && res.draft, type, f.name);
             } catch (eDraft) {
               if (window.console && console.warn) {
                 console.warn('[contents] draft render failed, fallback mode', eDraft);
@@ -1114,7 +1271,7 @@
             if (contentsBlockType) contentsBlockType.classList.add('hidden');
             contentsShowFormBlock();
             contentsSetStep(3, 2);
-            contentsSetEditorStatus(i18n('contents_extraction_done'), false);
+            contentsSetEditorStatus(contentsFormatExtractionStatus_(res && res.draft), false);
           }, 600);
         })
         .withFailureHandler(function (e) {
@@ -1219,7 +1376,7 @@
     S.set('contentsClientNewMode', !!on);
     var isNew = S.get('contentsClientNewMode');
     if (contentsClient) contentsClient.classList.toggle('hidden', isNew);
-    if (contentsClientNew) contentsClientNew.classList.toggle('hidden', !isNew);
+    if (contentsClientNewWrap) contentsClientNewWrap.classList.toggle('hidden', !isNew);
     if (contentsClientToggleNew) {
       var icon = contentsClientToggleNew.querySelector('i');
       if (icon) icon.className = isNew ? 'fa-solid fa-list' : 'fa-solid fa-plus';
@@ -1231,17 +1388,14 @@
 
   function contentsApplyWriteAccess() {
     var canWrite = !!S.get('canWriteContents');
+    var canViewDetail = contentsCanViewDetail_();
     if (contentsNewBtn) contentsNewBtn.classList.toggle('hidden', !canWrite);
-    var exportBtn = document.getElementById('contents-export-btn');
-    var importBtn = document.getElementById('contents-import-btn');
-    if (exportBtn) exportBtn.classList.toggle('hidden', !canWrite);
-    if (importBtn) importBtn.classList.toggle('hidden', !canWrite);
     var batchDel = document.getElementById('contents-batch-delete-btn');
     if (batchDel) batchDel.classList.toggle('hidden', !canWrite);
     var batchSelCol = document.getElementById('contents-th-select');
     if (batchSelCol) batchSelCol.classList.toggle('hidden', !canWrite);
     var actionsCol = document.getElementById('contents-th-actions');
-    if (actionsCol) actionsCol.classList.toggle('hidden', !canWrite);
+    if (actionsCol) actionsCol.classList.toggle('hidden', !(canWrite || canViewDetail));
     if (contentsSelectAll) contentsSelectAll.checked = false;
     var badge = document.getElementById('contents-readonly-badge');
     if (badge) badge.classList.toggle('hidden', canWrite);

@@ -577,47 +577,29 @@
           <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-400" data-i18n="chat_quick_prompts_label"></p>
           <div class="chat-qp-list flex flex-wrap gap-1.5"></div>
         </div>
-        <div
-          id="chat-attach-chip"
-          class="chat-attach-chip mb-2 hidden inline-flex max-w-full items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
-          role="status"
-          aria-live="polite"
-        >
-          <i class="fa-solid fa-file-pdf shrink-0" aria-hidden="true"></i>
-          <span id="chat-attach-name" class="truncate"></span>
-          <button
-            type="button"
-            id="chat-attach-clear"
-            class="inline-flex shrink-0 items-center justify-center rounded-full p-1 text-sky-700 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-900/60"
-            data-i18n-aria-label="chat_attach_remove"
-            aria-label=""
-          >
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-          </button>
-        </div>
-        <div id="chat-attach-row" class="chat-attach-row mb-2 hidden flex flex-wrap items-center gap-2">
-          <input
-            type="file"
-            id="chat-attach-input"
-            class="sr-only"
-            accept=".pdf,application/pdf"
-          />
-          <button
-            type="button"
-            id="chat-attach-btn"
-            class="btn btn-sm btn-secondary"
-          >
-            <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
-            <span data-i18n="chat_attach_btn"></span>
-          </button>
-          <p class="min-w-0 flex-1 text-xs leading-snug text-slate-500 dark:text-slate-400" data-i18n="chat_attach_hint"></p>
-        </div>
         <label
           for="question"
           class="label-sr-only"
           data-i18n="lbl_chat_input_sronly"
         ></label>
         <div class="chat-input-row">
+          <div id="chat-attach-row" class="chat-attach-slot hidden shrink-0">
+            <input
+              type="file"
+              id="chat-attach-input"
+              class="sr-only"
+              accept=".pdf,application/pdf"
+            />
+            <button
+              type="button"
+              id="chat-attach-btn"
+              class="chat-attach-icon-btn inline-flex items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:bg-slate-700 dark:hover:text-sky-200"
+              data-i18n-aria-label="chat_attach_btn"
+              aria-label=""
+            >
+              <i class="fa-solid fa-paperclip text-base" aria-hidden="true"></i>
+            </button>
+          </div>
           <textarea
             id="question"
             class="q-area aviators-field w-full resize-none rounded-2xl px-4 py-3 text-[15px] shadow-inner ring-sky-500/20 transition focus:border-aviators-primary focus:ring-2"
@@ -653,6 +635,24 @@
               </button>
             </div>
           </div>
+        </div>
+        <div
+          id="chat-attach-chip"
+          class="chat-attach-chip mt-2 hidden max-w-full items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 inline-flex"
+          role="status"
+          aria-live="polite"
+        >
+          <i class="fa-solid fa-file-pdf shrink-0" aria-hidden="true"></i>
+          <span id="chat-attach-name" class="truncate"></span>
+          <button
+            type="button"
+            id="chat-attach-clear"
+            class="inline-flex shrink-0 items-center justify-center rounded-full p-1 text-sky-700 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-900/60"
+            data-i18n-aria-label="chat_attach_remove"
+            aria-label=""
+          >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
         </div>
         <div
           id="gemini-docs-block"
@@ -1179,14 +1179,6 @@
                         <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_contents_lead"></p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button type="button" id="contents-export-btn" class="btn btn-sm btn-secondary">
-                          <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
-                          <span data-i18n="export_csv"></span>
-                        </button>
-                        <button type="button" id="contents-import-btn" class="btn btn-sm btn-secondary">
-                          <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
-                          <span data-i18n="import_csv"></span>
-                        </button>
                         <button type="button" id="contents-new-btn" class="btn btn-md btn-primary whitespace-nowrap">
                           <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
                           <span data-i18n="contents_btn_new"></span>
@@ -1313,6 +1305,13 @@
                   </div>
                   <h3 id="contents-editor-heading" class="sr-only" data-i18n="contents_editor_heading"></h3>
 
+                  <div id="contents-editor-readonly-banner" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="status">
+                    <span class="inline-flex items-center gap-2">
+                      <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                      <span data-i18n="contents_editor_readonly_banner"></span>
+                    </span>
+                  </div>
+
                   <ol id="contents-stepper" class="contents-stepper flex flex-wrap items-center gap-2 text-xs">
                     <li id="contents-step-1" class="contents-step is-active">
                       <span class="contents-step-num">1</span>
@@ -1405,12 +1404,17 @@
                     </div>
                   </section>
 
-                  <section id="contents-block-form" class="hidden space-y-3">
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <section id="contents-block-form" class="hidden space-y-5" aria-labelledby="contents-form-heading">
+                    <div class="border-b border-slate-100 pb-3 dark:border-slate-700">
+                      <h3 id="contents-form-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="contents_form_heading"></h3>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="contents_form_lead"></p>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800/50">
                       <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                          <div class="font-medium text-slate-800" data-i18n="contents_current_file_label"></div>
-                          <div id="contents-current-file-name" class="truncate text-slate-600">&nbsp;</div>
+                          <div class="font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_current_file_label"></div>
+                          <div id="contents-current-file-name" class="truncate text-slate-600 dark:text-slate-400">&nbsp;</div>
                         </div>
                         <button type="button" id="contents-replace-file-btn" class="btn btn-md btn-outline text-xs whitespace-nowrap">
                           <i class="fa-solid fa-rotate" aria-hidden="true"></i>
@@ -1419,91 +1423,153 @@
                       </div>
                     </div>
 
-                    <label class="block text-sm">
-                      <span class="font-medium text-slate-800" data-i18n="contents_lbl_title"></span>
-                      <input type="text" id="contents-title" class="aviators-field mt-1 w-full text-sm" />
-                    </label>
-                    <label class="block text-sm">
-                      <span class="font-medium text-slate-800" data-i18n="contents_lbl_summary"></span>
-                      <textarea id="contents-summary" rows="3" class="aviators-field mt-1 w-full text-sm"></textarea>
-                    </label>
-                    <div class="block text-sm">
-                      <span class="font-medium text-slate-800" data-i18n="contents_lbl_client"></span>
-                      <div class="mt-1 flex items-center gap-2">
-                        <select id="contents-client" class="aviators-field flex-1 text-sm">
-                          <option value="" data-i18n="contents_client_combo_placeholder"></option>
-                        </select>
-                        <input type="text" id="contents-client-new" class="aviators-field hidden flex-1 text-sm" placeholder="" />
-                        <button type="button" id="contents-client-toggle-new" class="btn btn-sm btn-outline">
-                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                        </button>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <label class="block text-sm md:col-span-2" for="contents-title">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_title"></span>
+                        <input type="text" id="contents-title" class="aviators-field w-full text-sm" />
+                      </label>
+                      <label class="block text-sm md:col-span-2" for="contents-summary">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_summary"></span>
+                        <textarea id="contents-summary" rows="3" class="aviators-field w-full text-sm"></textarea>
+                      </label>
+                      <div class="block text-sm md:col-span-2">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_client"></span>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <select id="contents-client" class="aviators-field min-w-[12rem] flex-1 text-sm">
+                            <option value="" data-i18n="contents_client_combo_placeholder"></option>
+                          </select>
+                          <button type="button" id="contents-client-toggle-new" class="btn btn-sm btn-outline shrink-0" data-i18n-aria-label="contents_client_toggle_aria" aria-label="">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                          </button>
+                        </div>
+                        <label id="contents-client-new-wrap" class="mt-2 hidden block" for="contents-client-new">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="contents_lbl_client_new"></span>
+                          <input type="text" id="contents-client-new" class="aviators-field w-full text-sm" />
+                        </label>
+                      </div>
+                      <div class="block text-sm md:col-span-2">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_tags"></span>
+                        <div id="contents-tags-chips" class="flex min-h-[2.5rem] flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-600 dark:bg-slate-900"></div>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                          <label class="min-w-[12rem] flex-1" for="contents-tag-input">
+                            <span class="sr-only" data-i18n="contents_lbl_tags"></span>
+                            <input type="text" id="contents-tag-input" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_ph_add_tag" list="contents-tag-suggestions" />
+                          </label>
+                          <datalist id="contents-tag-suggestions"></datalist>
+                          <button type="button" id="contents-add-tag-btn" class="btn btn-sm btn-outline shrink-0">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                            <span data-i18n="contents_btn_add_tag"></span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div class="block text-sm">
-                      <span class="font-medium text-slate-800" data-i18n="contents_lbl_tags"></span>
-                      <div id="contents-tags-chips" class="mt-1 flex flex-wrap gap-2 min-h-[2.5rem] p-2 rounded-xl border border-slate-200 bg-white"></div>
-                      <div class="mt-2 flex items-center gap-2">
-                        <input type="text" id="contents-tag-input" class="aviators-field flex-1 text-sm" data-i18n-placeholder="contents_ph_add_tag" list="contents-tag-suggestions" />
-                        <datalist id="contents-tag-suggestions"></datalist>
-                        <button type="button" id="contents-add-tag-btn" class="btn btn-sm btn-outline">
-                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                          <span data-i18n="contents_btn_add_tag"></span>
-                        </button>
+
+                    <section id="contents-specific-proposal" class="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm" for="contents-proposal-stage">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_stage"></span>
+                          <select id="contents-proposal-stage" class="aviators-field w-full text-sm">
+                            <option value="">—</option>
+                            <option value="PRESENTED">Presented</option>
+                            <option value="NEGOTIATION">Negotiation</option>
+                            <option value="WIN">Win</option>
+                            <option value="LOST">Lost</option>
+                            <option value="ON_HOLD">On Hold</option>
+                          </select>
+                        </label>
+                        <label class="block text-sm" for="contents-proposal-pricing">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_pricing_model"></span>
+                          <select id="contents-proposal-pricing" class="aviators-field w-full text-sm">
+                            <option value="">—</option>
+                            <option value="TIME_AND_MATERIALS">Time &amp; Materials</option>
+                            <option value="STAFF_AUGMENTATION">Staff Augmentation</option>
+                            <option value="FIXED_PRICE">Fixed Price</option>
+                            <option value="SUBSCRIPTION">Subscription</option>
+                          </select>
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-proposal-effort">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_effort"></span>
+                          <input type="text" id="contents-proposal-effort" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-proposal-notes">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-proposal-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        </label>
                       </div>
-                    </div>
-
-                    <section id="contents-specific-proposal" class="space-y-2">
-                      <h4 class="text-sm font-semibold text-slate-800" data-i18n="contents_specific_proposal_heading"></h4>
-                      <label class="block text-sm">
-                        <span class="text-slate-600" data-i18n="contents_lbl_stage"></span>
-                        <select id="contents-proposal-stage" class="aviators-field mt-1 w-full text-sm">
-                          <option value="">—</option>
-                          <option value="PRESENTED">Presented</option>
-                          <option value="NEGOTIATION">Negotiation</option>
-                          <option value="WIN">Win</option>
-                          <option value="LOST">Lost</option>
-                          <option value="ON_HOLD">On Hold</option>
-                        </select>
-                      </label>
-                      <label class="block text-sm">
-                        <span class="text-slate-600" data-i18n="contents_lbl_pricing_model"></span>
-                        <select id="contents-proposal-pricing" class="aviators-field mt-1 w-full text-sm">
-                          <option value="">—</option>
-                          <option value="TIME_AND_MATERIALS">Time &amp; Materials</option>
-                          <option value="STAFF_AUGMENTATION">Staff Augmentation</option>
-                          <option value="FIXED_PRICE">Fixed Price</option>
-                          <option value="SUBSCRIPTION">Subscription</option>
-                        </select>
-                      </label>
-                      <input type="text" id="contents-proposal-effort" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_effort" />
-                      <textarea id="contents-proposal-notes" rows="2" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
                     </section>
 
-                    <section id="contents-specific-success" class="hidden space-y-2">
-                      <h4 class="text-sm font-semibold text-slate-800" data-i18n="contents_specific_success_heading"></h4>
-                      <input type="text" id="contents-success-challenge" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_challenge" />
-                      <input type="text" id="contents-success-solution" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_solution" />
-                      <input type="text" id="contents-success-impact" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_impact_value" />
-                      <textarea id="contents-success-notes" rows="2" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
+                    <section id="contents-specific-success" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_success_heading"></h4>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm" for="contents-success-challenge">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_challenge"></span>
+                          <input type="text" id="contents-success-challenge" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm" for="contents-success-solution">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_solution"></span>
+                          <input type="text" id="contents-success-solution" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-success-impact">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_impact_value"></span>
+                          <input type="text" id="contents-success-impact" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-success-notes">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-success-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        </label>
+                      </div>
                     </section>
 
-                    <section id="contents-specific-client" class="hidden space-y-2">
-                      <h4 class="text-sm font-semibold text-slate-800" data-i18n="contents_specific_client_heading"></h4>
-                      <input type="text" id="contents-client-status" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_account_status" />
-                      <input type="text" id="contents-client-projects" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_active_projects" />
-                      <input type="text" id="contents-client-health" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_health_score" />
-                      <textarea id="contents-client-notes" rows="2" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
+                    <section id="contents-specific-client" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_client_heading"></h4>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm" for="contents-client-status">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_account_status"></span>
+                          <input type="text" id="contents-client-status" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm" for="contents-client-health">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_health_score"></span>
+                          <input type="text" id="contents-client-health" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-client-projects">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_active_projects"></span>
+                          <input type="text" id="contents-client-projects" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-client-notes">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-client-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        </label>
+                      </div>
                     </section>
 
-                    <section id="contents-specific-onboarding" class="hidden space-y-2">
-                      <h4 class="text-sm font-semibold text-slate-800" data-i18n="contents_specific_onboarding_heading"></h4>
-                      <input type="text" id="contents-onboarding-topic" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_onboarding_topic_ph" />
-                      <input type="text" id="contents-onboarding-category" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_onboarding_category_ph" />
-                      <input type="text" id="contents-onboarding-audience" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_onboarding_audience_ph" />
-                      <textarea id="contents-onboarding-notes" rows="2" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_lbl_notes"></textarea>
+                    <section id="contents-specific-onboarding" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_onboarding_heading"></h4>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="block text-sm" for="contents-onboarding-topic">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_topic"></span>
+                          <input type="text" id="contents-onboarding-topic" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm" for="contents-onboarding-category">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_category"></span>
+                          <input type="text" id="contents-onboarding-category" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-onboarding-audience">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_audience"></span>
+                          <input type="text" id="contents-onboarding-audience" class="aviators-field w-full text-sm" />
+                        </label>
+                        <label class="block text-sm md:col-span-2" for="contents-onboarding-notes">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-onboarding-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        </label>
+                      </div>
                     </section>
 
-                    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
+                      <button type="button" id="contents-view-drive-btn" class="hidden btn btn-md btn-outline">
+                        <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+                        <span data-i18n="contents_btn_view_file"></span>
+                      </button>
                       <button type="button" id="contents-cancel-btn" class="btn btn-md btn-outline">
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                         <span data-i18n="contents_btn_cancel"></span>
@@ -1537,14 +1603,6 @@
                       <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_clients_lead"></p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                      <button type="button" id="clients-export-btn" class="btn btn-sm btn-secondary">
-                        <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
-                        <span data-i18n="export_csv"></span>
-                      </button>
-                      <button type="button" id="clients-import-btn" class="btn btn-sm btn-secondary">
-                        <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
-                        <span data-i18n="import_csv"></span>
-                      </button>
                       <button type="button" id="clients-new-btn" class="btn btn-md btn-primary shrink-0">
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                         <span data-i18n="clients_btn_new"></span>
@@ -1578,6 +1636,7 @@
                     <thead>
                       <tr class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                         <th id="clients-th-select" class="w-8 px-2 py-3"><input type="checkbox" id="clients-select-all" class="rounded" /></th>
+                        <th class="w-14 px-2 py-3 font-medium" data-i18n="clients_th_logo"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_name"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_industry"></th>
                         <th class="px-4 py-3 font-medium" data-i18n="clients_th_country"></th>
@@ -1608,15 +1667,49 @@
                     <span data-i18n="clients_btn_back_list"></span>
                   </button>
                 </div>
+
+                <div id="clients-editor-readonly-banner" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="status">
+                  <span class="inline-flex items-center gap-2">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    <span data-i18n="clients_editor_readonly_banner"></span>
+                  </span>
+                </div>
+
                 <input type="hidden" id="clients-id" />
-                <label class="block text-sm">
-                  <span class="font-medium text-slate-800" data-i18n="clients_lbl_name"></span>
-                  <input type="text" id="clients-name" class="aviators-field mt-1 w-full text-sm" />
+                <input type="hidden" id="clients-logo-url" value="" />
+
+                <section class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/40" aria-labelledby="clients-logo-heading">
+                  <h4 id="clients-logo-heading" class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="clients_logo_heading"></h4>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="clients_logo_lead"></p>
+                  <div class="mt-3 flex flex-wrap items-center gap-4">
+                    <div id="clients-logo-preview-wrap" class="hidden flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-900">
+                      <img id="clients-logo-preview" src="" alt="" class="max-h-full max-w-full object-contain" />
+                    </div>
+                    <div id="clients-logo-empty" class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-300 dark:border-slate-600 dark:bg-slate-900" aria-hidden="true">
+                      <i class="fa-solid fa-building text-2xl"></i>
+                    </div>
+                    <div id="clients-logo-actions" class="flex flex-wrap items-center gap-2">
+                      <input type="file" id="clients-logo-file" class="label-sr-only" accept="image/png,image/jpeg,image/webp,image/gif" />
+                      <button type="button" id="clients-logo-pick-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                        <i class="fa-solid fa-image" aria-hidden="true"></i>
+                        <span data-i18n="clients_btn_pick_logo"></span>
+                      </button>
+                      <button type="button" id="clients-logo-remove-btn" class="hidden btn btn-sm btn-outline inline-flex items-center gap-2">
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                        <span data-i18n="clients_btn_remove_logo"></span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <label class="block text-sm" for="clients-name">
+                  <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_name"></span>
+                  <input type="text" id="clients-name" class="aviators-field w-full text-sm" />
                 </label>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <label class="block text-sm">
-                    <span class="font-medium text-slate-800" data-i18n="clients_lbl_industry"></span>
-                    <select id="clients-industry" class="aviators-field mt-1 w-full text-sm">
+                  <label class="block text-sm" for="clients-industry">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_industry"></span>
+                    <select id="clients-industry" class="aviators-field w-full text-sm">
                       <option value="" data-i18n="clients_industry_placeholder"></option>
                       <option value="Agencias de Turismo" data-i18n="clients_industry_tourism_agencies"></option>
                       <option value="Logistica" data-i18n="clients_industry_logistics"></option>
@@ -1625,24 +1718,24 @@
                       <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
                     </select>
                   </label>
-                  <label class="block text-sm">
-                    <span class="font-medium text-slate-800" data-i18n="clients_lbl_country"></span>
-                    <input type="text" id="clients-country" class="aviators-field mt-1 w-full text-sm" />
+                  <label class="block text-sm" for="clients-country">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_country"></span>
+                    <input type="text" id="clients-country" class="aviators-field w-full text-sm" />
                   </label>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <label class="block text-sm">
-                    <span class="font-medium text-slate-800" data-i18n="clients_lbl_contact_name"></span>
-                    <input type="text" id="clients-contact-name" class="aviators-field mt-1 w-full text-sm" />
+                  <label class="block text-sm" for="clients-contact-name">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_name"></span>
+                    <input type="text" id="clients-contact-name" class="aviators-field w-full text-sm" />
                   </label>
-                  <label class="block text-sm">
-                    <span class="font-medium text-slate-800" data-i18n="clients_lbl_contact_email"></span>
-                    <input type="email" id="clients-contact-email" class="aviators-field mt-1 w-full text-sm" />
+                  <label class="block text-sm" for="clients-contact-email">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_email"></span>
+                    <input type="email" id="clients-contact-email" class="aviators-field w-full text-sm" />
                   </label>
                 </div>
-                <label class="block text-sm">
-                  <span class="font-medium text-slate-800" data-i18n="clients_lbl_notes"></span>
-                  <textarea id="clients-notes" rows="3" class="aviators-field mt-1 w-full text-sm"></textarea>
+                <label class="block text-sm" for="clients-notes">
+                  <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_notes"></span>
+                  <textarea id="clients-notes" rows="3" class="aviators-field w-full text-sm"></textarea>
                 </label>
                 <div class="flex flex-wrap gap-2 pt-2">
                   <button type="button" id="clients-cancel-btn" class="btn btn-md btn-outline">
@@ -1666,152 +1759,317 @@
 
             <div
               id="page-metrics"
-              class="app-page app-page-metrics hidden mx-auto max-w-6xl space-y-6 pb-8"
+              class="app-page app-page-metrics hidden mx-auto max-w-6xl space-y-5 pb-8"
               data-app-page="metrics"
             >
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-title">
-                <h2 id="metrics-title" class="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                  <i class="fa-solid fa-chart-line text-sky-600" aria-hidden="true"></i>
-                  <span data-i18n="page_metrics_title"></span>
-                </h2>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="page_metrics_lead"></p>
-                <div class="mt-4 flex flex-wrap items-center gap-2">
-                  <label for="metrics-range" class="text-sm font-medium text-slate-800">
-                    <span data-i18n="metrics_range_label"></span>
-                  </label>
-                  <select id="metrics-range" class="aviators-field text-sm">
-                    <option value="30d" data-i18n="metrics_range_30d"></option>
-                    <option value="90d" data-i18n="metrics_range_90d"></option>
-                    <option value="12m" data-i18n="metrics_range_12m"></option>
-                  </select>
-                  <button type="button" id="metrics-refresh-btn" class="btn btn-md btn-outline">
-                    <i class="fa-solid fa-rotate" aria-hidden="true"></i>
-                    <span data-i18n="metrics_refresh_btn"></span>
-                  </button>
-                  <button type="button" id="metrics-reset-btn" class="btn btn-md btn-outline-danger hidden">
-                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-                    <span data-i18n="metrics_reset_btn"></span>
-                  </button>
+              <header class="metrics-page-head settings-page-head" aria-labelledby="metrics-title">
+                <div class="settings-page-head-icon" aria-hidden="true">
+                  <i class="fa-solid fa-chart-line"></i>
                 </div>
-                <div id="metrics-status" class="mt-3 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status" aria-live="polite">
-                  <div class="loader-flight-inline" aria-hidden="true">
-                    <span class="loader-flight-inline-contrail"></span>
-                    <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
-                  </div>
-                  <div class="mt-2 flex items-center gap-2">
-                    <i id="metrics-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                    <span id="metrics-status-text"></span>
-                  </div>
-                </div>
-              </section>
-
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-overview-heading">
-                <h3 id="metrics-overview-heading" class="text-base font-semibold text-slate-900" data-i18n="metrics_overview_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="metrics_overview_lead"></p>
-                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                    <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="metrics_total_questions"></p>
-                    <p id="metrics-total-questions" class="mt-1 text-2xl font-bold text-slate-900">0</p>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                    <p class="text-xs uppercase tracking-wide text-slate-500" data-i18n="metrics_total_unanswered"></p>
-                    <p id="metrics-total-unanswered" class="mt-1 text-2xl font-bold text-slate-900">0</p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-trend-heading">
-                <h3 id="metrics-trend-heading" class="text-base font-semibold text-slate-900" data-i18n="metrics_trend_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="metrics_trend_lead"></p>
-                <div class="mt-4 h-72">
-                  <canvas id="metrics-trend-chart"></canvas>
-                </div>
-              </section>
-
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-agent-usage-heading">
-                <h3 id="metrics-agent-usage-heading" class="text-base font-semibold text-slate-900" data-i18n="metrics_agent_usage_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="metrics_agent_usage_lead"></p>
-                <div class="mt-4 h-72">
-                  <canvas id="metrics-agent-chart"></canvas>
-                </div>
-              </section>
-
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-leaderboards-heading">
-                <h3 id="metrics-leaderboards-heading" class="text-base font-semibold text-slate-900" data-i18n="metrics_leaderboards_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="metrics_leaderboards_lead"></p>
-                <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_users"></p>
-                    <ul id="metrics-lb-users" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_agents"></p>
-                    <ul id="metrics-lb-agents" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_success_client"></p>
-                    <ul id="metrics-lb-success-client" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_success_industry"></p>
-                    <ul id="metrics-lb-success-industry" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_proposal_client"></p>
-                    <ul id="metrics-lb-proposal-client" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                  <div class="rounded-xl border border-slate-200 p-3">
-                    <p class="text-sm font-semibold text-slate-800" data-i18n="metrics_lb_proposal_industry"></p>
-                    <ul id="metrics-lb-proposal-industry" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
-                  </div>
-                </div>
-              </section>
-
-              <section class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6" aria-labelledby="metrics-unanswered-heading">
-                <h3 id="metrics-unanswered-heading" class="text-base font-semibold text-slate-900" data-i18n="metrics_unanswered_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600" data-i18n="metrics_unanswered_lead"></p>
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                  <label for="metrics-queue-filter" class="text-sm font-medium text-slate-700">
-                    <span data-i18n="metrics_queue_filter_label"></span>
-                  </label>
-                  <select id="metrics-queue-filter" class="aviators-field text-sm">
-                    <option value="all" data-i18n="metrics_queue_filter_all"></option>
-                    <option value="open" data-i18n="metrics_queue_filter_open"></option>
-                    <option value="missing_content" data-i18n="metrics_queue_filter_missing"></option>
-                  </select>
-                </div>
-                <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                  <table class="w-full text-left text-sm">
-                    <thead>
-                      <tr class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                        <th class="px-3 py-2" data-i18n="metrics_th_date"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_user"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_agent"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_question"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_reason"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_queue_status"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_assigned"></th>
-                        <th class="px-3 py-2" data-i18n="metrics_th_actions"></th>
-                      </tr>
-                    </thead>
-                    <tbody id="metrics-unanswered-body"></tbody>
-                  </table>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <p id="metrics-unanswered-page-info" class="text-xs text-slate-500">&nbsp;</p>
-                  <div class="flex items-center gap-2">
-                    <button type="button" id="metrics-unanswered-prev" class="btn btn-md btn-outline">
-                      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-                      <span data-i18n="pagination_prev"></span>
+                <div class="min-w-0 flex-1">
+                  <h2 id="metrics-title" class="settings-page-title" data-i18n="page_metrics_title"></h2>
+                  <p class="settings-page-lead" data-i18n="page_metrics_lead"></p>
+                  <div class="metrics-page-toolbar mt-4 flex flex-wrap items-end gap-2">
+                    <div class="flex min-w-[10rem] flex-col gap-1">
+                      <label for="metrics-range" class="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        <span data-i18n="metrics_range_label"></span>
+                      </label>
+                      <select id="metrics-range" class="aviators-field text-sm">
+                        <option value="30d" data-i18n="metrics_range_30d"></option>
+                        <option value="90d" data-i18n="metrics_range_90d"></option>
+                        <option value="12m" data-i18n="metrics_range_12m"></option>
+                      </select>
+                    </div>
+                    <button type="button" id="metrics-refresh-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                      <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                      <span data-i18n="metrics_refresh_btn"></span>
                     </button>
-                    <button type="button" id="metrics-unanswered-next" class="btn btn-md btn-outline">
-                      <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-                      <span data-i18n="pagination_next"></span>
+                    <button type="button" id="metrics-reset-btn" class="btn btn-md btn-outline-danger hidden inline-flex items-center gap-2">
+                      <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                      <span data-i18n="metrics_reset_btn"></span>
                     </button>
                   </div>
+                  <div
+                    id="metrics-status"
+                    class="metrics-status-banner mt-3 hidden rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-2.5 text-sm text-sky-900 dark:border-sky-800/60 dark:bg-sky-950/30 dark:text-sky-100"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div class="loader-flight-inline" aria-hidden="true">
+                      <span class="loader-flight-inline-contrail"></span>
+                      <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2">
+                      <i id="metrics-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                      <span id="metrics-status-text"></span>
+                    </div>
+                  </div>
+                </div>
+              </header>
+
+              <section class="metrics-shell settings-shell" aria-label="Metrics workspace">
+                <div id="metrics-tab-root" data-app-tab-group>
+                  <div
+                    id="metrics-tab-list"
+                    role="tablist"
+                    class="settings-tab-bar app-tab-bar app-tab-bar-underline"
+                    data-i18n-aria-label="metrics_tabs_aria"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      id="metrics-tab-overview"
+                      class="app-tab-btn settings-tab-btn"
+                      aria-controls="metrics-panel-overview"
+                      aria-selected="true"
+                    >
+                      <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                      <span data-i18n="metrics_tab_overview"></span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="metrics-tab-rankings"
+                      class="app-tab-btn settings-tab-btn"
+                      aria-controls="metrics-panel-rankings"
+                      aria-selected="false"
+                      tabindex="-1"
+                    >
+                      <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+                      <span data-i18n="metrics_tab_rankings"></span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="metrics-tab-queue"
+                      class="app-tab-btn settings-tab-btn"
+                      aria-controls="metrics-panel-queue"
+                      aria-selected="false"
+                      tabindex="-1"
+                    >
+                      <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+                      <span data-i18n="metrics_tab_queue"></span>
+                    </button>
+                  </div>
+
+                  <div
+                    id="metrics-panel-overview"
+                    role="tabpanel"
+                    class="settings-tab-panel app-tab-panel"
+                    aria-labelledby="metrics-tab-overview"
+                  >
+                    <div class="settings-panel-inner space-y-6">
+                      <div class="settings-panel-head">
+                        <h3 class="settings-panel-title" data-i18n="metrics_overview_heading"></h3>
+                        <p class="settings-panel-lead" data-i18n="metrics_overview_lead"></p>
+                      </div>
+                      <div class="metrics-stat-grid">
+                        <div class="metrics-stat-card metrics-stat-card-sky">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-comments"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_total_questions"></p>
+                            <p id="metrics-total-questions" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-amber">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-circle-question"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_total_unanswered"></p>
+                            <p id="metrics-total-unanswered" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="metrics-chart-grid">
+                        <article class="metrics-chart-card" aria-labelledby="metrics-trend-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-trend-heading" class="metrics-chart-card-title" data-i18n="metrics_trend_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_trend_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap">
+                            <canvas id="metrics-trend-chart"></canvas>
+                          </div>
+                        </article>
+                        <article class="metrics-chart-card" aria-labelledby="metrics-agent-usage-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-agent-usage-heading" class="metrics-chart-card-title" data-i18n="metrics_agent_usage_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_agent_usage_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap">
+                            <canvas id="metrics-agent-chart"></canvas>
+                          </div>
+                        </article>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    id="metrics-panel-rankings"
+                    role="tabpanel"
+                    class="settings-tab-panel app-tab-panel hidden"
+                    aria-labelledby="metrics-tab-rankings"
+                    hidden
+                  >
+                    <div class="settings-panel-inner">
+                      <div class="settings-panel-head">
+                        <h3 class="settings-panel-title" data-i18n="metrics_leaderboards_heading"></h3>
+                        <p class="settings-panel-lead" data-i18n="metrics_leaderboards_lead"></p>
+                      </div>
+                      <div id="metrics-lb-tab-root" data-app-tab-group>
+                        <div
+                          role="tablist"
+                          class="settings-subtab-bar app-tab-bar"
+                          data-i18n-aria-label="metrics_leaderboards_heading"
+                        >
+                          <button
+                            type="button"
+                            role="tab"
+                            id="metrics-lb-tab-usage"
+                            class="app-tab-btn"
+                            aria-controls="metrics-lb-panel-usage"
+                            aria-selected="true"
+                          >
+                            <span data-i18n="metrics_lb_subtab_usage"></span>
+                          </button>
+                          <button
+                            type="button"
+                            role="tab"
+                            id="metrics-lb-tab-success"
+                            class="app-tab-btn"
+                            aria-controls="metrics-lb-panel-success"
+                            aria-selected="false"
+                            tabindex="-1"
+                          >
+                            <span data-i18n="metrics_lb_subtab_success"></span>
+                          </button>
+                          <button
+                            type="button"
+                            role="tab"
+                            id="metrics-lb-tab-proposals"
+                            class="app-tab-btn"
+                            aria-controls="metrics-lb-panel-proposals"
+                            aria-selected="false"
+                            tabindex="-1"
+                          >
+                            <span data-i18n="metrics_lb_subtab_proposals"></span>
+                          </button>
+                        </div>
+                        <div
+                          id="metrics-lb-panel-usage"
+                          role="tabpanel"
+                          class="app-tab-panel"
+                          aria-labelledby="metrics-lb-tab-usage"
+                        >
+                          <div class="metrics-lb-grid">
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_users"></h4>
+                              <ol id="metrics-lb-users" class="metrics-rank-list"></ol>
+                            </div>
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_agents"></h4>
+                              <ol id="metrics-lb-agents" class="metrics-rank-list"></ol>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          id="metrics-lb-panel-success"
+                          role="tabpanel"
+                          class="app-tab-panel hidden"
+                          aria-labelledby="metrics-lb-tab-success"
+                          hidden
+                        >
+                          <div class="metrics-lb-grid">
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_success_client"></h4>
+                              <ol id="metrics-lb-success-client" class="metrics-rank-list"></ol>
+                            </div>
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_success_industry"></h4>
+                              <ol id="metrics-lb-success-industry" class="metrics-rank-list"></ol>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          id="metrics-lb-panel-proposals"
+                          role="tabpanel"
+                          class="app-tab-panel hidden"
+                          aria-labelledby="metrics-lb-tab-proposals"
+                          hidden
+                        >
+                          <div class="metrics-lb-grid">
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_proposal_client"></h4>
+                              <ol id="metrics-lb-proposal-client" class="metrics-rank-list"></ol>
+                            </div>
+                            <div class="metrics-lb-card">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_proposal_industry"></h4>
+                              <ol id="metrics-lb-proposal-industry" class="metrics-rank-list"></ol>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    id="metrics-panel-queue"
+                    role="tabpanel"
+                    class="settings-tab-panel app-tab-panel hidden"
+                    aria-labelledby="metrics-tab-queue"
+                    hidden
+                  >
+                    <div class="settings-panel-inner">
+                      <div class="settings-panel-head">
+                        <h3 class="settings-panel-title" data-i18n="metrics_unanswered_heading"></h3>
+                        <p class="settings-panel-lead" data-i18n="metrics_unanswered_lead"></p>
+                      </div>
+                      <div class="metrics-queue-toolbar">
+                        <label for="metrics-queue-filter" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          <span data-i18n="metrics_queue_filter_label"></span>
+                        </label>
+                        <select id="metrics-queue-filter" class="aviators-field max-w-xs text-sm">
+                          <option value="all" data-i18n="metrics_queue_filter_all"></option>
+                          <option value="open" data-i18n="metrics_queue_filter_open"></option>
+                          <option value="missing_content" data-i18n="metrics_queue_filter_missing"></option>
+                        </select>
+                      </div>
+                      <div class="settings-table-wrap metrics-queue-table-wrap">
+                        <table class="settings-table metrics-queue-table w-full text-left text-sm">
+                          <thead>
+                            <tr class="border-b border-slate-200 bg-slate-50/90 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-400">
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_date"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_user"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_agent"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_question"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_reason"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_queue_status"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_assigned"></th>
+                              <th class="px-3 py-2.5" data-i18n="metrics_th_actions"></th>
+                            </tr>
+                          </thead>
+                          <tbody id="metrics-unanswered-body"></tbody>
+                        </table>
+                      </div>
+                      <div class="metrics-queue-pagination">
+                        <p id="metrics-unanswered-page-info" class="text-xs text-slate-500 dark:text-slate-400">&nbsp;</p>
+                        <div class="flex items-center gap-2">
+                          <button type="button" id="metrics-unanswered-prev" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                            <span data-i18n="pagination_prev"></span>
+                          </button>
+                          <button type="button" id="metrics-unanswered-next" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                            <span data-i18n="pagination_next"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </section>
-
             </div>
 
             <div
@@ -2722,7 +2980,6 @@
     <?!= clientScriptAgents ?>
     <?!= clientScriptContents ?>
     <?!= clientScriptClients ?>
-    <?!= clientScriptExport ?>
     <?!= clientScriptDashboard ?>
     <?!= clientScriptMetrics ?>
     <?!= clientScriptSettings ?>

@@ -18,7 +18,6 @@ function doGet() {
   tpl.clientScriptAgents = HtmlService.createHtmlOutputFromFile('app-client-agents').getContent();
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
-  tpl.clientScriptExport = HtmlService.createHtmlOutputFromFile('app-client-export').getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
   tpl.clientScriptSettings = HtmlService.createHtmlOutputFromFile('app-client-settings').getContent();

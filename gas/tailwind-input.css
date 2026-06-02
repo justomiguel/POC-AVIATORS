@@ -288,6 +288,12 @@
   .chat-send-actions .btn-row:not(.hidden) {
     @apply flex;
   }
+  .chat-attach-slot {
+    @apply flex items-end pb-0;
+  }
+  .chat-attach-icon-btn {
+    @apply h-11 w-11;
+  }
 
   /* Desktop: input y botón en la misma fila, misma altura, textarea auto-crece */
   @media (min-width: 768px) {
@@ -417,6 +423,9 @@
   }
     .chat-input-row {
       @apply gap-2;
+    }
+    .chat-attach-icon-btn {
+      @apply h-11 w-11 shrink-0;
     }
     .chat-input-row .q-area {
       height: 2.75rem;
@@ -722,6 +731,16 @@
     @apply bg-slate-900/40;
   }
 
+  /* Contenidos / Clientes — editor solo lectura (campos visibles, no editables) */
+  .contents-editor-readonly .aviators-field:disabled,
+  .contents-editor-readonly select:disabled,
+  .contents-editor-readonly textarea:disabled,
+  .clients-editor-readonly .aviators-field:disabled,
+  .clients-editor-readonly select:disabled,
+  .clients-editor-readonly textarea:disabled {
+    @apply cursor-default border-slate-200 bg-slate-50 text-slate-800 opacity-100 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200;
+  }
+
   /* Configuración — shell con pestañas */
   .settings-page-head {
     @apply flex items-start gap-4 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-sky-50/60 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:from-slate-900/95 dark:via-slate-900/95 dark:to-sky-950/20;
@@ -787,6 +806,106 @@
   .settings-search-field {
     @apply border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800;
   }
+
+  /* Métricas — dashboard con pestañas */
+  .metrics-page-toolbar {
+    @apply max-w-xl;
+  }
+  .metrics-shell {
+    @apply overflow-hidden;
+  }
+  .metrics-stat-grid {
+    @apply grid gap-4 sm:grid-cols-2;
+  }
+  .metrics-stat-card {
+    @apply flex items-center gap-4 rounded-2xl border p-4 md:p-5;
+  }
+  .metrics-stat-card-sky {
+    @apply border-sky-200/80 bg-gradient-to-br from-sky-50/90 via-white to-white dark:border-sky-800/50 dark:from-sky-950/25 dark:via-slate-900/40 dark:to-slate-900/20;
+  }
+  .metrics-stat-card-amber {
+    @apply border-amber-200/80 bg-gradient-to-br from-amber-50/90 via-white to-white dark:border-amber-800/50 dark:from-amber-950/20 dark:via-slate-900/40 dark:to-slate-900/20;
+  }
+  .metrics-stat-icon {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg;
+  }
+  .metrics-stat-card-sky .metrics-stat-icon {
+    @apply bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300;
+  }
+  .metrics-stat-card-amber .metrics-stat-icon {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300;
+  }
+  .metrics-stat-label {
+    @apply text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400;
+  }
+  .metrics-stat-value {
+    @apply mt-1 text-3xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-50;
+  }
+  .metrics-chart-grid {
+    @apply grid gap-5 lg:grid-cols-2;
+  }
+  .metrics-chart-card {
+    @apply rounded-2xl border border-slate-200/90 bg-slate-50/40 p-4 md:p-5 dark:border-slate-700 dark:bg-slate-800/40;
+  }
+  .metrics-chart-card-head {
+    @apply mb-4 space-y-1;
+  }
+  .metrics-chart-card-title {
+    @apply text-sm font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .metrics-chart-card-lead {
+    @apply text-xs leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+  .metrics-chart-canvas-wrap {
+    @apply h-72 min-h-[16rem];
+  }
+  .metrics-lb-grid {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+  .metrics-lb-card {
+    @apply rounded-2xl border border-slate-200/90 bg-white/80 p-4 dark:border-slate-700 dark:bg-slate-800/50;
+  }
+  .metrics-lb-card-title {
+    @apply mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .metrics-rank-list {
+    @apply m-0 list-none space-y-2 p-0;
+  }
+  .metrics-rank-row {
+    @apply flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-slate-800/40;
+  }
+  .metrics-rank-pos {
+    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold tabular-nums text-slate-600 dark:text-slate-300;
+    @apply bg-slate-200/80 dark:bg-slate-700/80;
+  }
+  .metrics-rank-pos-1 {
+    @apply bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200;
+  }
+  .metrics-rank-pos-2 {
+    @apply bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-100;
+  }
+  .metrics-rank-pos-3 {
+    @apply bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-200;
+  }
+  .metrics-rank-name {
+    @apply min-w-0 flex-1 truncate text-sm text-slate-800 dark:text-slate-200;
+  }
+  .metrics-rank-count {
+    @apply shrink-0 text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100;
+  }
+  .metrics-rank-empty {
+    @apply rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400;
+  }
+  .metrics-queue-toolbar {
+    @apply mb-4 flex flex-wrap items-center gap-3;
+  }
+  .metrics-queue-table-wrap {
+    @apply mt-0;
+  }
+  .metrics-queue-pagination {
+    @apply mt-4 flex flex-wrap items-center justify-between gap-3;
+  }
+
   .settings-table-wrap {
     @apply overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40;
   }

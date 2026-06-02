@@ -114,6 +114,7 @@ function AdminSupabaseMigration_migrateClients_(props) {
       country: String(rows[i].country || ''),
       main_contact_name: String(rows[i].main_contact_name || ''),
       main_contact_email: String(rows[i].main_contact_email || ''),
+      logo_url: String(rows[i].logo_url || ''),
       notes: String(rows[i].notes || ''),
       created_at: String(rows[i].created_at || new Date().toISOString()),
       created_by: String(rows[i].created_by || ''),

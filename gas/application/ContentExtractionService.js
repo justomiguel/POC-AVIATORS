@@ -87,39 +87,278 @@ var CONTENT_PROPOSAL_STAGES = ['PRESENTED', 'NEGOTIATION', 'WIN', 'LOST', 'ON_HO
 /** @type {Array<string>} Valores válidos para pricing_model */
 var CONTENT_PRICING_MODELS = ['TIME_AND_MATERIALS', 'STAFF_AUGMENTATION', 'FIXED_PRICE', 'SUBSCRIPTION'];
 /** @type {Array<string>} Valores válidos para industria del cliente */
-var CONTENT_ALLOWED_CLIENT_INDUSTRIES = [
-  'Agencias de Turismo',
-  'Logistica',
-  'Agencias AeroEspaciales',
-  'Aeropuertos',
-  'Aerolineas',
-];
+var CONTENT_ALLOWED_CLIENT_INDUSTRIES =
+  typeof CLIENTS_ALLOWED_INDUSTRIES !== 'undefined'
+    ? CLIENTS_ALLOWED_INDUSTRIES
+    : [
+        'Agencias de Turismo',
+        'Logistica',
+        'Agencias AeroEspaciales',
+        'Aeropuertos',
+        'Aerolineas',
+      ];
+
+/** @type {Object<string,string>} Etiquetas legibles por content_type para el prompt */
+var CONTENT_EXTRACTION_TYPE_LABELS = {
+  proposal: 'commercial proposal / RFP response / sales deck',
+  success_case: 'success case / case study / customer story',
+  client: 'client profile / account overview / CRM export',
+  onboarding: 'onboarding / training / enablement material',
+};
+
+/**
+ * @return {string}
+ */
+function ContentExtraction_getClientsHint_() {
+  var rows = ClientsMasterStore_listAll();
+  if (!rows.length) return '';
+  var names = [];
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var n = String(rows[i].client_name || '').trim();
+    if (n) names.push(n);
+  }
+  if (!names.length) return '';
+  names.sort(function (a, b) {
+    return a.localeCompare(b);
+  });
+  var max = 80;
+  if (names.length > max) {
+    return (
+      'KNOWN CLIENTS (use exact spelling when the document matches; do NOT invent variants): ' +
+      names.slice(0, max).join(', ') +
+      ' … and ' +
+      String(names.length - max) +
+      ' more.'
+    );
+  }
+  return (
+    'KNOWN CLIENTS (use exact spelling when the document matches; do NOT invent variants): ' +
+    names.join(', ')
+  );
+}
+
+/**
+ * @param {string} fileName
+ * @return {string}
+ */
+function ContentExtraction_titleFromFileName_(fileName) {
+  var stem = String(fileName || '')
+    .replace(/\.[^.]+$/i, '')
+    .trim();
+  if (!stem) return '';
+  stem = stem.replace(/[_–—]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/^(document|scan|file|untitled|propuesta|proposal|rfp|draft|borrador)$/i.test(stem)) {
+    return '';
+  }
+  return stem;
+}
+
+/**
+ * @param {string} rawName
+ * @param {string} fileName
+ * @return {{client_name:string, industry:string, matched:boolean}}
+ */
+function ContentExtraction_matchClient_(rawName, fileName) {
+  var empty = {
+    client_name: String(rawName || '').trim(),
+    industry: '',
+    matched: false,
+  };
+  var rows = ClientsMasterStore_listAll();
+  if (!rows.length) return empty;
+
+  var candidates = [];
+  var raw = String(rawName || '').trim();
+  if (raw) candidates.push(raw);
+
+  var stem = String(fileName || '').replace(/\.[^.]+$/i, '');
+  var segs = stem.split(/[\s_\-–—]+/);
+  var si;
+  for (si = 0; si < segs.length; si++) {
+    var seg = String(segs[si] || '').trim();
+    if (seg.length >= 2) candidates.push(seg);
+  }
+  if (segs.length >= 2) {
+    candidates.push((String(segs[0] || '') + ' ' + String(segs[1] || '')).trim());
+  }
+
+  var seenC = {};
+  var uniq = [];
+  var ci;
+  for (ci = 0; ci < candidates.length; ci++) {
+    var key = ClientsMaster_normalizeName_(candidates[ci]);
+    if (!key || seenC[key]) continue;
+    seenC[key] = true;
+    uniq.push(candidates[ci]);
+  }
+
+  for (ci = 0; ci < uniq.length; ci++) {
+    var exact = ClientsMaster_findByName(uniq[ci]);
+    if (exact) {
+      return {
+        client_name: exact.client_name,
+        industry: String(exact.industry || '').trim(),
+        matched: true,
+      };
+    }
+  }
+
+  var best = null;
+  var bestScore = 0;
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    var client = ClientsMasterStore_toApiItem_(rows[ri]);
+    var cn = ClientsMaster_normalizeName_(client.client_name);
+    if (!cn || cn.length < 3) continue;
+    for (var uj = 0; uj < uniq.length; uj++) {
+      var cand = ClientsMaster_normalizeName_(uniq[uj]);
+      if (!cand || cand.length < 3) continue;
+      if (cand === cn) {
+        return {
+          client_name: client.client_name,
+          industry: String(client.industry || '').trim(),
+          matched: true,
+        };
+      }
+      if (cand.indexOf(cn) >= 0 || cn.indexOf(cand) >= 0) {
+        var score = Math.min(cand.length, cn.length) / Math.max(cand.length, cn.length);
+        if (score > bestScore && score >= 0.6) {
+          bestScore = score;
+          best = client;
+        }
+      }
+    }
+  }
+  if (best) {
+    return {
+      client_name: best.client_name,
+      industry: String(best.industry || '').trim(),
+      matched: true,
+    };
+  }
+  return empty;
+}
+
+/**
+ * @param {string} value
+ * @param {Array<string>} allowed
+ * @param {string=} fallback
+ * @return {string}
+ */
+function ContentExtraction_normalizeEnum_(value, allowed, fallback) {
+  var v = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  var i;
+  for (i = 0; i < allowed.length; i++) {
+    if (allowed[i] === v) return allowed[i];
+  }
+  var compact = v.replace(/_/g, '');
+  for (i = 0; i < allowed.length; i++) {
+    if (allowed[i].replace(/_/g, '') === compact) return allowed[i];
+  }
+  return fallback || '';
+}
 
 /**
  * @param {string} contentType
+ * @param {Object} specific
+ * @return {Object}
+ */
+function ContentExtraction_normalizeSpecific_(contentType, specific) {
+  var sp = specific && typeof specific === 'object' ? specific : {};
+  if (contentType === 'proposal') {
+    sp.stage = ContentExtraction_normalizeEnum_(sp.stage, CONTENT_PROPOSAL_STAGES, 'PRESENTED');
+    sp.pricing_model = ContentExtraction_normalizeEnum_(
+      sp.pricing_model,
+      CONTENT_PRICING_MODELS,
+      'TIME_AND_MATERIALS',
+    );
+  }
+  return sp;
+}
+
+/**
+ * Post-procesa el draft del LLM: catálogo de clientes, título desde filename, enums.
+ * @param {Object} parsed
+ * @param {string} contentType
+ * @param {string} fileName
+ * @return {Object}
+ */
+function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
+  var locale = UiStrings_activeLocale_();
+  var common = parsed.common || {};
+  var warnings = Array.isArray(parsed.warnings) ? parsed.warnings.slice() : [];
+
+  if (!String(common.title || '').trim()) {
+    var fromFile = ContentExtraction_titleFromFileName_(fileName);
+    if (fromFile) {
+      common.title = fromFile;
+      warnings.push(UiStrings_t(locale, 'contents_warn_title_from_filename'));
+    }
+  }
+
+  var clientMatch = ContentExtraction_matchClient_(common.client_name, fileName);
+  if (clientMatch.matched) {
+    if (
+      String(common.client_name || '').trim() &&
+      common.client_name !== clientMatch.client_name
+    ) {
+      warnings.push(UiStrings_t(locale, 'contents_warn_client_from_catalog'));
+    } else if (!String(common.client_name || '').trim()) {
+      warnings.push(UiStrings_t(locale, 'contents_warn_client_from_filename'));
+    }
+    common.client_name = clientMatch.client_name;
+    if (!String(common.industry || '').trim() && clientMatch.industry) {
+      common.industry = ClientsMaster_resolveIndustry_(clientMatch.industry);
+    }
+  }
+
+  parsed.common = common;
+  parsed.specific = ContentExtraction_normalizeSpecific_(contentType, parsed.specific || {});
+  parsed.warnings = warnings;
+  return parsed;
+}
+
+/**
+ * @param {string} contentType
+ * @param {{fileName?:string, clientsHint?:string}=} hints
  * @return {string}
  */
-function ContentExtraction_promptForType_(contentType) {
+function ContentExtraction_promptForType_(contentType, hints) {
+  hints = hints || {};
   var existingTags = ContentCatalog_getAllTags();
   var tagsHint = existingTags.length
     ? 'EXISTING TAGS (reuse these, do NOT create synonyms): ' + existingTags.join(', ')
     : '';
+  var typeLabel = CONTENT_EXTRACTION_TYPE_LABELS[contentType] || contentType;
+  var fileName = String(hints.fileName || '').trim();
+  var clientsHint = String(hints.clientsHint || '').trim();
 
   var commonInstructions = [
-    'Analyze the document and return ONLY valid JSON.',
-    'No markdown, no comments.',
-    'If a value is missing, use empty string unless a field is explicitly mandatory below.',
+    'Extract metadata for content type: ' + typeLabel + '.',
+    fileName ? 'Original file name: "' + fileName + '". Use it as a hint when the document title or client is unclear.' : '',
+    clientsHint,
+    'Analyze the full document (cover, headers, footers, tables, logos, metadata blocks).',
+    'Return ONLY valid JSON. No markdown fences, no comments outside JSON.',
+    'If a value is missing or uncertain, use empty string and explain briefly in warnings[] (same language as the document).',
+    'Set confidence to high only when title and client_name are clearly supported by the document.',
     'TAGS RULES:',
     '- Always in English',
     '- camelCase format (e.g. #dataAnalytics, #cloudMigration)',
     '- No spaces, no special chars except #',
     '- Reuse existing tags when meaning matches. Do NOT create synonyms.',
+    '- Suggest 3-8 relevant tags when the document supports them.',
     tagsHint,
     'INDUSTRY RULES:',
     '- common.industry MUST be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
     '- No synonyms, no translations, no free text.',
     'Common structure:',
     '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
+    'common.summary: 1-3 sentences describing the document purpose and scope.',
+    'common.client_name: legal or commercial name of the customer/account when present.',
   ];
   if (contentType === 'proposal') {
     commonInstructions.push(
@@ -127,15 +366,18 @@ function ContentExtraction_promptForType_(contentType) {
       'stage MUST be one of: ' + CONTENT_PROPOSAL_STAGES.join(', ') + '. If unclear, use PRESENTED.',
       'pricing_model MUST be one of: ' + CONTENT_PRICING_MODELS.join(', ') + '. If unclear, use TIME_AND_MATERIALS.',
       'For proposal, common.industry is mandatory and MUST be one of the allowed values.',
+      'effort_estimate and timeline: extract from SOW, staffing tables or commercial sections when available.',
     );
   } else if (contentType === 'success_case') {
     commonInstructions.push(
       'specific for success_case: {"challenge":"","solution":"","impact_metric":"","impact_value":"","evidence":"","notes":""}',
       'For success_case, common.industry is mandatory and MUST be one of the allowed values.',
+      'impact_metric: name of KPI (e.g. cost reduction, NPS). impact_value: quantified result when stated.',
     );
   } else if (contentType === 'client') {
     commonInstructions.push(
       'specific for client: {"account_status":"","active_projects":"","health_score":"","renewal_date":"","notes":""}',
+      'account_status: active, prospect, churned, etc. health_score: green/yellow/red or numeric if present.',
     );
   } else if (contentType === 'onboarding') {
     commonInstructions.push(
@@ -145,8 +387,22 @@ function ContentExtraction_promptForType_(contentType) {
   } else {
     throw new Error('content_type invalido');
   }
-  commonInstructions.push('Prioritize accuracy and traceability.');
-  return commonInstructions.join('\n');
+  commonInstructions.push('Prioritize accuracy and traceability over completeness.');
+  return commonInstructions.filter(function (line) {
+    return !!line;
+  }).join('\n');
+}
+
+/**
+ * @return {string}
+ */
+function ContentExtraction_systemPrompt_() {
+  return [
+    'You are a metadata extraction specialist for Aviators, a B2B knowledge base for aviation, airlines, airports, logistics and related industries.',
+    'You receive business documents (often PDF) and extract structured catalog fields.',
+    'Be conservative: never invent client names, dates, or metrics not supported by the document.',
+    'Return ONLY valid JSON as requested. No markdown.',
+  ].join('\n');
 }
 
 /**
@@ -235,19 +491,23 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
     baseUrl: baseUrl || undefined,
   });
 
-  var prompt = ContentExtraction_promptForType_(contentType);
+  var prompt = ContentExtraction_promptForType_(contentType, {
+    fileName: prepared.name,
+    clientsHint: ContentExtraction_getClientsHint_(),
+  });
   var b64 = payload.dataBase64 || '';
   var mime = prepared.mimeType || 'application/pdf';
 
   var result = client.chatWithFileInline(
     CONTENT_EXTRACTION_MODEL,
-    '',
+    ContentExtraction_systemPrompt_(),
     prompt,
     b64,
     mime,
   );
 
   var draft = ContentExtraction_parseJson_(result.text || '');
+  draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name);
   return {
     ok: true,
     file: { name: prepared.name, mimeType: prepared.mimeType },

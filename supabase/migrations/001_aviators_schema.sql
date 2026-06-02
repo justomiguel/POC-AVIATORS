@@ -23,6 +23,7 @@ create table if not exists clients (
   country text not null default '',
   main_contact_name text not null default '',
   main_contact_email text not null default '',
+  logo_url text not null default '',
   notes text not null default '',
   created_at timestamptz not null default now(),
   created_by text not null default '',

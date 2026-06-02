@@ -63,6 +63,7 @@ function ClientsMaster_headers_() {
     'country',
     'main_contact_name',
     'main_contact_email',
+    'logo_url',
     'notes',
     'created_at',
     'created_by',
@@ -153,6 +154,29 @@ function ClientsMaster_findByName(name) {
 }
 
 /**
+ * @param {string} raw
+ * @return {string}
+ */
+function ClientsMaster_sanitizeLogoUrl_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return '';
+  if (/^https:\/\//i.test(s)) {
+    if (s.length > 2048) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'clients_err_logo_invalid'));
+    }
+    return s;
+  }
+  var m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/i.exec(s);
+  if (!m) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'clients_err_logo_invalid'));
+  }
+  if (m[2].length > 800000) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'clients_err_logo_too_large'));
+  }
+  return s;
+}
+
+/**
  * @param {string} name
  * @return {string}
  */
@@ -198,6 +222,7 @@ function ClientsMaster_upsert(data) {
     country: String(data.country || '').trim(),
     main_contact_name: String(data.main_contact_name || '').trim(),
     main_contact_email: String(data.main_contact_email || '').trim(),
+    logo_url: ClientsMaster_sanitizeLogoUrl_(data.logo_url),
     notes: String(data.notes || '').trim(),
     created_at: isNewDb ? nowDb : String(existingDb.created_at || nowDb),
     created_by: isNewDb ? who.email : String(existingDb.created_by || who.email),

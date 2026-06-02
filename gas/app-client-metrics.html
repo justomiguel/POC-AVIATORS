@@ -40,6 +40,25 @@
   var chartJsPromise = null;
   var loadingDashboard = false;
   var loadingUnanswered = false;
+  var metricsTabRoot = document.getElementById('metrics-tab-root');
+  var metricsLbTabRoot = document.getElementById('metrics-lb-tab-root');
+  var metricsMainTabs = metricsTabRoot ? A.initTabGroup(metricsTabRoot) : null;
+  var metricsLbTabs = metricsLbTabRoot ? A.initTabGroup(metricsLbTabRoot) : null;
+
+  function metricsResizeCharts_() {
+    window.setTimeout(function () {
+      if (trendChart && typeof trendChart.resize === 'function') trendChart.resize();
+      if (agentChart && typeof agentChart.resize === 'function') agentChart.resize();
+    }, 60);
+  }
+
+  if (metricsTabRoot) {
+    metricsTabRoot.addEventListener('click', function (ev) {
+      var tab = ev.target && ev.target.closest ? ev.target.closest('[role="tab"]') : null;
+      if (!tab || tab.getAttribute('role') !== 'tab') return;
+      if (tab.id === 'metrics-tab-overview') metricsResizeCharts_();
+    });
+  }
 
   function activeRange() {
     return rangeEl ? String(rangeEl.value || '30d') : '30d';
@@ -215,7 +234,7 @@
       var tr = document.createElement('tr');
       var td = document.createElement('td');
       td.colSpan = 8;
-      td.className = 'px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400';
+      td.className = 'metrics-queue-empty px-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400';
       td.textContent = i18n('metrics_empty');
       tr.appendChild(td);
       unansweredBody.appendChild(tr);
@@ -224,7 +243,8 @@
     for (var i = 0; i < items.length; i++) {
       (function (row) {
         var trRow = document.createElement('tr');
-        trRow.className = 'border-b border-slate-100 dark:border-slate-700';
+        trRow.className =
+          'border-b border-slate-100 transition-colors hover:bg-slate-50/80 dark:border-slate-700 dark:hover:bg-slate-800/50';
         var busyRow = queueRowBusyId && queueRowBusyId === String(row.event_id || '');
 
         function addTextCell(text) {
@@ -389,25 +409,36 @@
     el.innerHTML = '';
     var items = Array.isArray(rows) ? rows : [];
     if (!items.length) {
-      var li = document.createElement('li');
-      li.className = 'text-xs text-slate-500 dark:text-slate-400';
-      li.textContent = i18n('metrics_empty');
-      el.appendChild(li);
+      var emptyLi = document.createElement('li');
+      emptyLi.className = 'metrics-rank-empty';
+      emptyLi.textContent = i18n('metrics_empty');
+      el.appendChild(emptyLi);
       return;
     }
     for (var i = 0; i < items.length; i++) {
       var row = items[i] || {};
+      var rank = i + 1;
       var liRow = document.createElement('li');
-      liRow.className =
-        'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-600';
-      var left = document.createElement('span');
-      left.className = 'truncate';
-      left.textContent = String(row.name || '');
-      var right = document.createElement('span');
-      right.className = 'shrink-0 font-semibold text-slate-900 dark:text-slate-100';
-      right.textContent = String(row.count || 0);
-      liRow.appendChild(left);
-      liRow.appendChild(right);
+      liRow.className = 'metrics-rank-row';
+
+      var pos = document.createElement('span');
+      pos.className = 'metrics-rank-pos';
+      if (rank <= 3) pos.classList.add('metrics-rank-pos-' + rank);
+      pos.textContent = String(rank);
+      pos.setAttribute('aria-hidden', 'true');
+
+      var name = document.createElement('span');
+      name.className = 'metrics-rank-name';
+      name.textContent = String(row.name || '');
+      name.title = String(row.name || '');
+
+      var count = document.createElement('span');
+      count.className = 'metrics-rank-count';
+      count.textContent = String(row.count || 0);
+
+      liRow.appendChild(pos);
+      liRow.appendChild(name);
+      liRow.appendChild(count);
       el.appendChild(liRow);
     }
   }
@@ -601,7 +632,10 @@
     renderRankList(lbProposalClientEl, lb.proposalByClient);
     renderRankList(lbProposalIndustryEl, lb.proposalByIndustry);
     ensureChartJs()
-      .then(function () { renderCharts(data); })
+      .then(function () {
+        renderCharts(data);
+        metricsResizeCharts_();
+      })
       .catch(function () { setStatus(i18n('metrics_load_error'), false, { error: true }); });
   }
 
@@ -693,6 +727,8 @@
     loadDashboard: function () {
       var isAdmin = !!S.get('canResetMetrics');
       if (resetBtn) resetBtn.classList.toggle('hidden', !isAdmin);
+      if (metricsMainTabs) metricsMainTabs.activate('metrics-tab-overview');
+      if (metricsLbTabs) metricsLbTabs.activate('metrics-lb-tab-usage');
       loadAll(false);
     },
     onThemeChange: function () {
@@ -700,6 +736,7 @@
       ensureChartJs()
         .then(function () {
           renderCharts(lastDashboardData);
+          metricsResizeCharts_();
         })
         .catch(function () {});
     },
