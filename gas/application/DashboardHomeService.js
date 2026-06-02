@@ -168,14 +168,23 @@ function DashboardHome_aggregateClients_(items, maxDistinct) {
  * @return {{ok:boolean, agents:?Object, contents:?Object, clients:?Object}}
  */
 function DashboardHome_metrics() {
-  var out = /** @type {{ok:boolean, agents:?Object, contents:?Object, clients:?Object}} */ ({
+  var out = /** @type {{ok:boolean, agents:?Object, contents:?Object, clients:?Object, orchestrator:?Object}} */ ({
     ok: true,
     agents: null,
     contents: null,
     clients: null,
+    orchestrator: null,
   });
   var email = ('' + Session.getActiveUser().getEmail()).trim();
   if (!email) return out;
+
+  try {
+    out.orchestrator = AdminAgents_orchestratorHealth_(
+      PropertiesService.getScriptProperties(),
+    );
+  } catch (eOrch) {
+    out.orchestrator = null;
+  }
 
   var isContributor = false;
   try {

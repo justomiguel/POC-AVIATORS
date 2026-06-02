@@ -17,6 +17,10 @@
   var _contentsDetailEl = document.getElementById('dash-contents-detail');
   var _clientsCountEl = document.getElementById('dash-clients-count');
   var _clientsDetailEl = document.getElementById('dash-clients-detail');
+  var _orchestratorHealthEl = document.getElementById('home-orchestrator-health');
+  var _orchestratorHealthPill = document.getElementById('home-orchestrator-health-pill');
+  var _orchestratorHealthIcon = document.getElementById('home-orchestrator-health-icon');
+  var _orchestratorHealthText = document.getElementById('home-orchestrator-health-text');
 
   var _dashOpts = {
     showAgentsCard: false,
@@ -130,6 +134,51 @@
     _clientsCountEl.textContent = total || (cache ? cache.length : '—');
   }
 
+  function applyOrchestratorHealth(payload) {
+    if (!_orchestratorHealthEl || !_orchestratorHealthText || !_orchestratorHealthIcon) return;
+    if (!payload || typeof payload !== 'object') {
+      _orchestratorHealthEl.classList.add('hidden');
+      _orchestratorHealthEl.removeAttribute('title');
+      return;
+    }
+    var msg = '';
+    var tone = 'warn';
+    var profile = String(payload.profileName || '').trim();
+    if (!payload.inRegistry) {
+      msg = i18n('home_orchestrator_missing_registry');
+    } else if (payload.remoteChecked && !payload.onRemote) {
+      msg = i18nFmt('home_orchestrator_missing_remote', {
+        profile: profile || i18n('label_em_dash'),
+      });
+    } else if (payload.remoteChecked && payload.onRemote) {
+      msg = i18n('home_orchestrator_ok');
+      tone = 'ok';
+    } else {
+      msg = i18n('home_orchestrator_unknown');
+    }
+    _orchestratorHealthText.textContent = msg;
+    if (tone === 'ok' && profile) {
+      _orchestratorHealthEl.setAttribute('title', profile);
+    } else {
+      _orchestratorHealthEl.removeAttribute('title');
+    }
+    _orchestratorHealthEl.classList.remove('hidden');
+    if (_orchestratorHealthPill) {
+      _orchestratorHealthPill.classList.remove('home-orch--ok', 'home-orch--warn');
+      _orchestratorHealthPill.classList.add(tone === 'ok' ? 'home-orch--ok' : 'home-orch--warn');
+    }
+    _orchestratorHealthIcon.classList.remove(
+      'fa-circle-check',
+      'fa-circle',
+      'fa-triangle-exclamation',
+    );
+    if (tone === 'ok') {
+      _orchestratorHealthIcon.classList.add('fa-circle');
+    } else {
+      _orchestratorHealthIcon.classList.add('fa-triangle-exclamation');
+    }
+  }
+
   function applyDashboardMetrics(res) {
     var showAgents = _dashOpts.showAgentsCard;
     var can = _dashOpts.canManageContents;
@@ -173,15 +222,18 @@
     setDetailVisible(_agentsDetailEl, '', '');
     setDetailVisible(_contentsDetailEl, '', '');
     setDetailVisible(_clientsDetailEl, '', '');
+    applyOrchestratorHealth(null);
   }
 
   function loadDashboardMetrics() {
-    if (!_metricsEl) return;
-    if (!_dashOpts.showAgentsCard && !_dashOpts.canManageContents) return;
     google.script.run
       .withSuccessHandler(function (res) {
-        if (res && res.ok) applyDashboardMetrics(res);
-        else clearDashboardDetails();
+        if (res && res.ok) {
+          applyOrchestratorHealth(res.orchestrator);
+          applyDashboardMetrics(res);
+        } else {
+          clearDashboardDetails();
+        }
       })
       .withFailureHandler(function () {
         clearDashboardDetails();
@@ -190,7 +242,7 @@
   }
 
   function renderDashboard(bootstrap, opts) {
-    if (!_metricsEl) return;
+    if (!_metricsEl && !_orchestratorHealthEl) return;
     var showAgentsCard = !!(opts && opts.showAgentsCard);
     var canManage = !!(opts && opts.canManageContents);
     _dashOpts = { showAgentsCard: showAgentsCard, canManageContents: canManage };

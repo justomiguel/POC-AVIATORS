@@ -1,0 +1,1252 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var qpSection = document.getElementById('settings-qp-section');
+  var qpList = document.getElementById('admin-qp-list');
+  var qpAddBtn = document.getElementById('admin-qp-add-btn');
+  var qpSaveBtn = document.getElementById('admin-qp-save-btn');
+  var qpStatus = document.getElementById('admin-qp-status');
+
+  var resetSection = document.getElementById('admin-reset-all-section');
+  var resetAllBtn = document.getElementById('admin-reset-all-btn');
+  var resetStatus = document.getElementById('settings-reset-status');
+
+  var embeddingsSection = document.getElementById('admin-embeddings-section');
+  var rebuildEmbeddingsBtn = document.getElementById('admin-rebuild-embeddings-btn');
+  var embeddingsStatus = document.getElementById('settings-embeddings-status');
+  var embeddingsBusy = false;
+
+  var roleConfigSection = document.getElementById('settings-role-config-section');
+  var roleConfigBoard = document.getElementById('role-config-board');
+  var roleConfigPoolRead = document.getElementById('role-config-pool-read');
+  var roleConfigPoolWrite = document.getElementById('role-config-pool-write');
+  var roleConfigLoader = document.getElementById('role-config-loader');
+  var roleConfigLoaderMsg = document.getElementById('role-config-loader-msg');
+  var roleConfigAddBtn = document.getElementById('role-config-add-btn');
+  var roleConfigSaveBtn = document.getElementById('role-config-save-btn');
+  var roleConfigStatus = document.getElementById('role-config-status');
+  var roleConfigAddDialog = document.getElementById('role-config-add-dialog');
+  var roleConfigAddForm = document.getElementById('role-config-add-form');
+  var roleConfigAddKey = document.getElementById('role-config-add-key');
+  var roleConfigAddLabelEs = document.getElementById('role-config-add-label-es');
+  var roleConfigAddLabelEn = document.getElementById('role-config-add-label-en');
+  var roleConfigAddCancel = document.getElementById('role-config-add-cancel');
+
+  var settingsTabRoot = document.getElementById('settings-tab-root');
+  var settingsTabList = document.getElementById('settings-tab-list');
+  var settingsUsersTabRoot = document.getElementById('settings-users-tab-root');
+  var settingsTabs = null;
+  var settingsUsersTabs = null;
+
+  var usersSection = document.getElementById('settings-users-section');
+  var visitorsSearch = document.getElementById('admin-users-visitors-search');
+  var visitorsLoader = document.getElementById('admin-users-visitors-loader');
+  var visitorsLoaderMsg = document.getElementById('admin-users-visitors-loader-msg');
+  var visitorsBody = document.getElementById('admin-users-visitors-body');
+  var visitorsPagerInfo = document.getElementById('admin-users-visitors-pager-info');
+  var visitorsPrev = document.getElementById('admin-users-visitors-prev');
+  var visitorsNext = document.getElementById('admin-users-visitors-next');
+  var visitorsStatus = document.getElementById('admin-users-visitors-status');
+  var rolesSearch = document.getElementById('admin-users-roles-search');
+  var rolesLoader = document.getElementById('admin-users-roles-loader');
+  var rolesLoaderMsg = document.getElementById('admin-users-roles-loader-msg');
+  var rolesBody = document.getElementById('admin-users-roles-body');
+  var rolesPagerInfo = document.getElementById('admin-users-roles-pager-info');
+  var rolesPrev = document.getElementById('admin-users-roles-prev');
+  var rolesNext = document.getElementById('admin-users-roles-next');
+  var rolesStatus = document.getElementById('admin-users-roles-status');
+  var requestsStatus = document.getElementById('admin-users-requests-status');
+
+  var USERS_PAGE_SIZE = 25;
+  var usersRoleOptions = [];
+  var visitorsSkip = 0;
+  var rolesSkip = 0;
+  var visitorsTotal = 0;
+  var rolesTotal = 0;
+  var visitorsHasMore = false;
+  var rolesHasMore = false;
+  var visitorsItems = [];
+  var rolesItems = [];
+  var usersSearchTimer = null;
+  var usersBusy = false;
+
+  var resetBusy = false;
+
+  var roleConfigPermissions = [];
+  var roleConfigRoles = [];
+  var roleConfigBusy = false;
+  var roleConfigDragKey = '';
+
+  function roleConfigLocaleUi_() {
+    var ci = S.get('cachedI18n');
+    return ci && ci._locale === 'en' ? 'en' : 'es';
+  }
+
+  function roleConfigSetStatus(text, isError) {
+    if (!roleConfigStatus) return;
+    var t = String(text || '').trim();
+    roleConfigStatus.textContent = t || '\u00a0';
+    roleConfigStatus.classList.toggle('text-red-700', !!isError && !!t);
+    roleConfigStatus.classList.toggle('text-emerald-700', !isError && !!t);
+    roleConfigStatus.classList.toggle('text-slate-600', !t);
+  }
+
+  function roleConfigSetBusy(on, msgKey) {
+    roleConfigBusy = !!on;
+    if (roleConfigLoader) roleConfigLoader.classList.toggle('hidden', !on);
+    if (roleConfigLoaderMsg && on) {
+      roleConfigLoaderMsg.textContent = i18n(msgKey || 'role_config_busy_load');
+    }
+    if (roleConfigSaveBtn) roleConfigSaveBtn.disabled = on;
+    if (roleConfigAddBtn) roleConfigAddBtn.disabled = on;
+  }
+
+  function roleConfigFindRole_(key) {
+    var k = String(key || '').trim().toLowerCase();
+    for (var i = 0; i < roleConfigRoles.length; i++) {
+      if (roleConfigRoles[i].key === k) return roleConfigRoles[i];
+    }
+    return null;
+  }
+
+  function roleConfigFindPerm_(key) {
+    var k = String(key || '').trim();
+    for (var i = 0; i < roleConfigPermissions.length; i++) {
+      if (roleConfigPermissions[i].key === k) return roleConfigPermissions[i];
+    }
+    return null;
+  }
+
+  function roleConfigRoleLabel_(role) {
+    if (!role || !role.label) return role ? role.key : '';
+    var loc = roleConfigLocaleUi_();
+    return String(role.label[loc] || role.label.es || role.key).trim() || role.key;
+  }
+
+  function roleConfigGrant_(roleKey, permKey) {
+    var role = roleConfigFindRole_(roleKey);
+    if (!role || role.key === 'admin') return;
+    if (!role.permissions) role.permissions = {};
+    role.permissions[permKey] = true;
+  }
+
+  function roleConfigRevoke_(roleKey, permKey) {
+    var role = roleConfigFindRole_(roleKey);
+    if (!role || role.key === 'admin') return;
+    if (role.permissions) delete role.permissions[permKey];
+  }
+
+  function roleConfigHasPerm_(role, permKey) {
+    if (!role) return false;
+    if (role.key === 'admin') return true;
+    return !!(role.permissions && role.permissions[permKey]);
+  }
+
+  function roleConfigPermKind_(perm) {
+    return perm && perm.kind === 'write' ? 'write' : 'read';
+  }
+
+  function roleConfigBuildChip_(perm, mode, roleKey) {
+    var chip = document.createElement('span');
+    chip.className = 'role-config-chip';
+    chip.setAttribute('role', 'listitem');
+    chip.dataset.permKey = perm.key;
+    chip.dataset.permKind = roleConfigPermKind_(perm);
+    if (roleKey) chip.dataset.roleKey = roleKey;
+    var readonly = mode === 'readonly';
+    var active = mode === 'active';
+    var kind = roleConfigPermKind_(perm);
+    chip.classList.add(
+      readonly ? 'role-config-chip-readonly' : active ? 'role-config-chip-active' : 'role-config-chip-pool',
+    );
+    chip.classList.add(kind === 'write' ? 'role-config-chip-kind-write' : 'role-config-chip-kind-read');
+    chip.textContent = perm.label || perm.key;
+    if (!readonly) {
+      chip.draggable = true;
+      chip.addEventListener('dragstart', function (ev) {
+        roleConfigDragKey = perm.key;
+        if (ev.dataTransfer) {
+          ev.dataTransfer.setData('text/plain', perm.key);
+          ev.dataTransfer.effectAllowed = 'copyMove';
+        }
+      });
+      chip.addEventListener('dragend', function () {
+        roleConfigDragKey = '';
+        var zones = document.querySelectorAll('.role-config-dropzone.is-drag-over');
+        for (var z = 0; z < zones.length; z++) zones[z].classList.remove('is-drag-over');
+      });
+    }
+    if (active && roleKey !== 'admin') {
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'role-config-chip-remove';
+      rm.setAttribute('aria-label', i18n('role_config_delete_btn'));
+      rm.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+      rm.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        roleConfigRevoke_(roleKey, perm.key);
+        roleConfigRenderBoard_();
+        roleConfigRenderPool_();
+      });
+      chip.appendChild(rm);
+    }
+    return chip;
+  }
+
+  function roleConfigBindDropzone_(zone, roleKey, expectedKind) {
+    zone.addEventListener('dragover', function (ev) {
+      if (roleKey === 'admin') return;
+      var pk = roleConfigDragKey || (ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '');
+      var perm = roleConfigFindPerm_(pk);
+      if (perm && roleConfigPermKind_(perm) !== expectedKind) {
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      ev.preventDefault();
+      zone.classList.add('is-drag-over');
+      if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    });
+    zone.addEventListener('dragleave', function () {
+      zone.classList.remove('is-drag-over');
+    });
+    zone.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      zone.classList.remove('is-drag-over');
+      if (roleKey === 'admin') return;
+      var pk = roleConfigDragKey || (ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '');
+      pk = String(pk || '').trim();
+      if (!pk) return;
+      var permDrop = roleConfigFindPerm_(pk);
+      if (!permDrop || roleConfigPermKind_(permDrop) !== expectedKind) return;
+      roleConfigGrant_(roleKey, pk);
+      roleConfigRenderBoard_();
+      roleConfigRenderPool_();
+    });
+  }
+
+  function roleConfigCreateRoleZone_(role, kind) {
+    var zone = document.createElement('div');
+    zone.className = 'role-config-dropzone role-config-dropzone-' + kind;
+    zone.dataset.expectedKind = kind;
+
+    var label = document.createElement('p');
+    label.className = 'role-config-zone-label';
+    label.textContent = i18n(kind === 'write' ? 'role_config_col_write_label' : 'role_config_col_read_label');
+    zone.appendChild(label);
+
+    var chipsWrap = document.createElement('div');
+    chipsWrap.className = 'role-config-zone-chips flex flex-wrap gap-1.5';
+    chipsWrap.setAttribute('role', 'list');
+
+    var chipCount = 0;
+    for (var p = 0; p < roleConfigPermissions.length; p++) {
+      var perm = roleConfigPermissions[p];
+      if (roleConfigPermKind_(perm) !== kind) continue;
+      if (!roleConfigHasPerm_(role, perm.key)) continue;
+      chipCount++;
+      var mode = role.key === 'admin' ? 'readonly' : 'active';
+      chipsWrap.appendChild(roleConfigBuildChip_(perm, mode, role.key));
+    }
+
+    if (role.key !== 'admin' && chipCount === 0) {
+      var hint = document.createElement('p');
+      hint.className = 'role-config-zone-hint';
+      hint.textContent = i18n('role_config_drop_hint');
+      chipsWrap.appendChild(hint);
+    }
+
+    zone.appendChild(chipsWrap);
+    roleConfigBindDropzone_(zone, role.key, kind);
+    return zone;
+  }
+
+  function roleConfigRenderBoard_() {
+    if (!roleConfigBoard) return;
+    roleConfigBoard.innerHTML = '';
+    for (var i = 0; i < roleConfigRoles.length; i++) {
+      (function (role) {
+        var col = document.createElement('div');
+        col.className = 'role-config-column';
+        col.dataset.roleKey = role.key;
+
+        var head = document.createElement('div');
+        head.className = 'role-config-column-head';
+
+        var titleRow = document.createElement('div');
+        titleRow.className = 'flex items-start justify-between gap-2';
+
+        var title = document.createElement('div');
+        title.className = 'role-config-column-title';
+        title.textContent = roleConfigRoleLabel_(role);
+        titleRow.appendChild(title);
+
+        if (!role.system && role.key !== 'admin') {
+          var delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-red-600 hover:bg-red-50';
+          delBtn.title = i18n('role_config_delete_btn');
+          delBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+          delBtn.addEventListener('click', function () {
+            roleConfigDeleteRole_(role.key);
+          });
+          titleRow.appendChild(delBtn);
+        }
+        head.appendChild(titleRow);
+
+        var meta = document.createElement('p');
+        meta.className = 'role-config-column-meta';
+        var metaParts = [];
+        if (role.system || role.key === 'admin') metaParts.push(i18n('role_config_system_badge'));
+        metaParts.push(i18nFmt('role_config_users_count', { count: role.userCount || 0 }));
+        meta.textContent = metaParts.join(' · ');
+        head.appendChild(meta);
+        col.appendChild(head);
+
+        col.appendChild(roleConfigCreateRoleZone_(role, 'read'));
+        col.appendChild(roleConfigCreateRoleZone_(role, 'write'));
+        roleConfigBoard.appendChild(col);
+      })(roleConfigRoles[i]);
+    }
+  }
+
+  function roleConfigRenderPool_() {
+    if (roleConfigPoolRead) roleConfigPoolRead.innerHTML = '';
+    if (roleConfigPoolWrite) roleConfigPoolWrite.innerHTML = '';
+    for (var i = 0; i < roleConfigPermissions.length; i++) {
+      var perm = roleConfigPermissions[i];
+      var target = roleConfigPermKind_(perm) === 'write' ? roleConfigPoolWrite : roleConfigPoolRead;
+      if (target) target.appendChild(roleConfigBuildChip_(perm, 'pool', ''));
+    }
+  }
+
+  function roleConfigBindPoolRevoke_(poolEl, kind) {
+    if (!poolEl || poolEl.dataset.bound === '1') return;
+    poolEl.dataset.bound = '1';
+    poolEl.addEventListener('dragover', function (ev) {
+      ev.preventDefault();
+    });
+    poolEl.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      var pk = roleConfigDragKey || (ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '');
+      pk = String(pk || '').trim();
+      if (!pk) return;
+      var perm = roleConfigFindPerm_(pk);
+      if (!perm || roleConfigPermKind_(perm) !== kind) return;
+      for (var i = 0; i < roleConfigRoles.length; i++) {
+        var role = roleConfigRoles[i];
+        if (role.key === 'admin') continue;
+        if (role.permissions && role.permissions[pk]) {
+          roleConfigRevoke_(role.key, pk);
+        }
+      }
+      roleConfigRenderBoard_();
+      roleConfigRenderPool_();
+    });
+  }
+
+  function roleConfigBindAllPools_() {
+    roleConfigBindPoolRevoke_(roleConfigPoolRead, 'read');
+    roleConfigBindPoolRevoke_(roleConfigPoolWrite, 'write');
+  }
+
+  function roleConfigLoad_() {
+    if (!S.get('canManageRoleConfig')) return;
+    roleConfigSetBusy(true, 'role_config_busy_load');
+    roleConfigSetStatus('', false);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        roleConfigSetBusy(false);
+        roleConfigPermissions = (res && res.permissions) || [];
+        roleConfigRoles = (res && res.roles) || [];
+        roleConfigRenderBoard_();
+        roleConfigRenderPool_();
+      })
+      .withFailureHandler(function (e) {
+        roleConfigSetBusy(false);
+        roleConfigSetStatus((e && e.message) || i18n('role_config_err_generic'), true);
+      })
+      .adminRoleConfigGet();
+  }
+
+  function roleConfigCollectPayload_() {
+    var roles = [];
+    for (var i = 0; i < roleConfigRoles.length; i++) {
+      var r = roleConfigRoles[i];
+      roles.push({
+        key: r.key,
+        label: r.label || { es: r.key, en: r.key },
+        system: !!r.system,
+        permissions: r.permissions || {},
+      });
+    }
+    return { version: 1, roles: roles };
+  }
+
+  function roleConfigSave_() {
+    if (!S.get('canManageRoleConfig') || roleConfigBusy) return;
+    roleConfigSetBusy(true, 'role_config_busy_save');
+    A.showBlockingModal(i18n('role_config_busy_save'));
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        roleConfigSetBusy(false);
+        roleConfigSetStatus(i18n('role_config_save_done'), false);
+        roleConfigLoad_();
+        usersLoadRoleOptions(function () {
+          usersReloadAll();
+        });
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        roleConfigSetBusy(false);
+        roleConfigSetStatus((e && e.message) || i18n('role_config_err_generic'), true);
+      })
+      .adminRoleConfigSave(JSON.stringify(roleConfigCollectPayload_()));
+  }
+
+  function roleConfigDeleteRole_(key) {
+    if (!S.get('canManageRoleConfig') || roleConfigBusy) return;
+    A.confirmDialog({
+      title: i18n('role_config_delete_btn'),
+      message: i18nFmt('role_config_delete_confirm', { key: key }),
+      danger: true,
+      confirmLabel: i18n('role_config_delete_btn'),
+    }).then(function (ok) {
+      if (!ok) return;
+      roleConfigSetBusy(true, 'role_config_busy_delete');
+      A.showBlockingModal(i18n('role_config_busy_delete'));
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          roleConfigSetBusy(false);
+          roleConfigSetStatus(i18n('role_config_delete_done'), false);
+          roleConfigLoad_();
+          usersLoadRoleOptions(function () {
+            usersReloadAll();
+          });
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          roleConfigSetBusy(false);
+          roleConfigSetStatus((e && e.message) || i18n('role_config_err_generic'), true);
+        })
+        .adminRoleConfigRemoveRole(key);
+    });
+  }
+
+  function roleConfigOpenAddDialog_() {
+    if (!roleConfigAddDialog) return;
+    if (roleConfigAddKey) roleConfigAddKey.value = '';
+    if (roleConfigAddLabelEs) roleConfigAddLabelEs.value = '';
+    if (roleConfigAddLabelEn) roleConfigAddLabelEn.value = '';
+    if (typeof roleConfigAddDialog.showModal === 'function') roleConfigAddDialog.showModal();
+  }
+
+  function roleConfigSubmitAdd_() {
+    if (!S.get('canManageRoleConfig') || roleConfigBusy) return;
+    var key = roleConfigAddKey ? roleConfigAddKey.value.trim().toLowerCase() : '';
+    var labelEs = roleConfigAddLabelEs ? roleConfigAddLabelEs.value.trim() : '';
+    var labelEn = roleConfigAddLabelEn ? roleConfigAddLabelEn.value.trim() : '';
+    if (!key || !labelEs) return;
+    roleConfigSetBusy(true, 'role_config_busy_add');
+    A.showBlockingModal(i18n('role_config_busy_add'));
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        roleConfigSetBusy(false);
+        if (roleConfigAddDialog && typeof roleConfigAddDialog.close === 'function') {
+          roleConfigAddDialog.close();
+        }
+        roleConfigSetStatus(i18n('role_config_add_done'), false);
+        roleConfigLoad_();
+        usersLoadRoleOptions(function () {
+          usersReloadAll();
+        });
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        roleConfigSetBusy(false);
+        roleConfigSetStatus((e && e.message) || i18n('role_config_err_generic'), true);
+      })
+      .adminRoleConfigAddRole(key, labelEs, labelEn || labelEs);
+  }
+
+  if (roleConfigAddBtn) {
+    roleConfigAddBtn.addEventListener('click', roleConfigOpenAddDialog_);
+  }
+  if (roleConfigAddCancel && roleConfigAddDialog) {
+    roleConfigAddCancel.addEventListener('click', function () {
+      roleConfigAddDialog.close();
+    });
+  }
+  if (roleConfigAddForm) {
+    roleConfigAddForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      roleConfigSubmitAdd_();
+    });
+  }
+  if (roleConfigSaveBtn) {
+    roleConfigSaveBtn.addEventListener('click', roleConfigSave_);
+  }
+
+  function setResetStatus(text, isError) {
+    if (!resetStatus) return;
+    var t = String(text || '').trim();
+    resetStatus.textContent = t || '\u00a0';
+    resetStatus.classList.toggle('text-red-700', !!isError && !!t);
+    resetStatus.classList.toggle('dark:text-red-400', !!isError && !!t);
+    resetStatus.classList.toggle('text-emerald-700', !isError && !!t);
+    resetStatus.classList.toggle('dark:text-emerald-400', !isError && !!t);
+    resetStatus.classList.toggle('text-slate-600', !t);
+    resetStatus.classList.toggle('dark:text-slate-400', !t);
+  }
+
+  function setEmbeddingsStatus(text, isError) {
+    if (!embeddingsStatus) return;
+    var t = String(text || '').trim();
+    embeddingsStatus.textContent = t || '\u00a0';
+    embeddingsStatus.classList.toggle('text-red-700', !!isError && !!t);
+    embeddingsStatus.classList.toggle('dark:text-red-400', !!isError && !!t);
+    embeddingsStatus.classList.toggle('text-emerald-700', !isError && !!t);
+    embeddingsStatus.classList.toggle('dark:text-emerald-400', !isError && !!t);
+    embeddingsStatus.classList.toggle('text-slate-600', !t);
+    embeddingsStatus.classList.toggle('dark:text-slate-400', !t);
+  }
+
+  function rebuildEmbeddingsBatch_(skip, doneAcc, failedAcc, total) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var done = doneAcc + (res && res.done ? res.done : 0);
+        var failed = failedAcc + (res && res.failed ? res.failed : 0);
+        var tot = res && res.total != null ? res.total : total;
+        var nextSkip = res && res.skip != null && res.limit != null ? res.skip + res.limit : skip;
+        if (res && res.hasMore) {
+          A.showBlockingModal(
+            i18nFmt('admin_embeddings_busy', { done: String(done), total: String(tot) }),
+          );
+          rebuildEmbeddingsBatch_(nextSkip, done, failed, tot);
+          return;
+        }
+        A.hideBlockingModal();
+        embeddingsBusy = false;
+        if (rebuildEmbeddingsBtn) rebuildEmbeddingsBtn.disabled = false;
+        setEmbeddingsStatus(
+          i18nFmt('admin_embeddings_done', { done: String(done), failed: String(failed) }),
+          failed > 0,
+        );
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        embeddingsBusy = false;
+        if (rebuildEmbeddingsBtn) rebuildEmbeddingsBtn.disabled = false;
+        setEmbeddingsStatus(
+          (e && e.message) || i18n('admin_embeddings_error'),
+          true,
+        );
+      })
+      .contentsRebuildEmbeddingsBatch(skip, 10);
+  }
+
+  function syncSectionVisibility() {
+    var tabPermMap = [
+      { tabId: 'settings-tab-roles', perm: 'canManageRoleConfig' },
+      { tabId: 'settings-tab-users', perm: 'canManageUsers' },
+      { tabId: 'settings-tab-chat', perm: 'canManageAgents' },
+      { tabId: 'settings-tab-data', perm: 'canResetMetrics' },
+    ];
+    var visibleTabs = [];
+    for (var ti = 0; ti < tabPermMap.length; ti++) {
+      var entry = tabPermMap[ti];
+      var allowed = !!S.get(entry.perm);
+      var tabBtn = document.getElementById(entry.tabId);
+      if (tabBtn) tabBtn.classList.toggle('hidden', !allowed);
+      if (allowed) visibleTabs.push(entry);
+    }
+    if (settingsTabList) {
+      settingsTabList.classList.toggle('hidden', visibleTabs.length <= 1);
+    }
+    if (settingsTabs && visibleTabs.length) {
+      settingsTabs.activate(visibleTabs[0].tabId);
+    }
+  }
+
+  function initSettingsTabs() {
+    if (settingsTabRoot && !settingsTabs) {
+      settingsTabs = A.initTabGroup(settingsTabRoot);
+    }
+    if (settingsUsersTabRoot && !settingsUsersTabs) {
+      settingsUsersTabs = A.initTabGroup(settingsUsersTabRoot);
+    }
+    syncSectionVisibility();
+  }
+
+  function usersSetStatus(el, text, isError) {
+    if (!el) return;
+    var t = String(text || '').trim();
+    el.textContent = t || '\u00a0';
+    el.classList.toggle('text-red-700', !!isError && !!t);
+    el.classList.toggle('dark:text-red-400', !!isError && !!t);
+    el.classList.toggle('text-emerald-700', !isError && !!t);
+    el.classList.toggle('dark:text-emerald-400', !isError && !!t);
+    el.classList.toggle('text-slate-600', !t);
+    el.classList.toggle('dark:text-slate-400', !t);
+  }
+
+  function usersFormatDate(iso) {
+    if (!iso) return '\u2014';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      var ci = S.get('cachedI18n');
+      var loc = ci && ci._locale === 'en' ? 'en' : 'es';
+      return new Intl.DateTimeFormat(loc, {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(d);
+    } catch (eDate) {
+      return iso;
+    }
+  }
+
+  function usersUpdatePager(infoEl, prevBtn, nextBtn, skip, total, pageLen) {
+    if (infoEl) {
+      if (!total) {
+        infoEl.textContent = i18n('metrics_pagination_empty');
+      } else {
+        var from = total ? skip + 1 : 0;
+        var to = skip + pageLen;
+        infoEl.textContent = i18nFmt('metrics_pagination_info', {
+          from: from,
+          to: to,
+          total: total,
+        });
+      }
+    }
+    if (prevBtn) prevBtn.disabled = usersBusy || skip <= 0;
+    if (nextBtn) nextBtn.disabled = usersBusy || skip + pageLen >= total;
+  }
+
+  function usersBuildRoleSelect(selectedKey) {
+    var sel = document.createElement('select');
+    sel.className = 'admin-users-role-select aviators-field rounded px-2 py-1 text-sm';
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = i18n('admin_users_select_role');
+    sel.appendChild(blank);
+    for (var i = 0; i < usersRoleOptions.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = usersRoleOptions[i].key;
+      opt.textContent = usersRoleOptions[i].label || usersRoleOptions[i].key;
+      if (selectedKey && opt.value === selectedKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    return sel;
+  }
+
+  function usersRenderVisitorsTable() {
+    if (!visitorsBody) return;
+    visitorsBody.innerHTML = '';
+    if (!visitorsItems.length) {
+      var trEmpty = document.createElement('tr');
+      var tdEmpty = document.createElement('td');
+      tdEmpty.colSpan = 6;
+      tdEmpty.className = 'px-4 py-6 text-center text-sm text-slate-400';
+      tdEmpty.textContent = i18n('admin_users_no_visitors');
+      trEmpty.appendChild(tdEmpty);
+      visitorsBody.appendChild(trEmpty);
+      return;
+    }
+    for (var i = 0; i < visitorsItems.length; i++) {
+      (function (item) {
+        var tr = document.createElement('tr');
+        tr.className = 'settings-table-row';
+        var tdEmail = document.createElement('td');
+        tdEmail.className = 'font-medium text-slate-900 dark:text-slate-100';
+        tdEmail.textContent = item.email || '';
+        tr.appendChild(tdEmail);
+        var tdName = document.createElement('td');
+        tdName.className = 'text-slate-600 dark:text-slate-400';
+        tdName.textContent = item.display_name || '\u2014';
+        tr.appendChild(tdName);
+        var tdSeen = document.createElement('td');
+        tdSeen.className = 'text-slate-600 dark:text-slate-400';
+        tdSeen.textContent = usersFormatDate(item.last_seen_at);
+        tr.appendChild(tdSeen);
+        var tdVisits = document.createElement('td');
+        tdVisits.className = 'text-slate-600 dark:text-slate-400';
+        tdVisits.textContent = String(item.visit_count != null ? item.visit_count : '\u2014');
+        tr.appendChild(tdVisits);
+        var tdRole = document.createElement('td');
+        tdRole.className = '';
+        var roleSel = usersBuildRoleSelect('');
+        tdRole.appendChild(roleSel);
+        tr.appendChild(tdRole);
+        var tdActions = document.createElement('td');
+        tdActions.className = 'text-right';
+        var assignBtn = document.createElement('button');
+        assignBtn.type = 'button';
+        assignBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-2';
+        assignBtn.innerHTML =
+          '<i class="fa-solid fa-user-plus" aria-hidden="true"></i>' +
+          '<span data-i18n="admin_users_assign_btn">' +
+          i18n('admin_users_assign_btn') +
+          '</span>';
+        assignBtn.addEventListener('click', function () {
+          usersAssignRole(item.email, roleSel.value, 'assign');
+        });
+        tdActions.appendChild(assignBtn);
+        tr.appendChild(tdActions);
+        visitorsBody.appendChild(tr);
+      })(visitorsItems[i]);
+    }
+  }
+
+  function usersRenderRolesTable() {
+    if (!rolesBody) return;
+    rolesBody.innerHTML = '';
+    if (!rolesItems.length) {
+      var trEmpty = document.createElement('tr');
+      var tdEmpty = document.createElement('td');
+      tdEmpty.colSpan = 4;
+      tdEmpty.className = 'px-4 py-6 text-center text-sm text-slate-400';
+      tdEmpty.textContent = i18n('admin_users_no_roles');
+      trEmpty.appendChild(tdEmpty);
+      rolesBody.appendChild(trEmpty);
+      return;
+    }
+    for (var i = 0; i < rolesItems.length; i++) {
+      (function (item) {
+        var tr = document.createElement('tr');
+        tr.className = 'settings-table-row';
+        var tdEmail = document.createElement('td');
+        tdEmail.className = 'font-medium text-slate-900 dark:text-slate-100';
+        tdEmail.textContent = item.email || '';
+        tr.appendChild(tdEmail);
+        var tdRole = document.createElement('td');
+        tdRole.className = '';
+        var roleSel = usersBuildRoleSelect(item.role_key || '');
+        tdRole.appendChild(roleSel);
+        tr.appendChild(tdRole);
+        var tdUpdated = document.createElement('td');
+        tdUpdated.className = 'text-slate-600 dark:text-slate-400';
+        tdUpdated.textContent = usersFormatDate(item.updated_at);
+        tr.appendChild(tdUpdated);
+        var tdActions = document.createElement('td');
+        tdActions.className = 'text-right';
+        var btnWrap = document.createElement('div');
+        btnWrap.className = 'flex flex-wrap items-center justify-end gap-2';
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+        saveBtn.innerHTML =
+          '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>' +
+          '<span data-i18n="admin_users_update_btn">' +
+          i18n('admin_users_update_btn') +
+          '</span>';
+        saveBtn.addEventListener('click', function () {
+          usersAssignRole(item.email, roleSel.value, 'update');
+        });
+        btnWrap.appendChild(saveBtn);
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-sm btn-outline-danger inline-flex items-center gap-2';
+        removeBtn.innerHTML =
+          '<i class="fa-solid fa-user-minus" aria-hidden="true"></i>' +
+          '<span data-i18n="admin_users_remove_btn">' +
+          i18n('admin_users_remove_btn') +
+          '</span>';
+        removeBtn.addEventListener('click', function () {
+          usersRemoveRole(item.email);
+        });
+        btnWrap.appendChild(removeBtn);
+        tdActions.appendChild(btnWrap);
+        tr.appendChild(tdActions);
+        rolesBody.appendChild(tr);
+      })(rolesItems[i]);
+    }
+  }
+
+  function usersSetVisitorsBusy(on) {
+    if (visitorsLoader) visitorsLoader.classList.toggle('hidden', !on);
+    if (visitorsLoaderMsg && on) visitorsLoaderMsg.textContent = i18n('admin_users_busy_loading');
+  }
+
+  function usersSetRolesBusy(on) {
+    if (rolesLoader) rolesLoader.classList.toggle('hidden', !on);
+    if (rolesLoaderMsg && on) rolesLoaderMsg.textContent = i18n('admin_users_busy_loading');
+  }
+
+  function usersLoadVisitors() {
+    if (!S.get('canManageUsers')) return;
+    usersSetVisitorsBusy(true);
+    usersUpdatePager(visitorsPagerInfo, visitorsPrev, visitorsNext, visitorsSkip, visitorsTotal, visitorsItems.length);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        usersSetVisitorsBusy(false);
+        visitorsItems = (res && res.items) || [];
+        visitorsTotal = (res && res.total) || 0;
+        visitorsHasMore = !!(res && res.hasMore);
+        usersRenderVisitorsTable();
+        usersUpdatePager(
+          visitorsPagerInfo,
+          visitorsPrev,
+          visitorsNext,
+          visitorsSkip,
+          visitorsTotal,
+          visitorsItems.length,
+        );
+      })
+      .withFailureHandler(function (e) {
+        usersSetVisitorsBusy(false);
+        usersSetStatus(
+          visitorsStatus,
+          (e && e.message) || i18n('admin_users_err_generic'),
+          true,
+        );
+        usersUpdatePager(
+          visitorsPagerInfo,
+          visitorsPrev,
+          visitorsNext,
+          visitorsSkip,
+          visitorsTotal,
+          visitorsItems.length,
+        );
+      })
+      .adminUsersListVisitors({
+        skip: visitorsSkip,
+        limit: USERS_PAGE_SIZE,
+        q: visitorsSearch ? visitorsSearch.value.trim() : '',
+      });
+  }
+
+  function usersLoadRoles() {
+    if (!S.get('canManageUsers')) return;
+    usersSetRolesBusy(true);
+    usersUpdatePager(rolesPagerInfo, rolesPrev, rolesNext, rolesSkip, rolesTotal, rolesItems.length);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        usersSetRolesBusy(false);
+        rolesItems = (res && res.items) || [];
+        rolesTotal = (res && res.total) || 0;
+        rolesHasMore = !!(res && res.hasMore);
+        usersRenderRolesTable();
+        usersUpdatePager(
+          rolesPagerInfo,
+          rolesPrev,
+          rolesNext,
+          rolesSkip,
+          rolesTotal,
+          rolesItems.length,
+        );
+      })
+      .withFailureHandler(function (e) {
+        usersSetRolesBusy(false);
+        usersSetStatus(
+          rolesStatus,
+          (e && e.message) || i18n('admin_users_err_generic'),
+          true,
+        );
+        usersUpdatePager(
+          rolesPagerInfo,
+          rolesPrev,
+          rolesNext,
+          rolesSkip,
+          rolesTotal,
+          rolesItems.length,
+        );
+      })
+      .adminUsersListRoles({
+        skip: rolesSkip,
+        limit: USERS_PAGE_SIZE,
+        q: rolesSearch ? rolesSearch.value.trim() : '',
+      });
+  }
+
+  function usersReloadAll() {
+    usersLoadVisitors();
+    usersLoadRoles();
+    if (A.accessRequest && A.accessRequest.adminLoad) {
+      A.accessRequest.adminLoad();
+    }
+  }
+
+  function usersAssignRoleFromRequest(email, roleKey) {
+    usersAssignRole(email, roleKey, 'assign');
+    if (requestsStatus) {
+      usersSetStatus(requestsStatus, '', false);
+    }
+  }
+
+  function usersAssignRole(email, roleKey, mode) {
+    if (!S.get('canManageUsers') || usersBusy) return;
+    if (!roleKey) {
+      usersSetStatus(
+        mode === 'update' ? rolesStatus : visitorsStatus,
+        i18n('admin_users_err_role'),
+        true,
+      );
+      return;
+    }
+    usersBusy = true;
+    var busyKey =
+      mode === 'update' ? 'admin_users_busy_update' : 'admin_users_busy_assign';
+    var doneKey =
+      mode === 'update' ? 'admin_users_update_done' : 'admin_users_assign_done';
+    A.showBlockingModal(i18n(busyKey));
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        usersBusy = false;
+        usersSetStatus(visitorsStatus, i18n(doneKey), false);
+        usersSetStatus(rolesStatus, i18n(doneKey), false);
+        if (requestsStatus) usersSetStatus(requestsStatus, i18n(doneKey), false);
+        usersReloadAll();
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        usersBusy = false;
+        usersSetStatus(
+          mode === 'update' ? rolesStatus : visitorsStatus,
+          (e && e.message) || i18n('admin_users_err_generic'),
+          true,
+        );
+        usersReloadAll();
+      })
+      [mode === 'update' ? 'adminUsersUpdateRole' : 'adminUsersAssignRole'](email, roleKey);
+  }
+
+  function usersRemoveRole(email) {
+    if (!S.get('canManageUsers') || usersBusy) return;
+    A.confirmDialog({
+      title: i18n('admin_users_remove_btn'),
+      message: i18nFmt('admin_users_remove_confirm', { email: email }),
+      danger: true,
+      confirmLabel: i18n('admin_users_remove_btn'),
+    }).then(function (ok) {
+      if (!ok) return;
+      usersBusy = true;
+      A.showBlockingModal(i18n('admin_users_busy_remove'));
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          usersBusy = false;
+          usersSetStatus(rolesStatus, i18n('admin_users_remove_done'), false);
+          usersReloadAll();
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          usersBusy = false;
+          usersSetStatus(
+            rolesStatus,
+            (e && e.message) || i18n('admin_users_err_generic'),
+            true,
+          );
+          usersReloadAll();
+        })
+        .adminUsersRemoveRole(email);
+    });
+  }
+
+  function usersLoadRoleOptions(cb) {
+    if (!S.get('canManageUsers')) {
+      if (cb) cb();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (opts) {
+        usersRoleOptions = Array.isArray(opts) ? opts : [];
+        if (cb) cb();
+      })
+      .withFailureHandler(function () {
+        usersRoleOptions = [];
+        if (cb) cb();
+      })
+      .adminUsersRoleOptions();
+  }
+
+  function usersScheduleSearchReload() {
+    if (usersSearchTimer) clearTimeout(usersSearchTimer);
+    usersSearchTimer = setTimeout(function () {
+      visitorsSkip = 0;
+      rolesSkip = 0;
+      usersReloadAll();
+    }, 300);
+  }
+
+  if (visitorsSearch) {
+    visitorsSearch.addEventListener('input', usersScheduleSearchReload);
+  }
+  if (rolesSearch) {
+    rolesSearch.addEventListener('input', usersScheduleSearchReload);
+  }
+  if (visitorsPrev) {
+    visitorsPrev.addEventListener('click', function () {
+      if (usersBusy || visitorsSkip <= 0) return;
+      visitorsSkip = Math.max(0, visitorsSkip - USERS_PAGE_SIZE);
+      usersLoadVisitors();
+    });
+  }
+  if (visitorsNext) {
+    visitorsNext.addEventListener('click', function () {
+      if (usersBusy || visitorsSkip + USERS_PAGE_SIZE >= visitorsTotal) return;
+      visitorsSkip += USERS_PAGE_SIZE;
+      usersLoadVisitors();
+    });
+  }
+  if (rolesPrev) {
+    rolesPrev.addEventListener('click', function () {
+      if (usersBusy || rolesSkip <= 0) return;
+      rolesSkip = Math.max(0, rolesSkip - USERS_PAGE_SIZE);
+      usersLoadRoles();
+    });
+  }
+  if (rolesNext) {
+    rolesNext.addEventListener('click', function () {
+      if (usersBusy || rolesSkip + USERS_PAGE_SIZE >= rolesTotal) return;
+      rolesSkip += USERS_PAGE_SIZE;
+      usersLoadRoles();
+    });
+  }
+
+  function qpRenderItem(prompt, index) {
+    if (!qpList) return;
+    var item = document.createElement('div');
+    item.className = 'admin-qp-item settings-qp-item flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-600 dark:bg-slate-800/60';
+    item.dataset.qpIndex = String(index);
+
+    var topRow = document.createElement('div');
+    topRow.className = 'flex items-center justify-between gap-2';
+
+    var labelSpan = document.createElement('span');
+    labelSpan.className = 'text-xs font-medium text-slate-500 dark:text-slate-400';
+    labelSpan.textContent = '#' + (index + 1);
+    topRow.appendChild(labelSpan);
+
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30';
+    delBtn.setAttribute('aria-label', i18n('admin_quick_prompts_delete_btn'));
+    delBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span data-i18n="admin_quick_prompts_delete_btn">' + i18n('admin_quick_prompts_delete_btn') + '</span>';
+    delBtn.addEventListener('click', function () {
+      item.remove();
+      qpRenumberItems_();
+    });
+    topRow.appendChild(delBtn);
+    item.appendChild(topRow);
+
+    var esRow = document.createElement('div');
+    esRow.className = 'flex flex-col gap-0.5';
+    var esLabel = document.createElement('label');
+    esLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
+    esLabel.textContent = i18n('admin_quick_prompts_lbl_es');
+    var esInput = document.createElement('input');
+    esInput.type = 'text';
+    esInput.className = 'admin-qp-es aviators-field w-full rounded px-2 py-1 text-sm';
+    esInput.placeholder = i18n('admin_quick_prompts_ph_es');
+    esInput.value = String(prompt.es || '');
+    esRow.appendChild(esLabel);
+    esRow.appendChild(esInput);
+    item.appendChild(esRow);
+
+    var enRow = document.createElement('div');
+    enRow.className = 'flex flex-col gap-0.5';
+    var enLabel = document.createElement('label');
+    enLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
+    enLabel.textContent = i18n('admin_quick_prompts_lbl_en');
+    var enInput = document.createElement('input');
+    enInput.type = 'text';
+    enInput.className = 'admin-qp-en aviators-field w-full rounded px-2 py-1 text-sm';
+    enInput.placeholder = i18n('admin_quick_prompts_ph_en');
+    enInput.value = String(prompt.en || '');
+    enRow.appendChild(enLabel);
+    enRow.appendChild(enInput);
+    item.appendChild(enRow);
+
+    qpList.appendChild(item);
+  }
+
+  function qpRenumberItems_() {
+    if (!qpList) return;
+    var items = qpList.querySelectorAll('.admin-qp-item');
+    for (var i = 0; i < items.length; i++) {
+      var lbl = items[i].querySelector('span.text-xs.font-medium');
+      if (lbl) lbl.textContent = '#' + (i + 1);
+    }
+  }
+
+  function qpCollectPrompts_() {
+    if (!qpList) return [];
+    var items = qpList.querySelectorAll('.admin-qp-item');
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var esEl = items[i].querySelector('.admin-qp-es');
+      var enEl = items[i].querySelector('.admin-qp-en');
+      var es = esEl ? esEl.value.trim() : '';
+      var en = enEl ? enEl.value.trim() : '';
+      if (!es && !en) continue;
+      out.push({ id: 'qp' + (i + 1), es: es, en: en, order: i + 1 });
+    }
+    return out;
+  }
+
+  function initQuickPrompts(initialPrompts) {
+    if (!qpList || !S.get('canManageAgents')) return;
+    qpList.innerHTML = '';
+    var prompts = Array.isArray(initialPrompts) ? initialPrompts : [];
+    for (var i = 0; i < prompts.length; i++) {
+      qpRenderItem(prompts[i], i);
+    }
+  }
+
+  if (qpAddBtn) {
+    qpAddBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents') || !qpList) return;
+      var idx = qpList.querySelectorAll('.admin-qp-item').length;
+      qpRenderItem({ es: '', en: '', order: idx + 1 }, idx);
+    });
+  }
+
+  if (qpSaveBtn) {
+    qpSaveBtn.addEventListener('click', function () {
+      if (!S.get('canManageAgents')) return;
+      var prompts = qpCollectPrompts_();
+      qpSaveBtn.disabled = true;
+      if (qpAddBtn) qpAddBtn.disabled = true;
+      if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_busy');
+      A.showBlockingModal(i18n('admin_quick_prompts_save_busy'));
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          qpSaveBtn.disabled = false;
+          if (qpAddBtn) qpAddBtn.disabled = false;
+          if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_done');
+          if (A.chat && A.chat.applyQuickPrompts) {
+            S.set('quickPrompts', prompts);
+            var ci = S.get('cachedI18n');
+            var localeUi = ci && ci._locale === 'en' ? 'en' : 'es';
+            A.chat.applyQuickPrompts(prompts, localeUi);
+          }
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          qpSaveBtn.disabled = false;
+          if (qpAddBtn) qpAddBtn.disabled = false;
+          if (qpStatus) {
+            qpStatus.textContent = e && e.message ? e.message : i18n('admin_quick_prompts_save_error');
+          }
+        })
+        .quickPromptsSave(JSON.stringify(prompts));
+    });
+  }
+
+  if (rebuildEmbeddingsBtn) {
+    rebuildEmbeddingsBtn.addEventListener('click', function () {
+      if (!S.get('canResetMetrics') || embeddingsBusy) return;
+      embeddingsBusy = true;
+      rebuildEmbeddingsBtn.disabled = true;
+      setEmbeddingsStatus(i18nFmt('admin_embeddings_busy', { done: '0', total: '…' }), false);
+      A.showBlockingModal(i18nFmt('admin_embeddings_busy', { done: '0', total: '…' }));
+      rebuildEmbeddingsBatch_(0, 0, 0, 0);
+    });
+  }
+
+  if (resetAllBtn) {
+    resetAllBtn.addEventListener('click', function () {
+      if (!S.get('canResetMetrics') || resetBusy) return;
+      A.confirmDialog({
+        title: i18n('admin_reset_all_confirm_title'),
+        message: i18n('admin_reset_all_confirm'),
+        danger: true,
+        requirePhrase: i18n('admin_reset_all_confirm_phrase'),
+        confirmLabel: i18n('admin_reset_all_btn'),
+      }).then(function (ok) {
+        if (!ok) return;
+        resetBusy = true;
+        resetAllBtn.disabled = true;
+        setResetStatus(i18n('admin_reset_all_busy'), false);
+        A.showBlockingModal(i18n('admin_reset_all_busy'));
+        google.script.run
+          .withSuccessHandler(function () {
+            A.hideBlockingModal();
+            resetBusy = false;
+            resetAllBtn.disabled = false;
+            if (A.cache) {
+              A.cache.invalidate('contentsList');
+              A.cache.invalidate('clientsList');
+              A.cache.invalidate('agentsList');
+              A.cache.invalidate('contextFiles');
+            }
+            setResetStatus(i18n('admin_reset_all_done'), false);
+            if (S.get('canManageAgents') && A.settings && A.settings.reloadQuickPrompts) {
+              A.settings.reloadQuickPrompts();
+            }
+          })
+          .withFailureHandler(function (e) {
+            A.hideBlockingModal();
+            resetBusy = false;
+            resetAllBtn.disabled = false;
+            setResetStatus((e && e.message) || i18n('admin_reset_all_error'), true);
+          })
+          .adminResetAllSpreadsheetData();
+      });
+    });
+  }
+
+  function reloadQuickPrompts() {
+    if (!S.get('canManageAgents')) return;
+    google.script.run
+      .withSuccessHandler(function (prompts) {
+        initQuickPrompts(prompts || []);
+        S.set('quickPrompts', prompts || []);
+        if (A.chat && A.chat.applyQuickPrompts) {
+          var ci = S.get('cachedI18n');
+          var localeUi = ci && ci._locale === 'en' ? 'en' : 'es';
+          A.chat.applyQuickPrompts(prompts || [], localeUi);
+        }
+      })
+      .withFailureHandler(function () {})
+      .quickPromptsGet();
+  }
+
+  A.settings = {
+    init: function (initialPrompts) {
+      initSettingsTabs();
+      roleConfigBindAllPools_();
+      initQuickPrompts(initialPrompts || []);
+      if (S.get('canManageRoleConfig')) {
+        roleConfigLoad_();
+      }
+      if (S.get('canManageUsers')) {
+        usersLoadRoleOptions(function () {
+          usersReloadAll();
+        });
+      }
+    },
+    onShow: function () {
+      initSettingsTabs();
+      setResetStatus('', false);
+      setEmbeddingsStatus('', false);
+      if (qpStatus) qpStatus.textContent = '';
+      roleConfigSetStatus('', false);
+      usersSetStatus(visitorsStatus, '', false);
+      usersSetStatus(rolesStatus, '', false);
+      if (requestsStatus) usersSetStatus(requestsStatus, '', false);
+      if (S.get('canManageRoleConfig')) {
+        roleConfigLoad_();
+      }
+      if (S.get('canManageUsers')) {
+        usersLoadRoleOptions(function () {
+          usersReloadAll();
+        });
+      }
+    },
+    reloadQuickPrompts: reloadQuickPrompts,
+    usersUpdatePager: usersUpdatePager,
+    usersAssignRoleFromRequest: usersAssignRoleFromRequest,
+    usersReloadAll: usersReloadAll,
+  };
+})(window.Aviators);
+</script>

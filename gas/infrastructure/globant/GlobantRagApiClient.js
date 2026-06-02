@@ -1,6 +1,6 @@
 /**
  * @fileoverview Cliente REST para Globant Agents / RAG Assistants API.
- * Basado en https://api.agents.globant.com (base configurable).
+ * Base URL por defecto: https://api.clients.geai.globant.com (GLOBANT_RAG_BASE_URL).
  */
 
 /**
@@ -15,10 +15,7 @@
  */
 function GlobantRagApiClient_create(config) {
   var apiKey = config.apiKey;
-  var baseUrl = (config.baseUrl || 'https://api.agents.globant.com').replace(
-    /\/+$/,
-    '',
-  );
+  var baseUrl = GlobantUrl_normalizeBaseUrl_(config.baseUrl);
 
   function authHeaders() {
     return { Authorization: 'Bearer ' + apiKey };
@@ -56,6 +53,14 @@ function GlobantRagApiClient_create(config) {
       question: question,
       filters: finalFilters,
     };
+    console.log(
+      '[RAG] POST /v1/search/execute profile=' +
+        profileName +
+        ' questionLen=' +
+        String(question || '').length +
+        ' filters=' +
+        finalFilters.length,
+    );
     var r = request('post', '/v1/search/execute', {
       contentType: 'application/json',
       payload: JSON.stringify(payload),

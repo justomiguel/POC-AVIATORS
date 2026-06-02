@@ -38,10 +38,7 @@ function GlobantAssistantApiClient_invalidateAccessCache() {
  */
 function GlobantAssistantApiClient_create(config) {
   var apiKey = config.apiKey;
-  var baseUrl = (config.baseUrl || 'https://api.agents.globant.com').replace(
-    /\/+$/,
-    '',
-  );
+  var baseUrl = GlobantUrl_normalizeBaseUrl_(config.baseUrl);
 
   /** @type {{ organizationId: string, projectId: string }|null} */
   var memAccessIds = GlobantAssistantApiClient_cacheGetAccessIds();

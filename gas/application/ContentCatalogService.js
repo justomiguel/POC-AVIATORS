@@ -1,7 +1,8 @@
 /**
- * @fileoverview Catalogo de contenidos (1 spreadsheet + 4 tabs).
+ * @fileoverview Catálogo de contenidos (Supabase / ContentCatalogStore).
  */
 
+/** @deprecated Propiedades legacy de planilla; solo migración AdminSupabaseMigration. */
 var CATALOG_PROP_SSID = 'CATALOG_SPREADSHEET_ID';
 var CATALOG_PROP_TAB_COMMON = 'CATALOG_TAB_COMMON';
 var CATALOG_PROP_TAB_PROPOSALS = 'CATALOG_TAB_PROPOSALS';
@@ -15,8 +16,6 @@ var CATALOG_TAB_PROPOSALS_DEFAULT = 'proposals';
 var CATALOG_TAB_SUCCESS_CASES_DEFAULT = 'success_cases';
 var CATALOG_TAB_CLIENTS_DEFAULT = 'clients';
 var CATALOG_TAB_ONBOARDING_DEFAULT = 'onboarding';
-var CATALOG_ROOT_FOLDER_ID = '1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG';
-
 /** @return {string[]} */
 function ContentCatalog_headersCommon_() {
   return [
@@ -92,20 +91,17 @@ function ContentCatalog_requireContributor_() {
       UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
     );
   }
-  if (AdminAuth_emailIsAdmin(email)) {
-    return { email: email, roleKey: 'admin', roleLabel: 'Admin' };
+  if (AdminAuth_emailCanWriteCatalog(email)) {
+    var recWrite = RoleDirectory_lookupRole(email);
+    var labelW = recWrite && recWrite.label ? String(recWrite.label) : '';
+    var keyW = AdminAuth_roleKeyForEmail_(email) || 'admin';
+    return {
+      email: email,
+      roleKey: keyW,
+      roleLabel: labelW || (keyW === 'admin' ? 'Admin' : keyW),
+    };
   }
-  var rec = RoleDirectory_lookupRole(email);
-  if (!RoleDirectory_roleRecordIsPresale_(rec)) {
-    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
-  }
-  var label = rec && rec.label ? String(rec.label) : '';
-  var key = rec && rec.key ? String(rec.key) : '';
-  return {
-    email: email,
-    roleKey: key || 'presale',
-    roleLabel: label || 'Presale',
-  };
+  throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
 }
 
 /**
@@ -118,11 +114,8 @@ function ContentCatalog_requireAnyRole_() {
       UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
     );
   }
-  if (AdminAuth_emailIsAdmin(email)) return;
-  var rec = RoleDirectory_lookupRole(email);
-  if (!rec || !rec.key) {
-    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
-  }
+  if (AdminAuth_emailCanViewCatalog(email)) return;
+  throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
 }
 
 /**
@@ -181,57 +174,6 @@ function ContentCatalog_ensureSheetHeaders_(sheet, headers) {
 }
 
 /**
- * @param {GoogleAppsScript.Properties.Properties} props
- * @return {{spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, tabs: {common:string,proposals:string,successCases:string,clients:string}}}
- */
-function ContentCatalog_getOrCreateSpreadsheet_(props) {
-  var tabs = ContentCatalog_resolveTabNames_(props);
-  var ssId = (props.getProperty(CATALOG_PROP_SSID) || '').trim();
-  var ss;
-  if (ssId) {
-    ss = SpreadsheetApp.openById(ssId);
-  } else {
-    ss = SpreadsheetApp.create('aviators-content-catalog');
-    props.setProperty(CATALOG_PROP_SSID, ss.getId());
-    try {
-      var file = DriveApp.getFileById(ss.getId());
-      var rootFolder = DriveApp.getFolderById(CATALOG_ROOT_FOLDER_ID);
-      rootFolder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
-    } catch (ignoreMove) {}
-  }
-
-  function ensureSheet(name) {
-    var sh = ss.getSheetByName(name);
-    if (!sh) sh = ss.insertSheet(name);
-    return sh;
-  }
-
-  ContentCatalog_ensureSheetHeaders_(
-    ensureSheet(tabs.common),
-    ContentCatalog_headersCommon_(),
-  );
-  ContentCatalog_ensureSheetHeaders_(
-    ensureSheet(tabs.proposals),
-    ContentCatalog_headersByType_('proposal'),
-  );
-  ContentCatalog_ensureSheetHeaders_(
-    ensureSheet(tabs.successCases),
-    ContentCatalog_headersByType_('success_case'),
-  );
-  ContentCatalog_ensureSheetHeaders_(
-    ensureSheet(tabs.clients),
-    ContentCatalog_headersByType_('client'),
-  );
-  ContentCatalog_ensureSheetHeaders_(
-    ensureSheet(tabs.onboarding),
-    ContentCatalog_headersByType_('onboarding'),
-  );
-
-  return { spreadsheet: ss, tabs: tabs };
-}
-
-/**
  * @param {string} contentType
  * @return {boolean}
  */
@@ -242,80 +184,6 @@ function ContentCatalog_isValidType_(contentType) {
     contentType === 'client' ||
     contentType === 'onboarding'
   );
-}
-
-/**
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string[]} headers
- * @return {Array<Object>}
- */
-function ContentCatalog_readRows_(sheet, headers) {
-  var last = sheet.getLastRow();
-  if (last < 2) return [];
-  var vals = sheet.getRange(2, 1, last - 1, headers.length).getValues();
-  var out = [];
-  var i;
-  var j;
-  for (i = 0; i < vals.length; i++) {
-    var row = {};
-    for (j = 0; j < headers.length; j++) {
-      row[headers[j]] = vals[i][j];
-    }
-    out.push(row);
-  }
-  return out;
-}
-
-/**
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string[]} headers
- * @param {Object} rowObj
- * @return {number} row index in sheet (1-based)
- */
-function ContentCatalog_upsertRowByContentId_(sheet, headers, rowObj) {
-  var last = sheet.getLastRow();
-  var targetRow = -1;
-  var contentId = String(rowObj.content_id || '').trim();
-  if (!contentId) throw new Error('content_id requerido');
-  if (last >= 2) {
-    var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
-    var i;
-    for (i = 0; i < ids.length; i++) {
-      if (String(ids[i][0] || '').trim() === contentId) {
-        targetRow = i + 2;
-        break;
-      }
-    }
-  }
-  var values = [];
-  var h;
-  for (h = 0; h < headers.length; h++) {
-    values.push(rowObj[headers[h]] != null ? rowObj[headers[h]] : '');
-  }
-  if (targetRow < 0) {
-    targetRow = last + 1;
-  }
-  sheet.getRange(targetRow, 1, 1, headers.length).setValues([values]);
-  return targetRow;
-}
-
-/**
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string} contentId
- * @return {boolean}
- */
-function ContentCatalog_deleteRowByContentId_(sheet, contentId) {
-  var last = sheet.getLastRow();
-  if (last < 2) return false;
-  var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
-  var i;
-  for (i = 0; i < ids.length; i++) {
-    if (String(ids[i][0] || '').trim() === contentId) {
-      sheet.deleteRow(i + 2);
-      return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -368,43 +236,15 @@ function ContentCatalog_tagsToCsv_(tags) {
  */
 function ContentCatalog_list(filters) {
   ContentCatalog_requireAnyRole_();
-  var props = PropertiesService.getScriptProperties();
-  var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
-  var ss = catalog.spreadsheet;
-  var tabs = catalog.tabs;
-  var commonHeaders = ContentCatalog_headersCommon_();
-  var commonRows = ContentCatalog_readRows_(ss.getSheetByName(tabs.common), commonHeaders);
-  var proposalsRows = ContentCatalog_readRows_(
-    ss.getSheetByName(tabs.proposals),
-    ContentCatalog_headersByType_('proposal'),
-  );
-  var successRows = ContentCatalog_readRows_(
-    ss.getSheetByName(tabs.successCases),
-    ContentCatalog_headersByType_('success_case'),
-  );
-  var clientRows = ContentCatalog_readRows_(
-    ss.getSheetByName(tabs.clients),
-    ContentCatalog_headersByType_('client'),
-  );
-  var onboardingRows = ContentCatalog_readRows_(
-    ss.getSheetByName(tabs.onboarding),
-    ContentCatalog_headersByType_('onboarding'),
-  );
-  var byIdSpecific = {};
-  var i;
-  for (i = 0; i < proposalsRows.length; i++) {
-    byIdSpecific[String(proposalsRows[i].content_id || '').trim()] = proposalsRows[i];
-  }
-  for (i = 0; i < successRows.length; i++) {
-    byIdSpecific[String(successRows[i].content_id || '').trim()] = successRows[i];
-  }
-  for (i = 0; i < clientRows.length; i++) {
-    byIdSpecific[String(clientRows[i].content_id || '').trim()] = clientRows[i];
-  }
-  for (i = 0; i < onboardingRows.length; i++) {
-    byIdSpecific[String(onboardingRows[i].content_id || '').trim()] = onboardingRows[i];
-  }
+  return ContentCatalog_listSupabase_(filters);
+}
 
+/**
+ * @param {Object} filters
+ * @return {{ok:boolean,items:Array<Object>,total:number,hasMore:boolean,controlledTags:Array<string>}}
+ */
+function ContentCatalog_listSupabase_(filters) {
+  var dbRows = ContentCatalogStore_listAll();
   var q = filters && filters.q ? String(filters.q).trim().toLowerCase() : '';
   var type = filters && filters.contentType ? String(filters.contentType).trim() : '';
   var tag = filters && filters.tag ? String(filters.tag).trim().toLowerCase() : '';
@@ -412,30 +252,33 @@ function ContentCatalog_list(filters) {
   var items = [];
   var repairClient = null;
   var repairClientReady = false;
-  for (i = 0; i < commonRows.length; i++) {
-    var c = commonRows[i];
-    var cid = String(c.content_id || '').trim();
+
+  for (var i = 0; i < dbRows.length; i++) {
+    var row = dbRows[i];
+    var cid = String(row.content_id || '').trim();
     if (!cid) continue;
-    var ctype = String(c.content_type || '').trim();
+    var ctype = String(row.content_type || '').trim();
     if (type && ctype !== type) continue;
-    var title = String(c.title || '');
-    var summary = String(c.summary || '');
-    var tagsCsv = String(c.tags_csv || '');
+    var title = String(row.title || '');
+    var summary = String(row.summary || '');
+    var tagsCsv = String(row.tags_csv || '');
     if (q) {
-      var hay = (title + ' ' + summary + ' ' + String(c.client_name || '') + ' ' + tagsCsv)
+      var hay = (title + ' ' + summary + ' ' + String(row.client_name || '') + ' ' + tagsCsv)
         .toLowerCase();
       if (hay.indexOf(q) < 0) continue;
     }
     if (tag && tagsCsv.toLowerCase().indexOf(tag) < 0) continue;
-    var driveFileId = String(c.drive_file_id || '').trim();
-    var globantProfile = String(c.globant_profile_name || '').trim();
-    var globantDocId = String(c.globant_document_id || '').trim();
-    var driveState = shouldReconcile
-      ? ContentCatalog_getDriveFileState_(driveFileId)
-      : 'exists';
+
+    var driveFileId = String(row.drive_file_id || '').trim();
+    var globantProfile = String(row.globant_profile_name || '').trim();
+    var globantDocId = String(row.globant_document_id || '').trim();
+    var driveState = 'exists';
+    if (shouldReconcile && ctype === 'success_case' && driveFileId) {
+      driveState = ContentCatalog_getDriveFileState_(driveFileId);
+    }
     if (driveState === 'missing') {
       ContentCatalog_tryDeleteRemoteIndex_(globantProfile, globantDocId);
-      ContentCatalog_deleteRowsByType_(ss, tabs, ctype, cid);
+      ContentCatalogStore_delete(cid);
       continue;
     }
     if (shouldReconcile && !repairClientReady && globantDocId && globantProfile) {
@@ -456,29 +299,13 @@ function ContentCatalog_list(filters) {
         globantIndexStatus !== 'Success' &&
         globantIndexStatus !== 'Pending' &&
         globantIndexStatus !== 'Processing');
-    items.push({
-      common: {
-        content_id: cid,
-        content_type: ctype,
-        title: title,
-        summary: summary,
-        client_name: String(c.client_name || ''),
-        tags: ContentCatalog_csvToTags_(tagsCsv),
-        file_name: String(c.file_name || ''),
-        mime_type: String(c.mime_type || ''),
-        drive_file_id: driveFileId,
-        drive_file_url: String(c.drive_file_url || ''),
-        globant_profile_name: globantProfile,
-        globant_document_id: globantDocId,
-        globant_index_status: globantIndexStatus,
-        index_repair_needed: needsIndexRepair,
-        uploaded_by: String(c.uploaded_by || ''),
-        created_at: String(c.created_at || ''),
-        updated_at: String(c.updated_at || ''),
-      },
-      specific: byIdSpecific[cid] || { content_id: cid },
-    });
+
+    var apiItem = ContentCatalogStore_toApiItem_(row, ContentCatalog_csvToTags_);
+    apiItem.common.globant_index_status = globantIndexStatus;
+    apiItem.common.index_repair_needed = needsIndexRepair;
+    items.push(apiItem);
   }
+
   items.sort(function (a, b) {
     return String(b.common.updated_at || '').localeCompare(String(a.common.updated_at || ''));
   });
@@ -545,33 +372,6 @@ function ContentCatalog_getIndexStatus_(ragClient, profileName, documentId) {
 }
 
 /**
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
- * @param {{common:string,proposals:string,successCases:string,clients:string}} tabs
- * @param {string} contentType
- * @param {string} contentId
- * @return {boolean}
- */
-function ContentCatalog_deleteRowsByType_(ss, tabs, contentType, contentId) {
-  var id = String(contentId || '').trim();
-  if (!id) return false;
-  var commonSheet = ss.getSheetByName(tabs.common);
-  var specificTab =
-    contentType === 'proposal'
-      ? tabs.proposals
-      : contentType === 'success_case'
-        ? tabs.successCases
-        : contentType === 'onboarding'
-          ? tabs.onboarding
-          : tabs.clients;
-  var specificSheet = ss.getSheetByName(specificTab);
-  var deletedCommon = commonSheet
-    ? ContentCatalog_deleteRowByContentId_(commonSheet, id)
-    : false;
-  if (specificSheet) ContentCatalog_deleteRowByContentId_(specificSheet, id);
-  return deletedCommon;
-}
-
-/**
  * @param {string} profileName
  * @param {string} documentId
  */
@@ -616,58 +416,16 @@ function ContentCatalog_upsert(payload) {
   var contentId = String(common.content_id || '').trim() || Utilities.getUuid();
   var now = new Date().toISOString();
 
-  var props = PropertiesService.getScriptProperties();
-  var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
-  var ss = catalog.spreadsheet;
-  var tabs = catalog.tabs;
-  var commonSheet = ss.getSheetByName(tabs.common);
-  var specificTab =
-    ctype === 'proposal'
-      ? tabs.proposals
-      : ctype === 'success_case'
-        ? tabs.successCases
-        : ctype === 'onboarding'
-          ? tabs.onboarding
-          : tabs.clients;
-  var specificSheet = ss.getSheetByName(specificTab);
-  var commonHeaders = ContentCatalog_headersCommon_();
-  var specificHeaders = ContentCatalog_headersByType_(ctype);
-
-  var prevCreatedAt = '';
-  var prevContentType = '';
-  var existingRows = ContentCatalog_readRows_(commonSheet, commonHeaders);
-  var i;
-  for (i = 0; i < existingRows.length; i++) {
-    if (String(existingRows[i].content_id || '').trim() === contentId) {
-      prevCreatedAt = String(existingRows[i].created_at || '');
-      prevContentType = String(existingRows[i].content_type || '').trim();
-      break;
-    }
-  }
-
-  if (prevContentType && prevContentType !== ctype) {
-    var oldTab =
-      prevContentType === 'proposal'
-        ? tabs.proposals
-        : prevContentType === 'success_case'
-          ? tabs.successCases
-          : prevContentType === 'onboarding'
-            ? tabs.onboarding
-            : tabs.clients;
-    var oldSheet = ss.getSheetByName(oldTab);
-    if (oldSheet) {
-      ContentCatalog_deleteRowByContentId_(oldSheet, contentId);
-    }
-  }
-
-  var tagsArray = common.tags || [].concat(common.tags_controlled || [], common.tags_free || []);
-  var commonRow = {
+  var prevDb = ContentCatalogStore_getById(contentId);
+  var prevCreatedAt = prevDb ? String(prevDb.created_at || '') : '';
+  var tagsArrayDb = common.tags || [].concat(common.tags_controlled || [], common.tags_free || []);
+  var commonRowDb = {
     content_id: contentId,
     content_type: ctype,
     title: String(common.title || '').trim(),
     summary: String(common.summary || '').trim(),
     client_name: String(common.client_name || '').trim(),
-    tags_csv: ContentCatalog_tagsToCsv_(tagsArray),
+    tags_csv: ContentCatalog_tagsToCsv_(tagsArrayDb),
     file_name: String(common.file_name || '').trim(),
     mime_type: String(common.mime_type || '').trim(),
     drive_file_id: String(common.drive_file_id || '').trim(),
@@ -678,16 +436,32 @@ function ContentCatalog_upsert(payload) {
     created_at: prevCreatedAt || now,
     updated_at: now,
   };
-  if (!commonRow.title) throw new Error('title requerido');
-  ContentCatalog_upsertRowByContentId_(commonSheet, commonHeaders, commonRow);
-
-  var specificRow = { content_id: contentId };
-  var h;
-  for (h = 1; h < specificHeaders.length; h++) {
-    var key = specificHeaders[h];
-    specificRow[key] = String(specific[key] || '').trim();
+  if (!commonRowDb.title) throw new Error('title requerido');
+  var specificHeadersDb = ContentCatalog_headersByType_(ctype);
+  var specificRowDb = { content_id: contentId };
+  var hd;
+  for (hd = 1; hd < specificHeadersDb.length; hd++) {
+    var skey = specificHeadersDb[hd];
+    specificRowDb[skey] = String(specific[skey] || '').trim();
   }
-  ContentCatalog_upsertRowByContentId_(specificSheet, specificHeaders, specificRow);
+  commonRowDb.search_text = ContentCatalog_buildSearchText_({
+    title: commonRowDb.title,
+    summary: commonRowDb.summary,
+    client_name: commonRowDb.client_name,
+    tags_csv: commonRowDb.tags_csv,
+    content_type: commonRowDb.content_type,
+    file_name: commonRowDb.file_name,
+    specific: specificRowDb,
+  });
+  ContentCatalogStore_upsert(commonRowDb, specificRowDb);
+  try {
+    ContentEmbedding_refreshForContentId_(contentId);
+  } catch (eEmb) {
+    console.log(
+      '[CATALOG-EMB] upsert ok, embedding deferred: ' +
+        String(eEmb.message || eEmb).slice(0, 200),
+    );
+  }
   return ContentCatalog_get(contentId);
 }
 
@@ -699,42 +473,17 @@ function ContentCatalog_deleteHard(contentId) {
   ContentCatalog_requireContributor_();
   var id = String(contentId || '').trim();
   if (!id) throw new Error('content_id requerido');
-  var item = ContentCatalog_get(id).item;
-  var ctype = item.common.content_type;
+  ContentCatalog_get(id);
 
-  var props = PropertiesService.getScriptProperties();
-  var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
-  var ss = catalog.spreadsheet;
-  var tabs = catalog.tabs;
-  var deletedCommon = ContentCatalog_deleteRowsByType_(ss, tabs, ctype, id);
-  return { ok: true, deleted: deletedCommon };
+  var deletedDb = ContentCatalogStore_delete(id);
+  return { ok: true, deleted: deletedDb };
 }
 
 /**
  * @return {Array<string>}
  */
 function ContentCatalog_getControlledTags() {
-  var raw = (PropertiesService.getScriptProperties().getProperty(CATALOG_PROP_TAGS_JSON) || '').trim();
-  if (!raw) return [];
-  try {
-    var arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    var out = [];
-    var seen = {};
-    var i;
-    for (i = 0; i < arr.length; i++) {
-      var t = String(arr[i] || '').trim();
-      if (!t) continue;
-      if (t.charAt(0) !== '#') t = '#' + t;
-      var k = t.toLowerCase();
-      if (seen[k]) continue;
-      seen[k] = true;
-      out.push(t);
-    }
-    return out;
-  } catch (e) {
-    return [];
-  }
+  return ContentCatalogStore_getControlledTags();
 }
 
 /**
@@ -743,34 +492,22 @@ function ContentCatalog_getControlledTags() {
  */
 function ContentCatalog_getAllTags() {
   try {
-    var props = PropertiesService.getScriptProperties();
-    var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
-    var ss = catalog.spreadsheet;
-    var commonSheet = ss.getSheetByName(catalog.tabs.common);
-    if (!commonSheet) return [];
-    var last = commonSheet.getLastRow();
-    if (last < 2) return [];
-    var headers = ContentCatalog_headersCommon_();
-    var tagsIdx = headers.indexOf('tags_csv');
-    if (tagsIdx < 0) return [];
-    var data = commonSheet.getRange(2, tagsIdx + 1, last - 1, 1).getValues();
-    var seen = {};
-    var out = [];
-    for (var r = 0; r < data.length; r++) {
-      var csv = String(data[r][0] || '');
-      if (!csv.trim()) continue;
-      var parts = csv.split(',');
-      for (var p = 0; p < parts.length; p++) {
-        var t = parts[p].trim();
-        if (!t) continue;
-        if (t.charAt(0) !== '#') t = '#' + t;
-        var k = t.toLowerCase();
-        if (seen[k]) continue;
-        seen[k] = true;
-        out.push(t);
+    var dbRows = ContentCatalogStore_listAll();
+    var seenDb = {};
+    var outDb = [];
+    for (var di = 0; di < dbRows.length; di++) {
+      var partsDb = String(dbRows[di].tags_csv || '').split(',');
+      for (var dp = 0; dp < partsDb.length; dp++) {
+        var tDb = partsDb[dp].trim();
+        if (!tDb) continue;
+        if (tDb.charAt(0) !== '#') tDb = '#' + tDb;
+        var kDb = tDb.toLowerCase();
+        if (seenDb[kDb]) continue;
+        seenDb[kDb] = true;
+        outDb.push(tDb);
       }
     }
-    return out.sort();
+    return outDb.sort();
   } catch (e) {
     return [];
   }
@@ -795,78 +532,437 @@ function ContentCatalog_setControlledTags(tags) {
     seen[k] = true;
     normalized.push(t);
   }
-  PropertiesService.getScriptProperties().setProperty(
-    CATALOG_PROP_TAGS_JSON,
-    JSON.stringify(normalized),
-  );
+  ContentCatalogStore_setControlledTags(normalized);
   return { ok: true, tags: normalized };
 }
 
 /**
+ * @param {string} clientName
+ * @param {string} queryLower — consulta en minúsculas
+ * @return {boolean}
+ */
+function ContentCatalog_clientNameMatchesQuery_(clientName, queryLower) {
+  var clientLower = String(clientName || '').trim().toLowerCase();
+  var q = String(queryLower || '').trim().toLowerCase();
+  if (!clientLower || !q) return false;
+  if (clientLower.indexOf(q) >= 0 || q.indexOf(clientLower) >= 0) return true;
+  var words = clientLower.split(/\s+/);
+  var w;
+  for (w = 0; w < words.length; w++) {
+    if (words[w].length >= 3 && q.indexOf(words[w]) >= 0) return true;
+  }
+  var qWords = q.split(/\s+/);
+  for (w = 0; w < qWords.length; w++) {
+    if (qWords[w].length >= 3 && clientLower.indexOf(qWords[w]) >= 0) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {Object} row
+ * @return {boolean}
+ */
+function ContentCatalog_rowHasCatalogContext_(row) {
+  return !!String(row.summary || '').trim();
+}
+
+/**
+ * @param {Object} row
+ * @return {boolean}
+ */
+function ContentCatalog_rowHasGlobantIndex_(row) {
+  return (
+    !!String(row.globant_document_id || '').trim() &&
+    !!String(row.globant_profile_name || '').trim()
+  );
+}
+
+/**
+ * @param {Object} row
+ * @return {{documentId:string, profileName:string, clientName:string, fileName:string, title:string, summary:string, contentType:string, driveUrl:string, catalogContextOnly:boolean, contentId:string, driveFileId:string}}
+ */
+function ContentCatalog_mapRowToCatalogDoc_(row) {
+  var globantDocId = String(row.globant_document_id || '').trim();
+  var profileName = String(row.globant_profile_name || '').trim();
+  var catalogContextOnly = !ContentCatalog_rowHasGlobantIndex_(row);
+  return {
+    contentId: String(row.content_id || '').trim(),
+    documentId: globantDocId,
+    profileName: profileName,
+    clientName: String(row.client_name || '').trim(),
+    fileName: String(row.file_name || '').trim(),
+    driveFileId: String(row.drive_file_id || '').trim(),
+    title: String(row.title || '').trim(),
+    summary: String(row.summary || '').trim(),
+    contentType: String(row.content_type || '').trim(),
+    driveUrl: String(row.drive_file_url || '').trim(),
+    catalogContextOnly: catalogContextOnly,
+  };
+}
+
+/**
  * Busca documentos en el catálogo por nombre de cliente (búsqueda flexible).
- * Devuelve los document IDs de Globant y metadata adicional incluyendo summary y link de Drive.
+ * Incluye filas con resumen aunque falte globant_document_id (contexto directo sin RAG).
  * @param {string} clientQuery — texto a buscar en client_name
- * @return {{docs: Array<{documentId:string, profileName:string, clientName:string, fileName:string, title:string, summary:string, contentType:string, driveUrl:string}>}}
+ * @return {{docs: Array<{documentId:string, profileName:string, clientName:string, fileName:string, title:string, summary:string, contentType:string, driveUrl:string, catalogContextOnly:boolean}>}}
  */
 function ContentCatalog_findDocsByClient(clientQuery) {
   var q = String(clientQuery || '').trim().toLowerCase();
   if (!q) return { docs: [] };
 
-  var props = PropertiesService.getScriptProperties();
-  var catalog = ContentCatalog_getOrCreateSpreadsheet_(props);
-  var ss = catalog.spreadsheet;
-  var tabs = catalog.tabs;
-  var commonHeaders = ContentCatalog_headersCommon_();
-  var commonRows = ContentCatalog_readRows_(ss.getSheetByName(tabs.common), commonHeaders);
-
+  var commonRows = ContentCatalogStore_listAll();
   var results = [];
   for (var i = 0; i < commonRows.length; i++) {
     var row = commonRows[i];
     var clientName = String(row.client_name || '').trim();
-    var globantDocId = String(row.globant_document_id || '').trim();
-    var profileName = String(row.globant_profile_name || '').trim();
+    if (!ContentCatalog_clientNameMatchesQuery_(clientName, q)) continue;
 
-    if (!globantDocId || !profileName) continue;
+    var hasIndex = ContentCatalog_rowHasGlobantIndex_(row);
+    var hasContext = ContentCatalog_rowHasCatalogContext_(row);
+    if (!hasIndex && !hasContext) continue;
 
-    var clientLower = clientName.toLowerCase();
-    var match = false;
-
-    if (clientLower.indexOf(q) >= 0) {
-      match = true;
-    } else {
-      var words = clientLower.split(/\s+/);
-      for (var w = 0; w < words.length; w++) {
-        if (words[w].length >= 3 && q.indexOf(words[w]) >= 0) {
-          match = true;
-          break;
-        }
-      }
-      if (!match) {
-        var qWords = q.split(/\s+/);
-        for (var qw = 0; qw < qWords.length; qw++) {
-          if (qWords[qw].length >= 3 && clientLower.indexOf(qWords[qw]) >= 0) {
-            match = true;
-            break;
-          }
-        }
-      }
-    }
-
-    if (match) {
-      results.push({
-        documentId: globantDocId,
-        profileName: profileName,
-        clientName: clientName,
-        fileName: String(row.file_name || '').trim(),
-        title: String(row.title || '').trim(),
-        summary: String(row.summary || '').trim(),
-        contentType: String(row.content_type || '').trim(),
-        driveUrl: String(row.drive_file_url || '').trim(),
-      });
-    }
+    results.push(ContentCatalog_mapRowToCatalogDoc_(row));
   }
 
   console.log('[CATALOG-SEARCH] Query: "' + q + '", Found: ' + results.length + ' docs');
   return { docs: results };
+}
+
+/**
+ * Detecta cliente y documentos cuando la pregunta menciona un client_name del catálogo
+ * aunque no esté en el maestro de clientes.
+ * @param {string} question
+ * @return {{docs: Array<Object>, clientName: string}}
+ */
+function ContentCatalog_findDocsByQuestion_(question) {
+  var q = String(question || '').trim().toLowerCase();
+  if (!q) return { docs: [], clientName: '' };
+
+  var commonRows = ContentCatalogStore_listAll();
+  var clientNames = {};
+  var i;
+  for (i = 0; i < commonRows.length; i++) {
+    var cn = String(commonRows[i].client_name || '').trim();
+    if (!cn) continue;
+    var hasIndex = ContentCatalog_rowHasGlobantIndex_(commonRows[i]);
+    var hasContext = ContentCatalog_rowHasCatalogContext_(commonRows[i]);
+    if (!hasIndex && !hasContext) continue;
+    if (ContentCatalog_clientNameMatchesQuery_(cn, q)) {
+      clientNames[cn.toLowerCase()] = cn;
+    }
+  }
+
+  var keys = Object.keys(clientNames);
+  if (!keys.length) return { docs: [], clientName: '' };
+
+  keys.sort(function (a, b) {
+    return clientNames[b].length - clientNames[a].length;
+  });
+  var bestClient = clientNames[keys[0]];
+  var found = ContentCatalog_findDocsByClient(bestClient);
+  return { docs: found.docs || [], clientName: bestClient };
+}
+
+/** @type {Object<string, boolean>} */
+var _CATALOG_QUERY_STOPWORDS_ = {
+  que: true,
+  con: true,
+  por: true,
+  para: true,
+  del: true,
+  los: true,
+  las: true,
+  una: true,
+  uno: true,
+  the: true,
+  and: true,
+  for: true,
+  with: true,
+  what: true,
+  did: true,
+  how: true,
+  hicimos: true,
+  hizo: true,
+  sobre: true,
+  acerca: true,
+};
+
+/**
+ * Tokens de búsqueda útiles a partir de la pregunta del usuario.
+ * @param {string} question
+ * @return {Array<string>}
+ */
+function ContentCatalog_questionSearchTokens_(question) {
+  var q = String(question || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  var raw = q.split(/[^a-z0-9]+/);
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < raw.length; i++) {
+    var w = String(raw[i] || '').trim();
+    if (w.length < 3 || _CATALOG_QUERY_STOPWORDS_[w] || seen[w]) continue;
+    seen[w] = true;
+    out.push(w);
+  }
+  return out;
+}
+
+/**
+ * Texto denormalizado para búsqueda léxica (título, resumen, tags, specific).
+ * @param {Object} row
+ * @return {string}
+ */
+function ContentCatalog_buildSearchText_(row) {
+  var parts = [
+    String(row.title || '').trim(),
+    String(row.summary || '').trim(),
+    String(row.client_name || '').trim(),
+    String(row.tags_csv || '').trim(),
+    String(row.content_type || '').trim(),
+    String(row.file_name || '').trim(),
+  ];
+  var specific = row.specific;
+  if (specific && typeof specific === 'object' && !Array.isArray(specific)) {
+    var k;
+    for (k in specific) {
+      if (!Object.prototype.hasOwnProperty.call(specific, k)) continue;
+      if (k === 'content_id') continue;
+      parts.push(String(specific[k] != null ? specific[k] : '').trim());
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Filtra filas del catálogo según el rol del usuario (visitante → solo success cases).
+ * @param {Array<Object>} docs
+ * @return {Array<Object>}
+ */
+function ContentCatalog_filterDocsForSessionRole_(docs) {
+  var role = AgentOrchestrator_resolveUserRoleTag_();
+  if (role !== 'visitante') return docs || [];
+  var out = [];
+  var i;
+  for (i = 0; i < (docs || []).length; i++) {
+    if ((docs[i].contentType || '') === 'success_case') out.push(docs[i]);
+  }
+  return out;
+}
+
+/**
+ * @param {Object} doc
+ * @return {string}
+ */
+function ContentCatalog_docMergeKey_(doc) {
+  return (
+    (doc.documentId || '') +
+    '|' +
+    (doc.title || doc.fileName || '') +
+    '|' +
+    (doc.contentType || '')
+  );
+}
+
+/**
+ * Búsqueda semántica (pgvector) con fallback silencioso si RPC/embeddings no están listos.
+ * @param {string} question
+ * @param {{limit?:number,threshold?:number}} [opts]
+ * @return {Array<{score:number,similarity:number,doc:Object}>}
+ */
+function ContentCatalog_findRowsSemantic_(question, opts) {
+  var limit = opts && opts.limit ? Math.min(15, Math.max(1, opts.limit)) : 8;
+  var threshold =
+    opts && opts.threshold != null ? Number(opts.threshold) : CONTENT_EMBEDDING_MATCH_THRESHOLD;
+  var q = String(question || '').trim();
+  if (!q) return [];
+  try {
+    var vector = ContentEmbedding_createVector_(q);
+    if (!vector.length) return [];
+    var rows = ContentCatalogStore_matchSemantic(vector, {
+      limit: limit,
+      threshold: threshold,
+    });
+    var out = [];
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      var sim = Number(rows[i].similarity || 0);
+      out.push({
+        score: sim * 10,
+        similarity: sim,
+        doc: ContentCatalog_mapRowToCatalogDoc_(rows[i]),
+      });
+    }
+    console.log('[CATALOG-SEM] hits=' + out.length);
+    return out;
+  } catch (eSem) {
+    console.log('[CATALOG-SEM] skip: ' + String(eSem.message || eSem).slice(0, 200));
+    return [];
+  }
+}
+
+/**
+ * @param {Array<{score:number,doc:Object}>} hits
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function ContentCatalog_scoredHitsToDocs_(hits, limit) {
+  hits.sort(function (a, b) {
+    return b.score - a.score;
+  });
+  var results = [];
+  var i;
+  for (i = 0; i < hits.length && results.length < limit; i++) {
+    results.push(hits[i].doc);
+  }
+  return results;
+}
+
+/**
+ * Backfill paginado de embeddings del catálogo.
+ * @param {number} skip
+ * @param {number} limit
+ */
+function ContentCatalog_rebuildEmbeddingsBatch(skip, limit) {
+  return ContentEmbedding_rebuildBatch_(skip, limit);
+}
+
+/**
+ * @param {string} question
+ * @param {{topics?:Array<string>,industry?:string,clientHint?:string,docKind?:string}} hints
+ * @param {{limit?:number}} [opts]
+ * @return {Array<Object>}
+ */
+function ContentCatalog_findRowsForEphemeralDocument_(question, hints, opts) {
+  var limit = opts && opts.limit ? Math.min(15, Math.max(1, opts.limit)) : 8;
+  var parts = [String(question || '').trim()];
+  if (hints) {
+    if (hints.industry) parts.push(String(hints.industry));
+    if (hints.clientHint) parts.push(String(hints.clientHint));
+    if (hints.docKind) parts.push(String(hints.docKind));
+    if (Array.isArray(hints.topics)) {
+      for (var ti = 0; ti < hints.topics.length; ti++) {
+        parts.push(String(hints.topics[ti] || ''));
+      }
+    }
+  }
+  var combined = parts.join(' ').replace(/\s+/g, ' ').trim();
+
+  /** @type {Object<string, {score:number, doc:Object}>} */
+  var byKey = {};
+  var addHits = function (query, weight) {
+    var hits = ContentCatalog_findRowsMatchingQuestion_(query, { limit: limit });
+    var hi;
+    for (hi = 0; hi < hits.length; hi++) {
+      var doc = hits[hi];
+      var key = ContentCatalog_docMergeKey_(doc);
+      if (!byKey[key]) byKey[key] = { score: 0, doc: doc };
+      byKey[key].score += weight;
+    }
+  };
+
+  addHits(combined, 3);
+  if (hints && hints.clientHint) addHits(String(hints.clientHint), 4);
+  if (hints && Array.isArray(hints.topics)) {
+    for (var tj = 0; tj < hints.topics.length; tj++) {
+      addHits(String(hints.topics[tj] || ''), 2);
+    }
+  }
+  addHits(String(question || ''), 2);
+
+  var scored = [];
+  var bk;
+  for (bk in byKey) {
+    if (Object.prototype.hasOwnProperty.call(byKey, bk)) scored.push(byKey[bk]);
+  }
+  scored.sort(function (a, b) {
+    return b.score - a.score;
+  });
+
+  var results = [];
+  for (var ri = 0; ri < scored.length && results.length < limit; ri++) {
+    results.push(scored[ri].doc);
+  }
+  return results;
+}
+
+/**
+ * Busca filas del catálogo relevantes a la pregunta (título, resumen, cliente, tags).
+ * No exige globant_document_id; requiere resumen para usar como contexto.
+ * @param {string} question
+ * @param {{limit?: number}} [opts]
+ * @return {Array<Object>}
+ */
+function ContentCatalog_findRowsMatchingQuestion_(question, opts) {
+  var limit = opts && opts.limit ? Math.min(15, Math.max(1, opts.limit)) : 10;
+  var tokens = ContentCatalog_questionSearchTokens_(question);
+  var q = String(question || '').trim();
+
+  /** @type {Object<string, {score:number, doc:Object}>} */
+  var byKey = {};
+  var commonRows = ContentCatalogStore_listAll();
+  var i;
+
+  if (tokens.length) {
+    for (i = 0; i < commonRows.length; i++) {
+      var row = commonRows[i];
+      if (!ContentCatalog_rowHasCatalogContext_(row)) continue;
+
+      var title = String(row.title || '').trim();
+      var summary = String(row.summary || '').trim();
+      var clientName = String(row.client_name || '').trim();
+      var tagsCsv = String(row.tags_csv || '').trim();
+      var searchText = String(row.search_text || '').trim();
+      var hay = (title + ' ' + summary + ' ' + clientName + ' ' + tagsCsv + ' ' + searchText)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      var score = 0;
+      var t;
+      for (t = 0; t < tokens.length; t++) {
+        if (hay.indexOf(tokens[t]) >= 0) score += 2;
+      }
+      if (ContentCatalog_clientNameMatchesQuery_(clientName, q)) {
+        score += 5;
+      }
+      if (score <= 0) continue;
+
+      var docLex = ContentCatalog_mapRowToCatalogDoc_(row);
+      var keyLex = ContentCatalog_docMergeKey_(docLex);
+      if (!byKey[keyLex]) byKey[keyLex] = { score: 0, doc: docLex };
+      byKey[keyLex].score += score;
+    }
+  }
+
+  var semHits = ContentCatalog_findRowsSemantic_(q, { limit: limit });
+  for (i = 0; i < semHits.length; i++) {
+    var docSem = semHits[i].doc;
+    var keySem = ContentCatalog_docMergeKey_(docSem);
+    if (!byKey[keySem]) byKey[keySem] = { score: 0, doc: docSem };
+    byKey[keySem].score += semHits[i].score;
+  }
+
+  var scored = [];
+  var k;
+  for (k in byKey) {
+    if (Object.prototype.hasOwnProperty.call(byKey, k)) scored.push(byKey[k]);
+  }
+
+  if (!scored.length) return [];
+
+  var results = ContentCatalog_scoredHitsToDocs_(scored, limit);
+
+  console.log(
+    '[CATALOG-MATCH] tokens=' +
+      tokens.join(',') +
+      ' sem=' +
+      semHits.length +
+      ' hits=' +
+      results.length,
+  );
+  return results;
 }
 

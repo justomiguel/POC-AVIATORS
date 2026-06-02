@@ -1,12 +1,11 @@
 ---
-description: Carpeta raíz de Drive para archivos del proyecto
+description: Carpeta raíz de Drive para PDFs de casos de éxito
 alwaysApply: true
 ---
 
-# Carpeta raíz de Drive (proyecto)
+# Carpeta raíz de Drive (casos de éxito)
 
-- **Regla**: cualquier archivo/documento relacionado al proyecto que se suba o gestione desde la app debe usar como destino por defecto la carpeta de Drive con ID `1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG`.
-- **URL de referencia**: `https://drive.google.com/drive/folders/1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG?usp=sharing`.
-- **Formato canónico**: en código/config usar el **ID** (no parsear desde URL en cada lugar).
-- **Excepción**: solo cambiar de carpeta si el usuario lo pide explícitamente para un flujo puntual.
-- **Persistencia recomendada**: si hay configuración runtime, guardar este ID en `ScriptProperties` con una clave estable y reutilizarla en todos los módulos.
+- **Regla**: la Script Property **`DRIVE_ROOT_FOLDER_ID`** es el destino **únicamente** para PDFs de **casos de éxito** (`content_type: success_case`). Propuestas, clientes y onboarding se indexan en Globant RAG y se registran en Supabase **sin** `drive_file_id` / `drive_file_url`.
+- **Código**: subida en `ContentIngestion_storeSuccessCasePdfInDrive_()`; guard `ContentIngestion_usesProjectDriveStorage_(contentType)`.
+- **Formato canónico**: `AviatorsConfig_requireDriveRootFolderId_()` solo en flujos de success case; no hardcodear IDs de carpeta.
+- **Excepción**: otro destino en Drive solo si el usuario lo pide explícitamente para un flujo puntual.

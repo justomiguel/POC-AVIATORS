@@ -11,7 +11,7 @@ El runtime es **Google Apps Script** servido con **HtmlService**; el código fue
 | Backend | Google Apps Script (V8) |
 | UI | HTML + JS modular (`gas/app-client-*.html`) inyectado desde `Code.js` |
 | Estilos | Tailwind CSS compilado en local → `gas/tailwind-include.html` |
-| Persistencia | Google Sheets (catálogo, métricas, clientes, catálogo API) |
+| Persistencia | **Supabase** (PostgREST): catálogo, métricas, clientes, roles, catálogo API |
 | Archivos | Google Drive (carpeta raíz del proyecto) |
 | IA | Globant Enterprise AI (RAG / Assistant) o Gemini API |
 | i18n | Español e inglés (`gas/i18n/UiStrings.js`) |
@@ -22,8 +22,8 @@ El runtime es **Google Apps Script** servido con **HtmlService**; el código fue
 - **Catálogo de contenidos**: ingesta de PDFs, extracción asistida por IA y sincronización con perfiles RAG.
 - **Maestro de clientes** con metadata e industria.
 - **Métricas**: preguntas, no respondidas, leaderboards y feedback.
-- **Admin**: agentes RAG, prompts rápidos, reset de métricas y restablecimiento total de datos operativos en spreadsheets (solo administradores).
-- **Roles** desde una planilla de Google (pestaña `data`: columna Rol + E-mail).
+- **Admin**: agentes RAG, prompts rápidos, reset de métricas y restablecimiento total de datos operativos en Supabase (solo administradores).
+- **Roles** desde la tabla `roles` en Supabase (`role_key`: `admin`, `presales`, `manager`, `tech`, `client_partner`).
 
 ## Estructura del repositorio
 
@@ -72,19 +72,28 @@ No commitear secretos. Configuración mínima típica:
 
 | Propiedad | Descripción |
 |-----------|-------------|
+| `AVIATORS_DATA_BACKEND` | Debe ser `supabase` (valor `sheets` está deshabilitado) |
+| `SUPABASE_URL` | URL del proyecto Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (solo servidor GAS; no exponer al cliente) |
+| `SUPABASE_SCHEMA` | Esquema PostgREST (default `public`) |
 | `GLOBANT_AGENTS_API_KEY` | API key de Globant Enterprise AI |
 | `GLOBANT_RAG_BASE_URL` | Base URL (ej. `https://api.clients.geai.globant.com`) |
 | `GEMINI_API_KEY` | Opcional, si se usa proveedor Gemini |
 | `LLM_PROVIDER` | Opcional: `globant` o `gemini` |
-| `ROLES_SPREADSHEET_ID` | ID de la planilla de roles (si no usa la por defecto del proyecto) |
+| `DRIVE_ROOT_FOLDER_ID` | Carpeta raíz de Drive para PDFs del proyecto |
 
 Detalle de propiedades admin, corpus Drive y Globant: comentarios en `gas/application/LlmConfig.js`.
 
-### 3. Planilla de roles
+Esquema SQL: `supabase/migrations/001_aviators_schema.sql`. Para dar acceso admin:
 
-Spreadsheet con pestaña **`data`** y columnas **Rol** y **E-mail**. Las etiquetas de administrador se reconocen vía propiedad `ADMIN_SHEET_ROLES` (default: `Admin`, `Administrador`, `administrator`).
+```sql
+insert into roles (email, role_label, role_key, updated_at)
+values ('tu.email@dominio.com', 'Admin', 'admin', now())
+on conflict (email) do update
+set role_label = excluded.role_label, role_key = excluded.role_key, updated_at = now();
+```
 
-### 4. Dominio Workspace (opcional)
+### 3. Dominio Workspace (opcional)
 
 En `gas/deploy.json`, campo `workspaceDomain` (ej. `globant.com`) para que el script de deploy imprima la URL con formato `/a/{dominio}/macros/s/...`.
 
@@ -129,19 +138,19 @@ El script ejecuta, en orden:
 2. **Embeber logo** — `logo.png` → data URL en `gas/index.html` (si existe `logo.png` en la raíz).
 3. **`clasp push --force`** — sube `gas/` al proyecto Apps Script.
 4. **`clasp version`** — crea una versión numerada.
-5. **`clasp undeploy`** — elimina implementaciones antiguas (excepto `@HEAD`).
-6. **`clasp deploy`** — crea una **nueva** implementación de Web App y actualiza `gas/deploy.json` con el `webAppDeploymentId`.
+5. **`clasp redeploy`** — actualiza la implementación en `gas/deploy.json` (`webAppDeploymentId`) a esa versión. **La URL `/exec` no cambia.**
+6. Si no hay ID guardado o el redeploy falla, **`clasp deploy`** crea una implementación nueva y guarda el ID en `gas/deploy.json`.
 
 Al finalizar imprime las URLs de acceso (formato estándar y, si aplica, formato Workspace).
 
-> **Importante:** cada deploy genera un **nuevo deployment ID**; la URL pública cambia. Compartí la URL que imprime el script tras el deploy.
+> **URL estable:** compartí la URL una vez. Cada `./deploy` publica código nuevo en la **misma** URL mientras exista el `webAppDeploymentId` en `gas/deploy.json`. Solo cambia si se crea una implementación nueva (primer deploy o si borraste la implementación en Google).
 
 ### Checklist post-deploy
 
 - [ ] Abrir la URL `/exec` e iniciar sesión con Google.
 - [ ] Si cambiaron **scopes** en `appsscript.json`, los usuarios deben **re-autorizar** la app.
 - [ ] Verificar que el despliegue use **Ejecutar como: yo (desplegador)** — coherente con `"executeAs": "USER_DEPLOYING"` en el manifiesto.
-- [ ] Confirmar propiedades del script y acceso a spreadsheets/Drive en la cuenta desplegadora.
+- [ ] Confirmar propiedades del script (Supabase + Globant) y acceso a Drive en la cuenta desplegadora.
 
 ### Deploy manual (paso a paso)
 
@@ -149,6 +158,9 @@ Al finalizar imprime las URLs de acceso (formato estándar y, si aplica, formato
 npm run build:css
 clasp push
 clasp version "descripción del cambio"
+# Misma URL: usar el ID de gas/deploy.json
+clasp redeploy AKfycb... -V <número_de_versión> --description "Aviators web app"
+# Primera vez o implementación borrada:
 clasp deploy -V <número_de_versión> --description "Aviators web app"
 ```
 
@@ -165,14 +177,11 @@ Si integrás un host HTTPS nuevo, añadilo a la allowlist y volvé a desplegar; 
 
 ## Datos y reset administrativo
 
-Los datos operativos viven en spreadsheets creados/gestionados por la app (IDs en Script Properties). Desde **Métricas → Restablecer todo** (solo admin) se pueden vaciar filas de:
+Los datos operativos viven en **tablas Supabase** (catálogo, métricas, clientes, catálogo API). Desde **Ajustes → Restablecer todo** (solo admin) se pueden vaciar filas de esas tablas.
 
-- catálogo de contenidos,
-- métricas (incl. historial de chat y quick prompts),
-- maestro de clientes,
-- catálogo API de agentes.
+**No** se modifica la tabla `roles` ni secretos en Script Properties.
 
-**No** se modifica la planilla de roles ni secretos en Script Properties.
+Migración one-shot desde planillas legacy: RPC `adminMigrateSpreadsheetsToSupabase()` (solo administradores; ver `AdminSupabaseMigrationService.js`).
 
 ## Referencias
 

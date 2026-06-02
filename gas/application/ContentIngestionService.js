@@ -106,19 +106,27 @@ function ContentIngestion_buildMetadata_(common, contentType) {
 }
 
 /**
+ * Solo los casos de éxito persisten PDF en la carpeta de proyecto en Drive.
+ * El resto de tipos viven en Globant RAG + Supabase (sin drive_file_*).
+ * @param {string} contentType
+ * @return {boolean}
+ */
+function ContentIngestion_usesProjectDriveStorage_(contentType) {
+  return String(contentType || '').trim() === 'success_case';
+}
+
+/**
  * @param {GoogleAppsScript.Base.Blob} pdfBlob
  * @param {string} fileName
  * @param {string} clientName
  * @param {string} contentTitle
- * @param {string} contentType
  * @return {{id:string,url:string,name:string}}
  */
-function ContentIngestion_storeBlobInDrive_(
+function ContentIngestion_storeSuccessCasePdfInDrive_(
   pdfBlob,
   fileName,
   clientName,
   contentTitle,
-  contentType,
 ) {
   function safeFolderName_(raw, fallback) {
     var v = String(raw || '').trim();
@@ -141,14 +149,9 @@ function ContentIngestion_storeBlobInDrive_(
   }
 
   var name = String(fileName || 'content.pdf').trim() || 'content.pdf';
-  var root = DriveApp.getFolderById(CATALOG_ROOT_FOLDER_ID);
+  var root = DriveApp.getFolderById(AviatorsConfig_requireDriveRootFolderId_());
   var clientFolderName = safeFolderName_(clientName, 'Sin cliente');
-  var titleFallback = contentType === 'success_case'
-    ? 'Success Case'
-    : contentType === 'proposal'
-      ? 'Propuesta'
-      : 'Contenido';
-  var titleFolderName = safeFolderName_(contentTitle, titleFallback);
+  var titleFolderName = safeFolderName_(contentTitle, 'Success Case');
   var clientFolder = getOrCreateChildFolder_(root, clientFolderName);
   var targetFolder = getOrCreateChildFolder_(clientFolder, titleFolderName);
   var file = targetFolder.createFile(pdfBlob.setName(name));
@@ -157,6 +160,17 @@ function ContentIngestion_storeBlobInDrive_(
     url: String(file.getUrl() || ''),
     name: String(file.getName() || name),
   };
+}
+
+/**
+ * @param {string} driveFileId
+ */
+function ContentIngestion_trashDriveFile_(driveFileId) {
+  var id = String(driveFileId || '').trim();
+  if (!id) return;
+  try {
+    DriveApp.getFileById(id).setTrashed(true);
+  } catch (ignoreTrash) {}
 }
 
 /**
@@ -198,18 +212,24 @@ function ContentIngestion_save(payloadJson) {
     var newDriveFile = null;
     var oldDriveFileId = existing ? String(existing.common.drive_file_id || '').trim() : '';
     var oldDriveFileUrl = existing ? String(existing.common.drive_file_url || '').trim() : '';
+    var usesDrive = ContentIngestion_usesProjectDriveStorage_(contentType);
     if (hasNewFile) {
       var prepared = ContentExtraction_validateAndPrepareBlob_(filePayload);
       pdfBlob = prepared.blob;
       common.file_name = prepared.name;
       common.mime_type = prepared.mimeType;
-      newDriveFile = ContentIngestion_storeBlobInDrive_(
-        pdfBlob,
-        prepared.name,
-        common.client_name || (existing && existing.common && existing.common.client_name) || '',
-        common.title || (existing && existing.common && existing.common.title) || '',
-        contentType,
-      );
+      if (usesDrive) {
+        newDriveFile = ContentIngestion_storeSuccessCasePdfInDrive_(
+          pdfBlob,
+          prepared.name,
+          common.client_name || (existing && existing.common && existing.common.client_name) || '',
+          common.title || (existing && existing.common && existing.common.title) || '',
+        );
+      } else if (oldDriveFileId) {
+        ContentIngestion_trashDriveFile_(oldDriveFileId);
+        oldDriveFileId = '';
+        oldDriveFileUrl = '';
+      }
     }
 
     var agent = ContentIngestion_findAgentByType_(contentType);
@@ -257,12 +277,12 @@ function ContentIngestion_save(payloadJson) {
           ('content-' + contentType),
         mime_type:
           common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
-        drive_file_id: newDriveFile
-          ? newDriveFile.id
-          : oldDriveFileId,
-        drive_file_url: newDriveFile
-          ? newDriveFile.url
-          : oldDriveFileUrl,
+        drive_file_id: usesDrive
+          ? (newDriveFile ? newDriveFile.id : oldDriveFileId)
+          : '',
+        drive_file_url: usesDrive
+          ? (newDriveFile ? newDriveFile.url : oldDriveFileUrl)
+          : '',
         globant_profile_name: targetProfile,
         globant_document_id: needReindex
           ? newDocId
@@ -278,9 +298,7 @@ function ContentIngestion_save(payloadJson) {
       saved = ContentCatalog_upsert(toSave);
     } catch (eSave) {
       if (newDriveFile && newDriveFile.id) {
-        try {
-          DriveApp.getFileById(newDriveFile.id).setTrashed(true);
-        } catch (ignoreDriveRollback) {}
+        ContentIngestion_trashDriveFile_(newDriveFile.id);
       }
       if (newDocId) {
         try {
@@ -295,10 +313,8 @@ function ContentIngestion_save(payloadJson) {
         client.deleteDocument(oldProfile || targetProfile, oldDocId);
       } catch (ignoreOldDelete) {}
     }
-    if (newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
-      try {
-        DriveApp.getFileById(oldDriveFileId).setTrashed(true);
-      } catch (ignoreOldDriveDelete) {}
+    if (usesDrive && newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
+      ContentIngestion_trashDriveFile_(oldDriveFileId);
     }
 
     return {
@@ -340,6 +356,13 @@ function ContentIngestion_delete(contentId) {
       }
     }
     var deleted = ContentCatalog_deleteHard(id);
+    var driveFileId = String(item.common.drive_file_id || '').trim();
+    if (
+      ContentIngestion_usesProjectDriveStorage_(String(item.common.content_type || '')) &&
+      driveFileId
+    ) {
+      ContentIngestion_trashDriveFile_(driveFileId);
+    }
     return {
       ok: true,
       deleted: !!(deleted && deleted.deleted),
@@ -400,6 +423,10 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
     }
 
     var contentType = String(common.content_type || '').trim();
+    if (!ContentIngestion_usesProjectDriveStorage_(contentType)) {
+      throw new Error('ERR_CONTENT_REPAIR_DRIVE_SUCCESS_CASE_ONLY');
+    }
+
     var agent = ContentIngestion_findAgentByType_(contentType);
     var targetProfile = String(agent.profileName || '').trim();
     if (!targetProfile) throw new Error('profileName vacio para agente destino');

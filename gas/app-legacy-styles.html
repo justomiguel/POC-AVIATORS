@@ -48,52 +48,9 @@
         gap: 0.5rem;
         cursor: pointer;
       }
-      .admin-app-shell .btn-admin,
-      .app-content-panel .btn-admin {
-        font-family: inherit;
-        font-weight: 600;
-        font-size: 0.8125rem;
-        padding: 0.55rem 0.95rem;
-        border-radius: 0.875rem;
-        border: 2px solid var(--primary);
-        background: #fff;
-        color: var(--primary);
-        box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
-        transition:
-          box-shadow 0.15s ease,
-          transform 0.1s ease,
-          background-color 0.15s ease,
-          border-color 0.15s ease;
-      }
-      .admin-app-shell .btn-admin:hover,
-      .app-content-panel .btn-admin:hover {
-        box-shadow: 0 4px 14px rgb(42 93 163 / 0.14);
-      }
-      .admin-app-shell .btn-admin:active,
-      .app-content-panel .btn-admin:active {
-        transform: scale(0.99);
-      }
-      .admin-app-shell .btn-admin.primary,
-      .app-content-panel .btn-admin.primary {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
-        box-shadow: 0 2px 8px rgb(42 93 163 / 0.28);
-      }
-      .admin-app-shell .btn-admin.primary:hover,
-      .app-content-panel .btn-admin.primary:hover {
-        filter: brightness(1.06);
-        box-shadow: 0 4px 16px rgb(42 93 163 / 0.35);
-      }
-      .admin-app-shell .btn-admin.danger,
-      .app-content-panel .btn-admin.danger {
-        border-color: var(--danger);
-        color: var(--danger);
-        box-shadow: 0 1px 2px rgb(179 38 30 / 0.12);
-      }
-      .admin-app-shell .btn-admin.danger:hover,
-      .app-content-panel .btn-admin.danger:hover {
-        box-shadow: 0 4px 14px rgb(179 38 30 / 0.2);
+      .app-nav-item:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
       }
       .btn-icon {
         display: inline-flex;
@@ -208,9 +165,17 @@
         border-color: rgb(14 165 233);
         background-color: rgb(240 249 255);
       }
+      .dark .admin-agent-dropzone.is-dragover {
+        border-color: rgb(56 189 248);
+        background-color: rgb(12 74 110 / 0.35);
+      }
       .contents-dropzone.is-dragover {
         border-color: rgb(14 165 233);
         background-color: rgb(240 249 255);
+      }
+      .dark .contents-dropzone.is-dragover {
+        border-color: rgb(56 189 248);
+        background-color: rgb(12 74 110 / 0.35);
       }
       .admin-app-sidebar-title {
         margin-top: 0;
@@ -440,14 +405,6 @@
       .dark .admin-table tr:hover td {
         background: rgb(30 41 59 / 0.5);
       }
-      .dark .btn-admin {
-        background: rgb(51 65 85);
-        color: rgb(203 213 225);
-        border-color: rgb(71 85 105);
-      }
-      .dark .btn-admin:hover {
-        background: rgb(71 85 105);
-      }
       .dark .btn-icon {
         color: rgb(148 163 184);
       }
@@ -496,5 +453,28 @@
       }
       .dark #blocking-modal-msg {
         color: rgb(226 232 240);
+      }
+      .dark .drive-exp-breadcrumb {
+        color: rgb(148 163 184);
+      }
+      .dark ul.files li {
+        border-bottom-color: rgb(51 65 85);
+      }
+      .dark .gc-table-wrap {
+        border-color: rgb(51 65 85);
+      }
+      .dark .gc-table-wrap th,
+      .dark .gc-table-wrap td {
+        border-bottom-color: rgb(51 65 85);
+      }
+      .dark ul.drive-exp-list li {
+        border-bottom-color: rgb(51 65 85);
+      }
+      .dark .admin-chips .chip {
+        background: rgb(51 65 85);
+        color: rgb(226 232 240);
+      }
+      .dark .admin-chips .chip button.x {
+        color: rgb(148 163 184);
       }
     </style>

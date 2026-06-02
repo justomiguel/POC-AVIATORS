@@ -23,6 +23,8 @@
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageClients = document.getElementById('nav-page-clients');
   var navPageMetrics = document.getElementById('nav-page-metrics');
+  var navPageSettings = document.getElementById('nav-page-settings');
+  var navPageRequestAccess = document.getElementById('nav-page-request-access');
   var navPageFaq = document.getElementById('nav-page-faq');
   var adminAgentStatus = document.getElementById('admin-agent-status');
   var appShellView = document.getElementById('view-app');
@@ -103,6 +105,12 @@
     if (pg === 'metrics' && !S.get('canViewMetrics')) {
       pg = 'home';
     }
+    if (pg === 'settings' && !S.get('canViewSettings')) {
+      pg = 'home';
+    }
+    if (pg === 'request-access' && !S.get('isVisitor')) {
+      pg = 'home';
+    }
     var nodes = document.querySelectorAll('.app-page');
     var i;
     for (i = 0; i < nodes.length; i++) {
@@ -117,13 +125,18 @@
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'clients' && id === 'page-clients') ||
         (pg === 'metrics' && id === 'page-metrics') ||
+        (pg === 'settings' && id === 'page-settings') ||
+        (pg === 'request-access' && id === 'page-request-access') ||
         (pg === 'faq' && id === 'page-faq');
       p.classList.toggle('hidden', !show);
     }
     if (homeMember) {
-      homeMember.classList.toggle('hidden', pg === 'faq');
+      homeMember.classList.toggle('hidden', pg === 'faq' || pg === 'request-access');
     }
-    if (homeVisitante) homeVisitante.classList.add('hidden');
+    if (homeVisitante) {
+      homeVisitante.classList.toggle('hidden', !(S.get('isVisitor') && pg === 'home'));
+    }
+    S.set('activePage', pg || '');
     var viewApp = document.getElementById('view-app');
     if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
     var scrollArea = document.querySelector('.app-content-scroll');
@@ -150,6 +163,16 @@
         A.metrics.loadDashboard();
       }
     }
+    if (pg === 'settings') {
+      if (A.settings && typeof A.settings.onShow === 'function') {
+        A.settings.onShow();
+      }
+    }
+    if (pg === 'request-access') {
+      if (A.accessRequest && typeof A.accessRequest.onShow === 'function') {
+        A.accessRequest.onShow();
+      }
+    }
     if (pg === 'contents') {
       A.contents.setScreen('list');
       A.contents.toggleSpecificSections();
@@ -162,7 +185,7 @@
       A.clients.loadList();
     }
     if (pg === 'agents' && S.get('canViewAgents') && A.agents && A.agents.loadList) {
-      A.agents.loadList();
+      A.agents.loadList(null, true);
     }
     closeMobileDrawer({ restoreFocus: false });
   }
@@ -238,7 +261,7 @@
       return;
     }
 
-    filesUl.innerHTML = '<li class="text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i>' + i18n('context_files_loading') + '</li>';
+    filesUl.innerHTML = '<li class="text-xs text-slate-400 dark:text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i>' + i18n('context_files_loading') + '</li>';
     google.script.run
       .withSuccessHandler(function (res) {
         var files = (res && res.files) || [];
@@ -326,6 +349,9 @@
       S.set('isVisitor', isVisitor);
       if (homeVisitante) homeVisitante.classList.add('hidden');
       if (homeMember) homeMember.classList.remove('hidden');
+      if (A.accessRequest && A.accessRequest.syncVisitorNav) {
+        A.accessRequest.syncVisitorNav();
+      }
 
       A.chat.updateHomeChatBanner(llmCfg);
 
@@ -337,12 +363,21 @@
       var canViewCatalog = !!perms.canViewCatalog || canWriteCatalog;
       var canViewMetrics = !!perms.canViewMetrics;
       var canResetMetrics = !!perms.canResetMetrics;
+      var canManageUsers = !!perms.canManageUsers;
+      var canManageRoleConfig = !!perms.canManageRoleConfig;
+      var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
+      var canViewSettings =
+        canManageAgents || canResetMetrics || canManageUsers || canManageRoleConfig;
       S.set('canManageAgents', canManageAgents);
       S.set('canWriteContents', canWriteCatalog);
       S.set('canViewAgents', canViewAgents);
       S.set('canViewCatalog', canViewCatalog);
       S.set('canViewMetrics', canViewMetrics);
       S.set('canResetMetrics', canResetMetrics);
+      S.set('canManageUsers', canManageUsers);
+      S.set('canManageRoleConfig', canManageRoleConfig);
+      S.set('canManageUnansweredQueue', canManageUnansweredQueue);
+      S.set('canViewSettings', canViewSettings);
       var adm = bootstrap.admin || {};
       var maxUp =
         adm.adminUploadMaxBytes != null
@@ -362,12 +397,24 @@
         canViewAgents: canViewAgents,
         canViewCatalog: canViewCatalog,
         adminSlice: { isAdmin: (bootstrap.admin||{}).isAdmin, cma: (bootstrap.admin||{}).canManageAgents, cwc: (bootstrap.admin||{}).canWriteCatalog },
-        session: { email: data.email, roleKey: data.roleKey, isVisitor: data.isVisitor },
+        session: { email: data.email, roleKey: data.roleKey, roleLabel: data.roleLabel, isVisitor: data.isVisitor, showNoRoleBanner: data.showNoRoleBanner },
+        dataBackend: bootstrap.dataBackend || '',
       }));
+      if (isVisitor) {
+        google.script.run
+          .withSuccessHandler(function (diag) {
+            console.warn('[Aviators:role-debug]', JSON.stringify(diag));
+          })
+          .withFailureHandler(function (err) {
+            console.warn('[Aviators:role-debug] RPC failed', err && err.message ? err.message : err);
+          })
+          .debugRoleDirectory();
+      }
       if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
       if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canViewCatalog);
       if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
+      if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
       setAppPage('home');
       syncMobileDrawerViewport();
       if (A.renderDashboard) {
@@ -394,9 +441,9 @@
         A.chat.applyQuickPrompts(qpBootstrap, locale);
       }
 
-      // Load quick prompts admin section if admin
-      if (canManageAgents && A.adminQuickPrompts && A.adminQuickPrompts.init) {
-        A.adminQuickPrompts.init(bootstrap.quickPrompts || []);
+      // Settings page (quick prompts + destructive reset)
+      if (canViewSettings && A.settings && A.settings.init) {
+        A.settings.init(bootstrap.quickPrompts || []);
       }
 
       loadContextFilesLazy();
@@ -484,6 +531,12 @@
   }
   if (navPageMetrics) {
     navPageMetrics.addEventListener('click', function () { setAppPage('metrics'); });
+  }
+  if (navPageSettings) {
+    navPageSettings.addEventListener('click', function () { setAppPage('settings'); });
+  }
+  if (navPageRequestAccess) {
+    navPageRequestAccess.addEventListener('click', function () { setAppPage('request-access'); });
   }
   if (navPageFaq) {
     navPageFaq.addEventListener('click', function () { setAppPage('faq'); });
@@ -578,6 +631,9 @@
     }
     if (opts.persist) {
       try { localStorage.setItem('aviators_theme', theme); } catch (e) {}
+    }
+    if (A.metrics && typeof A.metrics.onThemeChange === 'function') {
+      A.metrics.onThemeChange();
     }
   }
 

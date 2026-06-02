@@ -2,6 +2,7 @@
  * @fileoverview Métricas operativas (uso de chat, no respondidas y leaderboards).
  */
 
+/** @deprecated Solo migración legacy desde planilla; runtime usa Supabase. */
 var METRICS_PROP_SPREADSHEET_ID = 'METRICS_SPREADSHEET_ID';
 var METRICS_TAB_USAGE_EVENTS = 'usage_events';
 var METRICS_TAB_UNANSWERED = 'unanswered_queries';
@@ -9,8 +10,10 @@ var METRICS_TAB_MONTHLY = 'monthly_agg';
 var METRICS_TAB_FEEDBACK = 'feedback_events';
 var METRICS_TAB_CHAT_HISTORY = 'chat_history';
 var METRICS_TAB_QUICK_PROMPTS = 'quick_prompts';
-var METRICS_ROOT_FOLDER_ID = '1gkNVvIEN3UfPMnphZKLJ3600s5bkmTwG';
-var METRICS_CHAT_HISTORY_MAX_PER_USER = 30;
+/** Visitante (sin fila en `roles`): máximo de conversaciones persistidas. */
+var METRICS_CHAT_HISTORY_MAX_VISITOR = 10;
+/** Usuario con `role_key` asignado. */
+var METRICS_CHAT_HISTORY_MAX_WITH_ROLE = 200;
 
 /** @return {string[]} */
 function MetricsService_usageHeaders_() {
@@ -99,108 +102,38 @@ function MetricsAuth_requireView() {
 
 function MetricsAuth_requireReset() {
   var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!AdminAuth_emailIsAdmin(email)) {
+  if (!AdminAuth_emailCanResetMetrics(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_metrics_reset_only'));
   }
 }
 
 /**
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string[]} headers
+ * Cola operativa: admin y presales.
+ * @param {string} email
+ * @return {boolean}
  */
-function MetricsService_ensureHeaders_(sheet, headers) {
-  if (sheet.getLastRow() < 1) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.setFrozenRows(1);
-    return;
-  }
-  var row = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
-  var same = true;
-  for (var i = 0; i < headers.length; i++) {
-    if (String(row[i] || '') !== headers[i]) {
-      same = false;
-      break;
-    }
-  }
-  if (!same) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+function MetricsAuth_canManageQueue(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  return k === 'admin' || k === 'presales';
+}
+
+function MetricsAuth_requireManageQueue() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!MetricsAuth_canManageQueue(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_metrics_queue_only'));
   }
 }
 
 /**
- * @return {{spreadsheet:GoogleAppsScript.Spreadsheet.Spreadsheet,usageSheet:GoogleAppsScript.Spreadsheet.Sheet,unansweredSheet:GoogleAppsScript.Spreadsheet.Sheet,monthlySheet:GoogleAppsScript.Spreadsheet.Sheet,feedbackSheet:GoogleAppsScript.Spreadsheet.Sheet,chatHistorySheet:GoogleAppsScript.Spreadsheet.Sheet,quickPromptsSheet:GoogleAppsScript.Spreadsheet.Sheet}}
+ * @param {string} agentId
+ * @return {string}
  */
-function MetricsService_getOrCreateSpreadsheet_() {
-  var props = PropertiesService.getScriptProperties();
-  var ssId = String(props.getProperty(METRICS_PROP_SPREADSHEET_ID) || '').trim();
-  var ss = null;
-  if (ssId) {
-    try {
-      ss = SpreadsheetApp.openById(ssId);
-    } catch (eOpen) {
-      ss = null;
-    }
+function MetricsService_suggestContentTypeFromAgent_(agentId) {
+  try {
+    return AgentOrchestrator_mapAgentIdToContentType_(agentId) || '';
+  } catch (ignore) {
+    return '';
   }
-  if (!ss) {
-    ss = SpreadsheetApp.create('Aviators - Metrics');
-    props.setProperty(METRICS_PROP_SPREADSHEET_ID, ss.getId());
-    try {
-      var file = DriveApp.getFileById(ss.getId());
-      var folder = DriveApp.getFolderById(METRICS_ROOT_FOLDER_ID);
-      folder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
-    } catch (ignoreMove) {}
-  }
-
-  var usageSheet = ss.getSheetByName(METRICS_TAB_USAGE_EVENTS);
-  if (!usageSheet) usageSheet = ss.insertSheet(METRICS_TAB_USAGE_EVENTS);
-  var unansweredSheet = ss.getSheetByName(METRICS_TAB_UNANSWERED);
-  if (!unansweredSheet) unansweredSheet = ss.insertSheet(METRICS_TAB_UNANSWERED);
-  var monthlySheet = ss.getSheetByName(METRICS_TAB_MONTHLY);
-  if (!monthlySheet) monthlySheet = ss.insertSheet(METRICS_TAB_MONTHLY);
-  var feedbackSheet = ss.getSheetByName(METRICS_TAB_FEEDBACK);
-  if (!feedbackSheet) feedbackSheet = ss.insertSheet(METRICS_TAB_FEEDBACK);
-  var chatHistorySheet = ss.getSheetByName(METRICS_TAB_CHAT_HISTORY);
-  if (!chatHistorySheet) chatHistorySheet = ss.insertSheet(METRICS_TAB_CHAT_HISTORY);
-  var quickPromptsSheet = ss.getSheetByName(METRICS_TAB_QUICK_PROMPTS);
-  if (!quickPromptsSheet) quickPromptsSheet = ss.insertSheet(METRICS_TAB_QUICK_PROMPTS);
-
-  MetricsService_ensureHeaders_(usageSheet, MetricsService_usageHeaders_());
-  MetricsService_ensureHeaders_(unansweredSheet, MetricsService_unansweredHeaders_());
-  MetricsService_ensureHeaders_(monthlySheet, MetricsService_monthlyHeaders_());
-  MetricsService_ensureHeaders_(feedbackSheet, MetricsService_feedbackHeaders_());
-  MetricsService_ensureHeaders_(chatHistorySheet, MetricsService_chatHistoryHeaders_());
-  MetricsService_ensureHeaders_(quickPromptsSheet, MetricsService_quickPromptsHeaders_());
-
-  return {
-    spreadsheet: ss,
-    usageSheet: usageSheet,
-    unansweredSheet: unansweredSheet,
-    monthlySheet: monthlySheet,
-    feedbackSheet: feedbackSheet,
-    chatHistorySheet: chatHistorySheet,
-    quickPromptsSheet: quickPromptsSheet,
-  };
-}
-
-/**
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string[]} headers
- * @return {Array<Object>}
- */
-function MetricsService_readRows_(sheet, headers) {
-  var last = sheet.getLastRow();
-  if (last < 2) return [];
-  var vals = sheet.getRange(2, 1, last - 1, headers.length).getValues();
-  var out = [];
-  for (var r = 0; r < vals.length; r++) {
-    var obj = {};
-    for (var c = 0; c < headers.length; c++) {
-      obj[headers[c]] = vals[r][c];
-    }
-    out.push(obj);
-  }
-  return out;
 }
 
 /**
@@ -282,41 +215,40 @@ function MetricsService_trackQuestionEvent(payload) {
   var isUnanswered = !!p.isUnanswered;
   var unansweredCode = String(p.unansweredCode || '').trim();
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  db.usageSheet.appendRow([
-    eventId,
-    questionId,
-    nowIso,
-    nowMs,
-    MetricsService_toYearMonth_(nowMs),
-    email,
-    displayName,
-    roleKey,
-    mode,
-    agentId,
-    agentName,
-    question,
-    isUnanswered ? '1' : '0',
-    unansweredCode,
-  ]);
-
+  MetricsStore_insertUsageEvent_({
+    event_id: eventId,
+    question_id: questionId,
+    ts_iso: nowIso,
+    ts_ms: nowMs,
+    year_month: MetricsService_toYearMonth_(nowMs),
+    user_email: email,
+    user_display_name: displayName,
+    role_key: roleKey,
+    mode: mode,
+    agent_id: agentId,
+    agent_name: agentName,
+    question_text: question,
+    is_unanswered: isUnanswered,
+    unanswered_code: unansweredCode,
+  });
   if (isUnanswered) {
-    db.unansweredSheet.appendRow([
-      eventId,
-      questionId,
-      nowIso,
-      nowMs,
-      email,
-      displayName,
-      roleKey,
-      mode,
-      agentId,
-      agentName,
-      question,
-      unansweredCode || 'UNANSWERED',
-    ]);
+    MetricsStore_insertUnanswered({
+      event_id: eventId,
+      question_id: questionId,
+      ts_iso: nowIso,
+      ts_ms: nowMs,
+      user_email: email,
+      user_display_name: displayName,
+      role_key: roleKey,
+      mode: mode,
+      agent_id: agentId,
+      agent_name: agentName,
+      question_text: question,
+      unanswered_code: unansweredCode || 'UNANSWERED',
+      suggested_content_type: MetricsService_suggestContentTypeFromAgent_(agentId),
+      queue_status: 'open',
+    });
   }
-
   return { ok: true, eventId: eventId, questionId: questionId };
 }
 
@@ -504,8 +436,7 @@ function MetricsService_page_(items, skip, limit) {
 function MetricsService_dashboard(range, topN) {
   MetricsAuth_requireView();
   var bounds = MetricsService_resolveRange_(range);
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var usageRows = MetricsService_readRows_(db.usageSheet, MetricsService_usageHeaders_());
+  var usageRows = MetricsStore_listUsageEvents().map(MetricsStore_usageToLegacyRow_);
   var filteredUsage = MetricsService_filterRowsByRange_(usageRows, bounds);
   var usageAgg = MetricsService_buildUsageAggregates_(filteredUsage, topN || 10);
   var contentAgg = MetricsService_buildContentLeaderboards_(topN || 10);
@@ -534,19 +465,107 @@ function MetricsService_dashboard(range, topN) {
 
 /**
  * @param {Object=} filters
- * @return {{ok:boolean,items:Array<Object>,total:number,skip:number,limit:number,hasMore:boolean}}
+ * @return {{ok:boolean,items:Array<Object>,total:number,skip:number,limit:number,hasMore:boolean,canManage:boolean}}
  */
 function MetricsService_unansweredList(filters) {
   MetricsAuth_requireView();
   var f = filters || {};
-  var bounds = MetricsService_resolveRange_(f.range || '30d');
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var rows = MetricsService_readRows_(db.unansweredSheet, MetricsService_unansweredHeaders_());
-  var filtered = MetricsService_filterRowsByRange_(rows, bounds);
-  filtered.sort(function (a, b) {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  var rows = MetricsStore_listUnansweredQueue(f).map(MetricsStore_unansweredToLegacyRow_);
+  rows.sort(function (a, b) {
     return Number(b.ts_ms || 0) - Number(a.ts_ms || 0);
   });
-  return MetricsService_page_(filtered, f.skip, f.limit);
+  var page = MetricsService_page_(rows, f.skip, f.limit);
+  page.canManage = MetricsAuth_canManageQueue(email);
+  return page;
+}
+
+/**
+ * @return {{ok:boolean,items:Array<{email:string,displayName:string,roleKey:string}>}}
+ */
+function MetricsService_unansweredAssignees_() {
+  MetricsAuth_requireManageQueue();
+  var rows = RoleDirectoryStore_listAll();
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var row = rows[i] || {};
+    var roleKey = String(row.role_key || '').trim();
+    if (roleKey !== 'admin' && roleKey !== 'presales') continue;
+    var em = String(row.email || '').trim();
+    if (!em || seen[em.toLowerCase()]) continue;
+    seen[em.toLowerCase()] = true;
+    var localPart = em.split('@')[0] || em;
+    out.push({
+      email: em,
+      displayName: String(row.role_label || '').trim() || localPart,
+      roleKey: roleKey,
+    });
+  }
+  out.sort(function (a, b) {
+    return String(a.displayName || a.email).localeCompare(String(b.displayName || b.email));
+  });
+  return { ok: true, items: out };
+}
+
+/**
+ * @param {string} eventId
+ * @param {string} assigneeEmail
+ * @return {{ok:boolean}}
+ */
+function MetricsService_unansweredAssign_(eventId, assigneeEmail) {
+  MetricsAuth_requireManageQueue();
+  var eid = String(eventId || '').trim();
+  var assignee = String(assigneeEmail || '').trim().toLowerCase();
+  if (!eid || !assignee) return { ok: false };
+
+  var allowed = MetricsService_unansweredAssignees_().items || [];
+  var match = null;
+  for (var i = 0; i < allowed.length; i++) {
+    if (String(allowed[i].email || '').trim().toLowerCase() === assignee) {
+      match = allowed[i];
+      break;
+    }
+  }
+  if (!match) return { ok: false };
+
+  var actor = ('' + Session.getActiveUser().getEmail()).trim();
+  var nowIso = new Date().toISOString();
+  return MetricsStore_updateUnansweredQueue(eid, {
+    assigned_to_email: match.email,
+    assigned_to_name: match.displayName || match.email,
+    assigned_at: nowIso,
+    assigned_by_email: actor,
+    queue_status: 'open',
+  });
+}
+
+/**
+ * @param {string} eventId
+ * @param {string} status open|missing_content|resolved
+ * @param {string=} note
+ * @return {{ok:boolean}}
+ */
+function MetricsService_unansweredSetStatus_(eventId, status, note) {
+  MetricsAuth_requireManageQueue();
+  var eid = String(eventId || '').trim();
+  var st = String(status || '').trim();
+  if (!eid) return { ok: false };
+  if (st !== 'open' && st !== 'missing_content' && st !== 'resolved') {
+    return { ok: false };
+  }
+
+  var actor = ('' + Session.getActiveUser().getEmail()).trim();
+  var patch = {
+    queue_status: st,
+    resolution_note: String(note || '').trim().slice(0, 500),
+  };
+  if (st === 'resolved') {
+    patch.resolved_at = new Date().toISOString();
+    patch.resolved_by_email = actor;
+  }
+  return MetricsStore_updateUnansweredQueue(eid, patch);
 }
 
 /**
@@ -562,9 +581,8 @@ function MetricsService_leaderboardList(kind, filters) {
 
   if (k === 'users' || k === 'agents') {
     var bounds = MetricsService_resolveRange_(f.range || '30d');
-    var db = MetricsService_getOrCreateSpreadsheet_();
-    var usageRows = MetricsService_readRows_(db.usageSheet, MetricsService_usageHeaders_());
-    var filteredUsage = MetricsService_filterRowsByRange_(usageRows, bounds);
+    var usageRowsLb = MetricsStore_listUsageEvents().map(MetricsStore_usageToLegacyRow_);
+    var filteredUsage = MetricsService_filterRowsByRange_(usageRowsLb, bounds);
     var agg = MetricsService_buildUsageAggregates_(filteredUsage, 9999);
     data = k === 'users' ? agg.byUser : agg.byAgent;
   } else {
@@ -584,12 +602,8 @@ function MetricsService_leaderboardList(kind, filters) {
  */
 function MetricsService_resetAll() {
   MetricsAuth_requireReset();
-  var props = PropertiesService.getScriptProperties();
-  var cleared = AdminReset_clearMetrics_(props);
-  return {
-    ok: true,
-    cleared: cleared,
-  };
+  var clearedSb = MetricsStore_clearAll();
+  return { ok: true, cleared: clearedSb };
 }
 
 // ─── Feedback ────────────────────────────────────────────────────────────────
@@ -619,130 +633,100 @@ function MetricsService_trackFeedback_(payload) {
   var agentName = String(p.agentName || '').trim();
   var questionText = String(p.questionText || '').trim().slice(0, 500);
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.feedbackSheet;
-  var lastRow = sheet.getLastRow();
-
-  // Check for existing row with same event_id to update (idempotent)
-  if (lastRow >= 2) {
-    var eventIdCol = 2; // column index of event_id (1-based)
-    var ratingCol = 6;  // column index of rating
-    var vals = sheet.getRange(2, 1, lastRow - 1, MetricsService_feedbackHeaders_().length).getValues();
-    for (var i = 0; i < vals.length; i++) {
-      if (String(vals[i][1] || '') === eventId) {
-        sheet.getRange(i + 2, ratingCol).setValue(rating);
-        sheet.getRange(i + 2, 3).setValue(nowIso);
-        return { ok: true };
-      }
-    }
-  }
-
-  sheet.appendRow([
-    Utilities.getUuid(),
-    eventId,
-    nowIso,
-    email,
-    roleKey,
-    rating,
-    agentId,
-    agentName,
-    questionText,
-  ]);
-  return { ok: true };
+  return MetricsStore_trackFeedback({
+    eventId: eventId,
+    rating: rating,
+    user_email: email,
+    role_key: roleKey,
+    agentId: agentId,
+    agentName: agentName,
+    questionText: questionText,
+  });
 }
 
 // ─── Chat History ─────────────────────────────────────────────────────────────
 
 /**
+ * @param {string} convId
+ * @return {boolean}
+ */
+function MetricsService_isUuidConvId_(convId) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(convId || '').trim(),
+  );
+}
+
+/**
+ * @param {string} email
+ * @return {number}
+ */
+function MetricsService_chatHistoryMaxForEmail_(email) {
+  try {
+    var rec = RoleDirectory_lookupRole(email);
+    if (rec && rec.key) return METRICS_CHAT_HISTORY_MAX_WITH_ROLE;
+  } catch (ignoreRole) {}
+  return METRICS_CHAT_HISTORY_MAX_VISITOR;
+}
+
+/**
  * Guarda o actualiza una conversación para el usuario activo.
- * Topa en METRICS_CHAT_HISTORY_MAX_PER_USER por usuario (elimina las más antiguas).
+ * Topa por rol (visitante 10 · con rol 200) y elimina las más antiguas al exceder.
  * @param {string} convId
  * @param {string} title
  * @param {string} messagesJson
- * @return {{ok:boolean}}
+ * @return {{ok:boolean,convId?:string,maxAllowed?:number}}
  */
 function MetricsService_chatHistorySave_(convId, title, messagesJson) {
-  var cid = String(convId || '').trim();
-  if (!cid) return { ok: false };
-  var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!email) return { ok: false };
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    var cid = String(convId || '').trim();
+    if (!MetricsService_isUuidConvId_(cid)) cid = Utilities.getUuid();
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (!email) return { ok: false };
 
-  var safeTitle = String(title || '').trim().slice(0, 80) || '(sin título)';
-  var safeJson = String(messagesJson || '[]').trim();
-  var nowIso = new Date().toISOString();
+    var safeTitle = String(title || '').trim().slice(0, 80) || '(sin título)';
+    var safeJson = String(messagesJson || '[]').trim();
+    var maxPerUser = MetricsService_chatHistoryMaxForEmail_(email);
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.chatHistorySheet;
-  var lastRow = sheet.getLastRow();
-  var headers = MetricsService_chatHistoryHeaders_();
-
-  // Check for existing conv_id to update
-  if (lastRow >= 2) {
-    var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-    for (var i = 0; i < vals.length; i++) {
-      if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
-        sheet.getRange(i + 2, 3).setValue(nowIso);
-        sheet.getRange(i + 2, 4).setValue(safeTitle);
-        sheet.getRange(i + 2, 5).setValue(safeJson);
-        return { ok: true };
-      }
-    }
+    var saved = MetricsStore_chatHistorySave(
+      cid,
+      email,
+      safeTitle,
+      safeJson,
+      maxPerUser,
+    );
+    if (!saved || !saved.ok) return { ok: false };
+    return { ok: true, convId: cid, maxAllowed: maxPerUser };
+  } catch (e) {
+    Logger.log(
+      '[MetricsService] chatHistorySave: ' + (e && e.message ? e.message : e),
+    );
+    return { ok: false };
   }
-
-  // New row: append
-  sheet.appendRow([cid, email, nowIso, safeTitle, safeJson]);
-
-  // Enforce per-user cap: delete oldest rows if over limit
-  var newLastRow = sheet.getLastRow();
-  if (newLastRow >= 2) {
-    var allVals = sheet.getRange(2, 1, newLastRow - 1, headers.length).getValues();
-    var userRows = [];
-    for (var j = 0; j < allVals.length; j++) {
-      if (String(allVals[j][1] || '') === email) {
-        userRows.push({ rowIndex: j + 2, ts: String(allVals[j][2] || '') });
-      }
-    }
-    if (userRows.length > METRICS_CHAT_HISTORY_MAX_PER_USER) {
-      userRows.sort(function (a, b) { return String(a.ts).localeCompare(String(b.ts)); });
-      var toDelete = userRows.length - METRICS_CHAT_HISTORY_MAX_PER_USER;
-      // Delete from bottom to top to avoid index shifting
-      var toDeleteRows = userRows.slice(0, toDelete).map(function (r) { return r.rowIndex; });
-      toDeleteRows.sort(function (a, b) { return b - a; });
-      for (var d = 0; d < toDeleteRows.length; d++) {
-        sheet.deleteRow(toDeleteRows[d]);
-      }
-    }
-  }
-
-  return { ok: true };
 }
 
 /**
  * Lista las conversaciones del usuario activo (sin messages_json), ordenadas más reciente primero.
- * @return {{ok:boolean,items:Array<{convId:string,title:string,tsCreated:string}>}}
+ * @return {{ok:boolean,items:Array<{convId:string,title:string,tsCreated:string}>,maxAllowed:number}}
  */
 function MetricsService_chatHistoryList_() {
-  var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!email) return { ok: false, items: [] };
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (!email) return { ok: false, items: [], maxAllowed: METRICS_CHAT_HISTORY_MAX_VISITOR };
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.chatHistorySheet;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, items: [] };
-
-  var headers = MetricsService_chatHistoryHeaders_();
-  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  var items = [];
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][1] || '') !== email) continue;
-    items.push({
-      convId: String(vals[i][0] || ''),
-      tsCreated: String(vals[i][2] || ''),
-      title: String(vals[i][3] || ''),
-    });
+    var maxPerUser = MetricsService_chatHistoryMaxForEmail_(email);
+    return {
+      ok: true,
+      items: MetricsStore_chatHistoryList(email, maxPerUser),
+      maxAllowed: maxPerUser,
+    };
+  } catch (e) {
+    Logger.log(
+      '[MetricsService] chatHistoryList: ' + (e && e.message ? e.message : e),
+    );
+    return { ok: false, items: [], maxAllowed: METRICS_CHAT_HISTORY_MAX_VISITOR };
   }
-  items.sort(function (a, b) { return String(b.tsCreated).localeCompare(String(a.tsCreated)); });
-  return { ok: true, items: items };
 }
 
 /**
@@ -751,24 +735,35 @@ function MetricsService_chatHistoryList_() {
  * @return {{ok:boolean,messagesJson:string}}
  */
 function MetricsService_chatHistoryLoad_(convId) {
-  var cid = String(convId || '').trim();
-  if (!cid) return { ok: false, messagesJson: '[]' };
-  var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!email) return { ok: false, messagesJson: '[]' };
-
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.chatHistorySheet;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: false, messagesJson: '[]' };
-
-  var headers = MetricsService_chatHistoryHeaders_();
-  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
-      return { ok: true, messagesJson: String(vals[i][4] || '[]') };
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    var cid = String(convId || '').trim();
+    if (!cid || !MetricsService_isUuidConvId_(cid)) {
+      return { ok: false, messagesJson: '[]' };
     }
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (!email) return { ok: false, messagesJson: '[]' };
+
+    var mj = MetricsStore_chatHistoryLoad(cid, email);
+    if (mj === '[]') {
+      var qCheck = SupabaseRest_select(
+        SUPABASE_TABLE.CHAT_CONVERSATIONS,
+        SupabaseRest_query_([
+          'select=conv_id',
+          SupabaseRest_filter_('conv_id', 'eq', cid),
+          SupabaseRest_filter_('user_email', 'eq', email),
+          'limit=1',
+        ]),
+      );
+      if (!qCheck.length) return { ok: false, messagesJson: '[]' };
+    }
+    return { ok: true, messagesJson: mj };
+  } catch (e) {
+    Logger.log(
+      '[MetricsService] chatHistoryLoad: ' + (e && e.message ? e.message : e),
+    );
+    return { ok: false, messagesJson: '[]' };
   }
-  return { ok: false, messagesJson: '[]' };
 }
 
 /**
@@ -777,32 +772,28 @@ function MetricsService_chatHistoryLoad_(convId) {
  * @return {{ok:boolean}}
  */
 function MetricsService_chatHistoryDelete_(convId) {
-  var cid = String(convId || '').trim();
-  if (!cid) return { ok: false };
-  var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!email) return { ok: false };
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    var cid = String(convId || '').trim();
+    if (!cid || !MetricsService_isUuidConvId_(cid)) return { ok: false };
+    var email = ('' + Session.getActiveUser().getEmail()).trim();
+    if (!email) return { ok: false };
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.chatHistorySheet;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: false };
-
-  var headers = MetricsService_chatHistoryHeaders_();
-  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0] || '') === cid && String(vals[i][1] || '') === email) {
-      sheet.deleteRow(i + 2);
-      return { ok: true };
-    }
+    MetricsStore_chatHistoryDelete(cid, email);
+    return { ok: true };
+  } catch (e) {
+    Logger.log(
+      '[MetricsService] chatHistoryDelete: ' + (e && e.message ? e.message : e),
+    );
+    return { ok: false };
   }
-  return { ok: false };
 }
 
 // ─── Quick Prompts ─────────────────────────────────────────────────────────────
 
 var METRICS_QUICK_PROMPTS_DEFAULTS_ = [
-  { id: 'qp1', es: '¿Casos de éxito en banca?', en: 'Success cases in banking?', order: 1 },
-  { id: 'qp2', es: '¿Propuestas para retail con IA?', en: 'Proposals for retail with AI?', order: 2 },
+  { id: 'qp1', es: '¿Casos de éxito con NDC?', en: 'Success cases with NDC', order: 1 },
+  { id: 'qp2', es: '¿Que hicimos con Iberia?', en: 'What did we do with Iberia?', order: 2 },
   { id: 'qp3', es: '¿Qué clientes tiene Globant en aviación?', en: 'Which clients does Globant have in aviation?', order: 3 },
 ];
 
@@ -812,26 +803,20 @@ var METRICS_QUICK_PROMPTS_DEFAULTS_ = [
  * @return {Array<{id:string,es:string,en:string,order:number}>}
  */
 function MetricsService_quickPromptsGet_() {
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.quickPromptsSheet;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return METRICS_QUICK_PROMPTS_DEFAULTS_;
-
-  var headers = MetricsService_quickPromptsHeaders_();
-  var vals = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  var out = [];
-  for (var i = 0; i < vals.length; i++) {
-    var row = vals[i];
-    var id = String(row[0] || '').trim();
-    var es = String(row[1] || '').trim();
-    var en = String(row[2] || '').trim();
-    var order = Number(row[3] || 0) || (i + 1);
-    if (!id || (!es && !en)) continue;
-    out.push({ id: id, es: es, en: en, order: order });
+  var sbRows = MetricsStore_quickPromptsList();
+  if (!sbRows.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+  var outSb = [];
+  for (var si = 0; si < sbRows.length; si++) {
+    outSb.push({
+      id: String(sbRows[si].id || ''),
+      es: String(sbRows[si].es || ''),
+      en: String(sbRows[si].en || ''),
+      order: Number(sbRows[si].sort_order || 0) || (si + 1),
+    });
   }
-  if (!out.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
-  out.sort(function (a, b) { return a.order - b.order; });
-  return out;
+  if (!outSb.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+  outSb.sort(function (a, b) { return a.order - b.order; });
+  return outSb;
 }
 
 /**
@@ -843,29 +828,6 @@ function MetricsService_quickPromptsGet_() {
 function MetricsService_quickPromptsSave_(prompts) {
   if (!Array.isArray(prompts)) return { ok: false };
 
-  var db = MetricsService_getOrCreateSpreadsheet_();
-  var sheet = db.quickPromptsSheet;
-
-  // Clear data rows (keep header)
-  var lastRow = sheet.getLastRow();
-  if (lastRow >= 2) {
-    sheet.getRange(2, 1, lastRow - 1, MetricsService_quickPromptsHeaders_().length).clearContent();
-  }
-
-  var rows = [];
-  for (var i = 0; i < prompts.length; i++) {
-    var p = prompts[i] || {};
-    var id = String(p.id || '').trim() || Utilities.getUuid().slice(0, 8);
-    var es = String(p.es || '').trim();
-    var en = String(p.en || '').trim();
-    var order = Number(p.order || 0) || (i + 1);
-    if (!es && !en) continue;
-    rows.push([id, es, en, order]);
-  }
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 4).setValues(rows);
-  }
-
+  MetricsStore_quickPromptsReplaceAll(prompts);
   return { ok: true };
 }

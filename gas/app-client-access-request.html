@@ -1,0 +1,383 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var navPageRequestAccess = document.getElementById('nav-page-request-access');
+  var homeVisitante = document.getElementById('home-visitante');
+  var form = document.getElementById('access-request-form');
+  var roleSelect = document.getElementById('access-request-role');
+  var reasonInput = document.getElementById('access-request-reason');
+  var submitBtn = document.getElementById('access-request-submit');
+  var loader = document.getElementById('access-request-loader');
+  var statusEl = document.getElementById('access-request-status');
+  var pendingBox = document.getElementById('access-request-pending');
+  var pendingDetail = document.getElementById('access-request-pending-detail');
+
+  var requestsSearch = document.getElementById('admin-users-requests-search');
+  var requestsLoader = document.getElementById('admin-users-requests-loader');
+  var requestsLoaderMsg = document.getElementById('admin-users-requests-loader-msg');
+  var requestsBody = document.getElementById('admin-users-requests-body');
+  var requestsPagerInfo = document.getElementById('admin-users-requests-pager-info');
+  var requestsPrev = document.getElementById('admin-users-requests-prev');
+  var requestsNext = document.getElementById('admin-users-requests-next');
+  var requestsStatus = document.getElementById('admin-users-requests-status');
+
+  var roleOptions = [];
+  var visitorBusy = false;
+  var adminRequestsSkip = 0;
+  var adminRequestsTotal = 0;
+  var adminRequestsItems = [];
+  var adminRequestsBusy = false;
+  var adminRequestsSearchTimer = null;
+  var REQUESTS_PAGE_SIZE = 25;
+
+  function setStatus(el, msg, isErr) {
+    if (!el) return;
+    el.textContent = msg || '\u00a0';
+    el.classList.toggle('err', !!isErr && !!msg);
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '\u2014';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      var ci = S.get('cachedI18n');
+      var loc = ci && ci._locale === 'en' ? 'en' : 'es';
+      return new Intl.DateTimeFormat(loc, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(d);
+    } catch (ignore) {
+      return iso;
+    }
+  }
+
+  function mapAccessRequestError(err) {
+    var code = err && err.message ? String(err.message) : '';
+    if (code === 'ERR_ACCESS_REQUEST_NOT_VISITOR') return i18n('access_request_err_not_visitor');
+    if (code === 'ERR_ACCESS_REQUEST_INVALID_ROLE') return i18n('admin_users_err_role');
+    if (code === 'ERR_ACCESS_REQUEST_REASON_REQUIRED') return i18n('access_request_err_reason');
+    if (code === 'ERR_ACCESS_REQUEST_REASON_TOO_LONG') return i18n('access_request_err_reason_long');
+    if (code === 'ERR_ACCESS_REQUEST_ALREADY_PENDING') return i18n('access_request_err_pending');
+    if (code === 'ERR_SUPABASE_NOT_CONFIGURED') return i18n('access_request_err_supabase');
+    if (code.indexOf('ERR_SUPABASE_HTTP_') === 0) return i18n('access_request_err_supabase');
+    return i18n('err_generic');
+  }
+
+  function populateRoleSelect(selectedKey) {
+    if (!roleSelect) return;
+    while (roleSelect.options.length > 1) {
+      roleSelect.remove(1);
+    }
+    for (var i = 0; i < roleOptions.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = roleOptions[i].key;
+      opt.textContent = roleOptions[i].label || roleOptions[i].key;
+      if (selectedKey && opt.value === selectedKey) opt.selected = true;
+      roleSelect.appendChild(opt);
+    }
+  }
+
+  function setVisitorFormDisabled(on) {
+    if (form) form.classList.toggle('opacity-60', !!on);
+    if (roleSelect) roleSelect.disabled = !!on;
+    if (reasonInput) reasonInput.disabled = !!on;
+    if (submitBtn) submitBtn.disabled = !!on;
+    if (loader) loader.classList.toggle('hidden', !on);
+  }
+
+  function showPendingRequest(req) {
+    if (!pendingBox || !form) return;
+    if (!req || req.status !== 'pending') {
+      pendingBox.classList.add('hidden');
+      form.classList.remove('hidden');
+      setVisitorFormDisabled(false);
+      return;
+    }
+    pendingBox.classList.remove('hidden');
+    form.classList.add('hidden');
+    if (pendingDetail) {
+      pendingDetail.textContent = i18nFmt('access_request_pending_detail', {
+        role: req.desired_role_label || req.desired_role_key || '',
+        date: formatDate(req.created_at),
+      });
+    }
+  }
+
+  function loadVisitorState() {
+    if (!S.get('isVisitor')) return;
+    setStatus(statusEl, '', false);
+    setVisitorFormDisabled(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var pending = res && res.request ? res.request : null;
+        showPendingRequest(pending);
+        setVisitorFormDisabled(!!pending);
+        google.script.run
+          .withSuccessHandler(function (opts) {
+            roleOptions = opts || [];
+            populateRoleSelect(pending ? pending.desired_role_key : '');
+            setVisitorFormDisabled(!!pending);
+          })
+          .withFailureHandler(function () {
+            setVisitorFormDisabled(!!pending);
+          })
+          .visitorAccessRequestRoleOptions();
+      })
+      .withFailureHandler(function (err) {
+        setVisitorFormDisabled(false);
+        setStatus(statusEl, mapAccessRequestError(err), true);
+        google.script.run
+          .withSuccessHandler(function (opts) {
+            roleOptions = opts || [];
+            populateRoleSelect('');
+          })
+          .withFailureHandler(function () {})
+          .visitorAccessRequestRoleOptions();
+      })
+      .visitorAccessRequestGetMine();
+  }
+
+  function submitAccessRequest(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!S.get('isVisitor') || visitorBusy) return;
+    var roleKey = roleSelect ? roleSelect.value : '';
+    var reason = reasonInput ? reasonInput.value.trim() : '';
+    if (!roleKey) {
+      setStatus(statusEl, i18n('admin_users_err_role'), true);
+      return;
+    }
+    if (!reason) {
+      setStatus(statusEl, i18n('access_request_err_reason'), true);
+      return;
+    }
+    visitorBusy = true;
+    setStatus(statusEl, '', false);
+    setVisitorFormDisabled(true);
+    A.showBlockingModal(i18n('access_request_busy_submit'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        visitorBusy = false;
+        showPendingRequest(res && res.request ? res.request : null);
+        setStatus(statusEl, i18n('access_request_submit_done'), false);
+      })
+      .withFailureHandler(function (err) {
+        A.hideBlockingModal();
+        visitorBusy = false;
+        setVisitorFormDisabled(false);
+        setStatus(statusEl, mapAccessRequestError(err), true);
+      })
+      .visitorAccessRequestSubmit(roleKey, reason);
+  }
+
+  function syncVisitorNav() {
+    var isVisitor = !!S.get('isVisitor');
+    if (navPageRequestAccess) navPageRequestAccess.classList.toggle('hidden', !isVisitor);
+    if (homeVisitante && S.get('activePage') === 'home') {
+      homeVisitante.classList.toggle('hidden', !isVisitor);
+    }
+  }
+
+  function adminUpdatePager() {
+    if (!A.settings || !A.settings.usersUpdatePager) return;
+    A.settings.usersUpdatePager(
+      requestsPagerInfo,
+      requestsPrev,
+      requestsNext,
+      adminRequestsSkip,
+      adminRequestsTotal,
+      adminRequestsItems.length,
+    );
+  }
+
+  function adminSetRequestsBusy(on) {
+    adminRequestsBusy = !!on;
+    if (requestsLoader) requestsLoader.classList.toggle('hidden', !on);
+    if (requestsLoaderMsg && on) {
+      requestsLoaderMsg.textContent = i18n('admin_users_busy_loading');
+    }
+    if (requestsPrev) requestsPrev.disabled = on || adminRequestsSkip <= 0;
+    if (requestsNext) {
+      requestsNext.disabled =
+        on || adminRequestsSkip + REQUESTS_PAGE_SIZE >= adminRequestsTotal;
+    }
+  }
+
+  function adminRenderRequestsTable() {
+    if (!requestsBody) return;
+    requestsBody.innerHTML = '';
+    if (!adminRequestsItems.length) {
+      var trEmpty = document.createElement('tr');
+      var tdEmpty = document.createElement('td');
+      tdEmpty.colSpan = 6;
+      tdEmpty.className = 'px-4 py-6 text-center text-sm text-slate-400';
+      tdEmpty.textContent = i18n('admin_users_no_requests');
+      trEmpty.appendChild(tdEmpty);
+      requestsBody.appendChild(trEmpty);
+      return;
+    }
+    for (var i = 0; i < adminRequestsItems.length; i++) {
+      (function (item) {
+        var tr = document.createElement('tr');
+        tr.className = 'settings-table-row';
+        var tdEmail = document.createElement('td');
+        tdEmail.className = 'font-medium text-slate-900 dark:text-slate-100';
+        tdEmail.textContent = item.email || '';
+        tr.appendChild(tdEmail);
+        var tdName = document.createElement('td');
+        tdName.className = 'text-slate-600 dark:text-slate-400';
+        tdName.textContent = item.display_name || '\u2014';
+        tr.appendChild(tdName);
+        var tdRole = document.createElement('td');
+        tdRole.className = 'text-slate-600 dark:text-slate-400';
+        tdRole.textContent = item.desired_role_label || item.desired_role_key || '\u2014';
+        tr.appendChild(tdRole);
+        var tdReason = document.createElement('td');
+        tdReason.className = 'max-w-xs truncate text-slate-600 dark:text-slate-400';
+        tdReason.title = item.reason || '';
+        tdReason.textContent = item.reason || '\u2014';
+        tr.appendChild(tdReason);
+        var tdDate = document.createElement('td');
+        tdDate.className = 'text-slate-600 dark:text-slate-400';
+        tdDate.textContent = formatDate(item.created_at);
+        tr.appendChild(tdDate);
+        var tdActions = document.createElement('td');
+        tdActions.className = 'text-right whitespace-nowrap';
+        var assignBtn = document.createElement('button');
+        assignBtn.type = 'button';
+        assignBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-2 mr-2';
+        assignBtn.innerHTML =
+          '<i class="fa-solid fa-user-plus" aria-hidden="true"></i>' +
+          '<span>' +
+          i18n('admin_users_assign_btn') +
+          '</span>';
+        assignBtn.addEventListener('click', function () {
+          if (A.settings && A.settings.usersAssignRoleFromRequest) {
+            A.settings.usersAssignRoleFromRequest(
+              item.email,
+              item.desired_role_key,
+            );
+          }
+        });
+        tdActions.appendChild(assignBtn);
+        var dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+        dismissBtn.innerHTML =
+          '<i class="fa-solid fa-xmark" aria-hidden="true"></i>' +
+          '<span>' +
+          i18n('admin_users_dismiss_request_btn') +
+          '</span>';
+        dismissBtn.addEventListener('click', function () {
+          adminDismissRequest(item.id);
+        });
+        tdActions.appendChild(dismissBtn);
+        tr.appendChild(tdActions);
+        requestsBody.appendChild(tr);
+      })(adminRequestsItems[i]);
+    }
+  }
+
+  function adminLoadRequests() {
+    if (!S.get('canManageUsers') || !requestsBody) return;
+    adminSetRequestsBusy(true);
+    adminUpdatePager();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        adminSetRequestsBusy(false);
+        adminRequestsItems = (res && res.items) || [];
+        adminRequestsTotal = (res && res.total) || 0;
+        adminRenderRequestsTable();
+        adminUpdatePager();
+      })
+      .withFailureHandler(function (err) {
+        adminSetRequestsBusy(false);
+        setStatus(
+          requestsStatus,
+          (err && err.message) || i18n('err_generic'),
+          true,
+        );
+        adminUpdatePager();
+      })
+      .adminUsersListAccessRequests({
+        skip: adminRequestsSkip,
+        limit: REQUESTS_PAGE_SIZE,
+        q: requestsSearch ? requestsSearch.value.trim() : '',
+        status: 'pending',
+      });
+  }
+
+  function adminDismissRequest(id) {
+    if (!S.get('canManageUsers') || adminRequestsBusy || !id) return;
+    if (!window.confirm(i18n('admin_users_dismiss_request_confirm'))) return;
+    adminRequestsBusy = true;
+    A.showBlockingModal(i18n('admin_users_busy_dismiss_request'));
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        adminRequestsBusy = false;
+        setStatus(requestsStatus, i18n('admin_users_dismiss_request_done'), false);
+        adminLoadRequests();
+        if (A.settings && A.settings.usersReloadAll) A.settings.usersReloadAll();
+      })
+      .withFailureHandler(function (err) {
+        A.hideBlockingModal();
+        adminRequestsBusy = false;
+        setStatus(
+          requestsStatus,
+          (err && err.message) || i18n('err_generic'),
+          true,
+        );
+      })
+      .adminUsersDismissAccessRequest(id);
+  }
+
+  if (form) {
+    form.addEventListener('submit', submitAccessRequest);
+  }
+
+  if (requestsSearch) {
+    requestsSearch.addEventListener('input', function () {
+      if (adminRequestsSearchTimer) clearTimeout(adminRequestsSearchTimer);
+      adminRequestsSearchTimer = setTimeout(function () {
+        adminRequestsSkip = 0;
+        adminLoadRequests();
+      }, 300);
+    });
+  }
+
+  if (requestsPrev) {
+    requestsPrev.addEventListener('click', function () {
+      if (adminRequestsBusy || adminRequestsSkip <= 0) return;
+      adminRequestsSkip = Math.max(0, adminRequestsSkip - REQUESTS_PAGE_SIZE);
+      adminLoadRequests();
+    });
+  }
+
+  if (requestsNext) {
+    requestsNext.addEventListener('click', function () {
+      if (
+        adminRequestsBusy ||
+        adminRequestsSkip + REQUESTS_PAGE_SIZE >= adminRequestsTotal
+      ) {
+        return;
+      }
+      adminRequestsSkip += REQUESTS_PAGE_SIZE;
+      adminLoadRequests();
+    });
+  }
+
+  A.accessRequest = {
+    syncVisitorNav: syncVisitorNav,
+    onShow: loadVisitorState,
+    adminLoad: adminLoadRequests,
+    adminResetPager: function () {
+      adminRequestsSkip = 0;
+    },
+  };
+})(window.Aviators);
+</script>

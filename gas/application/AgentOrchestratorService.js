@@ -4,6 +4,76 @@
 
 var _ORCH_NO_CONTENT_SENTINEL = '[[NO_RELEVANT_CONTENT]]';
 var _ORCH_PROFILE_DOC_CACHE = {};
+/** Turnos user+assistant previos incluidos en el prompt (no cuenta la pregunta actual). */
+var _ORCH_HISTORY_MAX_PAIRS = 3;
+/** Tope por mensaje en historial para no inflar /v1/search/execute. */
+var _ORCH_HISTORY_MAX_CHARS = 2000;
+
+/**
+ * Recorta historial: quita duplicado de la pregunta actual y deja hasta N pares previos.
+ * @param {Array=} history
+ * @param {string=} currentQuestion
+ * @return {Array<{role:string,content:string}>}
+ */
+function AgentOrchestrator_prepareHistoryEntries_(history, currentQuestion) {
+  var histArr = Array.isArray(history) ? history.slice() : [];
+  var qTrim = String(currentQuestion || '').trim();
+  if (histArr.length) {
+    var last = histArr[histArr.length - 1];
+    if (
+      last &&
+      last.role === 'user' &&
+      String(last.content || '').trim() === qTrim
+    ) {
+      histArr.pop();
+    }
+  }
+  var maxMsgs = _ORCH_HISTORY_MAX_PAIRS * 2;
+  if (histArr.length > maxMsgs) {
+    histArr = histArr.slice(histArr.length - maxMsgs);
+  }
+  var out = [];
+  for (var i = 0; i < histArr.length; i++) {
+    var entry = histArr[i];
+    if (!entry || !entry.role || !entry.content) continue;
+    var content = String(entry.content);
+    if (content.length > _ORCH_HISTORY_MAX_CHARS) {
+      content =
+        content.substring(0, _ORCH_HISTORY_MAX_CHARS) +
+        UiStrings_fmt_('drive_text_truncated_suffix');
+    }
+    out.push({ role: entry.role, content: content });
+  }
+  return out;
+}
+
+/**
+ * @param {string} question
+ * @param {Array=} history
+ * @return {string}
+ */
+function AgentOrchestrator_buildPromptWithHistory_(question, history) {
+  var q = String(question || '').trim();
+  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
+  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
+  var histArr = AgentOrchestrator_prepareHistoryEntries_(history, q);
+  if (!histArr.length) {
+    return rolePrefix + q;
+  }
+  var histLines = [];
+  for (var h = 0; h < histArr.length; h++) {
+    var entry = histArr[h];
+    histLines.push('[' + entry.role.toUpperCase() + ']\n' + entry.content);
+  }
+  return (
+    rolePrefix +
+    '[CONVERSATION HISTORY]\n' +
+    histLines.join('\n\n') +
+    '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' +
+    q +
+    '\n[/CURRENT QUESTION]'
+  );
+}
 
 /**
  * Verifica si un perfil RAG tiene documentos indexados.
@@ -19,7 +89,7 @@ function AgentOrchestrator_profileHasDocuments_(profileName) {
   try {
     var p = PropertiesService.getScriptProperties();
     var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
-    var baseUrl = (p.getProperty('GLOBANT_AGENTS_BASE_URL') || '').trim();
+    var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
     if (!apiKey) {
       _ORCH_PROFILE_DOC_CACHE[profileName] = true;
       return true;
@@ -46,7 +116,7 @@ function AgentOrchestrator_profileHasDocuments_(profileName) {
  * @param {string} question
  * @return {{docs: Array<Object>, clientName: string, docCount: number}}
  */
-function AgentOrchestrator_detectClientDocs_(question) {
+function AgentOrchestrator_detectClientDocs_(question, catalogPrefetch) {
   var q = String(question || '').toLowerCase();
   if (!q) return { docs: [], clientName: '', docCount: 0 };
 
@@ -78,7 +148,33 @@ function AgentOrchestrator_detectClientDocs_(question) {
     }
 
     if (!detectedClient) {
+      console.log('[CLIENT-DETECT] No client in master; trying catalog hints');
+      var fromCatalog = ContentCatalog_findDocsByQuestion_(question);
+      if (fromCatalog.docs && fromCatalog.docs.length) {
+        console.log(
+          '[CLIENT-DETECT] Catalog hint client="' +
+            fromCatalog.clientName +
+            '" docs=' +
+            fromCatalog.docs.length,
+        );
+        return {
+          docs: fromCatalog.docs,
+          clientName: fromCatalog.clientName || '',
+          docCount: fromCatalog.docs.length,
+        };
+      }
       console.log('[CLIENT-DETECT] No client detected in query: "' + q + '"');
+      var hinted =
+        catalogPrefetch && catalogPrefetch.length
+          ? catalogPrefetch.slice(0, 8)
+          : ContentCatalog_findRowsMatchingQuestion_(question, { limit: 8 });
+      if (hinted.length) {
+        return {
+          docs: hinted,
+          clientName: hinted[0].clientName || '',
+          docCount: hinted.length,
+        };
+      }
       return { docs: [], clientName: '', docCount: 0 };
     }
 
@@ -89,6 +185,17 @@ function AgentOrchestrator_detectClientDocs_(question) {
 
     if (!docs.length) {
       console.log('[CLIENT-DETECT] No documents found for client: "' + detectedClient + '"');
+      var byQuestion =
+        catalogPrefetch && catalogPrefetch.length
+          ? catalogPrefetch.slice(0, 8)
+          : ContentCatalog_findRowsMatchingQuestion_(question, { limit: 8 });
+      if (byQuestion.length) {
+        return {
+          docs: byQuestion,
+          clientName: byQuestion[0].clientName || detectedClient,
+          docCount: byQuestion.length,
+        };
+      }
       return { docs: [], clientName: detectedClient, docCount: 0 };
     }
 
@@ -134,6 +241,247 @@ function AgentOrchestrator_buildDocsContext_(docs) {
 var _ORCH_DIRECT_CONTEXT_MAX_DOCS = 5;
 
 /**
+ * @param {Array<Object>} docs
+ * @return {boolean}
+ */
+function AgentOrchestrator_docsHaveUsableCatalogContext_(docs) {
+  for (var i = 0; i < (docs || []).length; i++) {
+    if (String(docs[i].summary || '').trim()) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {Array<Object>} docs
+ * @return {boolean}
+ */
+function AgentOrchestrator_canUseDirectCatalogContext_(docs) {
+  if (!docs || !docs.length || docs.length > _ORCH_DIRECT_CONTEXT_MAX_DOCS) return false;
+  return AgentOrchestrator_docsHaveUsableCatalogContext_(docs);
+}
+
+/**
+ * @param {Array<Object>} docs
+ * @param {string} agentId
+ * @return {Array<Object>}
+ */
+function AgentOrchestrator_filterDocsForAgent_(docs, agentId) {
+  var wantType = AgentOrchestrator_mapAgentIdToContentType_(agentId);
+  if (!wantType) return docs || [];
+  var out = [];
+  for (var i = 0; i < (docs || []).length; i++) {
+    if (String(docs[i].contentType || '').trim() === wantType) out.push(docs[i]);
+  }
+  return out;
+}
+
+/**
+ * @param {{id:string, profileName:string}} chosen
+ * @param {Array<Object>} agentDocs — docs del catálogo filtrados por tipo de agente
+ * @return {boolean}
+ */
+function AgentOrchestrator_agentHasAnswerSource_(chosen, agentDocs) {
+  if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) return true;
+  if (AgentOrchestrator_profileHasDocuments_(chosen.profileName)) return true;
+  return AgentOrchestrator_docsHaveUsableCatalogContext_(agentDocs);
+}
+
+/**
+ * Prompt reducido cuando la respuesta sale del catálogo (evita sentinel [[NO_RELEVANT_CONTENT]]).
+ * @param {{profileName:string}} agent
+ * @param {string} question
+ * @return {string}
+ */
+function AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, question) {
+  return [
+    'Sos el agente Aviators "' + (agent.profileName || 'Aviators') + '".',
+    'Respondé usando EXCLUSIVAMENTE los extractos del catálogo incluidos abajo.',
+    'No inventes clientes, métricas ni nombres de proyecto.',
+    'Nunca respondas con [[NO_RELEVANT_CONTENT]] si el contexto contiene datos pertinentes.',
+    AgentOrchestrator_languageInstruction_(question),
+    AgentOrchestrator_buildRoleRestriction_(),
+  ].join('\n');
+}
+
+/**
+ * @param {string} question
+ * @param {Object} orchestrator
+ * @return {string}
+ */
+function AgentOrchestrator_buildOrchestratorCatalogSystemPrompt_(question, orchestrator) {
+  var lines = [];
+  lines.push(
+    'Sos el Orquestador de Aviators, el asistente inteligente del Aviation Studio de Globant.',
+  );
+  lines.push('Respondés DIRECTAMENTE al usuario final. NO clasifiques, NO enrutes, NO muestres decisiones internas.');
+  lines.push('');
+  lines.push('## Modo: catálogo de contenidos (red de seguridad)');
+  lines.push(
+    'Los agentes especialistas no encontraron material suficiente en su índice RAG para esta consulta.',
+  );
+  lines.push(
+    'Las filas del catálogo provistas abajo fueron preseleccionadas por similitud semántica y léxica con la pregunta (metadata curada: título, resumen, cliente, tags).',
+  );
+  lines.push(
+    'Usá EXCLUSIVAMENTE esas filas como fuente. Priorizá las más relevantes y explicá en qué se parecen a lo pedido (cliente, industria, servicios, alcance).',
+  );
+  lines.push(
+    'Si ninguna fila es realmente pertinente, decilo con claridad; no inventes coincidencias ni datos fuera del listado.',
+  );
+  lines.push('No uses [[NO_RELEVANT_CONTENT]] si hay filas útiles para orientar al usuario.');
+  lines.push('');
+  lines.push(AgentOrchestrator_languageInstruction_(question));
+  lines.push(AgentOrchestrator_buildRoleRestriction_());
+  if (orchestrator && orchestrator.systemPrompt) {
+    lines.push('');
+    lines.push('[NOTA INTERNA ORQUESTADOR — no repetir al usuario]');
+    lines.push(String(orchestrator.systemPrompt).slice(0, 500));
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Último recurso: orquestador responde con filas del catálogo de contenidos.
+ * @param {string} question
+ * @param {Array=} history
+ * @param {Array<Object>} docs
+ * @param {Object} orchestrator
+ * @return {{answer:string, model:string, agentName:string, references:Array, filterLabel:string, isUnanswered:boolean, unansweredCode:string, providerLabel:string, rawJson:string}}
+ */
+function AgentOrchestrator_answerOrchestratorCatalogFallback_(
+  question,
+  history,
+  docs,
+  orchestrator,
+) {
+  var q = String(question || '').trim();
+  var docsContext = AgentOrchestrator_buildDocsContext_(docs);
+  var systemPrompt = AgentOrchestrator_buildOrchestratorCatalogSystemPrompt_(
+    q,
+    orchestrator,
+  );
+  systemPrompt +=
+    '\n\n[FILAS DEL CATÁLOGO AVIATORS — CONTENIDOS]\n' +
+    docsContext +
+    '\n[/FILAS DEL CATÁLOGO]\n';
+
+  var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
+
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var client = GlobantAssistantApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  console.log('[ORCH] Catalog fallback via orchestrator, rows=' + docs.length);
+  var chatResult = client.chatSimple(systemPrompt, userMessage);
+  var answer = chatResult.text || '';
+  var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
+  answer = AgentOrchestrator_sanitizeAnswer_(answer);
+
+  var rawA = JSON.stringify(chatResult.parsed, null, 2);
+  if (rawA.length > 6000) {
+    rawA = rawA.substring(0, 6000) + '...(truncado)';
+  }
+
+  var filterLabel =
+    UiStrings_fmt_('meta_orchestrator_selected_agent', {
+      agent: orchestrator.profileName,
+      confidence: 'catalog',
+    }) +
+    ' | ' +
+    UiStrings_fmt_('meta_filter_orchestrator_catalog', { count: docs.length });
+
+  var references = [];
+  for (var i = 0; i < docs.length; i++) {
+    references.push({
+      contentId: docs[i].contentId || '',
+      title: docs[i].title || docs[i].fileName || 'Documento',
+      contentType: docs[i].contentType || '',
+      clientName: docs[i].clientName || '',
+      url: docs[i].driveUrl || '',
+      fileName: docs[i].fileName || '',
+      driveFileId: docs[i].driveFileId || '',
+      globantDocumentId: docs[i].documentId || '',
+      globantProfileName: docs[i].profileName || '',
+      matched: true,
+    });
+  }
+
+  return {
+    answer: answer,
+    model: 'globant-chat',
+    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
+    rawJson: rawA,
+    agentName: orchestrator.profileName,
+    references: references,
+    filterLabel: filterLabel,
+    isUnanswered: isUnanswered,
+    unansweredCode: isUnanswered ? 'NO_RELEVANT_CONTENT' : '',
+  };
+}
+
+/**
+ * @param {Object} doc
+ * @return {Object}
+ */
+function AgentOrchestrator_catalogDocToReference_(doc) {
+  return {
+    contentId: doc.contentId || '',
+    title: doc.title || doc.fileName || 'Documento',
+    contentType: doc.contentType || '',
+    clientName: doc.clientName || '',
+    url: doc.driveUrl || '',
+    fileName: doc.fileName || '',
+    driveFileId: doc.driveFileId || '',
+    globantDocumentId: doc.documentId || '',
+    globantProfileName: doc.profileName || '',
+    matched: true,
+  };
+}
+
+/**
+ * Precarga matches del catálogo (léxico + semántico) al inicio del paso de respuesta.
+ * Se reutiliza como red de seguridad si RAG/agentes vienen vacíos (sin segunda búsqueda).
+ * @param {string} question
+ * @param {{limit?:number}} [opts]
+ * @return {Array<Object>}
+ */
+function AgentOrchestrator_prefetchCatalogMatches_(question, opts) {
+  var limit = opts && opts.limit ? Math.min(15, Math.max(1, opts.limit)) : 10;
+  var docs = ContentCatalog_findRowsMatchingQuestion_(question, { limit: limit });
+  docs = ContentCatalog_filterDocsForSessionRole_(docs);
+  console.log('[ORCH-PREFETCH] catalog matches=' + docs.length);
+  return docs;
+}
+
+/**
+ * @param {string} question
+ * @param {Array=} history
+ * @param {{orchestrator:Object}} ctx
+ * @param {Array<Object>=} prefetchedDocs
+ * @return {Object|null}
+ */
+function AgentOrchestrator_tryOrchestratorCatalogFallback_(question, history, ctx, prefetchedDocs) {
+  var docs =
+    prefetchedDocs && prefetchedDocs.length
+      ? prefetchedDocs
+      : ContentCatalog_findRowsMatchingQuestion_(question, { limit: 10 });
+  docs = ContentCatalog_filterDocsForSessionRole_(docs);
+  if (!docs.length) return null;
+  var answer = AgentOrchestrator_answerOrchestratorCatalogFallback_(
+    question,
+    history,
+    docs,
+    ctx.orchestrator,
+  );
+  if (AgentOrchestrator_isEmptyResponse_(answer.answer)) return null;
+  return answer;
+}
+
+/**
  * Responde usando contexto directo de los resúmenes del catálogo (sin búsqueda RAG).
  * Incluye links a los documentos en Drive.
  * @param {string} question
@@ -147,36 +495,36 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
   var q = String(question || '').trim();
   var docsContext = AgentOrchestrator_buildDocsContext_(docs);
 
-  var systemPrompt = agent.systemPrompt || '';
-  systemPrompt += '\n' + AgentOrchestrator_languageInstruction_(q);
-  systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
-  systemPrompt += '\n\n[CONTEXTO DE DOCUMENTOS DEL CLIENTE "' + clientName + '"]\n' + docsContext + '\n[/CONTEXTO DE DOCUMENTOS]\n';
+  var catalogOnly = false;
+  for (var dci = 0; dci < docs.length; dci++) {
+    if (docs[dci] && docs[dci].catalogContextOnly) {
+      catalogOnly = true;
+      break;
+    }
+  }
+
+  var systemPrompt = catalogOnly || AgentOrchestrator_docsHaveUsableCatalogContext_(docs)
+    ? AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, q)
+    : String(agent.systemPrompt || '');
+  var contextLabel = clientName
+    ? '[CONTEXTO DE DOCUMENTOS DEL CLIENTE "' + clientName + '"]'
+    : '[CONTEXTO DE DOCUMENTOS DEL CATÁLOGO]';
+  systemPrompt += '\n\n' + contextLabel + '\n' + docsContext + '\n[/CONTEXTO DE DOCUMENTOS]\n';
+  if (catalogOnly) {
+    systemPrompt +=
+      '\nNota: el contexto proviene del catálogo Aviators (resumen curado) y puede no estar en el índice RAG.';
+  }
   systemPrompt += '\nINSTRUCCIONES DE RESPUESTA:';
   systemPrompt += '\n1. Usa ÚNICAMENTE la información de los documentos proporcionados arriba.';
   systemPrompt += '\n2. Formula una respuesta clara y bien estructurada.';
   systemPrompt += '\n3. Si la información no está en el contexto, indica que no tienes datos disponibles.';
+  systemPrompt += '\n4. NO respondas con [[NO_RELEVANT_CONTENT]] si el contexto anterior contiene datos pertinentes.';
 
-  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
-  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
-
-  var histArr = Array.isArray(history) ? history : [];
-  var userMessage = rolePrefix + q;
-  if (histArr.length > 0) {
-    var histLines = [];
-    for (var h = 0; h < histArr.length; h++) {
-      var entry = histArr[h];
-      if (entry && entry.role && entry.content) {
-        histLines.push('[' + entry.role.toUpperCase() + ']\n' + entry.content);
-      }
-    }
-    if (histLines.length > 0) {
-      userMessage = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
-    }
-  }
+  var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
   var p = PropertiesService.getScriptProperties();
   var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
-  var baseUrl = (p.getProperty('GLOBANT_AGENTS_BASE_URL') || '').trim();
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
 
   var client = GlobantAssistantApiClient_create({
     apiKey: apiKey,
@@ -207,13 +555,7 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
 
   var references = [];
   for (var i = 0; i < docs.length; i++) {
-    references.push({
-      title: docs[i].title || docs[i].fileName || 'Documento',
-      contentType: docs[i].contentType || '',
-      clientName: docs[i].clientName || '',
-      url: docs[i].driveUrl || '',
-      matched: true,
-    });
+    references.push(AgentOrchestrator_catalogDocToReference_(docs[i]));
   }
 
   return {
@@ -267,19 +609,39 @@ function AgentOrchestrator_routeOnly(question) {
  * Si detecta cliente con pocos docs, usa contexto directo; si no, RAG semántico.
  * @param {string} question
  * @param {string} agentId
+ * @param {Array=} history
+ * @param {Array<Object>=} catalogPrefetch
  * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string, agentName: string, references?: Array<Object> }}
  */
-function AgentOrchestrator_answerWith(question, agentId, history) {
+function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetch) {
   AgentOrchestrator_requireGlobant_();
 
   var q = AgentOrchestrator_requireQuestion_(question);
 
   var ctx = AgentOrchestrator_loadContext_();
+  if (!catalogPrefetch || !catalogPrefetch.length) {
+    catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
+  }
   var chosen = ctx.byId[agentId] || ctx.orchestrator;
+  var clientDetection = AgentOrchestrator_detectClientDocs_(q, catalogPrefetch);
+  var agentDocs = AgentOrchestrator_filterDocsForAgent_(clientDetection.docs, chosen.id);
+  var clientLabel =
+    clientDetection.clientName ||
+    (agentDocs.length && agentDocs[0].clientName) ||
+    '';
 
-  if (chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
-      !AgentOrchestrator_profileHasDocuments_(chosen.profileName)) {
-    console.log('[ORCH] Agent "' + chosen.id + '" has no indexed documents - returning empty response');
+  if (
+    chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
+    !AgentOrchestrator_agentHasAnswerSource_(chosen, agentDocs)
+  ) {
+    console.log('[ORCH] Agent "' + chosen.id + '" has no RAG index nor catalog context');
+    var orchFbNoIndex = AgentOrchestrator_tryOrchestratorCatalogFallback_(
+      q,
+      history,
+      ctx,
+      catalogPrefetch,
+    );
+    if (orchFbNoIndex) return orchFbNoIndex;
     return {
       answer: UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content'),
       model: '',
@@ -294,14 +656,24 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     };
   }
 
-  var clientDetection = AgentOrchestrator_detectClientDocs_(q);
-
-  if (clientDetection.clientName &&
-      clientDetection.docCount > 0 &&
-      clientDetection.docCount <= _ORCH_DIRECT_CONTEXT_MAX_DOCS &&
-      chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR) {
-    console.log('[ORCH] Using direct context for "' + clientDetection.clientName + '" (' + clientDetection.docCount + ' docs)');
-    return AgentOrchestrator_answerWithDocContext_(q, chosen, clientDetection.docs, clientDetection.clientName, history);
+  if (
+    AgentOrchestrator_canUseDirectCatalogContext_(agentDocs) &&
+    chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR
+  ) {
+    console.log(
+      '[ORCH] Using direct catalog context for "' +
+        clientLabel +
+        '" (' +
+        agentDocs.length +
+        ' docs)',
+    );
+    return AgentOrchestrator_answerWithDocContext_(
+      q,
+      chosen,
+      agentDocs,
+      clientLabel,
+      history,
+    );
   }
 
   var systemPrompt = chosen.systemPrompt;
@@ -311,23 +683,7 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
   systemPrompt += '\n' + AgentOrchestrator_languageInstruction_(q);
   systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
 
-  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
-  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
-
-  var histArr = Array.isArray(history) ? history : [];
-  var promptWithHistory = rolePrefix + q;
-  if (histArr.length > 0) {
-    var histLines = [];
-    for (var h = 0; h < histArr.length; h++) {
-      var entry = histArr[h];
-      if (entry && entry.role && entry.content) {
-        histLines.push('[' + entry.role.toUpperCase() + ']\n' + entry.content);
-      }
-    }
-    if (histLines.length > 0) {
-      promptWithHistory = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
-    }
-  }
+  var promptWithHistory = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
   var answer = LlmProviderGlobant_consultPromptWithAgent(
     chosen.profileName,
@@ -336,10 +692,38 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
     [],
   );
 
+  if (
+    AgentOrchestrator_isEmptyResponse_(answer.answer) &&
+    AgentOrchestrator_canUseDirectCatalogContext_(agentDocs) &&
+    chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR
+  ) {
+    console.log('[ORCH] RAG empty; falling back to catalog context for "' + chosen.id + '"');
+    return AgentOrchestrator_answerWithDocContext_(
+      q,
+      chosen,
+      agentDocs,
+      clientLabel,
+      history,
+    );
+  }
+
   var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer.answer);
   answer.answer = AgentOrchestrator_sanitizeAnswer_(answer.answer);
   answer.isUnanswered = isUnanswered;
   answer.unansweredCode = isUnanswered ? 'NO_RELEVANT_CONTENT' : '';
+
+  if (isUnanswered) {
+    var orchFb = AgentOrchestrator_tryOrchestratorCatalogFallback_(
+      q,
+      history,
+      ctx,
+      catalogPrefetch,
+    );
+    if (orchFb) {
+      return orchFb;
+    }
+  }
+
   var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
     agent: chosen.profileName,
     confidence: 'routed',
@@ -358,54 +742,57 @@ function AgentOrchestrator_answerWith(question, agentId, history) {
  * Si detecta cliente con pocos docs, usa contexto directo; si no, RAG semántico.
  * @param {string} question
  * @param {Array<string>} agentIds
+ * @param {Array=} history
+ * @param {Array<Object>=} catalogPrefetch
  * @return {Array<{answer:string, agentName:string, model:string, providerLabel:string, rawJson:string, filterLabel:string, references?:Array<Object>}>}
  */
-function AgentOrchestrator_answerMulti(question, agentIds, history) {
+function AgentOrchestrator_answerMulti(question, agentIds, history, catalogPrefetch) {
   AgentOrchestrator_requireGlobant_();
   var q = AgentOrchestrator_requireQuestion_(question);
   var ctx = AgentOrchestrator_loadContext_();
+  if (!catalogPrefetch || !catalogPrefetch.length) {
+    catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
+  }
   var langInstr = AgentOrchestrator_languageInstruction_(q);
 
-  var roleTag = AgentOrchestrator_resolveUserRoleTag_();
-  var rolePrefix = '[ROL_USUARIO: ' + roleTag + ']\n';
+  var promptWithHistory = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
-  var histArr = Array.isArray(history) ? history : [];
-  var promptWithHistory = rolePrefix + q;
-  if (histArr.length > 0) {
-    var histLines = [];
-    for (var h = 0; h < histArr.length; h++) {
-      var entry = histArr[h];
-      if (entry && entry.role && entry.content) {
-        histLines.push('[' + entry.role.toUpperCase() + ']\n' + entry.content);
-      }
-    }
-    if (histLines.length > 0) {
-      promptWithHistory = rolePrefix + '[CONVERSATION HISTORY]\n' + histLines.join('\n\n') + '\n[/CONVERSATION HISTORY]\n\n[CURRENT QUESTION]\n' + q + '\n[/CURRENT QUESTION]';
-    }
-  }
-
-  var clientDetection = AgentOrchestrator_detectClientDocs_(q);
-  var useDirectContext = clientDetection.clientName &&
-      clientDetection.docCount > 0 &&
-      clientDetection.docCount <= _ORCH_DIRECT_CONTEXT_MAX_DOCS;
+  var clientDetection = AgentOrchestrator_detectClientDocs_(q, catalogPrefetch);
 
   var results = [];
   for (var i = 0; i < agentIds.length; i++) {
     var chosen = ctx.byId[agentIds[i]];
     if (!chosen) continue;
 
-    if (chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
-        !AgentOrchestrator_profileHasDocuments_(chosen.profileName)) {
-      console.log('[ORCH] Skipping agent "' + chosen.id + '" - no indexed documents');
+    var agentDocs = AgentOrchestrator_filterDocsForAgent_(clientDetection.docs, chosen.id);
+    var clientLabel =
+      clientDetection.clientName ||
+      (agentDocs.length && agentDocs[0].clientName) ||
+      '';
+
+    if (
+      chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
+      !AgentOrchestrator_agentHasAnswerSource_(chosen, agentDocs)
+    ) {
+      console.log('[ORCH] Skipping agent "' + chosen.id + '" - no RAG index nor catalog context');
       continue;
     }
 
     try {
       var answer;
 
-      if (useDirectContext && chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR) {
-        console.log('[ORCH-MULTI] Using direct context for agent "' + chosen.id + '"');
-        answer = AgentOrchestrator_answerWithDocContext_(q, chosen, clientDetection.docs, clientDetection.clientName, history);
+      if (
+        AgentOrchestrator_canUseDirectCatalogContext_(agentDocs) &&
+        chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR
+      ) {
+        console.log('[ORCH-MULTI] Using direct catalog context for agent "' + chosen.id + '"');
+        answer = AgentOrchestrator_answerWithDocContext_(
+          q,
+          chosen,
+          agentDocs,
+          clientLabel,
+          history,
+        );
       } else {
         var systemPrompt = chosen.systemPrompt;
         if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
@@ -426,6 +813,23 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
           confidence: 'routed',
         });
         answer.filterLabel = filterLabel;
+
+        if (
+          AgentOrchestrator_isEmptyResponse_(answer.answer) &&
+          AgentOrchestrator_canUseDirectCatalogContext_(agentDocs) &&
+          chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR
+        ) {
+          console.log(
+            '[ORCH-MULTI] RAG empty; catalog fallback for agent "' + chosen.id + '"',
+          );
+          answer = AgentOrchestrator_answerWithDocContext_(
+            q,
+            chosen,
+            agentDocs,
+            clientLabel,
+            history,
+          );
+        }
       }
 
       if (!AgentOrchestrator_isEmptyResponse_(answer.answer)) {
@@ -440,6 +844,19 @@ function AgentOrchestrator_answerMulti(question, agentIds, history) {
       }
     } catch (e) {
       console.log('[ORCH-MULTI] Error with agent "' + chosen.id + '": ' + e.message);
+    }
+  }
+
+  if (!results.length) {
+    var catalogFallback = AgentOrchestrator_tryOrchestratorCatalogFallback_(
+      q,
+      history,
+      ctx,
+      catalogPrefetch,
+    );
+    if (catalogFallback) {
+      catalogFallback.answer = AgentOrchestrator_sanitizeAnswer_(catalogFallback.answer);
+      results.push(catalogFallback);
     }
   }
 
@@ -496,12 +913,14 @@ function AgentOrchestrator_resolveDriveUrlByFileName_(fileName) {
   if (_ORCH_DRIVE_URL_BY_FILE_NAME[key] != null) return _ORCH_DRIVE_URL_BY_FILE_NAME[key];
   try {
     var escaped = key.replace(/'/g, "\\'");
+    var rootFolderId = AviatorsConfig_driveRootFolderId_();
     var q =
       "title = '" +
       escaped +
-      "' and '" +
-      CATALOG_ROOT_FOLDER_ID +
-      "' in parents and trashed = false";
+      "' and trashed = false";
+    if (rootFolderId) {
+      q = "title = '" + escaped + "' and '" + rootFolderId + "' in parents and trashed = false";
+    }
     var it = DriveApp.searchFiles(q);
     if (it.hasNext()) {
       var f = it.next();
@@ -582,7 +1001,10 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
     if (docId && text.indexOf(AgentOrchestrator_normText_(docId)) >= 0) score += 4;
     if (score <= 0) continue;
 
-    var url = driveFileUrl || AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
+    var url = '';
+    if (cType === 'success_case') {
+      url = driveFileUrl || AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
+    }
     scored.push({
       score: score,
       ref: {
@@ -592,6 +1014,9 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
         url: url,
         fileName: fileName,
         driveFileId: driveFileId,
+        globantDocumentId: docId,
+        globantProfileName: String(c.globant_profile_name || '').trim(),
+        clientName: client,
       },
     });
   }
@@ -618,15 +1043,26 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
  * @return {{ answer: string, model: string, providerLabel: string, rawJson: string, filterLabel: string }}
  */
 function AgentOrchestrator_answer(question) {
+  AgentOrchestrator_requireGlobant_();
+  var q = AgentOrchestrator_requireQuestion_(question);
+  var catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
   var route = AgentOrchestrator_routeOnly(question);
   var ids = [];
   for (var i = 0; i < route.agents.length; i++) ids.push(route.agents[i].id);
   if (ids.length === 1) {
-    return AgentOrchestrator_answerWith(question, ids[0]);
+    return AgentOrchestrator_answerWith(question, ids[0], [], catalogPrefetch);
   }
-  var multi = AgentOrchestrator_answerMulti(question, ids);
+  var multi = AgentOrchestrator_answerMulti(question, ids, [], catalogPrefetch);
   if (multi.length === 0) {
-    return AgentOrchestrator_answerWith(question, _ADMIN_AGENT_ID_ORCHESTRATOR);
+    var ctx = AgentOrchestrator_loadContext_();
+    var fallback = AgentOrchestrator_tryOrchestratorCatalogFallback_(
+      question,
+      [],
+      ctx,
+      catalogPrefetch,
+    );
+    if (fallback) return fallback;
+    return AgentOrchestrator_answerWith(question, _ADMIN_AGENT_ID_ORCHESTRATOR, [], catalogPrefetch);
   }
   return multi[0];
 }
@@ -1060,5 +1496,356 @@ function AgentOrchestrator_keywordFallback_(question, candidates) {
     agentId: fallbackId,
     confidence: 'low',
     reason: 'fallback',
+  };
+}
+
+/**
+ * Diagnóstico RAG + catálogo (ejecutar desde el editor Apps Script).
+ * @param {string} [question]
+ * @return {Object}
+ */
+function AgentOrchestrator_debugRagDiagnostics_(question) {
+  var q = String(question || 'Iberia').trim();
+  var props = PropertiesService.getScriptProperties();
+  var apiMode = (props.getProperty(LLM_PROP.GLOBANT_API_MODE) || 'rag').trim();
+  var out = {
+    question: q,
+    globantApiMode: apiMode,
+    assistantMode: LlmProviderGlobant_isAssistantMode(props),
+    catalogMatches: [],
+    clientDetection: null,
+    agents: [],
+    notes: [],
+  };
+
+  if (LlmProviderGlobant_isAssistantMode(props)) {
+    out.notes.push(
+      'GLOBANT_API_MODE=assistant: los agentes aviators-* usan RAG /search/execute; el orquestador usa Assistant chat.',
+    );
+  }
+
+  try {
+    out.clientDetection = AgentOrchestrator_detectClientDocs_(q);
+  } catch (eDetect) {
+    out.clientDetection = { error: String(eDetect.message || eDetect) };
+  }
+
+  try {
+    out.catalogMatches = ContentCatalog_findRowsMatchingQuestion_(q, { limit: 5 });
+  } catch (eCat) {
+    out.catalogMatches = [{ error: String(eCat.message || eCat) }];
+  }
+
+  var ctx;
+  try {
+    ctx = AgentOrchestrator_loadContext_();
+  } catch (eCtx) {
+    out.notes.push('loadContext: ' + String(eCtx.message || eCtx));
+    return out;
+  }
+
+  var agentIds = [
+    _ADMIN_AGENT_ID_SUCCESS_CASES,
+    _ADMIN_AGENT_ID_PROPOSALS,
+    _ADMIN_AGENT_ID_CLIENTS,
+  ];
+  var apiKey = (props.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) {
+    out.notes.push('Falta GLOBANT_AGENTS_API_KEY');
+    return out;
+  }
+
+  var baseUrl = (props.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var ragClient = null;
+  try {
+    ragClient = GlobantRagApiClient_create({
+      apiKey: apiKey,
+      baseUrl: baseUrl || undefined,
+    });
+  } catch (eRag) {
+    out.notes.push('RAG client: ' + String(eRag.message || eRag));
+  }
+
+  var i;
+  for (i = 0; i < agentIds.length; i++) {
+    var ag = ctx.byId[agentIds[i]];
+    if (!ag) continue;
+    /** @type {Object} */
+    var row = {
+      id: ag.id,
+      profileName: ag.profileName,
+      profileHasDocuments: AgentOrchestrator_profileHasDocuments_(ag.profileName),
+      ragExecutePath: LlmProviderGlobant_useRagExecuteForProfile_(ag.profileName, props),
+      documentCount: 0,
+      sampleExecute: null,
+    };
+    if (ragClient) {
+      try {
+        var listed = ragClient.listProfileDocuments(ag.profileName, 0, 5);
+        row.documentCount = listed && listed.documents ? listed.documents.length : 0;
+        if (listed && listed.documents && listed.documents.length) {
+          row.sampleDocuments = listed.documents.slice(0, 3).map(function (d) {
+            return { id: d.id, name: d.name, indexStatus: d.indexStatus };
+          });
+        }
+      } catch (eList) {
+        row.listError = String(eList.message || eList).slice(0, 300);
+      }
+      try {
+        var exec = ragClient.executeQueryDetailed(ag.profileName, q, []);
+        row.sampleExecute = {
+          textPreview: String(exec.text || '').slice(0, 400),
+          hasNoContentSentinel:
+            String(exec.text || '').indexOf('[[NO_RELEVANT_CONTENT]]') >= 0,
+        };
+      } catch (eExec) {
+        row.sampleExecute = { error: String(eExec.message || eExec).slice(0, 300) };
+      }
+    }
+    out.agents.push(row);
+  }
+
+  return out;
+}
+
+/** Tope de bytes para adjuntos efímeros en el chat (evita timeouts de UrlFetch). */
+var EPHEMERAL_DOC_MAX_BYTES = 12 * 1024 * 1024;
+
+/**
+ * Valida payload de documento efímero del chat (no persiste, no requiere permiso de contenidos).
+ * @param {Object} payload
+ * @return {{name:string,mimeType:string,dataBase64:string}}
+ */
+function AgentOrchestrator_validateEphemeralPayload_(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_payload'));
+  }
+  var name = String(payload.name || 'document.pdf').trim();
+  var mime = String(payload.mimeType || 'application/pdf').trim();
+  var b64 = String(payload.dataBase64 || '');
+  if (!b64) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_empty'));
+  }
+  if (!DriveDocuments_mimeEligibleForGlobantRag(mime)) {
+    throw new Error(
+      UiStrings_fmt_('err_ephemeral_doc_mime', {
+        name: name,
+        mime: mime || UiStrings_t(UiStrings_activeLocale_(), 'label_em_dash'),
+      }),
+    );
+  }
+  var bytes = Utilities.base64Decode(b64);
+  if (!bytes || bytes.length === 0) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_empty'));
+  }
+  if (bytes.length > EPHEMERAL_DOC_MAX_BYTES) {
+    throw new Error(
+      UiStrings_fmt_('err_ephemeral_doc_too_large', {
+        max_mb: String(Math.floor(EPHEMERAL_DOC_MAX_BYTES / (1024 * 1024))),
+      }),
+    );
+  }
+  return { name: name, mimeType: mime, dataBase64: b64 };
+}
+
+/**
+ * Clasifica si el PDF es elegible (RFP / logística / aerolíneas).
+ * @param {Object} client GlobantAssistantApiClient
+ * @param {string} fileBase64
+ * @param {string} mimeType
+ * @return {{eligible:boolean,reason:string,docKind:string,topics:Array<string>,industry:string,clientHint:string}}
+ */
+function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeType) {
+  var classifyPrompt = [
+    'Analizá el documento adjunto y respondé SOLO con JSON válido (sin markdown):',
+    '{',
+    '  "eligible": boolean,',
+    '  "reason": "string breve",',
+    '  "docKind": "rfp|logistics|airline|airport|other",',
+    '  "topics": ["3-8 palabras clave en español o inglés"],',
+    '  "industry": "industria detectada o vacío",',
+    '  "clientHint": "nombre de empresa/cliente si aparece, o vacío"',
+    '}',
+    '',
+    'eligible=true SOLO si el documento es:',
+    '- una RFP, tender, solicitud de propuesta, pliego, o brief comercial similar, O',
+    '- documentación operativa/comercial de empresa de logística, freight, cargo, supply chain, aerolíneas, aeropuertos o aviación.',
+    'eligible=false para contratos genéricos, CVs, marketing no relacionado, IT genérico, etc.',
+  ].join('\n');
+
+  var result = client.chatWithFileInline(
+    CONTENT_EXTRACTION_MODEL,
+    'Sos un clasificador estricto. Devolvé únicamente JSON.',
+    classifyPrompt,
+    fileBase64,
+    mimeType,
+  );
+
+  var raw = String(result.text || '').trim();
+  var start = raw.indexOf('{');
+  var end = raw.lastIndexOf('}');
+  if (start < 0 || end < start) {
+    return {
+      eligible: false,
+      reason: 'classification_parse_error',
+      docKind: 'other',
+      topics: [],
+      industry: '',
+      clientHint: '',
+    };
+  }
+  try {
+    var o = JSON.parse(raw.substring(start, end + 1));
+    var topics = [];
+    if (Array.isArray(o.topics)) {
+      for (var i = 0; i < o.topics.length; i++) {
+        var t = String(o.topics[i] || '').trim();
+        if (t) topics.push(t);
+      }
+    }
+    return {
+      eligible: !!o.eligible,
+      reason: String(o.reason || '').trim(),
+      docKind: String(o.docKind || 'other').trim(),
+      topics: topics,
+      industry: String(o.industry || '').trim(),
+      clientHint: String(o.clientHint || '').trim(),
+    };
+  } catch (eParse) {
+    return {
+      eligible: false,
+      reason: 'classification_parse_error',
+      docKind: 'other',
+      topics: [],
+      industry: '',
+      clientHint: '',
+    };
+  }
+}
+
+/**
+ * System prompt para análisis de documento efímero + match con catálogo.
+ * @param {string} question
+ * @param {Array<Object>} catalogDocs
+ * @param {Object} orchestrator
+ * @return {string}
+ */
+function AgentOrchestrator_buildEphemeralDocumentSystemPrompt_(question, catalogDocs, orchestrator) {
+  var lines = [];
+  lines.push(AgentOrchestrator_buildSelfAnswerPrompt_());
+  lines.push(AgentOrchestrator_languageInstruction_(question));
+  lines.push(AgentOrchestrator_buildRoleRestriction_());
+  lines.push('');
+  lines.push('## Modo: documento adjunto efímero');
+  lines.push('El usuario adjuntó un PDF que NO se guarda. Analizalo y respondé a su pregunta.');
+  lines.push('Compará el contenido del PDF con las filas del catálogo Aviators listadas abajo (búsqueda semántica + resúmenes).');
+  lines.push('Señalá similitudes con propuestas o casos de éxito existentes (cliente, industria, servicios, alcance).');
+  lines.push('Si no hay match claro en el catálogo, indicá qué buscaste y que no hay coincidencias suficientes.');
+  lines.push('No cites filas del catálogo que no estén en la lista provista.');
+  if (orchestrator && orchestrator.systemPrompt) {
+    lines.push('');
+    lines.push('[NOTA INTERNA ORQUESTADOR — no repetir al usuario]');
+    lines.push(String(orchestrator.systemPrompt).slice(0, 500));
+  }
+  if (catalogDocs && catalogDocs.length) {
+    lines.push('');
+    lines.push('[FILAS DEL CATÁLOGO AVIATORS — POSIBLES MATCHES]');
+    lines.push(AgentOrchestrator_buildDocsContext_(catalogDocs));
+    lines.push('[/FILAS DEL CATÁLOGO]');
+  } else {
+    lines.push('');
+    lines.push('[FILAS DEL CATÁLOGO AVIATORS — POSIBLES MATCHES]');
+    lines.push('(No se encontraron filas del catálogo con similitud suficiente para esta consulta.)');
+    lines.push('[/FILAS DEL CATÁLOGO]');
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Analiza un documento adjunto efímero en el chat (sin persistir) vía orquestador.
+ * @param {string} question
+ * @param {string} payloadJson {name,mimeType,dataBase64}
+ * @param {string=} historyJson
+ * @return {{answer:string,agentName:string,model:string,providerLabel:string,rawJson:string,filterLabel:string,references:Array,isUnanswered:boolean,unansweredCode:string,docClassification:Object}}
+ */
+function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, historyJson) {
+  AgentOrchestrator_requireGlobant_();
+  var q = AgentOrchestrator_requireQuestion_(question);
+  var history = [];
+  try {
+    if (historyJson) history = JSON.parse(historyJson);
+  } catch (eHist) {}
+
+  var payload = JSON.parse(String(payloadJson || '').trim());
+  var prepared = AgentOrchestrator_validateEphemeralPayload_(payload);
+
+  var props = PropertiesService.getScriptProperties();
+  var apiKey = (props.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+  if (!apiKey) throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_key'));
+  var baseUrl = (props.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var client = GlobantAssistantApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  var classification = AgentOrchestrator_classifyEphemeralDocument_(
+    client,
+    prepared.dataBase64,
+    prepared.mimeType,
+  );
+  if (!classification.eligible) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_not_eligible'),
+    );
+  }
+
+  var catalogDocs = ContentCatalog_findRowsForEphemeralDocument_(q, classification, {
+    limit: 8,
+  });
+  catalogDocs = ContentCatalog_filterDocsForSessionRole_(catalogDocs);
+
+  var ctx = AgentOrchestrator_loadContext_();
+  var orchestrator = ctx.orchestrator;
+  var systemPrompt = AgentOrchestrator_buildEphemeralDocumentSystemPrompt_(
+    q,
+    catalogDocs,
+    orchestrator,
+  );
+  var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
+  userMessage +=
+    '\n\n[DOCUMENTO ADJUNTO — analizá el PDF adjunto y respondé según las instrucciones del sistema.]';
+
+  var answerResult = client.chatWithFileInline(
+    CONTENT_EXTRACTION_MODEL,
+    systemPrompt,
+    userMessage,
+    prepared.dataBase64,
+    prepared.mimeType,
+  );
+
+  var rawA = JSON.stringify(answerResult.parsed || {}).slice(0, 4000);
+  var answer = AgentOrchestrator_sanitizeAnswer_(answerResult.text || '');
+  var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
+  var filterLabel = UiStrings_fmt_('meta_ephemeral_doc_analyzed', {
+    name: prepared.name,
+  });
+
+  /** @type {Array<Object>} */
+  var references = [];
+  for (var ri = 0; ri < catalogDocs.length; ri++) {
+    references.push(AgentOrchestrator_catalogDocToReference_(catalogDocs[ri]));
+  }
+
+  return {
+    answer: answer,
+    model: CONTENT_EXTRACTION_MODEL,
+    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
+    rawJson: rawA,
+    agentName: orchestrator.profileName,
+    references: references,
+    filterLabel: filterLabel,
+    isUnanswered: isUnanswered,
+    unansweredCode: isUnanswered ? 'NO_RELEVANT_CONTENT' : '',
+    docClassification: classification,
   };
 }

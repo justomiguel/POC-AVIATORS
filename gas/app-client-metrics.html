@@ -7,9 +7,8 @@
   var rangeEl = document.getElementById('metrics-range');
   var refreshBtn = document.getElementById('metrics-refresh-btn');
   var resetBtn = document.getElementById('metrics-reset-btn');
-  var resetAllSection = document.getElementById('admin-reset-all-section');
-  var resetAllBtn = document.getElementById('admin-reset-all-btn');
   var statusWrap = document.getElementById('metrics-status');
+  var statusLoader = statusWrap ? statusWrap.querySelector('.loader-flight-inline') : null;
   var statusIcon = document.getElementById('metrics-status-icon');
   var statusText = document.getElementById('metrics-status-text');
 
@@ -30,10 +29,15 @@
   var unansweredInfo = document.getElementById('metrics-unanswered-page-info');
   var unansweredPrevBtn = document.getElementById('metrics-unanswered-prev');
   var unansweredNextBtn = document.getElementById('metrics-unanswered-next');
+  var queueFilterEl = document.getElementById('metrics-queue-filter');
 
   var unansweredPage = { skip: 0, limit: 10, total: 0, hasMore: false };
+  var queueCanManage = false;
+  var queueAssignees = [];
+  var queueRowBusyId = '';
   var trendChart = null;
   var agentChart = null;
+  var chartJsPromise = null;
   var loadingDashboard = false;
   var loadingUnanswered = false;
 
@@ -41,32 +45,327 @@
     return rangeEl ? String(rangeEl.value || '30d') : '30d';
   }
 
-  function setStatus(text, busy) {
+  function isMetricsBusy() {
+    return loadingDashboard || loadingUnanswered;
+  }
+
+  function setStatus(text, busy, opts) {
     if (!statusWrap || !statusText) return;
+    var o = opts || {};
     var t = String(text || '').trim();
-    if (!t) {
+    if (!t && !busy) {
       statusWrap.classList.add('hidden');
       statusText.textContent = '';
+      if (statusLoader) statusLoader.classList.add('hidden');
+      if (statusIcon) {
+        statusIcon.classList.add('hidden');
+        statusIcon.classList.remove(
+          'fa-spin',
+          'fa-spinner',
+          'fa-circle-check',
+          'fa-triangle-exclamation',
+        );
+      }
       return;
     }
     statusWrap.classList.remove('hidden');
     statusText.textContent = t;
-    var icon = statusIcon;
-    if (icon) {
-      icon.classList.toggle('fa-spin', !!busy);
-      icon.classList.toggle('fa-spinner', !!busy);
-      icon.classList.toggle('fa-circle-check', !busy);
+    if (statusLoader) statusLoader.classList.toggle('hidden', !busy);
+    if (statusIcon) {
+      statusIcon.classList.toggle('hidden', !!busy);
+      statusIcon.classList.remove(
+        'fa-spin',
+        'fa-spinner',
+        'fa-circle-check',
+        'fa-triangle-exclamation',
+      );
+      if (!busy && t && o.error) {
+        statusIcon.classList.add('fa-triangle-exclamation');
+      }
     }
   }
 
+  function refreshMetricsStatus() {
+    syncBusyControls();
+    if (isMetricsBusy()) {
+      var msg = loadingDashboard
+        ? i18n('metrics_loading_dashboard')
+        : i18n('metrics_loading_unanswered');
+      setStatus(msg, true);
+      return;
+    }
+    setStatus('', false);
+  }
+
   function syncBusyControls() {
-    var busy = loadingDashboard || loadingUnanswered;
+    var busy = loadingDashboard || loadingUnanswered || !!queueRowBusyId;
     if (rangeEl) rangeEl.disabled = busy;
     if (refreshBtn) refreshBtn.disabled = busy;
     if (resetBtn) resetBtn.disabled = busy;
-    if (resetAllBtn) resetAllBtn.disabled = busy;
+    if (queueFilterEl) queueFilterEl.disabled = busy;
     if (unansweredPrevBtn) unansweredPrevBtn.disabled = busy || unansweredPage.skip <= 0;
     if (unansweredNextBtn) unansweredNextBtn.disabled = busy || !unansweredPage.hasMore;
+  }
+
+  function metricsQueueStatusLabel(status) {
+    return status === 'missing_content'
+      ? i18n('metrics_queue_status_missing')
+      : i18n('metrics_queue_status_open');
+  }
+
+  function metricsQueueLoadAssignees(onDone) {
+    if (!S.get('canManageUnansweredQueue')) {
+      queueAssignees = [];
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        queueAssignees = (res && res.items) || [];
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function () {
+        queueAssignees = [];
+        if (typeof onDone === 'function') onDone();
+      })
+      .metricsUnansweredAssignees();
+  }
+
+  function metricsQueueOpenUpload(row) {
+    if (!S.get('canWriteContents')) {
+      if (A.toast) A.toast.error(i18n('metrics_queue_upload_denied'));
+      return;
+    }
+    var type = String(row.suggested_content_type || 'proposal').trim() || 'proposal';
+    A.setAppPage('contents');
+    if (A.contents && A.contents.startNewFromQueue) {
+      A.contents.startNewFromQueue({
+        contentType: type,
+        titleHint: row.question_text || '',
+      });
+    }
+  }
+
+  function metricsQueueRunAssign(eventId, assigneeEmail, onDone) {
+    queueRowBusyId = String(eventId || '');
+    syncBusyControls();
+    A.showBlockingModal(i18n('metrics_queue_busy_assign'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        queueRowBusyId = '';
+        syncBusyControls();
+        if (res && res.ok) {
+          if (A.toast) A.toast.success(i18n('metrics_queue_done_assign'));
+          loadUnanswered(false);
+        } else if (A.toast) A.toast.error(i18n('metrics_load_error'));
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        queueRowBusyId = '';
+        syncBusyControls();
+        if (A.toast) A.toast.error((e && e.message) || i18n('metrics_load_error'));
+        if (typeof onDone === 'function') onDone();
+      })
+      .metricsUnansweredAssign(eventId, assigneeEmail);
+  }
+
+  function metricsQueueRunStatus(eventId, status, rowOpt, onDone) {
+    if (typeof rowOpt === 'function') {
+      onDone = rowOpt;
+      rowOpt = null;
+    }
+    queueRowBusyId = String(eventId || '');
+    syncBusyControls();
+    A.showBlockingModal(i18n('metrics_queue_busy_status'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        queueRowBusyId = '';
+        syncBusyControls();
+        if (res && res.ok) {
+          var msg =
+            status === 'resolved'
+              ? i18n('metrics_queue_done_resolve')
+              : i18n('metrics_queue_done_missing');
+          if (A.toast) A.toast.success(msg);
+          if (status === 'missing_content' && rowOpt) {
+            metricsQueueOpenUpload(rowOpt);
+          }
+          loadUnanswered(false);
+        } else if (A.toast) A.toast.error(i18n('metrics_load_error'));
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        queueRowBusyId = '';
+        syncBusyControls();
+        if (A.toast) A.toast.error((e && e.message) || i18n('metrics_load_error'));
+        if (typeof onDone === 'function') onDone();
+      })
+      .metricsUnansweredSetStatus(eventId, status, '');
+  }
+
+  function renderUnansweredTable(rows) {
+    if (!unansweredBody) return;
+    unansweredBody.innerHTML = '';
+    var items = Array.isArray(rows) ? rows : [];
+    if (!items.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 8;
+      td.className = 'px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400';
+      td.textContent = i18n('metrics_empty');
+      tr.appendChild(td);
+      unansweredBody.appendChild(tr);
+      return;
+    }
+    for (var i = 0; i < items.length; i++) {
+      (function (row) {
+        var trRow = document.createElement('tr');
+        trRow.className = 'border-b border-slate-100 dark:border-slate-700';
+        var busyRow = queueRowBusyId && queueRowBusyId === String(row.event_id || '');
+
+        function addTextCell(text) {
+          var tdCol = document.createElement('td');
+          tdCol.className = 'px-3 py-2 align-top text-sm text-slate-700 dark:text-slate-300';
+          tdCol.textContent = text;
+          trRow.appendChild(tdCol);
+        }
+
+        addTextCell(formatDateTime(row.ts_iso));
+        addTextCell(String(row.user_display_name || row.user_email || ''));
+        addTextCell(String(row.agent_name || row.agent_id || ''));
+        addTextCell(String(row.question_text || ''));
+        addTextCell(String(row.unanswered_code || ''));
+
+        var tdStatus = document.createElement('td');
+        tdStatus.className = 'px-3 py-2 align-top text-sm';
+        var badge = document.createElement('span');
+        badge.className =
+          row.queue_status === 'missing_content'
+            ? 'inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+            : 'inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200';
+        badge.textContent = metricsQueueStatusLabel(row.queue_status);
+        tdStatus.appendChild(badge);
+        trRow.appendChild(tdStatus);
+
+        var tdAssigned = document.createElement('td');
+        tdAssigned.className = 'px-3 py-2 align-top text-sm text-slate-700 dark:text-slate-300';
+        tdAssigned.textContent =
+          String(row.assigned_to_name || row.assigned_to_email || '').trim() ||
+          i18n('metrics_queue_unassigned');
+        trRow.appendChild(tdAssigned);
+
+        var tdActions = document.createElement('td');
+        tdActions.className = 'px-3 py-2 align-top text-sm';
+        if (queueCanManage) {
+          var wrap = document.createElement('div');
+          wrap.className = 'flex min-w-[14rem] flex-col gap-2';
+
+          if (queueAssignees.length) {
+            var assignRow = document.createElement('div');
+            assignRow.className = 'flex flex-wrap items-center gap-1.5';
+            var sel = document.createElement('select');
+            sel.className = 'aviators-field min-w-[8rem] flex-1 text-xs';
+            sel.disabled = busyRow;
+            var ph = document.createElement('option');
+            ph.value = '';
+            ph.textContent = i18n('metrics_queue_assign_ph');
+            sel.appendChild(ph);
+            for (var ai = 0; ai < queueAssignees.length; ai++) {
+              var opt = document.createElement('option');
+              opt.value = queueAssignees[ai].email;
+              opt.textContent =
+                queueAssignees[ai].displayName || queueAssignees[ai].email;
+              if (
+                String(row.assigned_to_email || '').toLowerCase() ===
+                String(queueAssignees[ai].email || '').toLowerCase()
+              ) {
+                opt.selected = true;
+              }
+              sel.appendChild(opt);
+            }
+            var assignBtn = document.createElement('button');
+            assignBtn.type = 'button';
+            assignBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-1.5';
+            assignBtn.disabled = busyRow;
+            assignBtn.innerHTML =
+              '<i class="fa-solid fa-user-check" aria-hidden="true"></i><span>' +
+              i18n('metrics_queue_btn_assign') +
+              '</span>';
+            assignBtn.addEventListener('click', function () {
+              var em = String(sel.value || '').trim();
+              if (!em) return;
+              metricsQueueRunAssign(row.event_id, em);
+            });
+            assignRow.appendChild(sel);
+            assignRow.appendChild(assignBtn);
+            wrap.appendChild(assignRow);
+          }
+
+          var btnRow = document.createElement('div');
+          btnRow.className = 'flex flex-wrap gap-1.5';
+
+          if (S.get('canWriteContents')) {
+            var uploadBtn = document.createElement('button');
+            uploadBtn.type = 'button';
+            uploadBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-1.5';
+            uploadBtn.disabled = busyRow;
+            uploadBtn.innerHTML =
+              '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i><span>' +
+              i18n('metrics_queue_btn_upload') +
+              '</span>';
+            uploadBtn.addEventListener('click', function () {
+              metricsQueueOpenUpload(row);
+            });
+            btnRow.appendChild(uploadBtn);
+          }
+
+          if (row.queue_status !== 'missing_content') {
+            var missingBtn = document.createElement('button');
+            missingBtn.type = 'button';
+            missingBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-1.5';
+            missingBtn.disabled = busyRow;
+            missingBtn.innerHTML =
+              '<i class="fa-solid fa-folder-plus" aria-hidden="true"></i><span>' +
+              i18n('metrics_queue_btn_missing') +
+              '</span>';
+            missingBtn.addEventListener('click', function () {
+              metricsQueueRunStatus(row.event_id, 'missing_content', row);
+            });
+            btnRow.appendChild(missingBtn);
+          }
+
+          var resolveBtn = document.createElement('button');
+          resolveBtn.type = 'button';
+          resolveBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-1.5';
+          resolveBtn.disabled = busyRow;
+          resolveBtn.innerHTML =
+            '<i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>' +
+            i18n('metrics_queue_btn_resolve') +
+            '</span>';
+          resolveBtn.addEventListener('click', function () {
+            A.confirmDialog({
+              message: i18n('metrics_queue_confirm_resolve'),
+              danger: false,
+            }).then(function (ok) {
+              if (!ok) return;
+              metricsQueueRunStatus(row.event_id, 'resolved');
+            });
+          });
+          btnRow.appendChild(resolveBtn);
+
+          wrap.appendChild(btnRow);
+          tdActions.appendChild(wrap);
+        } else {
+          tdActions.textContent = '—';
+        }
+        trRow.appendChild(tdActions);
+        unansweredBody.appendChild(trRow);
+      })(items[i] || {});
+    }
   }
 
   function formatDateTime(value) {
@@ -91,7 +390,7 @@
     var items = Array.isArray(rows) ? rows : [];
     if (!items.length) {
       var li = document.createElement('li');
-      li.className = 'text-xs text-slate-500';
+      li.className = 'text-xs text-slate-500 dark:text-slate-400';
       li.textContent = i18n('metrics_empty');
       el.appendChild(li);
       return;
@@ -99,12 +398,13 @@
     for (var i = 0; i < items.length; i++) {
       var row = items[i] || {};
       var liRow = document.createElement('li');
-      liRow.className = 'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-2 py-1.5';
+      liRow.className =
+        'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-600';
       var left = document.createElement('span');
       left.className = 'truncate';
       left.textContent = String(row.name || '');
       var right = document.createElement('span');
-      right.className = 'shrink-0 font-semibold text-slate-900';
+      right.className = 'shrink-0 font-semibold text-slate-900 dark:text-slate-100';
       right.textContent = String(row.count || 0);
       liRow.appendChild(left);
       liRow.appendChild(right);
@@ -112,11 +412,113 @@
     }
   }
 
+  function renderUnansweredPageInfo() {
+    if (!unansweredInfo) return;
+    if (!unansweredPage.total) {
+      unansweredInfo.textContent = i18n('metrics_pagination_empty');
+      return;
+    }
+    var from = unansweredPage.skip + 1;
+    var to = Math.min(unansweredPage.skip + unansweredPage.limit, unansweredPage.total);
+    unansweredInfo.textContent = i18nFmt('metrics_pagination_info', {
+      from: from,
+      to: to,
+      total: unansweredPage.total,
+    });
+  }
+
+  function queueFilterValue() {
+    if (!queueFilterEl) return 'all';
+    var v = String(queueFilterEl.value || 'all');
+    return v === 'open' || v === 'missing_content' ? v : 'all';
+  }
+
+  function loadUnanswered(resetPage) {
+    if (resetPage) unansweredPage.skip = 0;
+    loadingUnanswered = true;
+    refreshMetricsStatus();
+    var filters = {
+      skip: unansweredPage.skip,
+      limit: unansweredPage.limit,
+    };
+    var qf = queueFilterValue();
+    if (qf !== 'all') filters.status = qf;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loadingUnanswered = false;
+        queueCanManage = !!(res && res.canManage);
+        unansweredPage.total = Number((res && res.total) || 0);
+        unansweredPage.hasMore = !!(res && res.hasMore);
+        unansweredPage.limit = Number((res && res.limit) || unansweredPage.limit);
+        unansweredPage.skip = Number((res && res.skip) || unansweredPage.skip);
+        metricsQueueLoadAssignees(function () {
+          renderUnansweredTable((res && res.items) || []);
+          renderUnansweredPageInfo();
+          refreshMetricsStatus();
+        });
+      })
+      .withFailureHandler(function (e) {
+        loadingUnanswered = false;
+        setStatus((e && e.message) || i18n('metrics_load_error'), false, { error: true });
+        syncBusyControls();
+      })
+      .metricsUnansweredList(filters);
+  }
+
+  function ensureChartJs() {
+    if (typeof Chart !== 'undefined') return Promise.resolve();
+    if (chartJsPromise) return chartJsPromise;
+    chartJsPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+      s.crossOrigin = 'anonymous';
+      s.referrerPolicy = 'no-referrer';
+      s.onload = function () { resolve(); };
+      s.onerror = function () {
+        chartJsPromise = null;
+        reject(new Error('Chart.js load failed'));
+      };
+      document.head.appendChild(s);
+    });
+    return chartJsPromise;
+  }
+
   function destroyCharts() {
     if (trendChart && typeof trendChart.destroy === 'function') trendChart.destroy();
     if (agentChart && typeof agentChart.destroy === 'function') agentChart.destroy();
     trendChart = null;
     agentChart = null;
+  }
+
+  function metricsChartOptions(extra) {
+    var opts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: true } },
+    };
+    if (document.documentElement.classList.contains('dark')) {
+      opts.plugins.legend.labels = { color: '#cbd5e1' };
+      opts.scales = {
+        x: {
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148, 163, 184, 0.22)' },
+        },
+        y: {
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148, 163, 184, 0.22)' },
+        },
+      };
+    }
+    if (extra) {
+      if (extra.plugins) {
+        opts.plugins = Object.assign({}, opts.plugins, extra.plugins);
+      }
+      if (extra.scales) {
+        opts.scales = Object.assign({}, opts.scales || {}, extra.scales);
+      }
+    }
+    return opts;
   }
 
   function renderCharts(data) {
@@ -154,11 +556,7 @@
             },
           ],
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: true } },
-        },
+        options: metricsChartOptions(),
       });
     }
 
@@ -182,16 +580,15 @@
             },
           ],
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-        },
+        options: metricsChartOptions({ plugins: { legend: { display: false } } }),
       });
     }
   }
 
+  var lastDashboardData = null;
+
   function renderDashboard(data) {
+    lastDashboardData = data;
     var summary = (data && data.summary) || {};
     if (totalQuestionsEl) totalQuestionsEl.textContent = String(summary.questions || 0);
     if (totalUnansweredEl) totalUnansweredEl.textContent = String(summary.unanswered || 0);
@@ -203,106 +600,28 @@
     renderRankList(lbSuccessIndustryEl, lb.successByIndustry);
     renderRankList(lbProposalClientEl, lb.proposalByClient);
     renderRankList(lbProposalIndustryEl, lb.proposalByIndustry);
-    renderCharts(data);
-  }
-
-  function renderUnansweredTable(rows) {
-    if (!unansweredBody) return;
-    unansweredBody.innerHTML = '';
-    var items = Array.isArray(rows) ? rows : [];
-    if (!items.length) {
-      var tr = document.createElement('tr');
-      var td = document.createElement('td');
-      td.colSpan = 5;
-      td.className = 'px-3 py-4 text-center text-sm text-slate-500';
-      td.textContent = i18n('metrics_empty');
-      tr.appendChild(td);
-      unansweredBody.appendChild(tr);
-      return;
-    }
-    for (var i = 0; i < items.length; i++) {
-      var row = items[i] || {};
-      var trRow = document.createElement('tr');
-      trRow.className = 'border-b border-slate-100';
-      var cols = [
-        formatDateTime(row.ts_iso),
-        String(row.user_display_name || row.user_email || ''),
-        String(row.agent_name || row.agent_id || ''),
-        String(row.question_text || ''),
-        String(row.unanswered_code || ''),
-      ];
-      for (var c = 0; c < cols.length; c++) {
-        var tdCol = document.createElement('td');
-        tdCol.className = 'px-3 py-2 align-top text-sm text-slate-700';
-        tdCol.textContent = cols[c];
-        trRow.appendChild(tdCol);
-      }
-      unansweredBody.appendChild(trRow);
-    }
-  }
-
-  function renderUnansweredPageInfo() {
-    if (!unansweredInfo) return;
-    if (!unansweredPage.total) {
-      unansweredInfo.textContent = i18n('metrics_pagination_empty');
-      return;
-    }
-    var from = unansweredPage.skip + 1;
-    var to = Math.min(unansweredPage.skip + unansweredPage.limit, unansweredPage.total);
-    unansweredInfo.textContent = i18nFmt('metrics_pagination_info', {
-      from: from,
-      to: to,
-      total: unansweredPage.total,
-    });
-  }
-
-  function loadUnanswered(resetPage) {
-    if (resetPage) unansweredPage.skip = 0;
-    loadingUnanswered = true;
-    setStatus(i18n('metrics_loading_unanswered'), true);
-    syncBusyControls();
-    google.script.run
-      .withSuccessHandler(function (res) {
-        loadingUnanswered = false;
-        unansweredPage.total = Number(res && res.total || 0);
-        unansweredPage.hasMore = !!(res && res.hasMore);
-        unansweredPage.limit = Number(res && res.limit || unansweredPage.limit);
-        unansweredPage.skip = Number(res && res.skip || unansweredPage.skip);
-        renderUnansweredTable((res && res.items) || []);
-        renderUnansweredPageInfo();
-        setStatus(i18n('metrics_loaded'), false);
-        syncBusyControls();
-      })
-      .withFailureHandler(function (e) {
-        loadingUnanswered = false;
-        setStatus((e && e.message) || i18n('metrics_load_error'), false);
-        syncBusyControls();
-      })
-      .metricsUnansweredList({
-        range: activeRange(),
-        skip: unansweredPage.skip,
-        limit: unansweredPage.limit,
-      });
+    ensureChartJs()
+      .then(function () { renderCharts(data); })
+      .catch(function () { setStatus(i18n('metrics_load_error'), false, { error: true }); });
   }
 
   function loadDashboard() {
     loadingDashboard = true;
-    setStatus(i18n('metrics_loading_dashboard'), true);
-    syncBusyControls();
+    refreshMetricsStatus();
     google.script.run
       .withSuccessHandler(function (res) {
         loadingDashboard = false;
         if (res && res.ok) {
           renderDashboard(res);
-          setStatus(i18n('metrics_loaded'), false);
+          refreshMetricsStatus();
         } else {
-          setStatus(i18n('metrics_load_error'), false);
+          setStatus(i18n('metrics_load_error'), false, { error: true });
+          syncBusyControls();
         }
-        syncBusyControls();
       })
       .withFailureHandler(function (e) {
         loadingDashboard = false;
-        setStatus((e && e.message) || i18n('metrics_load_error'), false);
+        setStatus((e && e.message) || i18n('metrics_load_error'), false, { error: true });
         syncBusyControls();
       })
       .metricsDashboard(activeRange(), 8);
@@ -321,63 +640,38 @@
   }
   if (resetBtn) {
     resetBtn.addEventListener('click', function () {
-      if (!window.confirm(i18n('metrics_reset_confirm'))) return;
-      A.showBlockingModal(i18n('metrics_reset_busy'));
-      loadingDashboard = true;
-      loadingUnanswered = true;
-      syncBusyControls();
-      google.script.run
-        .withSuccessHandler(function () {
-          A.hideBlockingModal();
-          loadingDashboard = false;
-          loadingUnanswered = false;
-          setStatus(i18n('metrics_reset_done'), false);
-          loadAll(true);
-        })
-        .withFailureHandler(function (e) {
-          A.hideBlockingModal();
-          loadingDashboard = false;
-          loadingUnanswered = false;
-          setStatus((e && e.message) || i18n('metrics_reset_error'), false);
-          syncBusyControls();
-        })
-        .metricsResetAll();
-    });
-  }
-  if (resetAllBtn) {
-    resetAllBtn.addEventListener('click', function () {
-      if (!window.confirm(i18n('admin_reset_all_confirm'))) return;
-      A.showBlockingModal(i18n('admin_reset_all_busy'));
-      loadingDashboard = true;
-      loadingUnanswered = true;
-      syncBusyControls();
-      google.script.run
-        .withSuccessHandler(function () {
-          A.hideBlockingModal();
-          loadingDashboard = false;
-          loadingUnanswered = false;
-          if (A.cache) {
-            A.cache.invalidate('contentsList');
-            A.cache.invalidate('clientsList');
-            A.cache.invalidate('agentsList');
-            A.cache.invalidate('contextFiles');
-          }
-          setStatus(i18n('admin_reset_all_done'), false);
-          loadAll(true);
-        })
-        .withFailureHandler(function (e) {
-          A.hideBlockingModal();
-          loadingDashboard = false;
-          loadingUnanswered = false;
-          setStatus((e && e.message) || i18n('admin_reset_all_error'), false);
-          syncBusyControls();
-        })
-        .adminResetAllSpreadsheetData();
+      A.confirmDialog({ message: i18n('metrics_reset_confirm'), danger: true }).then(function (ok) {
+        if (!ok) return;
+        A.showBlockingModal(i18n('metrics_reset_busy'));
+        loadingDashboard = true;
+        loadingUnanswered = true;
+        syncBusyControls();
+        google.script.run
+          .withSuccessHandler(function () {
+            A.hideBlockingModal();
+            loadingDashboard = false;
+            loadingUnanswered = false;
+            loadAll(true);
+          })
+          .withFailureHandler(function (e) {
+            A.hideBlockingModal();
+            loadingDashboard = false;
+            loadingUnanswered = false;
+            setStatus((e && e.message) || i18n('metrics_reset_error'), false, { error: true });
+            syncBusyControls();
+          })
+          .metricsResetAll();
+      });
     });
   }
   if (rangeEl) {
     rangeEl.addEventListener('change', function () {
       loadAll(true);
+    });
+  }
+  if (queueFilterEl) {
+    queueFilterEl.addEventListener('change', function () {
+      loadUnanswered(true);
     });
   }
   if (unansweredPrevBtn) {
@@ -399,8 +693,15 @@
     loadDashboard: function () {
       var isAdmin = !!S.get('canResetMetrics');
       if (resetBtn) resetBtn.classList.toggle('hidden', !isAdmin);
-      if (resetAllSection) resetAllSection.classList.toggle('hidden', !isAdmin);
       loadAll(false);
+    },
+    onThemeChange: function () {
+      if (!lastDashboardData) return;
+      ensureChartJs()
+        .then(function () {
+          renderCharts(lastDashboardData);
+        })
+        .catch(function () {});
     },
   };
 })(window.Aviators);

@@ -73,8 +73,35 @@
     @apply active:scale-[0.99];
     @apply focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2;
   }
+  .btn-outline {
+    @apply border-2 border-aviators-primary bg-white text-aviators-primary shadow-sm shadow-slate-900/5;
+    @apply hover:shadow-md hover:shadow-aviators-primary/15;
+    @apply active:scale-[0.99];
+    @apply focus-visible:ring-2 focus-visible:ring-aviators-primary focus-visible:ring-offset-2;
+    @apply dark:border-slate-500 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600;
+  }
+  .btn-outline-danger {
+    @apply border-2 border-red-700/50 bg-white text-red-700 shadow-sm shadow-red-600/10;
+    @apply hover:shadow-md hover:shadow-red-600/20;
+    @apply active:scale-[0.99];
+    @apply focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2;
+    @apply dark:border-red-500/50 dark:bg-slate-800 dark:text-red-300 dark:hover:bg-slate-700;
+  }
   .login-footnote {
-    @apply mt-6 text-center text-xs leading-relaxed text-slate-500;
+    @apply mt-6 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400;
+  }
+
+  /**
+   * Campos de formulario: en modo oscuro fondo claro y texto oscuro (contraste de lectura).
+   */
+  .aviators-field {
+    @apply rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 shadow-sm placeholder:text-slate-500;
+    @apply focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/25;
+    @apply dark:border-slate-300 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500;
+    @apply dark:focus:border-sky-600 dark:focus:ring-sky-500/30;
+  }
+  .aviators-field.q-area {
+    @apply shadow-inner ring-sky-500/20;
   }
 
   .app-shell {
@@ -108,6 +135,18 @@
     background-size: cover;
     background-position: center 34%;
   }
+  .dark .app-content-panel::before {
+    opacity: 0.42;
+    background-color: rgb(15 23 42);
+    background-image:
+      linear-gradient(
+        135deg,
+        rgb(15 23 42 / 0.72) 0%,
+        rgb(30 41 59 / 0.55) 42%,
+        rgb(12 74 110 / 0.22) 100%
+      ),
+      url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=2000&q=75');
+  }
   .role-badge {
     @apply inline-flex max-w-full items-center rounded-full bg-aviators-primary/10 px-3 py-1 text-sm font-medium text-aviators-primary dark:bg-aviators-primary/20;
   }
@@ -134,11 +173,26 @@
   .home-chat-banner.err {
     @apply border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200;
   }
+
+  /* Inicio — indicador discreto del orquestador */
+  .home-orch-pill.home-orch--ok {
+    @apply border-slate-200/70 bg-slate-50/60 text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/40 dark:text-slate-400;
+  }
+  .home-orch-pill.home-orch--ok #home-orchestrator-health-icon {
+    @apply text-emerald-600/70 dark:text-emerald-500/60;
+  }
+  .home-orch-pill.home-orch--warn {
+    @apply border-amber-200/80 bg-amber-50/70 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-200/90;
+  }
+  .home-orch-pill.home-orch--warn #home-orchestrator-health-icon {
+    @apply text-amber-600 dark:text-amber-400;
+  }
+
   .chat-thread {
     @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth bg-slate-50/40 px-4 py-4 dark:bg-slate-900/40;
   }
   .chat-empty {
-    @apply px-2 py-12 text-center text-sm leading-relaxed text-slate-500;
+    @apply px-2 py-12 text-center text-sm leading-relaxed text-slate-500 dark:text-slate-400;
   }
   .chat-msg-user {
     @apply flex justify-end;
@@ -166,6 +220,27 @@
   .chat-bubble-agent.chat-thinking {
     @apply border-dashed border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400;
     @apply inline-flex items-center gap-2;
+  }
+  .chat-bubble-agent.chat-thinking--pipeline {
+    @apply flex-col items-start gap-2.5;
+  }
+  .chat-thinking-head {
+    @apply inline-flex items-center gap-2;
+  }
+  .chat-thinking-steps {
+    @apply w-full space-y-1 border-t border-slate-200/80 pt-2 text-xs dark:border-slate-600;
+  }
+  .chat-thinking-step {
+    @apply flex items-center gap-2 text-slate-500 dark:text-slate-400;
+  }
+  .chat-thinking-step--active {
+    @apply font-medium text-sky-700 dark:text-sky-300;
+  }
+  .chat-thinking-step--done {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+  .chat-thinking-step-icon {
+    @apply w-3.5 shrink-0 text-center text-[10px];
   }
   .chat-thinking-icon {
     @apply text-sky-500 dark:text-sky-400;
@@ -199,7 +274,7 @@
     @apply min-w-0 max-w-full;
   }
   .chat-msg-meta {
-    @apply mt-1.5 pl-1 text-xs text-slate-500;
+    @apply mt-1.5 pl-1 text-xs text-slate-500 dark:text-slate-400;
   }
   .chat-input-row {
     @apply flex items-end gap-3;
@@ -258,7 +333,7 @@
       overflow: hidden;
     }
     .app-sidebar {
-      @apply fixed inset-y-0 left-0 z-50 w-[min(86vw,22rem)] max-w-[22rem] rounded-none border-b-0 border-r border-slate-200 bg-slate-50 py-4 pl-4 pr-3 dark:border-slate-600 dark:bg-slate-800;
+      @apply fixed inset-y-0 left-0 z-drawer w-[min(86vw,22rem)] max-w-[22rem] rounded-none border-b-0 border-r border-slate-200 bg-slate-50 py-4 pl-4 pr-3 dark:border-slate-600 dark:bg-slate-800;
       height: 100dvh;
       transform: translateX(-105%);
       transition: transform 0.24s ease;
@@ -268,7 +343,7 @@
       transform: translateX(0);
     }
     .app-drawer-backdrop {
-      @apply fixed inset-0 z-40 block border-0 bg-slate-900/45 p-0;
+      @apply fixed inset-0 z-backdrop block border-0 bg-slate-900/45 p-0;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
@@ -337,9 +412,9 @@
     .dark .chat-composer {
       background-color: rgb(15 23 42 / 0.96);
     }
-    .chat-composer-lead {
-      @apply hidden;
-    }
+  .chat-composer-lead {
+    @apply hidden text-slate-600 dark:text-slate-400;
+  }
     .chat-input-row {
       @apply gap-2;
     }
@@ -367,6 +442,30 @@
   .admin-app-layout {
     @apply flex flex-col gap-4 lg:flex-row lg:gap-6 lg:items-start;
   }
+  .admin-app-layout.agents-layout-empty {
+    @apply lg:justify-center;
+  }
+  .admin-app-layout.agents-layout-empty .admin-app-main {
+    @apply hidden;
+  }
+  .admin-app-layout.agents-layout-empty .admin-app-sidebar {
+    @apply w-full max-w-md lg:max-w-lg;
+  }
+  .agents-page-shell.agents-shell-empty .agents-page-intro-text {
+    @apply hidden;
+  }
+  .agents-sidebar-onboard {
+    @apply mt-4 rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-5 text-center dark:border-sky-800 dark:bg-sky-950/30;
+  }
+  .agents-sidebar-onboard-icon {
+    @apply mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm dark:bg-slate-800 dark:text-sky-400;
+  }
+  .agents-sidebar-onboard-title {
+    @apply text-sm font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .agents-sidebar-onboard-lead {
+    @apply mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400;
+  }
   .admin-app-sidebar {
     @apply shrink-0 rounded-2xl border border-slate-200 bg-slate-50/90 p-4 lg:w-80 dark:border-slate-700 dark:bg-slate-800/90;
   }
@@ -383,18 +482,109 @@
     @apply max-h-[min(42vh,22rem)] overflow-y-auto pr-1;
   }
   .admin-agent-nav-btn {
-    @apply flex w-full items-center justify-between rounded-lg border border-transparent px-3 py-2 text-left text-sm text-slate-800 transition hover:border-slate-200 hover:bg-white dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700;
+    @apply flex w-full items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-left text-sm text-slate-800 transition hover:border-slate-200 hover:bg-white dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700;
   }
   .admin-agent-nav-btn.is-active {
-    @apply border-sky-200 bg-sky-50 font-medium text-sky-950 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-200;
+    @apply border-sky-300 bg-white font-medium text-sky-950 shadow-sm dark:border-sky-600 dark:bg-slate-900/60 dark:text-sky-100;
   }
-  .admin-agent-empty:not(.hidden) ~ .admin-agent-editor {
-    @apply mt-0;
+
+  /* Cabecera del editor de agente */
+  .agent-editor-header {
+    @apply mb-5 flex items-start gap-4 border-b border-slate-200 pb-5 dark:border-slate-700;
+  }
+  .agent-editor-header-icon {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300;
+  }
+  .agent-editor-eyebrow {
+    @apply text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400;
+  }
+  .agent-editor-title {
+    @apply mt-0.5 text-lg font-semibold text-slate-900 dark:text-slate-100;
+    text-wrap: balance;
+  }
+  .agent-editor-meta {
+    @apply mt-1 text-xs text-slate-500 dark:text-slate-400;
+  }
+
+  /* Tab bar — segmento subrayado */
+  .app-tab-bar {
+    @apply flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-50/80 p-1 dark:border-slate-600 dark:bg-slate-800/80;
+  }
+  .app-tab-bar-underline {
+    @apply gap-0 rounded-none border-0 border-b border-slate-200 bg-transparent p-0 dark:border-slate-700;
+  }
+  .app-tab-btn {
+    @apply inline-flex min-w-[5.5rem] flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100;
+  }
+  .app-tab-bar-underline .app-tab-btn {
+    @apply flex-none rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60;
+  }
+  .app-tab-btn.is-active,
+  .app-tab-btn[aria-selected='true'] {
+    @apply bg-white text-sky-900 shadow-sm dark:bg-slate-700 dark:text-sky-200;
+  }
+  .app-tab-bar-underline .app-tab-btn.is-active,
+  .app-tab-bar-underline .app-tab-btn[aria-selected='true'] {
+    @apply border-sky-600 bg-transparent text-sky-800 shadow-none dark:border-sky-400 dark:bg-transparent dark:text-sky-200;
+  }
+  .app-tab-panel {
+    @apply pt-5;
+  }
+  .app-tab-bar-underline + .app-tab-panel,
+  .app-tab-bar-underline ~ .app-tab-panel {
+    @apply pt-6;
+  }
+
+  /* Bloques dentro de pestañas */
+  .agent-panel-card {
+    @apply space-y-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4 md:p-5 dark:border-slate-700 dark:bg-slate-900/30;
+  }
+  .agent-panel-card + .agent-panel-card {
+    @apply mt-5;
+  }
+  .agent-panel-card-head {
+    @apply space-y-1;
+  }
+  .agent-panel-card-title {
+    @apply text-sm font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .agent-panel-card-lead {
+    @apply text-xs leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+  .agent-field-grid {
+    @apply grid gap-4 md:grid-cols-2;
+  }
+  .agent-field-grid-3 {
+    @apply grid gap-4 md:grid-cols-3;
+  }
+  .agent-ro-field {
+    @apply rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-600 dark:bg-slate-800/50;
+  }
+  .agent-ro-label {
+    @apply text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400;
+  }
+  .agent-ro-value {
+    @apply mt-1 text-sm font-medium text-slate-800 dark:text-slate-200;
+  }
+  .agent-ro-value-prose {
+    @apply mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300;
+  }
+
+  .admin-agent-actions-bar {
+    @apply sticky bottom-0 -mx-4 mt-6 space-y-3 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm md:-mx-6 md:px-6 dark:border-slate-700 dark:bg-slate-800/95;
+  }
+  .admin-agent-actions-bar .admin-agent-actions-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  /* Floating dropdown panels (chat history) */
+  .app-floating-panel {
+    @apply fixed z-dropdown rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800;
   }
 
   /* Toast / snackbar system */
   #toast-container {
-    @apply fixed bottom-4 right-4 z-[9999] flex flex-col-reverse items-end gap-2;
+    @apply fixed bottom-4 right-4 z-toast flex flex-col-reverse items-end gap-2;
     pointer-events: none;
   }
   .toast {
@@ -420,43 +610,7 @@
     @apply min-w-0 flex-1;
   }
   .toast-close {
-    @apply shrink-0 cursor-pointer rounded p-1 text-slate-400 transition hover:text-slate-700;
-  }
-
-  /* Dark mode contrast harmonization for legacy utility-heavy templates */
-  .dark .app-content-panel .text-slate-900 {
-    color: rgb(241 245 249);
-  }
-  .dark .app-content-panel .text-slate-800 {
-    color: rgb(226 232 240);
-  }
-  .dark .app-content-panel .text-slate-700 {
-    color: rgb(203 213 225);
-  }
-  .dark .app-content-panel .text-slate-600 {
-    color: rgb(148 163 184);
-  }
-  .dark .app-content-panel .text-slate-500 {
-    color: rgb(148 163 184);
-  }
-  .dark .app-content-panel .border-slate-200 {
-    border-color: rgb(71 85 105 / 0.9);
-  }
-  .dark .app-content-panel .border-slate-100 {
-    border-color: rgb(71 85 105 / 0.65);
-  }
-  .dark .app-content-panel .bg-white,
-  .dark .app-content-panel .bg-white\/95,
-  .dark .app-content-panel .bg-white\/90,
-  .dark .app-content-panel .bg-white\/80 {
-    background-color: rgb(30 41 59 / 0.92);
-  }
-  .dark .app-content-panel .bg-slate-50,
-  .dark .app-content-panel .bg-slate-50\/90,
-  .dark .app-content-panel .bg-slate-50\/80,
-  .dark .app-content-panel .bg-slate-50\/60,
-  .dark .app-content-panel .bg-slate-50\/40 {
-    background-color: rgb(30 41 59 / 0.82);
+    @apply shrink-0 cursor-pointer rounded p-1 text-slate-400 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200;
   }
 
   /* ── Chat feedback ─────────────────────────────────────────────────── */
@@ -468,6 +622,14 @@
   }
   .chat-feedback-btn-active {
     @apply bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400;
+  }
+
+  /* ── Chat message actions (copy / regenerate / reformulate) ─────────── */
+  .chat-msg-actions {
+    @apply mt-2 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-2 dark:border-slate-600;
+  }
+  .chat-msg-action-btn {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:bg-sky-900/30 dark:hover:text-sky-200;
   }
 
   /* ── Chat history panel ────────────────────────────────────────────── */
@@ -484,5 +646,271 @@
   /* ── Quick prompts chips ───────────────────────────────────────────── */
   .chat-qp-chip {
     @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:bg-sky-900/20 dark:hover:text-sky-400;
+  }
+
+  /* ── Role config board (settings) ─────────────────────────────────── */
+  .role-config-board {
+    @apply flex gap-3 overflow-x-auto pb-2;
+  }
+  .role-config-column {
+    @apply flex min-w-[11rem] max-w-[14rem] flex-shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+  .role-config-column-head {
+    @apply border-b border-slate-100 px-3 py-2;
+  }
+  .role-config-column-title {
+    @apply text-sm font-semibold text-slate-900;
+  }
+  .role-config-column-meta {
+    @apply mt-0.5 text-[11px] text-slate-500;
+  }
+  .role-config-dropzone {
+    @apply space-y-1.5 p-2 transition;
+  }
+  .role-config-dropzone-read {
+    @apply rounded-lg border border-sky-100 bg-sky-50/40;
+  }
+  .role-config-dropzone-write {
+    @apply rounded-lg border border-amber-100 bg-amber-50/40;
+  }
+  .role-config-dropzone.is-drag-over.role-config-dropzone-read {
+    @apply bg-sky-100 ring-2 ring-inset ring-sky-300;
+  }
+  .role-config-dropzone.is-drag-over.role-config-dropzone-write {
+    @apply bg-amber-100 ring-2 ring-inset ring-amber-300;
+  }
+  .role-config-zone-label {
+    @apply text-[10px] font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .role-config-dropzone-read .role-config-zone-label {
+    @apply text-sky-700;
+  }
+  .role-config-dropzone-write .role-config-zone-label {
+    @apply text-amber-800;
+  }
+  .role-config-zone-hint {
+    @apply w-full text-[10px] text-slate-400;
+  }
+  .role-config-zone-chips {
+    @apply min-h-[2.5rem];
+  }
+  .role-config-chip {
+    @apply inline-flex cursor-grab items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium active:cursor-grabbing;
+  }
+  .role-config-chip-pool {
+    @apply border-slate-300 bg-white text-slate-700 hover:border-sky-400 hover:bg-sky-50;
+  }
+  .role-config-chip-kind-read.role-config-chip-pool {
+    @apply border-sky-200 bg-sky-50/80 text-sky-900 hover:border-sky-400 hover:bg-sky-100;
+  }
+  .role-config-chip-kind-write.role-config-chip-pool {
+    @apply border-amber-200 bg-amber-50/80 text-amber-900 hover:border-amber-400 hover:bg-amber-100;
+  }
+  .role-config-chip-active {
+    @apply border-sky-200 bg-sky-100 text-sky-900;
+  }
+  .role-config-chip-kind-write.role-config-chip-active {
+    @apply border-amber-200 bg-amber-100 text-amber-900;
+  }
+  .role-config-chip-readonly {
+    @apply cursor-default border-emerald-200 bg-emerald-50 text-emerald-900 opacity-90;
+  }
+  .role-config-chip-remove {
+    @apply ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] hover:bg-red-100 hover:text-red-700;
+  }
+  .role-config-dialog::backdrop {
+    @apply bg-slate-900/40;
+  }
+
+  /* Configuración — shell con pestañas */
+  .settings-page-head {
+    @apply flex items-start gap-4 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-sky-50/60 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:from-slate-900/95 dark:via-slate-900/95 dark:to-sky-950/20;
+  }
+  .settings-page-head-icon {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300;
+  }
+  .settings-page-head-icon i {
+    @apply text-lg;
+  }
+  .settings-page-title {
+    @apply text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100;
+  }
+  .settings-page-lead {
+    @apply mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+  .settings-shell {
+    @apply overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95;
+  }
+  .settings-tab-bar {
+    @apply gap-0 rounded-none border-0 border-b border-slate-200 bg-slate-50/70 px-2 pt-1 dark:border-slate-700 dark:bg-slate-800/50 md:px-4;
+  }
+  .settings-tab-btn {
+    @apply flex-none gap-2 px-3 py-3 text-[13px] md:px-4;
+  }
+  .settings-tab-btn-danger.is-active,
+  .settings-tab-btn-danger[aria-selected='true'] {
+    @apply border-red-500 text-red-800 dark:border-red-400 dark:text-red-200;
+  }
+  .settings-tab-panel {
+    @apply px-4 pb-6 pt-5 md:px-6 md:pb-8 md:pt-6;
+  }
+  .settings-panel-inner {
+    @apply mx-auto max-w-4xl;
+  }
+  .settings-panel-head {
+    @apply mb-6 border-b border-slate-100 pb-5 dark:border-slate-700/80;
+  }
+  .settings-panel-head-danger {
+    @apply border-red-200/80 dark:border-red-900/50;
+  }
+  .settings-panel-title {
+    @apply text-base font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .settings-panel-lead {
+    @apply mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+  .settings-subpanel-head {
+    @apply mb-4;
+  }
+  .settings-subtab-bar {
+    @apply mb-5 max-w-md;
+  }
+  .settings-pool-card {
+    @apply rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 dark:border-slate-600 dark:bg-slate-800/40;
+  }
+  .settings-search-wrap {
+    @apply relative max-w-md;
+  }
+  .settings-search-icon {
+    @apply pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400;
+  }
+  .settings-search-field {
+    @apply border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800;
+  }
+  .settings-table-wrap {
+    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/40;
+  }
+  .settings-table thead {
+    @apply border-b border-slate-200 bg-slate-50/90 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-400;
+  }
+  .settings-table th {
+    @apply px-4 py-2.5 font-medium;
+  }
+  .settings-table tbody tr {
+    @apply border-b border-slate-100 transition hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50;
+  }
+  .settings-table td {
+    @apply px-4 py-3 align-middle text-slate-700 dark:text-slate-300;
+  }
+  .settings-table tbody tr:last-child {
+    @apply border-b-0;
+  }
+  .settings-pager {
+    @apply mt-4 flex flex-wrap items-center justify-between gap-3;
+  }
+  .settings-pager-info {
+    @apply text-sm text-slate-600 dark:text-slate-400;
+  }
+  .settings-inline-loader {
+    @apply mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400;
+  }
+  .settings-panel-footer {
+    @apply flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5 dark:border-slate-700/80;
+  }
+  .settings-status-msg {
+    @apply text-sm text-slate-600 dark:text-slate-400;
+  }
+  .settings-danger-panel {
+    @apply rounded-xl border border-red-200/80 bg-gradient-to-br from-red-50/50 to-white p-4 md:p-5 dark:border-red-900/40 dark:from-red-950/20 dark:to-slate-900/40;
+  }
+}
+
+/* Dark mode contrast harmonization (unlayered — evita circular deps con @apply) */
+.dark .app-content-panel .text-slate-900,
+.dark .app-floating-panel .text-slate-900,
+.dark .app-sidebar .text-slate-900 {
+  color: rgb(241 245 249);
+}
+.dark .app-content-panel .text-slate-800,
+.dark .app-floating-panel .text-slate-800,
+.dark .app-sidebar .text-slate-800 {
+  color: rgb(226 232 240);
+}
+.dark .app-content-panel .text-slate-700,
+.dark .app-floating-panel .text-slate-700,
+.dark .app-sidebar .text-slate-700 {
+  color: rgb(203 213 225);
+}
+.dark .app-content-panel .text-slate-600,
+.dark .app-floating-panel .text-slate-600,
+.dark .app-sidebar .text-slate-600 {
+  color: rgb(148 163 184);
+}
+.dark .app-content-panel .text-slate-500,
+.dark .app-floating-panel .text-slate-500,
+.dark .app-sidebar .text-slate-500 {
+  color: rgb(148 163 184);
+}
+.dark .app-content-panel .text-slate-400,
+.dark .app-floating-panel .text-slate-400,
+.dark .app-sidebar .text-slate-400 {
+  color: rgb(203 213 225);
+}
+.dark .app-content-panel .border-slate-200 {
+  border-color: rgb(71 85 105 / 0.9);
+}
+.dark .app-content-panel .border-slate-100 {
+  border-color: rgb(71 85 105 / 0.65);
+}
+.dark .app-content-panel .bg-white:not(input):not(textarea):not(select),
+.dark .app-content-panel .bg-white\/95:not(input):not(textarea):not(select),
+.dark .app-content-panel .bg-white\/90:not(input):not(textarea):not(select),
+.dark .app-content-panel .bg-white\/80:not(input):not(textarea):not(select) {
+  background-color: rgb(30 41 59 / 0.92);
+}
+
+/* Form controls: texto oscuro sobre fondo blanco (no heredar dark:text del body) */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="image"]):not([type="reset"]):not([type="range"]):not([type="color"]),
+.dark textarea,
+.dark select {
+  background-color: rgb(255 255 255) !important;
+  color: rgb(15 23 42) !important;
+  border-color: rgb(203 213 225) !important;
+  caret-color: rgb(15 23 42);
+}
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="image"]):not([type="reset"]):not([type="range"]):not([type="color"])::placeholder,
+.dark textarea::placeholder {
+  color: rgb(100 116 139) !important;
+}
+.dark select option {
+  background-color: rgb(255 255 255);
+  color: rgb(15 23 42);
+}
+.dark .app-content-panel .bg-slate-50,
+.dark .app-content-panel .bg-slate-50\/90,
+.dark .app-content-panel .bg-slate-50\/80,
+.dark .app-content-panel .bg-slate-50\/60,
+.dark .app-content-panel .bg-slate-50\/40 {
+  background-color: rgb(30 41 59 / 0.82);
+}
+.dark .app-content-panel .hover\:bg-slate-50\/50:hover,
+.dark .app-content-panel .hover\:bg-slate-100:hover {
+  background-color: rgb(51 65 85 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blocking-flight-plane,
+  .admin-seed-progress-indeterminate,
+  .loader-flight-inline-plane,
+  .chat-thinking-icon,
+  .fa-spin {
+    animation: none !important;
+  }
+  .app-sidebar,
+  .app-drawer-backdrop,
+  .toast,
+  .toast-visible,
+  .toast-exit {
+    transition: none !important;
   }
 }

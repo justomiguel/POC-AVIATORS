@@ -23,7 +23,7 @@ disable-model-invocation: false
    - `oauthScopes` — least privilege ([scopes](https://developers.google.com/apps-script/concepts/scopes)).
    - `urlFetchWhitelist` — add each HTTPS origin used by `UrlFetchApp` (e.g. Globant API host already listed).
 2. **Runtime**: Keep `"runtimeVersion": "V8"`.
-3. **Web app**: Changing `Code.js` `doGet`, HTML, or permissions usually requires a **new deployment** (Manage deployments) and users may need to **re-authorize** if scopes changed. **`webapp.executeAs`** in `gas/appsscript.json` must match el despliegue («Ejecutar como yo» = `USER_DEPLOYING`): la identidad de Drive/Sheets es la del despliegue; tras cambiarlo, publicar una nueva versión y comprobar en el cuadro de despliegue que coincida.
+3. **Web app**: Cambios en `doGet`, HTML o permisos requieren **publicar una versión** en la implementación (`clasp redeploy` con el `webAppDeploymentId` de `gas/deploy.json`; `./deploy` lo hace automáticamente). La URL `/exec` **no cambia** mientras se reutilice el mismo deployment ID. Los usuarios pueden necesitar **re-autorizar** si cambiaron scopes. **`webapp.executeAs`** en `gas/appsscript.json` debe coincidir con el despliegue («Ejecutar como yo» = `USER_DEPLOYING`).
 4. **Secrets**: API keys and tokens belong in **Script Properties** (or team vault); never commit them.
 
 ## Commands (terminal)
@@ -42,5 +42,5 @@ clasp deployments # list deployments
 
 - [ ] Edits under `gas/` match what clasp will push (`rootDir` is `gas`).
 - [ ] `appsscript.json` updated if new services/hosts are needed.
-- [ ] Remind user to **Deploy** → **New version** for the web app URL when user-facing behavior changes.
+- [ ] Remind user to run **`./deploy`** (or `clasp redeploy` with `gas/deploy.json` ID) when user-facing behavior changes — same public URL, new script version.
 - [ ] If scopes changed, remind **re-authorize** for users hitting the app.

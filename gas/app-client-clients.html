@@ -109,7 +109,7 @@
       var tr = document.createElement('tr');
       var td = document.createElement('td');
       td.colSpan = canWrite ? 6 : 4;
-      td.className = 'px-4 py-6 text-center text-sm text-slate-400';
+      td.className = 'px-4 py-6 text-center text-sm text-slate-400 dark:text-slate-400';
       td.textContent = i18n('clients_no_items');
       tr.appendChild(td);
       clientsTableBody.appendChild(tr);
@@ -118,7 +118,7 @@
     for (var i = 0; i < cache.length; i++) {
       (function (item) {
         var tr = document.createElement('tr');
-        tr.className = 'border-b border-slate-100 hover:bg-slate-50/50';
+        tr.className = 'border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-700 dark:hover:bg-slate-700/40';
         if (canWrite) {
           var cbTd = document.createElement('td');
           cbTd.className = 'w-8 px-2 py-3';
@@ -131,19 +131,19 @@
           tr.appendChild(cbTd);
         }
         var tdName = document.createElement('td');
-        tdName.className = 'px-4 py-3 font-medium text-slate-900';
+        tdName.className = 'px-4 py-3 font-medium text-slate-900 dark:text-slate-100';
         tdName.textContent = item.client_name || '';
         tr.appendChild(tdName);
         var tdIndustry = document.createElement('td');
-        tdIndustry.className = 'px-4 py-3 text-slate-600';
+        tdIndustry.className = 'px-4 py-3 text-slate-600 dark:text-slate-400';
         tdIndustry.textContent = item.industry || '\u2014';
         tr.appendChild(tdIndustry);
         var tdCountry = document.createElement('td');
-        tdCountry.className = 'px-4 py-3 text-slate-600';
+        tdCountry.className = 'px-4 py-3 text-slate-600 dark:text-slate-400';
         tdCountry.textContent = item.country || '\u2014';
         tr.appendChild(tdCountry);
         var tdContact = document.createElement('td');
-        tdContact.className = 'px-4 py-3 text-slate-600';
+        tdContact.className = 'px-4 py-3 text-slate-600 dark:text-slate-400';
         tdContact.textContent = item.main_contact_name || '\u2014';
         tr.appendChild(tdContact);
         var tdActions = document.createElement('td');
@@ -151,7 +151,7 @@
         if (canWrite) {
           var editBtn = document.createElement('button');
           editBtn.type = 'button';
-          editBtn.className = 'btn-admin text-xs inline-flex items-center gap-1';
+          editBtn.className = 'btn btn-sm btn-outline';
           editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
           editBtn.addEventListener('click', function () { clientsOpenEditor(item); });
           tdActions.appendChild(editBtn);
@@ -264,22 +264,24 @@
   function clientsDelete() {
     var id = (clientsId && clientsId.value) || '';
     if (!id) return;
-    if (!window.confirm(i18n('clients_confirm_delete'))) return;
-    A.showBlockingModal(i18n('clients_busy_deleting'));
-    A.cache.invalidate('clientsList');
-    google.script.run
-      .withSuccessHandler(function () {
-        A.hideBlockingModal();
-        clientsResetForm();
-        clientsSetScreen('list');
-        clientsLoadList({ skipCache: true });
-        clientsSetListStatus(i18n('clients_deleted'), false);
-      })
-      .withFailureHandler(function (e) {
-        A.hideBlockingModal();
-        clientsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
-      })
-      .clientsDelete(id);
+    A.confirmDialog({ message: i18n('clients_confirm_delete'), danger: true }).then(function (ok) {
+      if (!ok) return;
+      A.showBlockingModal(i18n('clients_busy_deleting'));
+      A.cache.invalidate('clientsList');
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          clientsResetForm();
+          clientsSetScreen('list');
+          clientsLoadList({ skipCache: true });
+          clientsSetListStatus(i18n('clients_deleted'), false);
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          clientsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
+        })
+        .clientsDelete(id);
+    });
   }
 
   function clientsApplyWriteAccess() {
@@ -362,31 +364,36 @@
     clientsBatchDeleteBtn.addEventListener('click', function () {
       var ids = clientsBatchGetSelected();
       if (!ids.length) return;
-      if (!confirm(i18nFmt('batch_delete_confirm', { n: ids.length }))) return;
-      clientsBatchDeleteBtn.disabled = true;
-      var done = 0;
-      var total = ids.length;
-      A.showBlockingModal(i18nFmt('batch_deleting', { done: 1, total: total }));
-      function next() {
-        if (done >= total) {
-          clientsBatchDeleteBtn.disabled = false;
-          A.hideBlockingModal();
-          if (clientsSelectAll) clientsSelectAll.checked = false;
-          clientsBatchUpdateBar();
-          A.cache.invalidate('clientsList');
-          clientsLoadList({ skipCache: true });
-          if (A.toast) A.toast.success(i18nFmt('batch_done', { n: total }));
-          return;
+      A.confirmDialog({
+        message: i18nFmt('batch_delete_confirm', { n: ids.length }),
+        danger: true,
+      }).then(function (ok) {
+        if (!ok) return;
+        clientsBatchDeleteBtn.disabled = true;
+        var done = 0;
+        var total = ids.length;
+        A.showBlockingModal(i18nFmt('batch_deleting', { done: 1, total: total }));
+        function next() {
+          if (done >= total) {
+            clientsBatchDeleteBtn.disabled = false;
+            A.hideBlockingModal();
+            if (clientsSelectAll) clientsSelectAll.checked = false;
+            clientsBatchUpdateBar();
+            A.cache.invalidate('clientsList');
+            clientsLoadList({ skipCache: true });
+            if (A.toast) A.toast.success(i18nFmt('batch_done', { n: total }));
+            return;
+          }
+          var progMsg = i18nFmt('batch_deleting', { done: done + 1, total: total });
+          if (clientsBatchCount) clientsBatchCount.textContent = progMsg;
+          A.showBlockingModal(progMsg);
+          google.script.run
+            .withSuccessHandler(function () { done++; next(); })
+            .withFailureHandler(function () { done++; next(); })
+            .clientsDelete(ids[done]);
         }
-        var progMsg = i18nFmt('batch_deleting', { done: done + 1, total: total });
-        if (clientsBatchCount) clientsBatchCount.textContent = progMsg;
-        A.showBlockingModal(progMsg);
-        google.script.run
-          .withSuccessHandler(function () { done++; next(); })
-          .withFailureHandler(function () { done++; next(); })
-          .clientsDelete(ids[done]);
-      }
-      next();
+        next();
+      });
     });
   }
 

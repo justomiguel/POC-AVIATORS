@@ -15,10 +15,7 @@
  */
 function GlobantAgentsApiClient_create(config) {
   var apiKey = String(config.apiKey || '').trim();
-  var baseUrl = (config.baseUrl || 'https://api.agents.globant.com').replace(
-    /\/+$/,
-    '',
-  );
+  var baseUrl = GlobantUrl_normalizeBaseUrl_(config.baseUrl);
   var projectId = String(config.projectId || '').trim();
 
   function authHeaders(extra) {

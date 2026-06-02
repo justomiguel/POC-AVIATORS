@@ -14,6 +14,21 @@ function LlmProviderGlobant_isAssistantMode(props) {
 }
 
 /**
+ * Perfiles Aviators de agentes especialistas deben usar RAG /search/execute
+ * aunque GLOBANT_API_MODE=assistant (el chat assistant no indexa esos corpus).
+ * @param {string} profileName
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {boolean}
+ */
+function LlmProviderGlobant_useRagExecuteForProfile_(profileName, props) {
+  if (!LlmProviderGlobant_isAssistantMode(props)) return true;
+  var pn = String(profileName || '').trim().toLowerCase();
+  if (pn.indexOf('aviators-') !== 0) return false;
+  if (pn === 'aviators-orquestador') return false;
+  return true;
+}
+
+/**
  * @param {GoogleAppsScript.Properties.Properties} p
  * @return {number}
  */
@@ -388,7 +403,10 @@ function LlmProviderGlobant_consultPromptWithAgent(
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
 
-  if (LlmProviderGlobant_isAssistantMode(p)) {
+  if (
+    LlmProviderGlobant_isAssistantMode(p) &&
+    !LlmProviderGlobant_useRagExecuteForProfile_(pn, p)
+  ) {
     var ast = GlobantAssistantApiClient_create({
       apiKey: apiKey,
       baseUrl: baseUrl || undefined,
@@ -415,12 +433,33 @@ function LlmProviderGlobant_consultPromptWithAgent(
     };
   }
 
+  var ragExecuteMaxChars = 14000;
+  if (finalPrompt.length > ragExecuteMaxChars) {
+    console.log(
+      '[RAG-QUERY] Truncating prompt from ' +
+        finalPrompt.length +
+        ' to ' +
+        ragExecuteMaxChars +
+        ' chars',
+    );
+    finalPrompt =
+      finalPrompt.substring(0, ragExecuteMaxChars) +
+      UiStrings_fmt_('drive_text_truncated_suffix');
+  }
+
   var client = GlobantRagApiClient_create({
     apiKey: apiKey,
     baseUrl: baseUrl || undefined,
   });
   var appliedFilters = filters || [];
-  console.log('[RAG-QUERY] Profile: ' + pn + ', Filters: ' + JSON.stringify(appliedFilters));
+  console.log(
+    '[RAG-QUERY] Profile: ' +
+      pn +
+      ', Filters: ' +
+      JSON.stringify(appliedFilters) +
+      ', promptLen=' +
+      finalPrompt.length,
+  );
   var detail = client.executeQueryDetailed(pn, finalPrompt, appliedFilters);
   var rawStr = JSON.stringify(detail.parsed, null, 2);
   if (rawStr.length > 6000) {

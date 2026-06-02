@@ -254,47 +254,11 @@ function AdminAgents_uniqueNonEmpty_(arr) {
 }
 
 /**
- * @param {GoogleAppsScript.Properties.Properties} props
- * @return {{ spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, sheet: GoogleAppsScript.Spreadsheet.Sheet }}
- */
-function AdminAgents_getOrCreateApiCatalogSheet_(props) {
-  var ssId = (props.getProperty(_ADMIN_AGENTS_API_CATALOG_SSID_PROP) || '').trim();
-  var ss = null;
-  if (ssId) {
-    try {
-      ss = SpreadsheetApp.openById(ssId);
-    } catch (eOpen) {
-      ss = null;
-    }
-  }
-  if (!ss) {
-    ss = SpreadsheetApp.create('Aviators - Admin Agent API Catalog');
-    props.setProperty(_ADMIN_AGENTS_API_CATALOG_SSID_PROP, ss.getId());
-  }
-  var sh = ss.getSheetByName(_ADMIN_AGENTS_API_CATALOG_TAB);
-  if (!sh) sh = ss.insertSheet(_ADMIN_AGENTS_API_CATALOG_TAB);
-  if (sh.getLastRow() < 1) {
-    sh.getRange(1, 1, 1, 2).setValues([['model', 'strategy']]);
-  } else {
-    var h1 = String(sh.getRange(1, 1).getValue() || '').trim().toLowerCase();
-    var h2 = String(sh.getRange(1, 2).getValue() || '').trim().toLowerCase();
-    if (h1 !== 'model' || h2 !== 'strategy') {
-      sh.getRange(1, 1, 1, 2).setValues([['model', 'strategy']]);
-    }
-  }
-  return { spreadsheet: ss, sheet: sh };
-}
-
-/**
- * Catálogo editable desde hoja:
- * - Spreadsheet: Script Property ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID.
- * - Tab: agent_api_catalog.
- * - Columnas: model, strategy.
+ * Catálogo de modelos/estrategias (Supabase agent_api_catalog).
  * @return {{ ok: boolean, models: Array<string>, strategies: Array<string>, source: string, spreadsheetId: string, sheetName: string }}
  */
 function AdminAgents_apiCatalog() {
   AdminAuth_requireAgentsView();
-  var props = PropertiesService.getScriptProperties();
   var defaultModels = [
     'vertex_ai/gemini-2.5-pro',
     'vertex_ai/gemini-2.5-flash',
@@ -312,28 +276,23 @@ function AdminAgents_apiCatalog() {
     'Self-Consistency',
     'ReAct',
   ];
-  var cat = AdminAgents_getOrCreateApiCatalogSheet_(props);
-  var sh = cat.sheet;
-  var models = [];
-  var strategies = [];
-  var last = sh.getLastRow();
-  if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 2).getDisplayValues();
-    var i;
-    for (i = 0; i < vals.length; i++) {
-      models.push(vals[i][0]);
-      strategies.push(vals[i][1]);
-    }
+
+  var sbCat = AgentApiCatalogStore_listAll();
+  var sbModels = [];
+  var sbStrategies = [];
+  for (var si = 0; si < sbCat.length; si++) {
+    sbModels.push(sbCat[si].model);
+    sbStrategies.push(sbCat[si].strategy);
   }
-  models = AdminAgents_uniqueNonEmpty_(models);
-  strategies = AdminAgents_uniqueNonEmpty_(strategies);
+  sbModels = AdminAgents_uniqueNonEmpty_(sbModels);
+  sbStrategies = AdminAgents_uniqueNonEmpty_(sbStrategies);
   return {
     ok: true,
-    models: models.length ? models : defaultModels,
-    strategies: strategies.length ? strategies : defaultStrategies,
-    source: models.length || strategies.length ? 'spreadsheet' : 'defaults',
-    spreadsheetId: cat.spreadsheet.getId(),
-    sheetName: _ADMIN_AGENTS_API_CATALOG_TAB,
+    models: sbModels.length ? sbModels : defaultModels,
+    strategies: sbStrategies.length ? sbStrategies : defaultStrategies,
+    source: sbModels.length || sbStrategies.length ? 'supabase' : 'defaults',
+    spreadsheetId: '',
+    sheetName: SUPABASE_TABLE.AGENT_API_CATALOG,
   };
 }
 
@@ -451,17 +410,11 @@ function AdminAgents_normalizeSources_(blob) {
 function AdminAgents_loadRegistry_(props) {
   var fromFile = AdminAgents_loadRegistryFromFile_(props);
   if (fromFile) {
-    if (AdminAgents_ensureDefaultAgentsInRegistry_(fromFile)) {
-      AdminAgents_saveRegistry_(props, fromFile);
-    }
     return fromFile;
   }
 
   var legacy = AdminAgents_loadLegacyRegistryFromProperties_(props);
   if (legacy) {
-    if (AdminAgents_ensureDefaultAgentsInRegistry_(legacy)) {
-      // seeded missing defaults
-    }
     AdminAgents_saveRegistry_(props, legacy);
     return legacy;
   }
@@ -643,7 +596,7 @@ function AdminAgents_createGlobantAgentsApiClient_(props) {
     );
   }
   var baseUrl = (props.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
-  var projectId = (props.getProperty('GLOBANT_PROJECT_ID') || '').trim();
+  var projectId = (props.getProperty(AVIATORS_PROP.GLOBANT_PROJECT_ID) || '').trim();
   return GlobantAgentsApiClient_create({
     apiKey: apiKey,
     baseUrl: baseUrl || undefined,
@@ -771,6 +724,51 @@ function AdminAgents_annotateRagProfileOnRemote_(agents, remoteSet) {
     var pn = String(agents[i].profileName || '').trim();
     agents[i].ragProfileOnRemote = !!remoteSet[pn];
   }
+}
+
+/**
+ * Estado del agente orquestador (registro local + perfil RAG remoto si se puede consultar).
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @return {{ ok: boolean, inRegistry: boolean, onRemote: boolean, remoteChecked: boolean, profileName: string }}
+ */
+function AdminAgents_orchestratorHealth_(props) {
+  var reg = AdminAgents_loadRegistry_(props);
+  var orch = null;
+  var i;
+  for (i = 0; i < reg.agents.length; i++) {
+    var ag = reg.agents[i];
+    if (ag && String(ag.id || '').trim() === _ADMIN_AGENT_ID_ORCHESTRATOR) {
+      orch = ag;
+      break;
+    }
+  }
+  if (!orch) {
+    return {
+      ok: false,
+      inRegistry: false,
+      onRemote: false,
+      remoteChecked: false,
+      profileName: '',
+    };
+  }
+  var pn = String(orch.profileName || '').trim();
+  var ragClient = AdminAgents_tryMaybeCreateRagClient_(props);
+  var onRemote = false;
+  var remoteChecked = false;
+  if (ragClient && pn) {
+    var remoteSet = AdminAgents_tryListRemoteProfilesSet_(ragClient);
+    if (remoteSet) {
+      remoteChecked = true;
+      onRemote = !!remoteSet[pn];
+    }
+  }
+  return {
+    ok: onRemote,
+    inRegistry: true,
+    onRemote: onRemote,
+    remoteChecked: remoteChecked,
+    profileName: pn,
+  };
 }
 
 /**

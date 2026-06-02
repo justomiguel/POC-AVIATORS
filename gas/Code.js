@@ -18,10 +18,11 @@ function doGet() {
   tpl.clientScriptAgents = HtmlService.createHtmlOutputFromFile('app-client-agents').getContent();
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
-  tpl.clientScriptSearch = HtmlService.createHtmlOutputFromFile('app-client-search').getContent();
   tpl.clientScriptExport = HtmlService.createHtmlOutputFromFile('app-client-export').getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
+  tpl.clientScriptSettings = HtmlService.createHtmlOutputFromFile('app-client-settings').getContent();
+  tpl.clientScriptAccessRequest = HtmlService.createHtmlOutputFromFile('app-client-access-request').getContent();
   tpl.clientScriptBoot = HtmlService.createHtmlOutputFromFile('app-client-boot').getContent();
   return tpl
     .evaluate()
@@ -44,19 +45,22 @@ function getBootstrap() {
     canEditCatalog: false,
     canViewMetrics: false,
     canResetMetrics: false,
+    canManageUsers: false,
+    canManageRoleConfig: false,
+    canManageUnansweredQueue: false,
   };
   try {
     var email = ('' + Session.getActiveUser().getEmail()).trim();
     if (email) {
       perms.canManageAgents = AdminAuth_canManageAgents(email);
-      perms.canEditCatalog = AdminAuth_emailIsAdmin(email) ||
-        (function () {
-          try { return RoleDirectory_emailIsPresale(email); } catch (ePresale) { return false; }
-        })();
+      perms.canEditCatalog = AdminAuth_emailCanWriteCatalog(email);
       perms.canViewAgents = AdminAuth_emailCanViewAgents(email);
       perms.canViewCatalog = AdminAuth_emailCanViewCatalog(email);
       perms.canViewMetrics = AdminAuth_emailCanViewMetrics(email);
-      perms.canResetMetrics = AdminAuth_emailIsAdmin(email);
+      perms.canResetMetrics = AdminAuth_emailCanResetMetrics(email);
+      perms.canManageUsers = AdminAuth_emailCanManageUsers(email);
+      perms.canManageRoleConfig = AdminAuth_emailIsAdmin(email);
+      perms.canManageUnansweredQueue = MetricsAuth_canManageQueue(email);
     }
   } catch (ePerms) {}
 
@@ -76,6 +80,7 @@ function getBootstrap() {
     i18n: UiStrings_getClientPack_(),
     permissions: perms,
     quickPrompts: quickPrompts,
+    dataBackend: AviatorsDataBackend_mode_(),
   };
 }
 
@@ -89,13 +94,22 @@ function getI18nPack(locale) {
 }
 
 /**
- * Diagnóstico de roles (planilla): en el editor Apps Script, elegí esta función y «Ejecutar».
- * Revisa acceso, pestaña `data`, encabezados y si tu email aparece en una fila.
+ * Diagnóstico de roles (Supabase): en el editor Apps Script, elegí esta función y «Ejecutar».
+ * Revisa configuración Supabase y si tu email tiene fila en la tabla `roles`.
  *
  * @return {Object}
  */
 function debugRoleDirectory() {
   return RoleDirectory_diagnostic();
+}
+
+/**
+ * Diagnóstico RAG y catálogo para una pregunta (editor Apps Script → Ejecutar).
+ * @param {string} [question]
+ * @return {Object}
+ */
+function debugAgentRagForQuestion(question) {
+  return AgentOrchestrator_debugRagDiagnostics_(question);
 }
 
 /**
@@ -199,10 +213,13 @@ function getSessionInfo() {
     roleLookupError = true;
     var errMsg = eRole && eRole.message ? String(eRole.message) : '';
     var roleNoteKey = 'session_no_role_line';
-    if (errMsg === 'ERR_ROLE_LOOKUP_OPEN') roleNoteKey = 'session_role_err_open';
-    else if (errMsg === 'ERR_ROLE_LOOKUP_TAB') roleNoteKey = 'session_role_err_tab';
-    else if (errMsg === 'ERR_ROLE_LOOKUP_COLS')
-      roleNoteKey = 'session_role_err_cols';
+    if (
+      errMsg === 'ERR_SUPABASE_NOT_CONFIGURED' ||
+      errMsg === 'ERR_SUPABASE_SHEETS_DISABLED' ||
+      errMsg === 'ERR_ROLE_SUPABASE' ||
+      errMsg.indexOf('ERR_SUPABASE_HTTP_') === 0
+    )
+      roleNoteKey = 'session_role_err_supabase';
     note += (note ? ' ' : '') + UiStrings_t(locale, roleNoteKey);
     var logLine =
       '[getSessionInfo] RoleDirectory threw message=' +
@@ -232,6 +249,10 @@ function getSessionInfo() {
   var localPart = email.split('@')[0] || email;
 
   var isVisitor = !roleRec;
+
+  if (isVisitor && email) {
+    AdminUsers_touchVisitorSession_(email, card.displayName || localPart);
+  }
 
   return {
     email: email,
@@ -306,10 +327,11 @@ function resolveDriveFileUrlByName(fileName) {
   var name = String(fileName || '').trim();
   if (!name) return { ok: false, url: '', fileName: '' };
   var q = 'trashed = false and title = "' + DriveQuery_escapeLiteral_(name) + '"';
-  if (typeof CATALOG_ROOT_FOLDER_ID !== 'undefined' && CATALOG_ROOT_FOLDER_ID) {
+  var rootFolderId = AviatorsConfig_driveRootFolderId_();
+  if (rootFolderId) {
     q =
       '"' +
-      DriveQuery_escapeLiteral_(String(CATALOG_ROOT_FOLDER_ID)) +
+      DriveQuery_escapeLiteral_(rootFolderId) +
       '" in parents and ' +
       q;
   }
@@ -380,6 +402,9 @@ function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
     if (!c.url && fKey && byFileName[fKey] && byFileName[fKey].url) {
       c.url = byFileName[fKey].url;
     }
+    if (!c.driveFileId && fKey && byFileName[fKey] && byFileName[fKey].driveFileId) {
+      c.driveFileId = byFileName[fKey].driveFileId;
+    }
     var idKey = String(c.contentId || '') || String(c.title || '');
     var targetKey = resolveTargetKey_(c, i);
     if (seenTargets[targetKey]) continue;
@@ -409,7 +434,168 @@ function ChatReferences_merge_(catalogRefs, selectedFileRefs) {
 }
 
 /**
- * Entrada HTML: delega en el orquestador (proveedor según Propiedades del script).
+ * @param {Object} ref
+ * @return {Object}
+ */
+function ChatReferences_normalize_(ref) {
+  var r = ref || {};
+  return {
+    contentId: String(r.contentId || r.content_id || '').trim(),
+    title: String(r.title || '').trim(),
+    contentType: String(r.contentType || r.content_type || '').trim(),
+    clientName: String(r.clientName || r.client_name || '').trim(),
+    url: String(r.url || r.driveUrl || r.drive_file_url || '').trim(),
+    fileName: String(r.fileName || r.file_name || '').trim(),
+    driveFileId: String(r.driveFileId || r.drive_file_id || '').trim(),
+    globantDocumentId: String(
+      r.globantDocumentId || r.documentId || r.globant_document_id || '',
+    ).trim(),
+    globantProfileName: String(
+      r.globantProfileName || r.profileName || r.globant_profile_name || '',
+    ).trim(),
+  };
+}
+
+/**
+ * @param {Object} ref
+ * @return {Object}
+ */
+function ChatReferences_enrichFromCatalog_(ref) {
+  var n = ChatReferences_normalize_(ref);
+  var row = null;
+  if (n.contentId) {
+    try {
+      row = ContentCatalogStore_getById(n.contentId);
+    } catch (ignoreLookup) {}
+  }
+  if (row) {
+    if (!n.title) n.title = String(row.title || '').trim();
+    if (!n.contentType) n.contentType = String(row.content_type || '').trim();
+    if (!n.clientName) n.clientName = String(row.client_name || '').trim();
+    if (!n.fileName) n.fileName = String(row.file_name || '').trim();
+    if (!n.driveFileId) n.driveFileId = String(row.drive_file_id || '').trim();
+    if (!n.url) n.url = String(row.drive_file_url || '').trim();
+    if (!n.globantDocumentId) {
+      n.globantDocumentId = String(row.globant_document_id || '').trim();
+    }
+    if (!n.globantProfileName) {
+      n.globantProfileName = String(row.globant_profile_name || '').trim();
+    }
+    if (!n.contentId) n.contentId = String(row.content_id || '').trim();
+  }
+  if (!n.url && n.driveFileId) {
+    n.url = 'https://drive.google.com/open?id=' + encodeURIComponent(n.driveFileId);
+  }
+  if (!n.url && n.fileName && (n.contentType === 'success_case' || n.contentType === 'selected_file')) {
+    var resolved = resolveDriveFileUrlByName(n.fileName);
+    if (resolved.ok) n.url = resolved.url;
+  }
+  return n;
+}
+
+/**
+ * @param {Object} ref
+ * @param {string} email
+ * @return {Object}
+ */
+function ChatReferences_buildActions_(ref, email) {
+  var n = ChatReferences_enrichFromCatalog_(ref);
+  var canCatalog = false;
+  var canAgents = false;
+  try {
+    canCatalog = AdminAuth_emailCanViewCatalog(email);
+  } catch (ignoreCat) {}
+  try {
+    canAgents = AdminAuth_emailCanViewAgents(email);
+  } catch (ignoreAg) {}
+
+  var driveUrl = n.url;
+  if (!driveUrl && n.driveFileId) {
+    driveUrl = 'https://drive.google.com/open?id=' + encodeURIComponent(n.driveFileId);
+  }
+
+  var hasDrive =
+    !!driveUrl &&
+    (n.contentType === 'success_case' ||
+      n.contentType === 'selected_file' ||
+      !!n.driveFileId ||
+      /\.pdf($|\?)/i.test(driveUrl));
+
+  return {
+    contentId: n.contentId,
+    title: n.title || n.fileName || n.contentId || '—',
+    contentType: n.contentType,
+    clientName: n.clientName,
+    fileName: n.fileName,
+    globantDocumentId: n.globantDocumentId,
+    globantProfileName: n.globantProfileName,
+    actions: {
+      drive: { available: hasDrive, url: hasDrive ? driveUrl : '' },
+      catalog: {
+        available: !!(n.contentId && canCatalog),
+        contentId: n.contentId,
+      },
+      rag: {
+        available: !!(n.globantProfileName && canAgents),
+        profileName: n.globantProfileName,
+        documentId: n.globantDocumentId,
+      },
+    },
+  };
+}
+
+/**
+ * @param {Array<Object>} refs
+ * @param {string=} email
+ * @return {Array<Object>}
+ */
+function ChatReferences_enrichList_(refs, email) {
+  if (!email) {
+    try {
+      email = Session.getActiveUser().getEmail();
+    } catch (ignoreEmail) {}
+  }
+  email = String(email || '').trim();
+  var list = Array.isArray(refs) ? refs : [];
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var enriched = ChatReferences_buildActions_(list[i], email);
+    var key =
+      enriched.contentId ||
+      enriched.actions.drive.url ||
+      enriched.globantProfileName ||
+      enriched.title;
+    key = String(key || '').trim().toLowerCase();
+    if (key && seen[key]) continue;
+    if (key) seen[key] = true;
+    if (
+      enriched.actions.drive.available ||
+      enriched.actions.catalog.available ||
+      enriched.actions.rag.available ||
+      enriched.title
+    ) {
+      out.push(enriched);
+    }
+  }
+  return out.slice(0, 8);
+}
+
+/**
+ * Resuelve acciones de apertura para una cita (p. ej. historial legacy).
+ * @param {Object} ref
+ * @return {Object}
+ */
+function resolveChatReference(ref) {
+  var email = '';
+  try {
+    email = Session.getActiveUser().getEmail();
+  } catch (ignore) {}
+  return ChatReferences_buildActions_(ref || {}, email);
+}
+
+/**
  * @param {string} question
  * @param {string[]} fileIds
  */
@@ -425,7 +611,7 @@ function askAboutDocuments(question, fileIds, historyJson) {
       ['proposal', 'success_case', 'client'],
     );
   } catch (eMatch) {}
-  var refs = ChatReferences_merge_(catalogRefs, selectedRefs);
+  var refs = ChatReferences_enrichList_(ChatReferences_merge_(catalogRefs, selectedRefs));
   var answerText = String(ans.answer || '').trim();
   var isUnanswered = !answerText;
   var tracked = MetricsService_trackQuestionEvent({
@@ -458,7 +644,41 @@ function globantRouteQuery(prompt) {
 }
 
 /**
- * Paso 2 de orquestacion: responde la consulta con el agente indicado.
+ * Analiza un documento adjunto efímero en el chat home (sin persistir).
+ * @param {string} prompt
+ * @param {string} payloadJson {name,mimeType,dataBase64}
+ * @param {string=} historyJson
+ */
+function globantAnalyzeEphemeralDocument(prompt, payloadJson, historyJson) {
+  var history = [];
+  try {
+    if (historyJson) history = JSON.parse(historyJson);
+  } catch (e) {}
+  var r = AgentOrchestrator_analyzeEphemeralDocument(prompt, payloadJson, historyJson);
+  var tracked = MetricsService_trackQuestionEvent({
+    mode: 'globant_ephemeral_doc',
+    agentId: _ADMIN_AGENT_ID_ORCHESTRATOR,
+    agentName: r.agentName || '',
+    questionText: prompt,
+    isUnanswered: !!r.isUnanswered,
+    unansweredCode: r.unansweredCode || '',
+  });
+  return {
+    answer: r.answer,
+    agentName: r.agentName || '',
+    eventId: (tracked && tracked.eventId) || '',
+    meta: {
+      model: r.model,
+      location: r.providerLabel,
+      filterNote: r.filterLabel,
+      rawJson: r.rawJson,
+      references: ChatReferences_enrichList_(r.references || []),
+      docClassification: r.docClassification || null,
+    },
+  };
+}
+
+/**
  * @param {string} prompt
  * @param {string} agentId
  */
@@ -483,7 +703,7 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
       location: r.providerLabel,
       filterNote: r.filterLabel,
       rawJson: r.rawJson,
-      references: r.references || [],
+      references: ChatReferences_enrichList_(r.references || []),
     },
   };
 }
@@ -520,7 +740,7 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
         location: r.providerLabel,
         filterNote: r.filterLabel,
         rawJson: r.rawJson,
-        references: r.references || [],
+        references: ChatReferences_enrichList_(r.references || []),
       },
     });
   }
@@ -700,6 +920,15 @@ function contentsGetAllTags() {
   return { ok: true, tags: ContentCatalog_getAllTags() };
 }
 
+/**
+ * Regenera embeddings vectoriales del catálogo (lote paginado).
+ * @param {number} skip
+ * @param {number} limit
+ */
+function contentsRebuildEmbeddingsBatch(skip, limit) {
+  return ContentCatalog_rebuildEmbeddingsBatch(skip, limit);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Clients Master
 // ─────────────────────────────────────────────────────────────────────────────
@@ -763,6 +992,30 @@ function metricsUnansweredList(filters) {
   return MetricsService_unansweredList(filters || {});
 }
 
+/** Assignees válidos para la cola (admin / presales). */
+function metricsUnansweredAssignees() {
+  return MetricsService_unansweredAssignees_();
+}
+
+/**
+ * Asigna una consulta no respondida.
+ * @param {string} eventId
+ * @param {string} assigneeEmail
+ */
+function metricsUnansweredAssign(eventId, assigneeEmail) {
+  return MetricsService_unansweredAssign_(eventId, assigneeEmail);
+}
+
+/**
+ * Cambia estado de cola: missing_content | resolved
+ * @param {string} eventId
+ * @param {string} status
+ * @param {string=} note
+ */
+function metricsUnansweredSetStatus(eventId, status, note) {
+  return MetricsService_unansweredSetStatus_(eventId, status, note);
+}
+
 /**
  * Lista paginada de leaderboard por tipo.
  * @param {string} kind
@@ -777,9 +1030,89 @@ function metricsResetAll() {
   return MetricsService_resetAll();
 }
 
-/** Restablece todos los spreadsheets operativos (solo admin). */
+/** Solo admin · listado paginado de visitantes sin rol. */
+function adminUsersListVisitors(filters) {
+  return AdminUsers_listVisitors(filters || {});
+}
+
+/** Solo admin · listado paginado de usuarios con rol. */
+function adminUsersListRoles(filters) {
+  return AdminUsers_listRoles(filters || {});
+}
+
+/** Solo admin · opciones de rol para asignación. */
+function adminUsersRoleOptions() {
+  return AdminUsers_roleOptions();
+}
+
+/** Solo admin · convertir visitante en usuario con rol. */
+function adminUsersAssignRole(email, roleKey) {
+  return AdminUsers_assignRole(email, roleKey);
+}
+
+/** Solo admin · actualizar rol de un usuario existente. */
+function adminUsersUpdateRole(email, roleKey) {
+  return AdminUsers_updateRole(email, roleKey);
+}
+
+/** Solo admin · quitar rol (vuelve a visitante en próximo acceso). */
+function adminUsersRemoveRole(email) {
+  return AdminUsers_removeRole(email);
+}
+
+/** Visitante · opciones de rol solicitables. */
+function visitorAccessRequestRoleOptions() {
+  return AccessRequest_roleOptions();
+}
+
+/** Visitante · solicitud pendiente del usuario actual. */
+function visitorAccessRequestGetMine() {
+  return AccessRequest_getMine();
+}
+
+/** Visitante · enviar solicitud de acceso. */
+function visitorAccessRequestSubmit(roleKey, reason) {
+  return AccessRequest_submit(roleKey, reason);
+}
+
+/** Solo admin · listado paginado de solicitudes de acceso. */
+function adminUsersListAccessRequests(filters) {
+  return AccessRequest_listForAdmin(filters || {});
+}
+
+/** Solo admin · descartar solicitud de acceso. */
+function adminUsersDismissAccessRequest(requestId) {
+  return AccessRequest_dismiss(requestId);
+}
+
+/** Solo admin · catálogo de roles y matriz de permisos. */
+function adminRoleConfigGet() {
+  return AdminRoleConfig_get();
+}
+
+/** Solo admin · guardar matriz de permisos (JSON). */
+function adminRoleConfigSave(configJson) {
+  return AdminRoleConfig_save(configJson);
+}
+
+/** Solo admin · crear rol personalizado. */
+function adminRoleConfigAddRole(key, labelEs, labelEn) {
+  return AdminRoleConfig_addRole(key, labelEs, labelEn);
+}
+
+/** Solo admin · eliminar rol personalizado sin usuarios asignados. */
+function adminRoleConfigRemoveRole(key) {
+  return AdminRoleConfig_removeRole(key);
+}
+
+/** Restablece todos los datos operativos en Supabase (solo admin). RPC legacy conserva nombre. */
 function adminResetAllSpreadsheetData() {
   return AdminReset_resetAllSpreadsheetData();
+}
+
+/** Migra datos desde planillas hacia Supabase (solo admin, one-shot). */
+function adminMigrateSpreadsheetsToSupabase() {
+  return AdminSupabaseMigration_migrateFromSheets();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

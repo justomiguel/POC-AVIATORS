@@ -69,7 +69,7 @@ function LlmOrchestrator_getUiConfig() {
       location: (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').replace(
         /^https?:\/\//,
         '',
-      ) || 'api.agents.globant.com',
+      ) || GlobantUrl_defaultBaseUrl_().replace(/^https?:\/\//, ''),
       model: LlmProviderGlobant_isAssistantMode(p)
         ? 'globant-assistant'
         : 'globant-rag',

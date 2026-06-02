@@ -9,8 +9,16 @@
   var adminAgentSeedBtn = document.getElementById('admin-agent-seed-btn');
   var adminAgentSeedLoader = document.getElementById('admin-agent-seed-loader');
   var adminAgentSeedLoaderText = document.getElementById('admin-agent-seed-loader-text');
-  var adminAgentEmpty = document.getElementById('admin-agent-empty');
   var adminAgentEditor = document.getElementById('admin-agent-editor');
+  var adminAgentDisplayEyebrow = document.getElementById('admin-agent-display-eyebrow');
+  var adminAgentDisplayName = document.getElementById('admin-agent-display-name');
+  var adminAgentDisplayMeta = document.getElementById('admin-agent-display-meta');
+  var agentsSidebarEmptyOnboard = document.getElementById('agents-sidebar-empty-onboard');
+  var agentsRoSidebarEmptyOnboard = document.getElementById('agents-ro-sidebar-empty-onboard');
+  var agentsAdminLayout = document.getElementById('agents-admin-layout');
+  var agentsRoLayout = document.getElementById('agents-ro-layout');
+  var agentsRoDisplayName = document.getElementById('agents-ro-display-name');
+  var agentsRoDisplayMeta = document.getElementById('agents-ro-display-meta');
   var adminAgentProfile = document.getElementById('admin-agent-profile');
   var adminAgentPrompt = document.getElementById('admin-agent-prompt');
   var adminAgentApiIdOrName = document.getElementById('admin-agent-api-id-or-name');
@@ -46,7 +54,6 @@
   var adminAgentProgressMsg = document.getElementById('admin-agent-progress-msg');
   var adminAgentApiCatalog = { models: [], strategies: [] };
   var agentsRoNavList = document.getElementById('agents-ro-nav-list');
-  var agentsRoEmpty = document.getElementById('agents-ro-empty');
   var agentsRoDetail = document.getElementById('agents-ro-detail');
   var agentsRoProfile = document.getElementById('agents-ro-profile');
   var agentsRoLastSync = document.getElementById('agents-ro-last-sync');
@@ -63,6 +70,16 @@
   var agentsBatchCount = document.getElementById('agents-batch-count');
   var agentsBatchSyncBtn = document.getElementById('agents-batch-sync-btn');
   var agentsBatchDeleteBtn = document.getElementById('agents-batch-delete-btn');
+
+  var adminAgentTabRoot = document.querySelector('#admin-agent-editor [data-app-tab-group]');
+  var agentsRoTabRoot = document.querySelector('#agents-ro-detail [data-app-tab-group]');
+  var adminAgentTabs = adminAgentTabRoot ? A.initTabGroup(adminAgentTabRoot) : null;
+  var agentsRoTabs = agentsRoTabRoot ? A.initTabGroup(agentsRoTabRoot) : null;
+
+  function agentsActivateDefaultTab() {
+    if (adminAgentTabs) adminAgentTabs.activate('admin-agent-tab-general');
+    if (agentsRoTabs) agentsRoTabs.activate('agents-ro-tab-general');
+  }
 
   function adminShowBlocking(msg) {
     if (A.showBlockingModal) A.showBlockingModal(msg || i18n('busy_connecting'));
@@ -182,27 +199,137 @@
 
   var AGENTS_CACHE_TTL = 120000;
 
+  function agentsIsCreatingNew_() {
+    return (
+      !!S.get('canManageAgents') &&
+      adminAgentEditor &&
+      !adminAgentEditor.classList.contains('hidden') &&
+      !S.get('adminSelectedAgentId')
+    );
+  }
+
+  function agentsUpdateShellState_() {
+    var cache = S.get('adminAgentsCache') || [];
+    var hasAgents = cache.length > 0;
+    var readOnly = agentsIsReadOnlyMode();
+    var creatingNew = agentsIsCreatingNew_();
+    var sidebarOnly = !hasAgents && !creatingNew;
+
+    if (agentsAdminLayout) {
+      agentsAdminLayout.classList.toggle('agents-layout-empty', sidebarOnly && !readOnly);
+    }
+    if (agentsRoLayout) {
+      agentsRoLayout.classList.toggle('agents-layout-empty', sidebarOnly && readOnly);
+    }
+
+    var adminShell = document.getElementById('page-agents');
+    var roShell = document.getElementById('page-agents-readonly');
+    var adminPageShell = adminShell && adminShell.querySelector('.agents-page-shell');
+    var roPageShell = roShell && roShell.querySelector('.agents-page-shell');
+    if (adminPageShell) adminPageShell.classList.toggle('agents-shell-empty', sidebarOnly && !readOnly);
+    if (roPageShell) roPageShell.classList.toggle('agents-shell-empty', sidebarOnly && readOnly);
+
+    if (agentsSidebarEmptyOnboard) {
+      agentsSidebarEmptyOnboard.classList.toggle('hidden', hasAgents || creatingNew || readOnly);
+    }
+    if (agentsRoSidebarEmptyOnboard) {
+      agentsRoSidebarEmptyOnboard.classList.toggle('hidden', hasAgents || !readOnly);
+    }
+    if (adminAgentNavList) {
+      adminAgentNavList.classList.toggle('hidden', !hasAgents);
+    }
+    if (agentsRoNavList) {
+      agentsRoNavList.classList.toggle('hidden', !hasAgents);
+    }
+  }
+
+  function updateAgentEditorHeader_(ag) {
+    var isNew = agentsIsCreatingNew_();
+    if (adminAgentDisplayEyebrow) {
+      adminAgentDisplayEyebrow.textContent = i18n(isNew ? 'admin_agent_new' : 'admin_agent_editor_selected');
+    }
+    if (adminAgentDisplayName) {
+      if (isNew) {
+        var draft = adminAgentProfile && adminAgentProfile.value.trim();
+        adminAgentDisplayName.textContent = draft || i18n('admin_agent_editor_new');
+      } else if (ag) {
+        adminAgentDisplayName.textContent = ag.profileName || ag.id || i18n('label_em_dash');
+      }
+    }
+    if (adminAgentDisplayMeta) {
+      if (isNew) {
+        adminAgentDisplayMeta.textContent = '\u00a0';
+      } else if (ag && ag.lastSync) {
+        adminAgentDisplayMeta.textContent = i18nFmt('admin_agent_last_sync', { date: ag.lastSync });
+      } else {
+        adminAgentDisplayMeta.textContent = '\u00a0';
+      }
+    }
+  }
+
+  function updateAgentReadonlyHeader_(ag) {
+    if (!ag) return;
+    if (agentsRoDisplayName) {
+      agentsRoDisplayName.textContent = ag.profileName || ag.id || i18n('label_em_dash');
+    }
+    if (agentsRoDisplayMeta) {
+      agentsRoDisplayMeta.textContent = ag.lastSync
+        ? i18nFmt('admin_agent_last_sync', { date: ag.lastSync })
+        : '\u00a0';
+    }
+  }
+
+  function agentsSelectByProfileName_(profileName) {
+    var want = String(profileName || '').trim().toLowerCase();
+    if (!want) return false;
+    var cache = S.get('adminAgentsCache') || [];
+    for (var i = 0; i < cache.length; i++) {
+      var ag = cache[i];
+      if (!ag) continue;
+      var pn = String(ag.profileName || '').trim().toLowerCase();
+      var id = String(ag.id || '').trim().toLowerCase();
+      if (pn === want || id === want) {
+        selectAdminAgent(ag.id);
+        return true;
+      }
+    }
+    return false;
+  }
+
   function loadAdminAgentsListBody_(agents, onDone) {
+    var selId = S.get('adminSelectedAgentId');
+    if (selId) {
+      var stillThere = false;
+      for (var si = 0; si < agents.length; si++) {
+        if (agents[si] && agents[si].id === selId) {
+          stillThere = true;
+          break;
+        }
+      }
+      if (!stillThere) S.set('adminSelectedAgentId', null);
+    }
     S.set('adminAgentsCache', agents);
     applyAgentsWriteAccess();
     renderAdminAgentNav();
     if (!agents.length) {
-      if (adminAgentEmpty) {
-        adminAgentEmpty.classList.remove('hidden');
-        adminAgentEmpty.textContent = i18n('admin_agent_list_empty');
-      }
       if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
-      if (agentsRoEmpty) {
-        agentsRoEmpty.classList.remove('hidden');
-        agentsRoEmpty.textContent = i18n('admin_agent_list_empty');
-      }
       if (agentsRoDetail) agentsRoDetail.classList.add('hidden');
       S.set('adminSelectedAgentId', null);
+      agentsUpdateShellState_();
       if (typeof onDone === 'function') onDone();
       return;
     }
-    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
-    if (agentsRoEmpty) agentsRoEmpty.classList.add('hidden');
+    var pendingProfile = S.get('agentsPendingProfileName');
+    if (pendingProfile) {
+      S.set('agentsPendingProfileName', null);
+      if (agentsSelectByProfileName_(pendingProfile)) {
+        if (typeof onDone === 'function') onDone();
+        return;
+      }
+      if (A.toast) {
+        A.toast.info(i18nFmt('chat_ref_agent_not_in_list', { profile: pendingProfile }));
+      }
+    }
     selectAdminAgent(S.get('adminSelectedAgentId') || agents[0].id);
     if (typeof onDone === 'function') onDone();
   }
@@ -261,6 +388,15 @@
         var span = document.createElement('span');
         span.textContent = ag.profileName || ag.id;
         bt.appendChild(span);
+        if (ag.ragProfileOnRemote === false) {
+          var badge = document.createElement('span');
+          badge.className =
+            'ml-2 inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300';
+          badge.setAttribute('title', i18n('admin_agent_badge_remote_missing'));
+          badge.textContent = '!';
+          badge.setAttribute('aria-label', i18n('admin_agent_badge_remote_missing'));
+          bt.appendChild(badge);
+        }
         bt.addEventListener('click', function () { selectAdminAgent(ag.id); });
         li.appendChild(bt);
         navList.appendChild(li);
@@ -438,7 +574,7 @@
     }
     if (!folders.length && !files.length) {
       var empty = document.createElement('p');
-      empty.className = 'text-sm text-slate-500';
+      empty.className = 'text-sm text-slate-500 dark:text-slate-400';
       empty.textContent = i18n('admin_selection_empty');
       agentsRoSources.appendChild(empty);
     }
@@ -446,6 +582,7 @@
 
   function fillAgentReadonlyDetail_(ag) {
     if (!ag) return;
+    updateAgentReadonlyHeader_(ag);
     var cfg = adminAgentApiDefaults(ag.profileName || '', ag.systemPrompt || '');
     if (ag.globantAgent && typeof ag.globantAgent === 'object') {
       cfg = Object.assign(cfg, ag.globantAgent);
@@ -482,10 +619,9 @@
     var cache = S.get('adminAgentsCache');
     var readOnlyMode = agentsIsReadOnlyMode();
     if (!cache.length) {
-      if (adminAgentEmpty) adminAgentEmpty.classList.remove('hidden');
       if (adminAgentEditor) adminAgentEditor.classList.add('hidden');
-      if (agentsRoEmpty) agentsRoEmpty.classList.remove('hidden');
       if (agentsRoDetail) agentsRoDetail.classList.add('hidden');
+      agentsUpdateShellState_();
       return;
     }
     var ag = null;
@@ -494,16 +630,16 @@
     }
     if (!ag) ag = cache[0];
     S.set('adminSelectedAgentId', ag.id);
-    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
     if (adminAgentEditor) adminAgentEditor.classList.toggle('hidden', readOnlyMode);
-    if (agentsRoEmpty) agentsRoEmpty.classList.toggle('hidden', readOnlyMode);
     if (agentsRoDetail) agentsRoDetail.classList.toggle('hidden', !readOnlyMode);
     if (readOnlyMode) {
       fillAgentReadonlyDetail_(ag);
     } else {
       fillAdminAgentForm(ag);
+      updateAgentEditorHeader_(ag);
     }
     renderAdminAgentNav();
+    agentsUpdateShellState_();
     if (adminAgentDocsBody) adminAgentDocsBody.innerHTML = '';
     S.set('adminAgentDocsSkip', 0);
     if (adminAgentStatus) {
@@ -511,12 +647,13 @@
       adminAgentStatus.classList.remove('err');
     }
     setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
+    agentsActivateDefaultTab();
   }
 
   function openNewAdminAgent() {
     S.set('adminSelectedAgentId', null);
-    if (adminAgentEmpty) adminAgentEmpty.classList.add('hidden');
     if (adminAgentEditor) adminAgentEditor.classList.remove('hidden');
+    agentsUpdateShellState_();
     if (adminAgentProfile) adminAgentProfile.value = '';
     if (adminAgentPrompt) adminAgentPrompt.value = '';
     fillAdminAgentApiForm({ profileName: '', systemPrompt: '' });
@@ -533,6 +670,8 @@
       : [];
     for (var ni = 0; ni < nodes.length; ni++) nodes[ni].classList.remove('is-active');
     setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
+    agentsActivateDefaultTab();
+    updateAgentEditorHeader_(null);
   }
 
   function collectAdminAgentPayload() {
@@ -707,7 +846,9 @@
         adminHideBlocking();
         setAdminAgentBusy(false, '\u00a0');
         S.set('adminSelectedAgentId', null);
-        loadAdminAgentsList(null, true);
+        loadAdminAgentsList(function () {
+          if (A.dashboard && A.dashboard.loadMetrics) A.dashboard.loadMetrics();
+        }, true);
       })
       .withFailureHandler(function (e) {
         adminHideBlocking();
@@ -954,7 +1095,7 @@
         viewLink.href = d.url;
         viewLink.target = '_blank';
         viewLink.rel = 'noopener noreferrer';
-        viewLink.className = 'btn-admin inline-flex items-center gap-1';
+        viewLink.className = 'btn btn-sm btn-outline';
         viewLink.innerHTML =
           '<i class="fa-solid fa-eye" aria-hidden="true"></i>' +
           '<span>' + i18n('gc_view_file') + '</span>';
@@ -963,7 +1104,7 @@
       if (canWrite) {
         var b = document.createElement('button');
         b.type = 'button';
-        b.className = 'btn-admin inline-flex items-center gap-1';
+        b.className = 'btn btn-sm btn-outline';
         b.innerHTML =
           '<i class="fa-solid fa-trash" aria-hidden="true"></i>' +
           '<span>' + i18n('gc_remove') + '</span>';
@@ -1084,6 +1225,7 @@
   if (adminAgentProfile) {
     adminAgentProfile.addEventListener('input', function () {
       var v = (adminAgentProfile.value || '').trim();
+      if (agentsIsCreatingNew_()) updateAgentEditorHeader_(null);
       if (!v) return;
       if (adminAgentApiIdOrName && !String(adminAgentApiIdOrName.value || '').trim()) {
         adminAgentApiIdOrName.value = v;
@@ -1133,46 +1275,54 @@
         }
         return;
       }
-      if (!window.confirm(i18n('confirm_corpus_resync'))) return;
-      var src = S.get('adminSourcesState');
-      var nf = src.folders.length;
-      var na = src.files.length;
-      if (nf === 0 && na === 0) {
-        if (!window.confirm(i18n('confirm_empty_selection'))) return;
-      }
-      if (adminAgentStatus) adminAgentStatus.classList.remove('err');
-      setAdminAgentBusy(true, i18n('admin_busy_agent_sync'));
-      adminShowBlocking(i18n('admin_busy_agent_sync'));
-      A.cache.invalidate('agentsList');
-      google.script.run
-        .withSuccessHandler(function (res) {
-          adminHideBlocking();
-          setAdminAgentBusy(false, '\u00a0');
-          var sr = res && res.sync ? res.sync : {};
-          var ag = res && res.agent ? res.agent : null;
-          if (adminAgentStatus) {
-            adminAgentStatus.textContent = i18nFmt('admin_agent_sync_done', {
-              profile: sr.profileName || '',
-              uploaded: sr.uploaded,
-              total: sr.docCount,
-            });
-          }
-          if (ag && ag.lastSync && adminAgentMeta) {
-            adminAgentMeta.textContent = i18nFmt('admin_agent_last_sync', { date: ag.lastSync });
-          }
-          loadAdminAgentsList(null, true);
-          if (ag && ag.id) selectAdminAgent(ag.id);
-          refreshAdminAgentDocuments(false);
-        })
-        .withFailureHandler(function (e) {
-          adminHideBlocking();
-          setAdminAgentBusy(false, '\u00a0');
-          if (adminAgentStatus) {
-            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_sync');
-            adminAgentStatus.classList.add('err');
-          }
-        })
-        .adminAgentsSync(id);
+      A.confirmDialog({ message: i18n('confirm_corpus_resync'), danger: true }).then(function (ok) {
+        if (!ok) return;
+        var src = S.get('adminSourcesState');
+        var nf = src.folders.length;
+        var na = src.files.length;
+        function runSync() {
+          if (adminAgentStatus) adminAgentStatus.classList.remove('err');
+          setAdminAgentBusy(true, i18n('admin_busy_agent_sync'));
+          adminShowBlocking(i18n('admin_busy_agent_sync'));
+          A.cache.invalidate('agentsList');
+          google.script.run
+            .withSuccessHandler(function (res) {
+              adminHideBlocking();
+              setAdminAgentBusy(false, '\u00a0');
+              var sr = res && res.sync ? res.sync : {};
+              var ag = res && res.agent ? res.agent : null;
+              if (adminAgentStatus) {
+                adminAgentStatus.textContent = i18nFmt('admin_agent_sync_done', {
+                  profile: sr.profileName || '',
+                  uploaded: sr.uploaded,
+                  total: sr.docCount,
+                });
+              }
+              if (ag && ag.lastSync && adminAgentMeta) {
+                adminAgentMeta.textContent = i18nFmt('admin_agent_last_sync', { date: ag.lastSync });
+              }
+              loadAdminAgentsList(null, true);
+              if (ag && ag.id) selectAdminAgent(ag.id);
+              refreshAdminAgentDocuments(false);
+            })
+            .withFailureHandler(function (e) {
+              adminHideBlocking();
+              setAdminAgentBusy(false, '\u00a0');
+              if (adminAgentStatus) {
+                adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_sync');
+                adminAgentStatus.classList.add('err');
+              }
+            })
+            .adminAgentsSync(id);
+        }
+        if (nf === 0 && na === 0) {
+          A.confirmDialog({ message: i18n('confirm_empty_selection') }).then(function (ok2) {
+            if (ok2) runSync();
+          });
+        } else {
+          runSync();
+        }
+      });
     });
   }
   if (adminAgentDeleteBtn) {
@@ -1212,21 +1362,26 @@
         if (!S.get('canManageAgents')) return;
         var doc = btn.getAttribute('data-doc') || '';
         var pfrom = pnameBtn || pname;
-        if (!window.confirm(i18nFmt('confirm_rag_doc_remove', { name: pfrom }))) return;
-        adminShowBlocking(i18n('admin_busy_agent_delete'));
-        google.script.run
-          .withSuccessHandler(function () {
-            adminHideBlocking();
-            refreshAdminAgentDocuments(false);
-          })
-          .withFailureHandler(function (e) {
-            adminHideBlocking();
-            if (adminAgentStatus) {
-              adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
-              adminAgentStatus.classList.add('err');
-            }
-          })
-          .adminGlobantDeleteRagDocument(pfrom, doc);
+        A.confirmDialog({
+          message: i18nFmt('confirm_rag_doc_remove', { name: pfrom }),
+          danger: true,
+        }).then(function (ok) {
+          if (!ok) return;
+          adminShowBlocking(i18n('admin_busy_agent_delete'));
+          google.script.run
+            .withSuccessHandler(function () {
+              adminHideBlocking();
+              refreshAdminAgentDocuments(false);
+            })
+            .withFailureHandler(function (e) {
+              adminHideBlocking();
+              if (adminAgentStatus) {
+                adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
+                adminAgentStatus.classList.add('err');
+              }
+            })
+            .adminGlobantDeleteRagDocument(pfrom, doc);
+        });
       }
     });
   }
@@ -1260,30 +1415,32 @@
       if (!S.get('canManageAgents')) return;
       var ids = agentsBatchGetSelected();
       if (!ids.length) return;
-      if (!confirm(i18nFmt('batch_sync_confirm', { n: ids.length }))) return;
-      agentsBatchSyncBtn.disabled = true;
-      if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = true;
-      var done = 0;
-      var total = ids.length;
-      adminShowBlocking(i18nFmt('batch_syncing', { done: 1, total: total }));
-      function next() {
-        if (done >= total) {
-          agentsBatchSyncBtn.disabled = false;
-          if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = false;
-          adminHideBlocking();
-          agentsBatchClearSelection();
-          if (A.toast) A.toast.success(i18nFmt('batch_sync_done', { n: total }));
-          return;
+      A.confirmDialog({ message: i18nFmt('batch_sync_confirm', { n: ids.length }) }).then(function (ok) {
+        if (!ok) return;
+        agentsBatchSyncBtn.disabled = true;
+        if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = true;
+        var done = 0;
+        var total = ids.length;
+        adminShowBlocking(i18nFmt('batch_syncing', { done: 1, total: total }));
+        function next() {
+          if (done >= total) {
+            agentsBatchSyncBtn.disabled = false;
+            if (agentsBatchDeleteBtn) agentsBatchDeleteBtn.disabled = false;
+            adminHideBlocking();
+            agentsBatchClearSelection();
+            if (A.toast) A.toast.success(i18nFmt('batch_sync_done', { n: total }));
+            return;
+          }
+          var prog = i18nFmt('batch_syncing', { done: done + 1, total: total });
+          if (agentsBatchCount) agentsBatchCount.textContent = prog;
+          adminShowBlocking(prog);
+          google.script.run
+            .withSuccessHandler(function () { done++; next(); })
+            .withFailureHandler(function () { done++; next(); })
+            .adminAgentsSync(ids[done]);
         }
-        var prog = i18nFmt('batch_syncing', { done: done + 1, total: total });
-        if (agentsBatchCount) agentsBatchCount.textContent = prog;
-        adminShowBlocking(prog);
-        google.script.run
-          .withSuccessHandler(function () { done++; next(); })
-          .withFailureHandler(function () { done++; next(); })
-          .adminAgentsSync(ids[done]);
-      }
-      next();
+        next();
+      });
     });
   }
 
@@ -1292,37 +1449,44 @@
       if (!S.get('canManageAgents')) return;
       var ids = agentsBatchGetSelected();
       if (!ids.length) return;
-      if (!confirm(i18nFmt('batch_agents_delete_confirm', { n: ids.length }))) return;
-      agentsBatchDeleteBtn.disabled = true;
-      if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = true;
-      var done = 0;
-      var ok = 0;
-      var total = ids.length;
-      adminShowBlocking(i18nFmt('batch_agents_deleting', { done: 1, total: total }));
-      function nextDelete() {
-        if (done >= total) {
-          agentsBatchDeleteBtn.disabled = false;
-          if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = false;
-          adminHideBlocking();
-          agentsBatchClearSelection();
-          loadAdminAgentsList(function () {
-            if (A.toast) A.toast.success(i18nFmt('batch_agents_delete_done', { done: ok, total: total }));
-          }, true);
-          return;
+      A.confirmDialog({
+        message: i18nFmt('batch_agents_delete_confirm', { n: ids.length }),
+        danger: true,
+      }).then(function (ok) {
+        if (!ok) return;
+        A.cache.invalidate('agentsList');
+        agentsBatchDeleteBtn.disabled = true;
+        if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = true;
+        var done = 0;
+        var okCount = 0;
+        var total = ids.length;
+        adminShowBlocking(i18nFmt('batch_agents_deleting', { done: 1, total: total }));
+        function nextDelete() {
+          if (done >= total) {
+            agentsBatchDeleteBtn.disabled = false;
+            if (agentsBatchSyncBtn) agentsBatchSyncBtn.disabled = false;
+            adminHideBlocking();
+            agentsBatchClearSelection();
+            loadAdminAgentsList(function () {
+              if (A.toast) A.toast.success(i18nFmt('batch_agents_delete_done', { done: okCount, total: total }));
+              if (A.dashboard && A.dashboard.loadMetrics) A.dashboard.loadMetrics();
+            }, true);
+            return;
+          }
+          if (agentsBatchCount) {
+            agentsBatchCount.textContent = i18nFmt('batch_agents_deleting', {
+              done: done + 1,
+              total: total,
+            });
+          }
+          adminShowBlocking(i18nFmt('batch_agents_deleting', { done: done + 1, total: total }));
+          google.script.run
+            .withSuccessHandler(function () { okCount++; done++; nextDelete(); })
+            .withFailureHandler(function () { done++; nextDelete(); })
+            .adminAgentsDelete(ids[done]);
         }
-        if (agentsBatchCount) {
-          agentsBatchCount.textContent = i18nFmt('batch_agents_deleting', {
-            done: done + 1,
-            total: total,
-          });
-        }
-        adminShowBlocking(i18nFmt('batch_agents_deleting', { done: done + 1, total: total }));
-        google.script.run
-          .withSuccessHandler(function () { ok++; done++; nextDelete(); })
-          .withFailureHandler(function () { done++; nextDelete(); })
-          .adminAgentsDelete(ids[done]);
-      }
-      nextDelete();
+        nextDelete();
+      });
     });
   }
 
@@ -1330,146 +1494,11 @@
     loadList: loadAdminAgentsList,
     selectAgent: selectAdminAgent,
     selectById: function (id) { selectAdminAgent(id); },
+    selectByProfileName: agentsSelectByProfileName_,
     addFolderToState: addFolderToState,
     addFileToState: addFileToState,
     refreshUploadLimitHint: refreshUploadLimitHint,
   };
-
-  // ── Quick prompts admin ───────────────────────────────────────────────────
-  (function () {
-    var qpList = document.getElementById('admin-qp-list');
-    var qpAddBtn = document.getElementById('admin-qp-add-btn');
-    var qpSaveBtn = document.getElementById('admin-qp-save-btn');
-    var qpStatus = document.getElementById('admin-qp-status');
-
-    function qpRenderItem(prompt, index) {
-      if (!qpList) return;
-      var item = document.createElement('div');
-      item.className = 'admin-qp-item flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-800';
-      item.dataset.qpIndex = String(index);
-
-      var topRow = document.createElement('div');
-      topRow.className = 'flex items-center justify-between gap-2';
-
-      var labelSpan = document.createElement('span');
-      labelSpan.className = 'text-xs font-medium text-slate-500 dark:text-slate-400';
-      labelSpan.textContent = '#' + (index + 1);
-      topRow.appendChild(labelSpan);
-
-      var delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30';
-      delBtn.setAttribute('aria-label', i18n('admin_quick_prompts_delete_btn'));
-      delBtn.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span data-i18n="admin_quick_prompts_delete_btn">' + i18n('admin_quick_prompts_delete_btn') + '</span>';
-      delBtn.addEventListener('click', function () {
-        item.remove();
-        qpRenumberItems_();
-      });
-      topRow.appendChild(delBtn);
-      item.appendChild(topRow);
-
-      var esRow = document.createElement('div');
-      esRow.className = 'flex flex-col gap-0.5';
-      var esLabel = document.createElement('label');
-      esLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
-      esLabel.textContent = i18n('admin_quick_prompts_lbl_es');
-      var esInput = document.createElement('input');
-      esInput.type = 'text';
-      esInput.className = 'admin-qp-es w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100';
-      esInput.placeholder = i18n('admin_quick_prompts_ph_es');
-      esInput.value = String(prompt.es || '');
-      esRow.appendChild(esLabel);
-      esRow.appendChild(esInput);
-      item.appendChild(esRow);
-
-      var enRow = document.createElement('div');
-      enRow.className = 'flex flex-col gap-0.5';
-      var enLabel = document.createElement('label');
-      enLabel.className = 'text-[11px] text-slate-500 dark:text-slate-400';
-      enLabel.textContent = i18n('admin_quick_prompts_lbl_en');
-      var enInput = document.createElement('input');
-      enInput.type = 'text';
-      enInput.className = 'admin-qp-en w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100';
-      enInput.placeholder = i18n('admin_quick_prompts_ph_en');
-      enInput.value = String(prompt.en || '');
-      enRow.appendChild(enLabel);
-      enRow.appendChild(enInput);
-      item.appendChild(enRow);
-
-      qpList.appendChild(item);
-    }
-
-    function qpRenumberItems_() {
-      if (!qpList) return;
-      var items = qpList.querySelectorAll('.admin-qp-item');
-      for (var i = 0; i < items.length; i++) {
-        var lbl = items[i].querySelector('span.text-xs.font-medium');
-        if (lbl) lbl.textContent = '#' + (i + 1);
-      }
-    }
-
-    function qpCollectPrompts_() {
-      if (!qpList) return [];
-      var items = qpList.querySelectorAll('.admin-qp-item');
-      var out = [];
-      for (var i = 0; i < items.length; i++) {
-        var esEl = items[i].querySelector('.admin-qp-es');
-        var enEl = items[i].querySelector('.admin-qp-en');
-        var es = esEl ? esEl.value.trim() : '';
-        var en = enEl ? enEl.value.trim() : '';
-        if (!es && !en) continue;
-        out.push({ id: 'qp' + (i + 1), es: es, en: en, order: i + 1 });
-      }
-      return out;
-    }
-
-    function qpInit(initialPrompts) {
-      if (!qpList) return;
-      qpList.innerHTML = '';
-      var prompts = Array.isArray(initialPrompts) ? initialPrompts : [];
-      for (var i = 0; i < prompts.length; i++) {
-        qpRenderItem(prompts[i], i);
-      }
-    }
-
-    if (qpAddBtn) {
-      qpAddBtn.addEventListener('click', function () {
-        if (!qpList) return;
-        var idx = qpList.querySelectorAll('.admin-qp-item').length;
-        qpRenderItem({ es: '', en: '', order: idx + 1 }, idx);
-      });
-    }
-
-    if (qpSaveBtn) {
-      qpSaveBtn.addEventListener('click', function () {
-        if (!S.get('canManageAgents')) return;
-        var prompts = qpCollectPrompts_();
-        qpSaveBtn.disabled = true;
-        if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_busy');
-        adminShowBlocking(i18n('admin_quick_prompts_save_busy'));
-        google.script.run
-          .withSuccessHandler(function () {
-            adminHideBlocking();
-            qpSaveBtn.disabled = false;
-            if (qpStatus) qpStatus.textContent = i18n('admin_quick_prompts_save_done');
-            if (A.chat && A.chat.applyQuickPrompts) {
-              S.set('quickPrompts', prompts);
-              var ci = S.get('cachedI18n');
-              var localeUi = ci && ci._locale === 'en' ? 'en' : 'es';
-              A.chat.applyQuickPrompts(prompts, localeUi);
-            }
-          })
-          .withFailureHandler(function (e) {
-            adminHideBlocking();
-            qpSaveBtn.disabled = false;
-            if (qpStatus) qpStatus.textContent = e && e.message ? e.message : i18n('admin_quick_prompts_save_error');
-          })
-          .quickPromptsSave(JSON.stringify(prompts));
-      });
-    }
-
-    A.adminQuickPrompts = { init: qpInit };
-  })();
 
 })(window.Aviators);
 </script>
