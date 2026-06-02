@@ -43,6 +43,74 @@
     });
   };
 
+  /** @type {Object<string, string>} */
+  var SERVER_ERROR_I18N = {
+    ERR_DRIVE_ROOT_NOT_CONFIGURED: 'err_drive_root_not_configured',
+    ERR_SALESFORCE_SHEET_NOT_CONFIGURED: 'err_salesforce_sheet_not_configured',
+    ERR_SUPABASE_NOT_CONFIGURED: 'err_supabase_not_configured',
+    ERR_SUPABASE_SHEETS_DISABLED: 'err_supabase_sheets_disabled',
+    ERR_ROLE_SUPABASE: 'err_role_supabase',
+    ERR_CONTENT_REPAIR_DRIVE_SUCCESS_CASE_ONLY: 'err_contents_repair_drive_success_only',
+    ERR_ACCESS_REQUEST_NOT_VISITOR: 'access_request_err_not_visitor',
+    ERR_ACCESS_REQUEST_INVALID_ROLE: 'admin_users_err_role',
+    ERR_ACCESS_REQUEST_REASON_REQUIRED: 'access_request_err_reason',
+    ERR_ACCESS_REQUEST_REASON_TOO_LONG: 'access_request_err_reason_long',
+    ERR_ACCESS_REQUEST_ALREADY_PENDING: 'access_request_err_pending',
+    ERR_ACCESS_REQUEST_NO_SESSION: 'err_login_session',
+    ERR_ACCESS_REQUEST_ID_REQUIRED: 'err_generic',
+  };
+
+  A.extractServerErrorCode = function (err) {
+    var raw = err && err.message != null ? String(err.message).trim() : '';
+    if (!raw) return '';
+    var head = raw.match(/^ERR_[A-Z0-9_]+/);
+    if (head) return head[0];
+    var idx = raw.indexOf('ERR_');
+    if (idx < 0) return '';
+    var rest = raw.slice(idx);
+    var cut = rest.search(/[\s:]/);
+    return cut > 0 ? rest.slice(0, cut) : rest;
+  };
+
+  /**
+   * Mensaje legible para errores de google.script.run (códigos ERR_* → i18n).
+   * @param {*} err
+   * @param {string=} fallbackKey
+   * @return {string}
+   */
+  A.serverErrorMessage = function (err, fallbackKey) {
+    var raw = err && err.message != null ? String(err.message).trim() : '';
+    var code = A.extractServerErrorCode(err);
+    if (code) {
+      if (code.indexOf('ERR_SUPABASE_HTTP_') === 0) return A.i18n('err_supabase_http');
+      if (code.indexOf('ERR_SUPABASE_JSON') === 0) return A.i18n('err_supabase_json');
+      var key = SERVER_ERROR_I18N[code];
+      if (key) return A.i18n(key);
+      return A.i18nFmt('err_server_code', { code: code });
+    }
+    if (raw) return raw;
+    return A.i18n(fallbackKey || 'err_generic');
+  };
+
+  /**
+   * Registra error en consola, cierra modal opcional, toast y callback de estado.
+   * @param {*} err
+   * @param {{scope?:string,fallbackKey?:string,hideModal?:boolean,toast?:boolean,setStatus?:function(string,boolean)}} opts
+   * @return {string}
+   */
+  A.reportRpcError = function (err, opts) {
+    var o = opts || {};
+    var scope = o.scope || 'rpc';
+    var msg = A.serverErrorMessage(err, o.fallbackKey);
+    if (window.console && console.error) {
+      console.error('[Aviators RPC]', scope, err && err.message != null ? err.message : err);
+    }
+    if (o.hideModal !== false && A.hideBlockingModal) A.hideBlockingModal();
+    if (o.toast !== false && A.toast) A.toast.error(msg);
+    if (typeof o.setStatus === 'function') o.setStatus(msg, true);
+    return msg;
+  };
+
   (function () {
     var want = null;
     try {

@@ -81,6 +81,7 @@ No commitear secretos. Configuración mínima típica:
 | `GEMINI_API_KEY` | Opcional, si se usa proveedor Gemini |
 | `LLM_PROVIDER` | Opcional: `globant` o `gemini` |
 | `DRIVE_ROOT_FOLDER_ID` | Carpeta raíz de Drive para PDFs del proyecto |
+| `SALESFORCE_ACCOUNTS_SPREADSHEET_ID` | Planilla Airlines Accounts (sync diario a Supabase) — ver [docs/SALESFORCE_ACCOUNTS_SYNC.md](docs/SALESFORCE_ACCOUNTS_SYNC.md) |
 
 Detalle de propiedades admin, corpus Drive y Globant: comentarios en `gas/application/LlmConfig.js`.
 

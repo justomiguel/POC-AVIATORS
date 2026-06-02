@@ -12,6 +12,7 @@ var UI_STRINGS = {
     nav_home: 'Inicio',
     nav_agents: 'Agentes',
     nav_contents: 'Contenidos',
+    nav_tags: 'Tags',
     nav_clients: 'Clientes',
     nav_metrics: 'Métricas',
     nav_settings: 'Configuración',
@@ -86,6 +87,27 @@ var UI_STRINGS = {
     page_contents_title: 'Contenidos del agente',
     page_contents_lead:
       'Subí contenido, extraé metadata, revisá y guardá para indexar automáticamente en el agente correspondiente.',
+    page_tags_title: 'Tags del catálogo',
+    page_tags_lead:
+      'Explorá las etiquetas extraídas de los documentos. Hacé clic en un tag para ver todo el contenido asociado.',
+    tags_cloud_heading: 'Nube de tags',
+    tags_cloud_lead:
+      'El tamaño indica cuántos documentos comparten cada etiqueta. Los tags provienen de la extracción automática al subir contenido.',
+    tags_busy_loading: 'Cargando tags…',
+    tags_busy_browse: 'Cargando contenidos…',
+    tags_cloud_empty: 'Aún no hay tags en el catálogo. Subí contenido con etiquetas desde Contenidos.',
+    tags_browse_title: 'Contenido con {tag}',
+    tags_browse_lead:
+      'Listado de documentos que incluyen esta etiqueta. Podés abrir el detalle o filtrar por tipo.',
+    tags_browse_back: 'Volver a la nube',
+    tags_browse_empty: 'No hay contenidos con este tag.',
+    tags_filter_type: 'Tipo',
+    tags_btn_open: 'Ver detalle',
+    tags_col_title: 'Título',
+    tags_col_type: 'Tipo',
+    tags_col_client: 'Cliente',
+    tags_col_updated: 'Actualizado',
+    tags_count_badge: '{n} docs',
     contents_btn_new: 'Nuevo contenido',
     contents_btn_back_list: 'Volver a la lista',
     contents_editor_title_new: 'Nuevo contenido',
@@ -154,7 +176,31 @@ var UI_STRINGS = {
     contents_step_uploading: 'Enviando a análisis',
     contents_step_analyzing: 'Analizando documento',
     contents_step_extracting: 'Extrayendo metadata',
-    contents_step_analyzing_inline: 'Analizando documento con IA…',
+    contents_step_analyzing_inline: 'Extrayendo metadata del PDF con IA…',
+    contents_extract_phase_common:
+      'Título, resumen, cliente, industria y hashtags…',
+    contents_extract_phase_challenge: 'Challenge (problema de negocio)…',
+    contents_extract_phase_solution: 'Solution (enfoque y entrega)…',
+    contents_extract_phase_impact: 'Impacto, métricas, evidencia y notas…',
+    contents_extract_phase_proposal:
+      'Stage, modelo de pricing, esfuerzo y timeline…',
+    contents_extract_phase_client:
+      'Estado de cuenta, proyectos activos y health score…',
+    contents_extract_phase_onboarding: 'Tópico, categoría y audiencia…',
+    contents_extract_phase_generic:
+      'Campos comunes y específicos del documento…',
+    contents_extract_pass_progress: 'Pasada {current} de {total}: {phase}',
+    contents_batch_upload_extracting_detail:
+      'Extrayendo {current} de {total}: {name} — {phase}',
+    contents_batch_step_heading: 'Lote PDF · archivo {current} de {total}',
+    contents_batch_step_read: 'Paso 1: leyendo el PDF en el navegador…',
+    contents_batch_step_extract: 'Paso 2: extrayendo metadata con IA…',
+    contents_batch_step_save: 'Paso 3: guardando e indexando en el catálogo…',
+    contents_batch_counter_analyzed: '{analyzed} de {total} con metadata extraída',
+    contents_batch_counter_analyzed_saved:
+      '{analyzed} extraídos · {saved} guardados de {total}',
+    contents_batch_counter_file: 'Archivo {current} / {total}',
+    contents_batch_file_label: '{name}',
     contents_btn_cancel_upload: 'Cancelar',
     contents_cancel_confirm:
       'Se descartará el archivo subido y los datos extraídos. ¿Continuar?',
@@ -212,6 +258,10 @@ var UI_STRINGS = {
     contents_warn_title_from_filename: 'Título inferido del nombre del archivo.',
     contents_warn_client_from_catalog: 'Cliente ajustado al catálogo existente.',
     contents_warn_client_from_filename: 'Cliente inferido del nombre del archivo.',
+    contents_warn_challenge_from_summary:
+      'Challenge inferido del resumen porque el documento no trajo secciones separadas.',
+    contents_warn_extraction_pass_empty: 'Pasada {pass} sin datos extraídos.',
+    contents_warn_extraction_pass_failed: 'Pasada {pass} falló: {detail}',
     contents_uploaded: 'Archivo subido. Ahora podés extraer metadata.',
     contents_saved: 'Contenido guardado.',
     contents_deleted: 'Contenido eliminado.',
@@ -368,6 +418,18 @@ var UI_STRINGS = {
     label_no_email: '(sin email)',
     label_em_dash: '—',
     err_generic: 'Error.',
+    err_drive_root_not_configured:
+      'Falta configurar DRIVE_ROOT_FOLDER_ID en Propiedades del script de Apps Script (carpeta raíz de Drive para PDFs de casos de éxito).',
+    err_supabase_not_configured:
+      'Falta configurar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Propiedades del script).',
+    err_salesforce_sheet_not_configured:
+      'Falta configurar SALESFORCE_ACCOUNTS_SPREADSHEET_ID en Propiedades del script (ID de la planilla Airlines Accounts).',
+    err_supabase_sheets_disabled:
+      'El backend en planillas está deshabilitado. Configurá AVIATORS_DATA_BACKEND=supabase.',
+    err_role_supabase: 'No se pudo consultar roles en Supabase.',
+    err_supabase_http: 'Error de comunicación con Supabase.',
+    err_supabase_json: 'Respuesta inválida de Supabase.',
+    err_server_code: 'Error del servidor ({code}).',
     err_login_session: 'Error al cargar la sesión.',
     drive_loading: 'Cargando Drive…',
     drive_list_error: 'No se pudo listar esta carpeta.',
@@ -948,6 +1010,7 @@ var UI_STRINGS = {
     settings_tab_roles: 'Permisos',
     settings_tab_users: 'Usuarios',
     settings_tab_chat: 'Chat',
+    settings_tab_salesforce: 'Salesforce',
     settings_tab_data: 'Datos',
     settings_users_subtab_visitors: 'Visitantes',
     settings_users_subtab_requests: 'Solicitudes',
@@ -1087,6 +1150,31 @@ var UI_STRINGS = {
     admin_embeddings_busy: 'Regenerando embeddings… {done}/{total}',
     admin_embeddings_done: 'Embeddings actualizados: {done} filas ({failed} fallidas).',
     admin_embeddings_error: 'No se pudieron regenerar los embeddings.',
+    admin_sf_sync_sec_heading: 'Roster Salesforce (Airlines Accounts)',
+    admin_sf_sync_sec_lead:
+      'Importa o actualiza desde la planilla configurada (Sheet1): maestro de clientes y catálogo para el agente Clientes. El sync automático corre una vez al día; usá «Sincronizar ahora» para forzar una corrida.',
+    admin_sf_sync_schedule_lbl: 'Programación automática:',
+    admin_sf_sync_schedule_value:
+      'Cada día a las {hour}:00 (zona horaria del proyecto Apps Script).',
+    admin_sf_sync_trigger_lbl: 'Trigger instalado:',
+    admin_sf_sync_trigger_on: 'Sí — sync diario activo',
+    admin_sf_sync_trigger_off: 'No activo',
+    admin_sf_sync_last_lbl: 'Última sincronización:',
+    admin_sf_sync_last_none: 'Nunca registrada',
+    admin_sf_sync_last_line:
+      '{at} — {status} ({accounts} cuentas, {inactivated} inactivadas)',
+    admin_sf_sync_sheet_missing: 'Falta SALESFORCE_ACCOUNTS_SPREADSHEET_ID en propiedades del script.',
+    admin_sf_sync_activate_auto_btn: 'Activar sync automático',
+    admin_sf_sync_activate_auto_busy: 'Activando sync automático…',
+    admin_sf_sync_activate_auto_done:
+      'Sync automático activado (cada día a las {hour}:00, zona del proyecto Apps Script).',
+    admin_sf_sync_activate_auto_error: 'No se pudo activar el sync automático.',
+    admin_sf_sync_btn: 'Sincronizar ahora',
+    admin_sf_sync_busy: 'Sincronizando roster Salesforce…',
+    admin_sf_sync_done:
+      'Sync completado: {accounts} cuentas, {inactivated} inactivadas, {embeddings} embeddings.',
+    admin_sf_sync_skipped: 'Sin cambios detectados en la planilla (no se actualizó nada).',
+    admin_sf_sync_error: 'No se pudo sincronizar el roster Salesforce.',
     metrics_overview_heading: 'Resumen',
     metrics_overview_lead:
       'Indicadores globales para entender volumen de preguntas y consultas sin respuesta.',
@@ -1197,6 +1285,7 @@ var UI_STRINGS = {
     nav_home: 'Home',
     nav_agents: 'Agents',
     nav_contents: 'Content',
+    nav_tags: 'Tags',
     nav_clients: 'Clients',
     nav_metrics: 'Metrics',
     nav_settings: 'Settings',
@@ -1271,6 +1360,27 @@ var UI_STRINGS = {
     page_contents_title: 'Agent content',
     page_contents_lead:
       'Upload content, extract metadata, review and save it to auto-index into the matching agent.',
+    page_tags_title: 'Catalog tags',
+    page_tags_lead:
+      'Browse tags extracted from documents. Click a tag to see all related content.',
+    tags_cloud_heading: 'Tag cloud',
+    tags_cloud_lead:
+      'Size reflects how many documents share each tag. Tags come from automatic extraction when uploading content.',
+    tags_busy_loading: 'Loading tags…',
+    tags_busy_browse: 'Loading content…',
+    tags_cloud_empty: 'No tags in the catalog yet. Upload tagged content from Content.',
+    tags_browse_title: 'Content tagged {tag}',
+    tags_browse_lead:
+      'Documents that include this tag. Open details or filter by type.',
+    tags_browse_back: 'Back to cloud',
+    tags_browse_empty: 'No content with this tag.',
+    tags_filter_type: 'Type',
+    tags_btn_open: 'View detail',
+    tags_col_title: 'Title',
+    tags_col_type: 'Type',
+    tags_col_client: 'Client',
+    tags_col_updated: 'Updated',
+    tags_count_badge: '{n} docs',
     contents_btn_new: 'New content',
     contents_btn_back_list: 'Back to list',
     contents_editor_title_new: 'New content',
@@ -1338,7 +1448,31 @@ var UI_STRINGS = {
     contents_step_uploading: 'Sending for analysis',
     contents_step_analyzing: 'Analyzing document',
     contents_step_extracting: 'Extracting metadata',
-    contents_step_analyzing_inline: 'Analyzing document with AI…',
+    contents_step_analyzing_inline: 'Extracting PDF metadata with AI…',
+    contents_extract_phase_common:
+      'Title, summary, client, industry, and hashtags…',
+    contents_extract_phase_challenge: 'Challenge (business problem)…',
+    contents_extract_phase_solution: 'Solution (approach and delivery)…',
+    contents_extract_phase_impact: 'Impact, metrics, evidence, and notes…',
+    contents_extract_phase_proposal:
+      'Stage, pricing model, effort, and timeline…',
+    contents_extract_phase_client:
+      'Account status, active projects, and health score…',
+    contents_extract_phase_onboarding: 'Topic, category, and audience…',
+    contents_extract_phase_generic:
+      'Common and type-specific document fields…',
+    contents_extract_pass_progress: 'Pass {current} of {total}: {phase}',
+    contents_batch_upload_extracting_detail:
+      'Extracting {current} of {total}: {name} — {phase}',
+    contents_batch_step_heading: 'PDF batch · file {current} of {total}',
+    contents_batch_step_read: 'Step 1: reading the PDF in your browser…',
+    contents_batch_step_extract: 'Step 2: extracting metadata with AI…',
+    contents_batch_step_save: 'Step 3: saving and indexing to the catalog…',
+    contents_batch_counter_analyzed: '{analyzed} of {total} with metadata extracted',
+    contents_batch_counter_analyzed_saved:
+      '{analyzed} extracted · {saved} saved of {total}',
+    contents_batch_counter_file: 'File {current} / {total}',
+    contents_batch_file_label: '{name}',
     contents_btn_cancel_upload: 'Cancel',
     contents_cancel_confirm:
       'The uploaded file and extracted data will be discarded. Continue?',
@@ -1396,6 +1530,10 @@ var UI_STRINGS = {
     contents_warn_title_from_filename: 'Title inferred from file name.',
     contents_warn_client_from_catalog: 'Client matched to existing catalog entry.',
     contents_warn_client_from_filename: 'Client inferred from file name.',
+    contents_warn_challenge_from_summary:
+      'Challenge inferred from summary because the document had no separate sections.',
+    contents_warn_extraction_pass_empty: 'Pass {pass} returned no extracted data.',
+    contents_warn_extraction_pass_failed: 'Pass {pass} failed: {detail}',
     contents_uploaded: 'File uploaded. You can now extract metadata.',
     contents_saved: 'Content saved.',
     contents_deleted: 'Content deleted.',
@@ -1551,6 +1689,18 @@ var UI_STRINGS = {
     label_no_email: '(no email)',
     label_em_dash: '—',
     err_generic: 'Error.',
+    err_drive_root_not_configured:
+      'Set DRIVE_ROOT_FOLDER_ID in Apps Script project properties (Drive root folder for success case PDFs).',
+    err_supabase_not_configured:
+      'Supabase is not configured (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Script Properties).',
+    err_salesforce_sheet_not_configured:
+      'Set SALESFORCE_ACCOUNTS_SPREADSHEET_ID in Script Properties (Airlines Accounts spreadsheet ID).',
+    err_supabase_sheets_disabled:
+      'Sheets backend is disabled. Set AVIATORS_DATA_BACKEND=supabase.',
+    err_role_supabase: 'Could not load roles from Supabase.',
+    err_supabase_http: 'Supabase communication error.',
+    err_supabase_json: 'Invalid Supabase response.',
+    err_server_code: 'Server error ({code}).',
     err_login_session: 'Could not load session.',
     drive_loading: 'Loading Drive…',
     drive_list_error: 'Could not list this folder.',
@@ -2122,6 +2272,7 @@ var UI_STRINGS = {
     settings_tab_roles: 'Permissions',
     settings_tab_users: 'Users',
     settings_tab_chat: 'Chat',
+    settings_tab_salesforce: 'Salesforce',
     settings_tab_data: 'Data',
     settings_users_subtab_visitors: 'Visitors',
     settings_users_subtab_requests: 'Requests',
@@ -2261,6 +2412,31 @@ var UI_STRINGS = {
     admin_embeddings_busy: 'Rebuilding embeddings… {done}/{total}',
     admin_embeddings_done: 'Embeddings updated: {done} rows ({failed} failed).',
     admin_embeddings_error: 'Could not rebuild embeddings.',
+    admin_sf_sync_sec_heading: 'Salesforce roster (Airlines Accounts)',
+    admin_sf_sync_sec_lead:
+      'Imports or updates from the configured spreadsheet (Sheet1): client master and Clients agent catalog. Automatic sync runs daily; use «Sync now» to force a run.',
+    admin_sf_sync_schedule_lbl: 'Automatic schedule:',
+    admin_sf_sync_schedule_value:
+      'Every day at {hour}:00 (Apps Script project time zone).',
+    admin_sf_sync_trigger_lbl: 'Trigger installed:',
+    admin_sf_sync_trigger_on: 'Yes — daily sync active',
+    admin_sf_sync_trigger_off: 'Not active',
+    admin_sf_sync_last_lbl: 'Last sync:',
+    admin_sf_sync_last_none: 'Never recorded',
+    admin_sf_sync_last_line:
+      '{at} — {status} ({accounts} accounts, {inactivated} inactivated)',
+    admin_sf_sync_sheet_missing: 'SALESFORCE_ACCOUNTS_SPREADSHEET_ID is missing in Script Properties.',
+    admin_sf_sync_activate_auto_btn: 'Enable automatic sync',
+    admin_sf_sync_activate_auto_busy: 'Enabling automatic sync…',
+    admin_sf_sync_activate_auto_done:
+      'Automatic sync enabled (daily at {hour}:00, Apps Script project time zone).',
+    admin_sf_sync_activate_auto_error: 'Could not enable automatic sync.',
+    admin_sf_sync_btn: 'Sync now',
+    admin_sf_sync_busy: 'Syncing Salesforce roster…',
+    admin_sf_sync_done:
+      'Sync complete: {accounts} accounts, {inactivated} inactivated, {embeddings} embeddings.',
+    admin_sf_sync_skipped: 'No changes detected in the spreadsheet (nothing updated).',
+    admin_sf_sync_error: 'Could not sync the Salesforce roster.',
     metrics_overview_heading: 'Overview',
     metrics_overview_lead:
       'Top-level indicators to understand total question volume and unanswered requests.',

@@ -120,17 +120,19 @@ function AdminAgents_uploadLocalPdfToGlobantRag_(payload) {
  * @return {{ id: string, name: string }}
  */
 function adminAgentsUploadLocalPdf(payloadJson) {
-  var raw = ('' + (payloadJson || '')).trim();
-  /** @type {{ name: string, mimeType: string, dataBase64: string, profileName: string, systemPrompt?: string }} */
-  var obj;
-  try {
-    obj = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(
-      UiStrings_fmt_('err_json_invalid_detail', {
-        message: e.message || '',
-      }),
-    );
-  }
-  return AdminAgents_uploadLocalPdfToGlobantRag_(obj);
+  return AviatorsCode_runRpc_('adminAgentsUploadLocalPdf', function () {
+    var raw = ('' + (payloadJson || '')).trim();
+    /** @type {{ name: string, mimeType: string, dataBase64: string, profileName: string, systemPrompt?: string }} */
+    var obj;
+    try {
+      obj = JSON.parse(raw);
+    } catch (e) {
+      throw new Error(
+        UiStrings_fmt_('err_json_invalid_detail', {
+          message: e.message || '',
+        }),
+      );
+    }
+    return AdminAgents_uploadLocalPdfToGlobantRag_(obj);
+  });
 }

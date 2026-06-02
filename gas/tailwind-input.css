@@ -757,6 +757,14 @@
   .settings-page-lead {
     @apply mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400;
   }
+
+  .tags-cloud-chip {
+    @apply inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-sky-200/90 bg-white px-3 py-1.5 font-semibold leading-snug text-sky-800 shadow-sm transition hover:border-sky-400 hover:bg-sky-50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:border-sky-800/70 dark:bg-slate-900/80 dark:text-sky-200 dark:hover:border-sky-600 dark:hover:bg-sky-950/40;
+  }
+  .tags-cloud-chip-count {
+    @apply inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-sky-100 px-1.5 text-[10px] font-bold tabular-nums text-sky-800 dark:bg-sky-950/80 dark:text-sky-200;
+  }
+
   .settings-shell {
     @apply overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95;
   }

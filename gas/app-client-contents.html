@@ -4,6 +4,19 @@
   var i18n = A.i18n;
   var i18nFmt = A.i18nFmt;
 
+  function contentsRpcError_(err, scope, options) {
+    var o = options || {};
+    var msg = A.reportRpcError(err, {
+      scope: scope,
+      fallbackKey: o.fallbackKey || 'err_generic',
+      hideModal: o.hideModal !== false,
+      toast: o.toast !== false,
+      setStatus: o.setStatus,
+    });
+    if (o.editorStatus) contentsSetEditorStatus(msg, true);
+    return msg;
+  }
+
   var btnGotoAgentsTab = document.getElementById('btn-goto-agents-tab');
   var contentsScreenList = document.getElementById('contents-screen-list');
   var contentsScreenEditor = document.getElementById('contents-screen-editor');
@@ -116,6 +129,24 @@
     var isList = mode === 'list';
     if (contentsScreenList) contentsScreenList.classList.toggle('hidden', !isList);
     if (contentsScreenEditor) contentsScreenEditor.classList.toggle('hidden', isList);
+  }
+
+  function contentsScrollListToTop_() {
+    var scrollArea = document.querySelector('.app-content-scroll');
+    if (scrollArea) scrollArea.scrollTop = 0;
+  }
+
+  function contentsReturnToList_(opts) {
+    var o = opts || {};
+    contentsResetForm();
+    contentsSetScreen('list');
+    contentsScrollListToTop_();
+    if (o.reload !== false) {
+      contentsLoadList({ skipCache: !!o.skipCache });
+    }
+    if (o.statusKey) {
+      contentsSetListStatus(i18n(o.statusKey), !!o.statusIsErr);
+    }
   }
 
   function contentsCanViewDetail_() {
@@ -306,6 +337,85 @@
     }
   }
 
+  function contentsResolveSuccessSpecific_(sp, common) {
+    var raw = sp && typeof sp === 'object' ? sp : {};
+    function pick(obj, keys) {
+      for (var i = 0; i < keys.length; i++) {
+        var v = String(obj[keys[i]] != null ? obj[keys[i]] : '').trim();
+        if (v) return v;
+      }
+      return '';
+    }
+    var challenge = pick(raw, [
+      'challenge',
+      'Challenge',
+      'desafio',
+      'desafío',
+      'reto',
+      'problem',
+      'context',
+      'contexto',
+      'situation',
+    ]);
+    var solution = pick(raw, [
+      'solution',
+      'Solution',
+      'solucion',
+      'solución',
+      'approach',
+      'what_we_did',
+      'delivery',
+    ]);
+    var impactMetric = pick(raw, ['impact_metric', 'impactMetric', 'kpi', 'metric', 'metrica', 'métrica']);
+    var impactValue = pick(raw, [
+      'impact_value',
+      'impactValue',
+      'impact',
+      'impacto',
+      'results',
+      'resultados',
+      'outcome',
+      'benefits',
+    ]);
+    var evidence = pick(raw, ['evidence', 'proof', 'evidencia', 'testimonial', 'quote']);
+    var notes = pick(raw, ['notes', 'notas', 'comments', 'other']);
+    if (!challenge) {
+      challenge = pick(raw, ['summary', 'resumen', 'background']);
+    }
+    if (impactMetric && impactValue && impactValue.toLowerCase().indexOf(impactMetric.toLowerCase()) < 0) {
+      impactValue = impactMetric + ': ' + impactValue;
+    } else if (!impactValue && impactMetric) {
+      impactValue = impactMetric;
+    }
+    if (evidence && notes && notes.indexOf(evidence) < 0) {
+      notes = notes + '\n\n' + evidence;
+    } else if (evidence && !notes) {
+      notes = evidence;
+    }
+    var summary = String((common && common.summary) || '').trim();
+    if (!challenge && !solution && summary) {
+      challenge = summary;
+    }
+    return {
+      challenge: challenge,
+      solution: solution,
+      impact_metric: impactMetric,
+      impact_value: impactValue,
+      evidence: evidence,
+      notes: notes,
+    };
+  }
+
+  function contentsApplySuccessSpecificToForm_(sp, common) {
+    var resolved = contentsResolveSuccessSpecific_(sp, common);
+    S.set('contentsSuccessImpactMetric', String(resolved.impact_metric || '').trim());
+    S.set('contentsSuccessEvidence', String(resolved.evidence || '').trim());
+    if (contentsSuccessChallenge) contentsSuccessChallenge.value = resolved.challenge || '';
+    if (contentsSuccessSolution) contentsSuccessSolution.value = resolved.solution || '';
+    if (contentsSuccessImpact) contentsSuccessImpact.value = resolved.impact_value || '';
+    if (contentsSuccessNotes) contentsSuccessNotes.value = resolved.notes || '';
+  }
+
   function contentsSpecificDataFromForm() {
     var t = (contentsType && contentsType.value) || '';
     if (t === 'proposal') {
@@ -320,7 +430,9 @@
       return {
         challenge: (contentsSuccessChallenge && contentsSuccessChallenge.value) || '',
         solution: (contentsSuccessSolution && contentsSuccessSolution.value) || '',
+        impact_metric: String(S.get('contentsSuccessImpactMetric') || '').trim(),
         impact_value: (contentsSuccessImpact && contentsSuccessImpact.value) || '',
+        evidence: String(S.get('contentsSuccessEvidence') || '').trim(),
         notes: (contentsSuccessNotes && contentsSuccessNotes.value) || '',
       };
     }
@@ -398,6 +510,9 @@
     var d = draft || {};
     var c = d.common || {};
     var sp = d.specific && typeof d.specific === 'object' ? d.specific : {};
+    if (contentType === 'success_case') {
+      sp = contentsResolveSuccessSpecific_(sp, c);
+    }
     var title = String(c.title || '').trim();
     if (!title && fileWrap && fileWrap.name) {
       title = String(fileWrap.name.replace(/\.pdf$/i, '').trim() || fileWrap.name || '').trim();
@@ -453,6 +568,32 @@
     reader.readAsDataURL(file);
   }
 
+  function contentsShowBatchProgress_(opts) {
+    var step = opts.step || 'extract';
+    var stepKey =
+      step === 'read'
+        ? 'contents_batch_step_read'
+        : step === 'save'
+          ? 'contents_batch_step_save'
+          : 'contents_batch_step_extract';
+    A.showBlockingModal({
+      progress: true,
+      message: i18nFmt('contents_batch_step_heading', {
+        current: opts.current,
+        total: opts.total,
+        name: opts.fileName || '',
+      }),
+      analyzed: opts.analyzed != null ? opts.analyzed : 0,
+      completed: opts.completed != null ? opts.completed : 0,
+      total: opts.total,
+      current: opts.current,
+      fileName: opts.fileName || '',
+      stepLabel: i18n(stepKey),
+      phase: opts.phase || '',
+      barPercent: opts.barPercent,
+    });
+  }
+
   function contentsProcessBatch_(pdfFiles, type) {
     var total = pdfFiles.length;
     var idx = 0;
@@ -462,10 +603,7 @@
     function finishBatch() {
       A.hideBlockingModal();
       contentsSetEditorBusy(false, '');
-      contentsResetForm();
-      contentsSetScreen('list');
-      A.cache.invalidate('contentsList');
-      contentsLoadList({ skipCache: true });
+      contentsReturnToList_({ skipCache: true });
       var msg =
         failCount === 0
           ? i18nFmt('contents_batch_done_all_ok', { n: okCount })
@@ -485,7 +623,43 @@
       }
       var f = pdfFiles[idx];
       var cur = idx + 1;
-      A.showBlockingModal(i18nFmt('contents_batch_upload_extracting', { current: cur, total: total, name: f.name }));
+      var completed = okCount + failCount;
+      var batchBase = {
+        total: total,
+        current: cur,
+        fileName: f.name,
+        completed: completed,
+      };
+
+      function showBatchExtractUi(ev, passDone) {
+        var passTotal = ev && ev.passTotal ? ev.passTotal : 1;
+        var passIndex = ev && ev.passIndex != null ? ev.passIndex : 0;
+        var passWeight = passDone ? passIndex + 1 : passIndex;
+        var fileSlot = total > 0 ? (idx + passWeight / passTotal) / total : 0;
+        var barPct = total > 0 ? Math.round(fileSlot * 100) : 4;
+        if (barPct < 4 && idx < total) barPct = 4;
+        contentsShowBatchProgress_({
+          step: 'extract',
+          analyzed: idx,
+          phase: (ev && ev.phaseText) || '',
+          barPercent: barPct,
+          total: batchBase.total,
+          current: batchBase.current,
+          fileName: batchBase.fileName,
+          completed: batchBase.completed,
+        });
+      }
+
+      contentsShowBatchProgress_({
+        step: 'read',
+        analyzed: idx,
+        barPercent: total > 0 ? Math.round((idx / total) * 100) || 4 : 4,
+        total: batchBase.total,
+        current: batchBase.current,
+        fileName: batchBase.fileName,
+        completed: batchBase.completed,
+      });
+
       contentsReadFileAsBase64_(
         f,
         function (b64) {
@@ -494,8 +668,14 @@
             mimeType: f.type || 'application/pdf',
             dataBase64: b64,
           });
-          google.script.run
-            .withSuccessHandler(function (res) {
+          contentsRunExtraction_(extractPayload, type, {
+            onPassStart: function (ev) {
+              showBatchExtractUi(ev, false);
+            },
+            onPassDone: function (ev) {
+              showBatchExtractUi(ev, true);
+            },
+            onDone: function (res) {
               var draft = res && res.draft;
               var fileWrap = {
                 name: f.name,
@@ -509,7 +689,15 @@
                 processNext();
                 return;
               }
-              A.showBlockingModal(i18nFmt('contents_batch_upload_saving', { current: cur, total: total, name: f.name }));
+              contentsShowBatchProgress_({
+                step: 'save',
+                analyzed: idx + 1,
+                completed: completed,
+                barPercent: total > 0 ? Math.round(((idx + 1) / total) * 100) : 100,
+                total: batchBase.total,
+                current: batchBase.current,
+                fileName: batchBase.fileName,
+              });
               google.script.run
                 .withSuccessHandler(function () {
                   okCount++;
@@ -522,13 +710,13 @@
                   processNext();
                 })
                 .contentsSaveDraft(JSON.stringify(savePayload));
-            })
-            .withFailureHandler(function () {
+            },
+            onFail: function () {
               failCount++;
               idx++;
               processNext();
-            })
-            .contentsExtractDraft(extractPayload, type);
+            },
+          });
         },
         function () {
           failCount++;
@@ -628,6 +816,8 @@
     S.set('contentsUploadCancelled', false);
     S.set('contentsCurrentTags', []);
     S.set('contentsDetectedIndustry', '');
+    S.set('contentsSuccessImpactMetric', '');
+    S.set('contentsSuccessEvidence', '');
     if (contentsContentId) contentsContentId.value = '';
     if (contentsType) contentsType.value = '';
     if (contentsTitle) contentsTitle.value = '';
@@ -683,10 +873,7 @@
     if (contentsProposalPricing) contentsProposalPricing.value = s.pricing_model || '';
     if (contentsProposalEffort) contentsProposalEffort.value = s.effort_estimate || '';
     if (contentsProposalNotes) contentsProposalNotes.value = s.notes || '';
-    if (contentsSuccessChallenge) contentsSuccessChallenge.value = s.challenge || '';
-    if (contentsSuccessSolution) contentsSuccessSolution.value = s.solution || '';
-    if (contentsSuccessImpact) contentsSuccessImpact.value = s.impact_value || '';
-    if (contentsSuccessNotes) contentsSuccessNotes.value = s.notes || '';
+    contentsApplySuccessSpecificToForm_(s, c);
     if (contentsClientStatus) contentsClientStatus.value = s.account_status || '';
     if (contentsClientProjects) contentsClientProjects.value = s.active_projects || '';
     if (contentsClientHealth) contentsClientHealth.value = s.health_score || '';
@@ -986,7 +1173,11 @@
       })
       .withFailureHandler(function (e) {
         contentsSetListBusy(false, '');
-        contentsSetListStatus((e && e.message) || i18n('err_generic'), true);
+        contentsRpcError_(e, 'contentsList', {
+          hideModal: false,
+          toast: false,
+          setStatus: contentsSetListStatus,
+        });
       })
       .contentsList({ skip: skip, limit: CONTENTS_PAGE_SIZE });
     if (!append) {
@@ -1035,7 +1226,11 @@
       })
       .withFailureHandler(function (e) {
         contentsSetRowBusy(id, false);
-        contentsSetListStatus((e && e.message) || i18n('err_generic'), true);
+        contentsRpcError_(e, 'contentsGet', {
+          hideModal: false,
+          toast: false,
+          setStatus: contentsSetListStatus,
+        });
       })
       .contentsGet(id);
   }
@@ -1060,9 +1255,10 @@
           contentsLoadList({ skipCache: true });
         })
         .withFailureHandler(function (e) {
-          A.hideBlockingModal();
           contentsSetRowBusy(id, false);
-          contentsSetListStatus((e && e.message) || i18n('err_generic'), true);
+          contentsRpcError_(e, 'contentsDelete', {
+            setStatus: contentsSetListStatus,
+          });
         })
         .contentsDelete(id);
     });
@@ -1090,14 +1286,11 @@
         if (A.toast) A.toast.success(doneMsg);
       })
       .withFailureHandler(function (e) {
-        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
-        var msg = (e && e.message) || i18n('contents_repair_failed');
-        if (msg === 'ERR_CONTENT_REPAIR_DRIVE_SUCCESS_CASE_ONLY') {
-          msg = i18n('err_contents_repair_drive_success_only');
-        }
-        contentsSetListStatus(msg, true);
-        if (A.toast) A.toast.error(msg);
+        contentsRpcError_(e, 'contentsRepairIndex', {
+          fallbackKey: 'contents_repair_failed',
+          setStatus: contentsSetListStatus,
+        });
       })
       .contentsRepairIndex(id);
   }
@@ -1118,11 +1311,11 @@
         if (A.toast) A.toast.success(doneMsg);
       })
       .withFailureHandler(function (e) {
-        A.hideBlockingModal();
         contentsSetRowBusy(id, false);
-        var msg = (e && e.message) || i18n('contents_reindex_metadata_failed');
-        contentsSetListStatus(msg, true);
-        if (A.toast) A.toast.error(msg);
+        contentsRpcError_(e, 'contentsReindexWithMetadata', {
+          fallbackKey: 'contents_reindex_metadata_failed',
+          setStatus: contentsSetListStatus,
+        });
       })
       .contentsReindexWithMetadata(id);
   }
@@ -1173,10 +1366,7 @@
       if (contentsProposalEffort) contentsProposalEffort.value = sp.effort_estimate || '';
       if (contentsProposalNotes) contentsProposalNotes.value = sp.notes || '';
     } else if (type === 'success_case') {
-      if (contentsSuccessChallenge) contentsSuccessChallenge.value = sp.challenge || '';
-      if (contentsSuccessSolution) contentsSuccessSolution.value = sp.solution || '';
-      if (contentsSuccessImpact) contentsSuccessImpact.value = sp.impact_value || '';
-      if (contentsSuccessNotes) contentsSuccessNotes.value = sp.notes || '';
+      contentsApplySuccessSpecificToForm_(sp, c);
     } else if (type === 'client') {
       if (contentsClientStatus) contentsClientStatus.value = sp.account_status || '';
       if (contentsClientProjects) contentsClientProjects.value = sp.active_projects || '';
@@ -1190,6 +1380,135 @@
     }
   }
 
+  /** @const Pasadas success_case (mismo orden que CONTENT_SUCCESS_CASE_PASSES en servidor). */
+  var CONTENTS_SUCCESS_CASE_PASS_IDS = ['common', 'challenge', 'solution', 'impact'];
+
+  function contentsExtractionPassIds_(type) {
+    if (type === 'success_case') return CONTENTS_SUCCESS_CASE_PASS_IDS.slice();
+    return null;
+  }
+
+  function contentsPassToPhaseKey_(passId, type) {
+    var map = {
+      common: 'contents_extract_phase_common',
+      challenge: 'contents_extract_phase_challenge',
+      solution: 'contents_extract_phase_solution',
+      impact: 'contents_extract_phase_impact',
+    };
+    if (map[passId]) return map[passId];
+    if (type === 'proposal') return 'contents_extract_phase_proposal';
+    if (type === 'client') return 'contents_extract_phase_client';
+    if (type === 'onboarding') return 'contents_extract_phase_onboarding';
+    return 'contents_extract_phase_generic';
+  }
+
+  function contentsExtractionPhaseText_(passId, type, passIndex, passTotal) {
+    var phase = i18n(contentsPassToPhaseKey_(passId, type));
+    if (passTotal > 1) {
+      return i18nFmt('contents_extract_pass_progress', {
+        current: passIndex + 1,
+        total: passTotal,
+        phase: phase,
+      });
+    }
+    return phase;
+  }
+
+  function contentsSetExtractionPhaseUi_(text) {
+    var detailEl = document.getElementById('contents-uploading-detail');
+    var analyzeLabel = document.getElementById('contents-step-analyze-label');
+    if (detailEl) detailEl.textContent = text || '';
+    if (analyzeLabel) analyzeLabel.textContent = text || i18n('contents_step_analyzing_inline');
+  }
+
+  /**
+   * Extracción secuencial: una RPC por pasada (success_case) o una RPC única (otros tipos).
+   * @param {string} payloadStr JSON {name,mimeType,dataBase64}
+   * @param {string} type content_type
+   * @param {{isCancelled?:function, onPassStart?:function, onPassDone?:function, onDone?:function, onFail?:function}} handlers
+   */
+  function contentsRunExtraction_(payloadStr, type, handlers) {
+    handlers = handlers || {};
+    var passIds = contentsExtractionPassIds_(type);
+    var draftJson = '';
+
+    function cancelled() {
+      return handlers.isCancelled && handlers.isCancelled();
+    }
+
+    function fail(e) {
+      if (handlers.onFail) handlers.onFail(e);
+    }
+
+    if (!passIds || !passIds.length) {
+      var singlePhase = contentsExtractionPhaseText_('__single__', type, 0, 1);
+      if (handlers.onPassStart) {
+        handlers.onPassStart({
+          passId: '__single__',
+          passIndex: 0,
+          passTotal: 1,
+          phaseText: singlePhase,
+        });
+      }
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (cancelled()) return;
+          if (handlers.onPassDone) {
+            handlers.onPassDone({
+              passId: '__single__',
+              passIndex: 0,
+              passTotal: 1,
+              res: res,
+            });
+          }
+          if (handlers.onDone) handlers.onDone(res);
+        })
+        .withFailureHandler(fail)
+        .contentsExtractDraft(payloadStr, type);
+      return;
+    }
+
+    var passIndex = 0;
+
+    function runPass() {
+      if (cancelled()) return;
+      if (passIndex >= passIds.length) return;
+      var passId = passIds[passIndex];
+      var phaseText = contentsExtractionPhaseText_(passId, type, passIndex, passIds.length);
+      if (handlers.onPassStart) {
+        handlers.onPassStart({
+          passId: passId,
+          passIndex: passIndex,
+          passTotal: passIds.length,
+          phaseText: phaseText,
+        });
+      }
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (cancelled()) return;
+          if (handlers.onPassDone) {
+            handlers.onPassDone({
+              passId: passId,
+              passIndex: passIndex,
+              passTotal: passIds.length,
+              res: res,
+            });
+          }
+          if (res && res.extractionComplete) {
+            if (handlers.onDone) handlers.onDone(res);
+            return;
+          }
+          draftJson = JSON.stringify((res && res.draft) || {});
+          passIndex++;
+          runPass();
+        })
+        .withFailureHandler(fail)
+        .contentsExtractDraftPass(payloadStr, type, passId, draftJson);
+    }
+
+    runPass();
+  }
+
   function contentsShowUploading(on, fileName) {
     if (contentsDropzone) contentsDropzone.classList.toggle('hidden', on);
     if (contentsUploading) contentsUploading.classList.toggle('hidden', !on);
@@ -1198,6 +1517,8 @@
       contentsSetUploadStep('none');
       var bar = document.getElementById('contents-upload-bar');
       if (bar) bar.style.width = '10%';
+      var detailEl = document.getElementById('contents-uploading-detail');
+      if (detailEl) detailEl.textContent = '';
     }
   }
 
@@ -1216,6 +1537,12 @@
     if (bar) bar.style.width = c.bar;
     if (mainIcon) mainIcon.className = c.icon;
     if (mainMsg) mainMsg.textContent = i18n(c.msg);
+    if (step !== 'analyze') {
+      var detailEl = document.getElementById('contents-uploading-detail');
+      if (detailEl) detailEl.textContent = '';
+      var analyzeLabel = document.getElementById('contents-step-analyze-label');
+      if (analyzeLabel) analyzeLabel.textContent = i18n('contents_step_analyzing_inline');
+    }
     for (var i = 0; i < steps.length; i++) {
       var el = document.getElementById('contents-step-' + steps[i]);
       if (!el) continue;
@@ -1249,8 +1576,28 @@
       }
       var payload = JSON.stringify({ name: f.name, mimeType: f.type || 'application/pdf', dataBase64: b64 });
       contentsSetUploadStep('analyze');
-      google.script.run
-        .withSuccessHandler(function (res) {
+
+      function contentsUpdateUploadPassBar_(ev, passDone) {
+        var bar = document.getElementById('contents-upload-bar');
+        if (!bar || !ev || ev.passTotal <= 1) return;
+        var passWeight = passDone ? ev.passIndex + 1 : ev.passIndex;
+        var pct = 60 + Math.round((passWeight / ev.passTotal) * 35);
+        bar.style.width = pct + '%';
+      }
+
+      contentsRunExtraction_(payload, type, {
+        isCancelled: function () {
+          return !!S.get('contentsUploadCancelled');
+        },
+        onPassStart: function (ev) {
+          contentsSetExtractionPhaseUi_(ev.phaseText);
+          contentsUpdateUploadPassBar_(ev, false);
+        },
+        onPassDone: function (ev) {
+          contentsSetExtractionPhaseUi_(ev.phaseText);
+          contentsUpdateUploadPassBar_(ev, true);
+        },
+        onDone: function (res) {
           if (S.get('contentsUploadCancelled')) {
             contentsShowUploading(false, '');
             contentsSetEditorStatus(i18n('contents_cancelled'), false);
@@ -1263,6 +1610,7 @@
             if (contentsCurrentFileName) contentsCurrentFileName.textContent = f.name || '\u00a0';
             try {
               contentsApplyDraftToForm_(res && res.draft, type, f.name);
+              contentsToggleSpecificSections();
             } catch (eDraft) {
               if (window.console && console.warn) {
                 console.warn('[contents] draft render failed, fallback mode', eDraft);
@@ -1273,17 +1621,21 @@
             contentsSetStep(3, 2);
             contentsSetEditorStatus(contentsFormatExtractionStatus_(res && res.draft), false);
           }, 600);
-        })
-        .withFailureHandler(function (e) {
+        },
+        onFail: function (e) {
           if (S.get('contentsUploadCancelled')) {
             contentsShowUploading(false, '');
             contentsSetEditorStatus(i18n('contents_cancelled'), false);
             return;
           }
           contentsShowUploading(false, '');
-          contentsSetEditorStatus((e && e.message) || i18n('contents_err_upload_failed'), true);
-        })
-        .contentsExtractDraft(payload, type);
+          contentsRpcError_(e, contentsExtractionPassIds_(type) ? 'contentsExtractDraftPass' : 'contentsExtractDraft', {
+            hideModal: false,
+            fallbackKey: 'contents_err_upload_failed',
+            editorStatus: true,
+          });
+        },
+      });
     };
     reader.onerror = function () {
       if (S.get('contentsUploadCancelled')) { contentsShowUploading(false, ''); return; }
@@ -1320,13 +1672,11 @@
     google.script.run
       .withSuccessHandler(function () {
         A.hideBlockingModal();
-        contentsSetEditorStatus(i18n('contents_saved'), false);
-        contentsSetScreen('list');
-        contentsLoadList({ skipCache: true });
+        contentsReturnToList_({ skipCache: true, statusKey: 'contents_saved' });
+        if (A.toast) A.toast.success(i18n('contents_saved'));
       })
       .withFailureHandler(function (e) {
-        A.hideBlockingModal();
-        contentsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
+        contentsRpcError_(e, 'contentsSaveDraft', { editorStatus: true });
       })
       .contentsSaveDraft(JSON.stringify(payload));
   }
@@ -1347,8 +1697,7 @@
           contentsSetListStatus(i18n('contents_deleted'), false);
         })
         .withFailureHandler(function (e) {
-          A.hideBlockingModal();
-          contentsSetEditorStatus((e && e.message) || i18n('err_generic'), true);
+          contentsRpcError_(e, 'contentsDelete', { editorStatus: true });
         })
         .contentsDelete(id);
     });

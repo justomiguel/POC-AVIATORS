@@ -69,6 +69,7 @@ var LLM_DEFAULTS = Object.freeze({
 /** @type {Readonly<Record<string, string>>} Claves de Script Properties del proyecto. */
 var AVIATORS_PROP = Object.freeze({
   DRIVE_ROOT_FOLDER_ID: 'DRIVE_ROOT_FOLDER_ID',
+  SALESFORCE_ACCOUNTS_SPREADSHEET_ID: 'SALESFORCE_ACCOUNTS_SPREADSHEET_ID',
 
   GLOBANT_PROJECT_ID: 'GLOBANT_PROJECT_ID',
 
@@ -121,6 +122,17 @@ function AviatorsConfig_driveRootFolderId_() {
  */
 function AviatorsConfig_requireDriveRootFolderId_() {
   var id = AviatorsConfig_driveRootFolderId_();
-  if (!id) throw new Error('ERR_DRIVE_ROOT_NOT_CONFIGURED');
+  if (!id) {
+    AviatorsError_throw_('ERR_DRIVE_ROOT_NOT_CONFIGURED', 'AviatorsConfig_requireDriveRootFolderId_');
+  }
   return id;
+}
+
+/**
+ * @return {string}
+ */
+function AviatorsConfig_salesforceAccountsSpreadsheetId_() {
+  return SalesforceAccounts_parseSpreadsheetId_(
+    AviatorsConfig_scriptProp_(AVIATORS_PROP.SALESFORCE_ACCOUNTS_SPREADSHEET_ID),
+  );
 }

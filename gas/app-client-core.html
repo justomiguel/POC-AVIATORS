@@ -43,6 +43,7 @@ window.Aviators = window.Aviators || {};
     canManageUsers: false,
     canManageRoleConfig: false,
     canResetMetrics: false,
+    canSyncSalesforceAccounts: false,
     canManageUnansweredQueue: false,
     driveExpStack: [],
     driveExpNextToken: '',
@@ -78,9 +79,76 @@ window.Aviators = window.Aviators || {};
 
   var blockingModal = document.getElementById('blocking-modal');
   var blockingModalMsg = document.getElementById('blocking-modal-msg');
+  var blockingModalProgress = document.getElementById('blocking-modal-progress');
+  var blockingModalCounter = document.getElementById('blocking-modal-counter');
+  var blockingModalFileIdx = document.getElementById('blocking-modal-file-idx');
+  var blockingModalBar = document.getElementById('blocking-modal-bar');
+  var blockingModalStep = document.getElementById('blocking-modal-step');
+  var blockingModalDetail = document.getElementById('blocking-modal-detail');
+  var blockingModalFilename = document.getElementById('blocking-modal-filename');
 
-  A.showBlockingModal = function (msg) {
-    if (blockingModalMsg) blockingModalMsg.textContent = msg || '';
+  /**
+   * @param {string|Object} msgOrOpts mensaje plano o { message, progress, analyzed, completed, total, current, fileName, stepLabel, phase, barPercent }
+   */
+  A.showBlockingModal = function (msgOrOpts) {
+    var msg = '';
+    var showProgress = false;
+    if (msgOrOpts && typeof msgOrOpts === 'object') {
+      showProgress = !!msgOrOpts.progress;
+      msg = msgOrOpts.message || '';
+      if (showProgress) {
+        var analyzed = msgOrOpts.analyzed != null ? msgOrOpts.analyzed : 0;
+        var completed = msgOrOpts.completed != null ? msgOrOpts.completed : 0;
+        var total = msgOrOpts.total != null ? msgOrOpts.total : 0;
+        var current = msgOrOpts.current != null ? msgOrOpts.current : 0;
+        var barPct = msgOrOpts.barPercent;
+        if (barPct == null && total > 0) {
+          barPct = Math.round((analyzed / total) * 100);
+          if (analyzed < total && barPct < 4) barPct = 4;
+        }
+        if (blockingModalCounter && A.i18nFmt) {
+          blockingModalCounter.textContent = A.i18nFmt('contents_batch_counter_analyzed', {
+            analyzed: analyzed,
+            total: total,
+          });
+        }
+        if (blockingModalFileIdx && A.i18nFmt) {
+          blockingModalFileIdx.textContent = A.i18nFmt('contents_batch_counter_file', {
+            current: current,
+            total: total,
+          });
+        }
+        if (blockingModalBar) {
+          blockingModalBar.style.width = Math.max(0, Math.min(100, barPct || 0)) + '%';
+        }
+        if (blockingModalStep) {
+          blockingModalStep.textContent = msgOrOpts.stepLabel || '';
+        }
+        if (blockingModalDetail) {
+          blockingModalDetail.textContent = msgOrOpts.phase || '';
+        }
+        if (blockingModalFilename) {
+          blockingModalFilename.textContent = msgOrOpts.fileName
+            ? A.i18nFmt
+              ? A.i18nFmt('contents_batch_file_label', { name: msgOrOpts.fileName })
+              : msgOrOpts.fileName
+            : '';
+        }
+        if (completed > 0 && blockingModalCounter && A.i18nFmt) {
+          blockingModalCounter.textContent = A.i18nFmt('contents_batch_counter_analyzed_saved', {
+            analyzed: analyzed,
+            saved: completed,
+            total: total,
+          });
+        }
+      }
+    } else {
+      msg = msgOrOpts || '';
+    }
+    if (blockingModalProgress) {
+      blockingModalProgress.classList.toggle('hidden', !showProgress);
+    }
+    if (blockingModalMsg) blockingModalMsg.textContent = msg;
     if (blockingModal) {
       blockingModal.classList.remove('hidden');
       blockingModal.setAttribute('aria-hidden', 'false');
@@ -92,6 +160,11 @@ window.Aviators = window.Aviators || {};
       blockingModal.classList.add('hidden');
       blockingModal.setAttribute('aria-hidden', 'true');
     }
+    if (blockingModalProgress) blockingModalProgress.classList.add('hidden');
+    if (blockingModalBar) blockingModalBar.style.width = '0%';
+    if (blockingModalStep) blockingModalStep.textContent = '';
+    if (blockingModalDetail) blockingModalDetail.textContent = '';
+    if (blockingModalFilename) blockingModalFilename.textContent = '';
   };
 
   A.positionFloatingPanel = function (anchorEl, panelEl, opts) {

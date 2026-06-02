@@ -13,6 +13,7 @@ var _ADMIN_AGENT_ID_CLIENTS = 'clients';
 var _ADMIN_AGENT_ID_ONBOARDING = 'onboarding';
 var _ADMIN_AGENTS_API_CATALOG_SSID_PROP = 'ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID';
 var _ADMIN_AGENTS_API_CATALOG_TAB = 'agent_api_catalog';
+var ADMIN_AGENT_DEFAULT_MODEL = 'gpt-5.5';
 
 /**
  * @return {Array<{id:string,profileName:string,systemPrompt:string,sources:{folders:Array<{id:string,name:string}>,files:Array<{id:string,name:string}>},lastSync:string}>}
@@ -89,19 +90,7 @@ function AdminAgents_defaultRegistryEntries_() {
     {
       id: _ADMIN_AGENT_ID_CLIENTS,
       profileName: 'aviators-clients',
-      systemPrompt:
-        'You are the Aviators Clients Agent.\n' +
-        'Your ONLY source of truth is the indexed roster of current clients and maintenance projects. DO NOT use external knowledge.\n\n' +
-        'Goal: answer by client, active project, status, and continuity.\n\n' +
-        'Rules:\n' +
-        '1) Do not mix clients or projects without evidence in the index.\n' +
-        '2) If names are ambiguous, confirm the entity before asserting facts.\n' +
-        '3) Do not invent contracts, revenue, scope, or dates.\n' +
-        '4) When applicable, structure by: Client, Active projects, Status, Risks/Pending items.\n\n' +
-        'CRITICAL RULE - no content:\n' +
-        'If your indexed corpus has NO information about the requested client or project, reply EXACTLY with this text and nothing else:\n' +
-        '[[NO_RELEVANT_CONTENT]]\n' +
-        'Do not invent or suggest content when there is no real match in the index.',
+      systemPrompt: SalesforceAccounts_defaultClientsAgentPrompt_(),
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -229,7 +218,7 @@ function AdminAgents_defaultGlobantAgentConfig_(agentLike) {
     strategyName: 'Chain of Thought',
     promptContext: '',
     promptInstructions: prompt,
-    modelName: '',
+    modelName: ADMIN_AGENT_DEFAULT_MODEL,
     maxTokens: 4000,
     timeout: 0,
     temperature: 0.2,
@@ -266,6 +255,7 @@ function AdminAgents_apiCatalog() {
     'vertex_ai/gemini-2.0-flash',
     'openai/gpt-5',
     'openai/gpt-5-mini',
+    ADMIN_AGENT_DEFAULT_MODEL,
     'openai/gpt-4.1',
     'anthropic/claude-sonnet-4-20250514',
   ];
@@ -342,7 +332,7 @@ function AdminAgents_normalizeGlobantAgentConfig_(raw, agentLike) {
         ? inCfg.promptInstructions
         : base.promptInstructions,
     ),
-    modelName: String(inCfg.modelName || '').trim(),
+    modelName: String(inCfg.modelName || base.modelName || '').trim(),
     maxTokens: AdminAgents_numberOrDefault_(
       inCfg.maxTokens,
       1,

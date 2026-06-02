@@ -17,6 +17,7 @@ function doGet() {
   tpl.clientScriptChat = HtmlService.createHtmlOutputFromFile('app-client-chat').getContent();
   tpl.clientScriptAgents = HtmlService.createHtmlOutputFromFile('app-client-agents').getContent();
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
+  tpl.clientScriptTags = HtmlService.createHtmlOutputFromFile('app-client-tags').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
@@ -30,13 +31,26 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/**
+ * Envuelve handlers RPC expuestos al cliente: registra errores y re-lanza.
+ * @param {string} scope
+ * @param {function():*} fn
+ * @return {*}
+ */
+function AviatorsCode_runRpc_(scope, fn) {
+  return AviatorsError_run_(scope, fn);
+}
+
 /** @deprecated usar LlmOrchestrator_getUiConfig */
 function getLlmUiConfig() {
-  return LlmOrchestrator_getUiConfig();
+  return AviatorsCode_runRpc_('getLlmUiConfig', function () {
+    return LlmOrchestrator_getUiConfig();
+  });
 }
 
 /** Sesión + archivos + estado proveedor IA */
 function getBootstrap() {
+  return AviatorsCode_runRpc_('getBootstrap', function () {
   var perms = {
     canViewAgents: false,
     canViewCatalog: false,
@@ -47,6 +61,7 @@ function getBootstrap() {
     canManageUsers: false,
     canManageRoleConfig: false,
     canManageUnansweredQueue: false,
+    canSyncSalesforceAccounts: false,
   };
   try {
     var email = ('' + Session.getActiveUser().getEmail()).trim();
@@ -60,6 +75,7 @@ function getBootstrap() {
       perms.canManageUsers = AdminAuth_emailCanManageUsers(email);
       perms.canManageRoleConfig = AdminAuth_emailIsAdmin(email);
       perms.canManageUnansweredQueue = MetricsAuth_canManageQueue(email);
+      perms.canSyncSalesforceAccounts = AdminAuth_emailIsAdmin(email);
     }
   } catch (ePerms) {}
 
@@ -81,6 +97,7 @@ function getBootstrap() {
     quickPrompts: quickPrompts,
     dataBackend: AviatorsDataBackend_mode_(),
   };
+});
 }
 
 /**
@@ -89,7 +106,9 @@ function getBootstrap() {
  * @return {Object<string, string>}
  */
 function getI18nPack(locale) {
-  return UiStrings_getClientPackForLocale(locale === 'en' ? 'en' : 'es');
+  return AviatorsCode_runRpc_('getI18nPack', function () {
+    return UiStrings_getClientPackForLocale(locale === 'en' ? 'en' : 'es');
+  });
 }
 
 /**
@@ -99,7 +118,9 @@ function getI18nPack(locale) {
  * @return {Object}
  */
 function debugRoleDirectory() {
-  return RoleDirectory_diagnostic();
+  return AviatorsCode_runRpc_('debugRoleDirectory', function () {
+    return RoleDirectory_diagnostic();
+  });
 }
 
 /**
@@ -108,7 +129,9 @@ function debugRoleDirectory() {
  * @return {Object}
  */
 function debugAgentRagForQuestion(question) {
-  return AgentOrchestrator_debugRagDiagnostics_(question);
+  return AviatorsCode_runRpc_('debugAgentRagForQuestion', function () {
+    return AgentOrchestrator_debugRagDiagnostics_(question);
+  });
 }
 
 /**
@@ -117,7 +140,9 @@ function debugAgentRagForQuestion(question) {
  * @param {string} [profileName]
  */
 function adminSaveKnowledgeConfig(sourcesJson, profileName) {
-  return AdminKnowledge_saveConfiguration(sourcesJson, profileName);
+  return AviatorsCode_runRpc_('adminSaveKnowledgeConfig', function () {
+    return AdminKnowledge_saveConfiguration(sourcesJson, profileName);
+  });
 }
 
 /**
@@ -128,12 +153,14 @@ function adminSaveKnowledgeConfig(sourcesJson, profileName) {
  * @param {string} [pageToken]
  */
 function adminDriveSearch(query, includeFullText, pageToken) {
-  AdminAuth_requireAdmin();
-  return DriveExplorer_searchDrive(
-    query || '',
-    !!includeFullText,
-    pageToken || '',
-  );
+  return AviatorsCode_runRpc_('adminDriveSearch', function () {
+    AdminAuth_requireAdmin();
+    return DriveExplorer_searchDrive(
+      query || '',
+      !!includeFullText,
+      pageToken || '',
+    );
+  });
 }
 
 /**
@@ -142,52 +169,70 @@ function adminDriveSearch(query, includeFullText, pageToken) {
  * @param {string} [pageToken]
  */
 function driveBrowseFolder(parentId, pageToken) {
-  var email = Session.getActiveUser().getEmail();
-  if (!email) {
-    throw new Error(
-      UiStrings_t(
-        UiStrings_activeLocale_(),
-        'session_email_no_capture',
-      ),
-    );
-  }
-  return DriveExplorer_listChildren(parentId || '', pageToken || '');
+  return AviatorsCode_runRpc_('driveBrowseFolder', function () {
+    var email = Session.getActiveUser().getEmail();
+    if (!email) {
+      throw new Error(
+        UiStrings_t(
+          UiStrings_activeLocale_(),
+          'session_email_no_capture',
+        ),
+      );
+    }
+    return DriveExplorer_listChildren(parentId || '', pageToken || '');
+  });
 }
 
 /** Solo admin · guarda sólo carpeta raíz y sincroniza el árbol completo contra Globant (un clic). */
 function adminQuickSyncKnowledgeRoot(rootFolderInput, profileName) {
-  return AdminKnowledge_saveRootFolderOnlyAndSync(rootFolderInput, profileName);
+  return AviatorsCode_runRpc_('adminQuickSyncKnowledgeRoot', function () {
+    return AdminKnowledge_saveRootFolderOnlyAndSync(rootFolderInput, profileName);
+  });
 }
 
 /** Solo admin · recrea perfil Globant + sube PDFs desde carpetas seleccionadas y archivos pinchados */
 function adminSyncKnowledgeCorpus() {
-  return AdminKnowledge_syncCorpusFromDrive();
+  return AviatorsCode_runRpc_('adminSyncKnowledgeCorpus', function () {
+    return AdminKnowledge_syncCorpusFromDrive();
+  });
 }
 
 /** Solo admin · inventario: perfiles RAG o archivos /v1/files según modo */
 function adminGlobantControlFetch() {
-  return GlobantControl_fetchSnapshot();
+  return AviatorsCode_runRpc_('adminGlobantControlFetch', function () {
+    return GlobantControl_fetchSnapshot();
+  });
 }
 
 /** Solo admin · documentos de un perfil RAG */
 function adminGlobantRagDocuments(profileName, skip, count) {
-  return GlobantControl_listRagDocuments(profileName, skip, count);
+  return AviatorsCode_runRpc_('adminGlobantRagDocuments', function () {
+    return GlobantControl_listRagDocuments(profileName, skip, count);
+  });
 }
 
 function adminGlobantDeleteRagProfile(profileName) {
-  return GlobantControl_deleteRagProfile(profileName);
+  return AviatorsCode_runRpc_('adminGlobantDeleteRagProfile', function () {
+    return GlobantControl_deleteRagProfile(profileName);
+  });
 }
 
 function adminGlobantDeleteRagProfileDocuments(profileName) {
-  return GlobantControl_deleteRagProfileDocuments(profileName);
+  return AviatorsCode_runRpc_('adminGlobantDeleteRagProfileDocuments', function () {
+    return GlobantControl_deleteRagProfileDocuments(profileName);
+  });
 }
 
 function adminGlobantDeleteRagDocument(profileName, documentId) {
-  return GlobantControl_deleteRagDocument(profileName, documentId);
+  return AviatorsCode_runRpc_('adminGlobantDeleteRagDocument', function () {
+    return GlobantControl_deleteRagDocument(profileName, documentId);
+  });
 }
 
 function adminGlobantDeleteAssistantFileCtrl(fileId) {
-  return GlobantControl_deleteAssistantFileAdmin(fileId);
+  return AviatorsCode_runRpc_('adminGlobantDeleteAssistantFileCtrl', function () {
+    return GlobantControl_deleteAssistantFileAdmin(fileId);
+  });
 }
 
 function getSessionInfo() {
@@ -272,38 +317,40 @@ function getSessionInfo() {
  * @return {{ files: Array<{id:string,name:string,url:string,mimeType:string}>, note: string }}
  */
 function getContextFiles() {
-  var locale = UiStrings_activeLocale_();
-  var email = Session.getActiveUser().getEmail();
-  if (!email) {
-    return { files: [], note: UiStrings_t(locale, 'note_no_email') };
-  }
+  return AviatorsCode_runRpc_('getContextFiles', function () {
+    var locale = UiStrings_activeLocale_();
+    var email = Session.getActiveUser().getEmail();
+    if (!email) {
+      return { files: [], note: UiStrings_t(locale, 'note_no_email') };
+    }
 
-  var q =
-    '(' +
-    "mimeType = '" +
-    MimeType.GOOGLE_DOCUMENT +
-    "' or mimeType = 'text/plain' or mimeType = 'text/markdown'" +
-    ') and trashed = false';
+    var q =
+      '(' +
+      "mimeType = '" +
+      MimeType.GOOGLE_DOCUMENT +
+      "' or mimeType = 'text/plain' or mimeType = 'text/markdown'" +
+      ') and trashed = false';
 
-  var it = DriveApp.searchFiles(q);
-  var seen = {};
-  var files = [];
+    var it = DriveApp.searchFiles(q);
+    var seen = {};
+    var files = [];
 
-  while (it.hasNext() && files.length < 24) {
-    var f = it.next();
-    var id = f.getId();
-    if (seen[id]) continue;
-    seen[id] = true;
-    files.push({
-      id: id,
-      name: f.getName(),
-      url: f.getUrl(),
-      mimeType: f.getMimeType(),
-    });
-  }
+    while (it.hasNext() && files.length < 24) {
+      var f = it.next();
+      var id = f.getId();
+      if (seen[id]) continue;
+      seen[id] = true;
+      files.push({
+        id: id,
+        name: f.getName(),
+        url: f.getUrl(),
+        mimeType: f.getMimeType(),
+      });
+    }
 
-  var note = files.length === 0 ? UiStrings_t(locale, 'note_no_docs') : '';
-  return { files: files, note: note };
+    var note = files.length === 0 ? UiStrings_t(locale, 'note_no_docs') : '';
+    return { files: files, note: note };
+  });
 }
 
 /**
@@ -323,23 +370,25 @@ function DriveQuery_escapeLiteral_(raw) {
  * @return {{ok:boolean,url:string,fileName:string}}
  */
 function resolveDriveFileUrlByName(fileName) {
-  var name = String(fileName || '').trim();
-  if (!name) return { ok: false, url: '', fileName: '' };
-  var q = 'trashed = false and title = "' + DriveQuery_escapeLiteral_(name) + '"';
-  var rootFolderId = AviatorsConfig_driveRootFolderId_();
-  if (rootFolderId) {
-    q =
-      '"' +
-      DriveQuery_escapeLiteral_(rootFolderId) +
-      '" in parents and ' +
-      q;
-  }
-  var it = DriveApp.searchFiles(q);
-  if (it.hasNext()) {
-    var f = it.next();
-    return { ok: true, url: String(f.getUrl() || ''), fileName: String(f.getName() || name) };
-  }
-  return { ok: false, url: '', fileName: name };
+  return AviatorsCode_runRpc_('resolveDriveFileUrlByName', function () {
+    var name = String(fileName || '').trim();
+    if (!name) return { ok: false, url: '', fileName: '' };
+    var q = 'trashed = false and title = "' + DriveQuery_escapeLiteral_(name) + '"';
+    var rootFolderId = AviatorsConfig_driveRootFolderId_();
+    if (rootFolderId) {
+      q =
+        '"' +
+        DriveQuery_escapeLiteral_(rootFolderId) +
+        '" in parents and ' +
+        q;
+    }
+    var it = DriveApp.searchFiles(q);
+    if (it.hasNext()) {
+      var f = it.next();
+      return { ok: true, url: String(f.getUrl() || ''), fileName: String(f.getName() || name) };
+    }
+    return { ok: false, url: '', fileName: name };
+  });
 }
 
 /**
@@ -587,11 +636,13 @@ function ChatReferences_enrichList_(refs, email) {
  * @return {Object}
  */
 function resolveChatReference(ref) {
-  var email = '';
-  try {
-    email = Session.getActiveUser().getEmail();
-  } catch (ignore) {}
-  return ChatReferences_buildActions_(ref || {}, email);
+  return AviatorsCode_runRpc_('resolveChatReference', function () {
+    var email = '';
+    try {
+      email = Session.getActiveUser().getEmail();
+    } catch (ignore) {}
+    return ChatReferences_buildActions_(ref || {}, email);
+  });
 }
 
 /**
@@ -599,38 +650,40 @@ function resolveChatReference(ref) {
  * @param {string[]} fileIds
  */
 function askAboutDocuments(question, fileIds, historyJson) {
-  var history = [];
-  try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
-  var ans = LlmOrchestrator_consultWithDriveDocuments(question, fileIds, history);
-  var selectedRefs = ChatReferences_buildFromSelectedFiles_(fileIds);
-  var catalogRefs = [];
-  try {
-    catalogRefs = AgentOrchestrator_matchCatalogReferences_(
-      ans.answer || '',
-      ['proposal', 'success_case', 'client'],
-    );
-  } catch (eMatch) {}
-  var refs = ChatReferences_enrichList_(ChatReferences_merge_(catalogRefs, selectedRefs));
-  var answerText = String(ans.answer || '').trim();
-  var isUnanswered = !answerText;
-  var tracked = MetricsService_trackQuestionEvent({
-    mode: 'drive_docs',
-    agentId: 'drive_docs',
-    agentName: 'Drive Docs',
-    questionText: question,
-    isUnanswered: isUnanswered,
-    unansweredCode: isUnanswered ? 'EMPTY_ANSWER' : '',
+  return AviatorsCode_runRpc_('askAboutDocuments', function () {
+    var history = [];
+    try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
+    var ans = LlmOrchestrator_consultWithDriveDocuments(question, fileIds, history);
+    var selectedRefs = ChatReferences_buildFromSelectedFiles_(fileIds);
+    var catalogRefs = [];
+    try {
+      catalogRefs = AgentOrchestrator_matchCatalogReferences_(
+        ans.answer || '',
+        ['proposal', 'success_case', 'client'],
+      );
+    } catch (eMatch) {}
+    var refs = ChatReferences_enrichList_(ChatReferences_merge_(catalogRefs, selectedRefs));
+    var answerText = String(ans.answer || '').trim();
+    var isUnanswered = !answerText;
+    var tracked = MetricsService_trackQuestionEvent({
+      mode: 'drive_docs',
+      agentId: 'drive_docs',
+      agentName: 'Drive Docs',
+      questionText: question,
+      isUnanswered: isUnanswered,
+      unansweredCode: isUnanswered ? 'EMPTY_ANSWER' : '',
+    });
+    return {
+      answer: ans.answer,
+      eventId: (tracked && tracked.eventId) || '',
+      meta: {
+        model: ans.model,
+        location: ans.providerLabel,
+        filesUsed: ans.filesUsed,
+        references: refs,
+      },
+    };
   });
-  return {
-    answer: ans.answer,
-    eventId: (tracked && tracked.eventId) || '',
-    meta: {
-      model: ans.model,
-      location: ans.providerLabel,
-      filesUsed: ans.filesUsed,
-      references: refs,
-    },
-  };
 }
 
 /**
@@ -639,7 +692,9 @@ function askAboutDocuments(question, fileIds, historyJson) {
  * @return {{ agents: Array<{id:string,name:string}>, confidence: string, reason: string, isSelf: boolean }}
  */
 function globantRouteQuery(prompt) {
-  return AgentOrchestrator_routeOnly(prompt);
+  return AviatorsCode_runRpc_('globantRouteQuery', function () {
+    return AgentOrchestrator_routeOnly(prompt);
+  });
 }
 
 /**
@@ -649,32 +704,34 @@ function globantRouteQuery(prompt) {
  * @param {string=} historyJson
  */
 function globantAnalyzeEphemeralDocument(prompt, payloadJson, historyJson) {
-  var history = [];
-  try {
-    if (historyJson) history = JSON.parse(historyJson);
-  } catch (e) {}
-  var r = AgentOrchestrator_analyzeEphemeralDocument(prompt, payloadJson, historyJson);
-  var tracked = MetricsService_trackQuestionEvent({
-    mode: 'globant_ephemeral_doc',
-    agentId: _ADMIN_AGENT_ID_ORCHESTRATOR,
-    agentName: r.agentName || '',
-    questionText: prompt,
-    isUnanswered: !!r.isUnanswered,
-    unansweredCode: r.unansweredCode || '',
+  return AviatorsCode_runRpc_('globantAnalyzeEphemeralDocument', function () {
+    var history = [];
+    try {
+      if (historyJson) history = JSON.parse(historyJson);
+    } catch (e) {}
+    var r = AgentOrchestrator_analyzeEphemeralDocument(prompt, payloadJson, historyJson);
+    var tracked = MetricsService_trackQuestionEvent({
+      mode: 'globant_ephemeral_doc',
+      agentId: _ADMIN_AGENT_ID_ORCHESTRATOR,
+      agentName: r.agentName || '',
+      questionText: prompt,
+      isUnanswered: !!r.isUnanswered,
+      unansweredCode: r.unansweredCode || '',
+    });
+    return {
+      answer: r.answer,
+      agentName: r.agentName || '',
+      eventId: (tracked && tracked.eventId) || '',
+      meta: {
+        model: r.model,
+        location: r.providerLabel,
+        filterNote: r.filterLabel,
+        rawJson: r.rawJson,
+        references: ChatReferences_enrichList_(r.references || []),
+        docClassification: r.docClassification || null,
+      },
+    };
   });
-  return {
-    answer: r.answer,
-    agentName: r.agentName || '',
-    eventId: (tracked && tracked.eventId) || '',
-    meta: {
-      model: r.model,
-      location: r.providerLabel,
-      filterNote: r.filterLabel,
-      rawJson: r.rawJson,
-      references: ChatReferences_enrichList_(r.references || []),
-      docClassification: r.docClassification || null,
-    },
-  };
 }
 
 /**
@@ -682,29 +739,31 @@ function globantAnalyzeEphemeralDocument(prompt, payloadJson, historyJson) {
  * @param {string} agentId
  */
 function globantAnswerWithAgent(prompt, agentId, historyJson) {
-  var history = [];
-  try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
-  var r = AgentOrchestrator_answerWith(prompt, agentId, history);
-  var tracked = MetricsService_trackQuestionEvent({
-    mode: 'globant_agent',
-    agentId: agentId,
-    agentName: r.agentName || '',
-    questionText: prompt,
-    isUnanswered: !!r.isUnanswered,
-    unansweredCode: r.unansweredCode || '',
+  return AviatorsCode_runRpc_('globantAnswerWithAgent', function () {
+    var history = [];
+    try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
+    var r = AgentOrchestrator_answerWith(prompt, agentId, history);
+    var tracked = MetricsService_trackQuestionEvent({
+      mode: 'globant_agent',
+      agentId: agentId,
+      agentName: r.agentName || '',
+      questionText: prompt,
+      isUnanswered: !!r.isUnanswered,
+      unansweredCode: r.unansweredCode || '',
+    });
+    return {
+      answer: r.answer,
+      agentName: r.agentName || '',
+      eventId: (tracked && tracked.eventId) || '',
+      meta: {
+        model: r.model,
+        location: r.providerLabel,
+        filterNote: r.filterLabel,
+        rawJson: r.rawJson,
+        references: ChatReferences_enrichList_(r.references || []),
+      },
+    };
   });
-  return {
-    answer: r.answer,
-    agentName: r.agentName || '',
-    eventId: (tracked && tracked.eventId) || '',
-    meta: {
-      model: r.model,
-      location: r.providerLabel,
-      filterNote: r.filterLabel,
-      rawJson: r.rawJson,
-      references: ChatReferences_enrichList_(r.references || []),
-    },
-  };
 }
 
 /**
@@ -714,36 +773,38 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
  * @return {Array<{answer:string, agentName:string, meta:{model:string, location:string, filterNote:string, rawJson:string}}>}
  */
 function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
-  var history = [];
-  try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
-  var results = AgentOrchestrator_answerMulti(prompt, agentIds, history);
-  var multiAgentId = 'multi:' + (Array.isArray(agentIds) ? agentIds.join(',') : '');
-  var tracked = MetricsService_trackQuestionEvent({
-    mode: 'globant_multi',
-    agentId: multiAgentId,
-    agentName: 'Multi-agent',
-    questionText: prompt,
-    isUnanswered: !results || !results.length,
-    unansweredCode: !results || !results.length ? 'NO_RELEVANT_CONTENT' : '',
-  });
-  var sharedEventId = (tracked && tracked.eventId) || '';
-  var out = [];
-  for (var i = 0; i < results.length; i++) {
-    var r = results[i];
-    out.push({
-      answer: r.answer,
-      agentName: r.agentName || '',
-      eventId: sharedEventId,
-      meta: {
-        model: r.model,
-        location: r.providerLabel,
-        filterNote: r.filterLabel,
-        rawJson: r.rawJson,
-        references: ChatReferences_enrichList_(r.references || []),
-      },
+  return AviatorsCode_runRpc_('globantAnswerMultiAgent', function () {
+    var history = [];
+    try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
+    var results = AgentOrchestrator_answerMulti(prompt, agentIds, history);
+    var multiAgentId = 'multi:' + (Array.isArray(agentIds) ? agentIds.join(',') : '');
+    var tracked = MetricsService_trackQuestionEvent({
+      mode: 'globant_multi',
+      agentId: multiAgentId,
+      agentName: 'Multi-agent',
+      questionText: prompt,
+      isUnanswered: !results || !results.length,
+      unansweredCode: !results || !results.length ? 'NO_RELEVANT_CONTENT' : '',
     });
-  }
-  return out;
+    var sharedEventId = (tracked && tracked.eventId) || '';
+    var out = [];
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      out.push({
+        answer: r.answer,
+        agentName: r.agentName || '',
+        eventId: sharedEventId,
+        meta: {
+          model: r.model,
+          location: r.providerLabel,
+          filterNote: r.filterLabel,
+          rawJson: r.rawJson,
+          references: ChatReferences_enrichList_(r.references || []),
+        },
+      });
+    }
+    return out;
+  });
 }
 
 /**
@@ -751,32 +812,34 @@ function globantAnswerMultiAgent(prompt, agentIds, historyJson) {
  * @param {string} prompt
  */
 function globantAskDirect(prompt) {
-  if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_direct'),
-    );
-  }
-  var r = AgentOrchestrator_answer(prompt);
-  var noRelevant = String(r.answer || '').indexOf(
-    UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content'),
-  ) >= 0;
-  MetricsService_trackQuestionEvent({
-    mode: 'globant_direct',
-    agentId: 'orchestrator',
-    agentName: 'orchestrator',
-    questionText: prompt,
-    isUnanswered: noRelevant,
-    unansweredCode: noRelevant ? 'NO_RELEVANT_CONTENT' : '',
+  return AviatorsCode_runRpc_('globantAskDirect', function () {
+    if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
+      throw new Error(
+        UiStrings_t(UiStrings_activeLocale_(), 'err_globant_direct'),
+      );
+    }
+    var r = AgentOrchestrator_answer(prompt);
+    var noRelevant = String(r.answer || '').indexOf(
+      UiStrings_t(UiStrings_activeLocale_(), 'chat_no_relevant_content'),
+    ) >= 0;
+    MetricsService_trackQuestionEvent({
+      mode: 'globant_direct',
+      agentId: 'orchestrator',
+      agentName: 'orchestrator',
+      questionText: prompt,
+      isUnanswered: noRelevant,
+      unansweredCode: noRelevant ? 'NO_RELEVANT_CONTENT' : '',
+    });
+    return {
+      answer: r.answer,
+      meta: {
+        model: r.model,
+        location: r.providerLabel,
+        filterNote: r.filterLabel,
+        rawJson: r.rawJson,
+      },
+    };
   });
-  return {
-    answer: r.answer,
-    meta: {
-      model: r.model,
-      location: r.providerLabel,
-      filterNote: r.filterLabel,
-      rawJson: r.rawJson,
-    },
-  };
 }
 
 /**
@@ -784,45 +847,53 @@ function globantAskDirect(prompt) {
  * @param {string} fileId
  */
 function globantAssistantDeleteFile(fileId) {
-  if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_only_feature'),
-    );
-  }
-  var p = PropertiesService.getScriptProperties();
-  if (!LlmProviderGlobant_isAssistantMode(p)) {
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'err_assistant_delete_mode'),
-    );
-  }
-  var fid = (fileId || '').trim();
-  if (!fid)
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_file_id'),
-    );
-  var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
-  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
-  var client = GlobantAssistantApiClient_create({
-    apiKey: apiKey,
-    baseUrl: baseUrl || undefined,
+  return AviatorsCode_runRpc_('globantAssistantDeleteFile', function () {
+    if (LlmOrchestrator_resolveProviderKind() !== 'globant') {
+      throw new Error(
+        UiStrings_t(UiStrings_activeLocale_(), 'err_globant_only_feature'),
+      );
+    }
+    var p = PropertiesService.getScriptProperties();
+    if (!LlmProviderGlobant_isAssistantMode(p)) {
+      throw new Error(
+        UiStrings_t(UiStrings_activeLocale_(), 'err_assistant_delete_mode'),
+      );
+    }
+    var fid = (fileId || '').trim();
+    if (!fid)
+      throw new Error(
+        UiStrings_t(UiStrings_activeLocale_(), 'err_globant_file_id'),
+      );
+    var apiKey = (p.getProperty(LLM_PROP.GLOBANT_API_KEY) || '').trim();
+    var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+    var client = GlobantAssistantApiClient_create({
+      apiKey: apiKey,
+      baseUrl: baseUrl || undefined,
+    });
+    client.deleteFile(fid);
+    return { success: true };
   });
-  client.deleteFile(fid);
-  return { success: true };
 }
 
 /** Admin o lectura técnica/client partner · listar agentes configurados (perfil + fuentes + prompt). */
 function adminAgentsList() {
-  return AdminAgents_list();
+  return AviatorsCode_runRpc_('adminAgentsList', function () {
+    return AdminAgents_list();
+  });
 }
 
 /** Solo admin · crear agentes por defecto faltantes (sin duplicar). */
 function adminAgentsEnsureDefaults() {
-  return AdminAgents_ensureDefaults();
+  return AviatorsCode_runRpc_('adminAgentsEnsureDefaults', function () {
+    return AdminAgents_ensureDefaults();
+  });
 }
 
 /** Admin o lectura técnica/client partner · catálogo de modelos/estrategias para Agent API. */
 function adminAgentsApiCatalog() {
-  return AdminAgents_apiCatalog();
+  return AviatorsCode_runRpc_('adminAgentsApiCatalog', function () {
+    return AdminAgents_apiCatalog();
+  });
 }
 
 /**
@@ -830,27 +901,33 @@ function adminAgentsApiCatalog() {
  * @param {string} agentJson
  */
 function adminAgentsSave(agentJson) {
-  var raw = ('' + (agentJson || '')).trim();
-  /** @type {Object} */
-  var obj;
-  try {
-    obj = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(
-      UiStrings_fmt_('err_json_invalid_detail', { message: e.message || '' }),
-    );
-  }
-  return AdminAgents_upsert(obj);
+  return AviatorsCode_runRpc_('adminAgentsSave', function () {
+    var raw = ('' + (agentJson || '')).trim();
+    /** @type {Object} */
+    var obj;
+    try {
+      obj = JSON.parse(raw);
+    } catch (e) {
+      throw new Error(
+        UiStrings_fmt_('err_json_invalid_detail', { message: e.message || '' }),
+      );
+    }
+    return AdminAgents_upsert(obj);
+  });
 }
 
 /** Solo admin · eliminar agente (registro y perfil RAG en Globant si aplica). */
 function adminAgentsDelete(agentId) {
-  return AdminAgents_delete(agentId);
+  return AviatorsCode_runRpc_('adminAgentsDelete', function () {
+    return AdminAgents_delete(agentId);
+  });
 }
 
 /** Solo admin · sincronizar corpus Drive → perfil Globant del agente. */
 function adminAgentsSync(agentId) {
-  return AdminAgents_sync(agentId);
+  return AviatorsCode_runRpc_('adminAgentsSync', function () {
+    return AdminAgents_sync(agentId);
+  });
 }
 
 /**
@@ -858,7 +935,9 @@ function adminAgentsSync(agentId) {
  * @param {Object} filters
  */
 function contentsList(filters) {
-  return ContentCatalog_list(filters || {});
+  return AviatorsCode_runRpc_('contentsList', function () {
+    return ContentCatalog_list(filters || {});
+  });
 }
 
 /**
@@ -866,7 +945,9 @@ function contentsList(filters) {
  * @param {string} contentId
  */
 function contentsGet(contentId) {
-  return ContentCatalog_get(contentId);
+  return AviatorsCode_runRpc_('contentsGet', function () {
+    return ContentCatalog_get(contentId);
+  });
 }
 
 /**
@@ -875,7 +956,22 @@ function contentsGet(contentId) {
  * @param {string} contentType proposal|success_case|client
  */
 function contentsExtractDraft(payloadJson, contentType) {
-  return ContentExtraction_extractInline(payloadJson, contentType);
+  return AviatorsCode_runRpc_('contentsExtractDraft', function () {
+    return ContentExtraction_extractInline(payloadJson, contentType);
+  });
+}
+
+/**
+ * Una pasada de extracción success_case (el cliente encadena las pasadas).
+ * @param {string} payloadJson {name, mimeType, dataBase64}
+ * @param {string} contentType success_case
+ * @param {string} passId common|challenge|solution|impact
+ * @param {string} draftJson borrador acumulado ("" en la primera pasada)
+ */
+function contentsExtractDraftPass(payloadJson, contentType, passId, draftJson) {
+  return AviatorsCode_runRpc_('contentsExtractDraftPass', function () {
+    return ContentExtraction_extractPass(payloadJson, contentType, passId, draftJson);
+  });
 }
 
 /**
@@ -883,7 +979,9 @@ function contentsExtractDraft(payloadJson, contentType) {
  * @param {string} payloadJson
  */
 function contentsSaveDraft(payloadJson) {
-  return ContentIngestion_save(payloadJson);
+  return AviatorsCode_runRpc_('contentsSaveDraft', function () {
+    return ContentIngestion_save(payloadJson);
+  });
 }
 
 /**
@@ -891,7 +989,9 @@ function contentsSaveDraft(payloadJson) {
  * @param {string} contentId
  */
 function contentsDelete(contentId) {
-  return ContentIngestion_delete(contentId);
+  return AviatorsCode_runRpc_('contentsDelete', function () {
+    return ContentIngestion_delete(contentId);
+  });
 }
 
 /**
@@ -900,7 +1000,9 @@ function contentsDelete(contentId) {
  * @param {string} contentId
  */
 function contentsRepairIndex(contentId) {
-  return ContentIngestion_repairIndexFromDrive(contentId);
+  return AviatorsCode_runRpc_('contentsRepairIndex', function () {
+    return ContentIngestion_repairIndexFromDrive(contentId);
+  });
 }
 
 /**
@@ -909,14 +1011,27 @@ function contentsRepairIndex(contentId) {
  * @param {string} contentId
  */
 function contentsReindexWithMetadata(contentId) {
-  return ContentIngestion_reindexWithMetadata(contentId);
+  return AviatorsCode_runRpc_('contentsReindexWithMetadata', function () {
+    return ContentIngestion_reindexWithMetadata(contentId);
+  });
 }
 
 /**
  * Obtiene todos los tags usados en contenidos (para autocompletar).
  */
 function contentsGetAllTags() {
-  return { ok: true, tags: ContentCatalog_getAllTags() };
+  return AviatorsCode_runRpc_('contentsGetAllTags', function () {
+    return { ok: true, tags: ContentCatalog_getAllTags() };
+  });
+}
+
+/**
+ * Nube de tags del catálogo (tag + conteo por documento).
+ */
+function contentsGetTagsCloud() {
+  return AviatorsCode_runRpc_('contentsGetTagsCloud', function () {
+    return ContentCatalog_getTagsCloud();
+  });
 }
 
 /**
@@ -925,7 +1040,9 @@ function contentsGetAllTags() {
  * @param {number} limit
  */
 function contentsRebuildEmbeddingsBatch(skip, limit) {
-  return ContentCatalog_rebuildEmbeddingsBatch(skip, limit);
+  return AviatorsCode_runRpc_('contentsRebuildEmbeddingsBatch', function () {
+    return ContentCatalog_rebuildEmbeddingsBatch(skip, limit);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -933,28 +1050,40 @@ function contentsRebuildEmbeddingsBatch(skip, limit) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function clientsList(filters) {
-  return ClientsMaster_list(filters || {});
+  return AviatorsCode_runRpc_('clientsList', function () {
+    return ClientsMaster_list(filters || {});
+  });
 }
 
 function clientsListForCombo() {
-  return ClientsMaster_listForCombo();
+  return AviatorsCode_runRpc_('clientsListForCombo', function () {
+    return ClientsMaster_listForCombo();
+  });
 }
 
 function clientsGet(clientId) {
-  return ClientsMaster_get(clientId);
+  return AviatorsCode_runRpc_('clientsGet', function () {
+    return ClientsMaster_get(clientId);
+  });
 }
 
 function clientsUpsert(dataJson) {
-  var data = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
-  return ClientsMaster_upsert(data);
+  return AviatorsCode_runRpc_('clientsUpsert', function () {
+    var data = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
+    return ClientsMaster_upsert(data);
+  });
 }
 
 function clientsEnsureByName(name) {
-  return ClientsMaster_ensureByName(name);
+  return AviatorsCode_runRpc_('clientsEnsureByName', function () {
+    return ClientsMaster_ensureByName(name);
+  });
 }
 
 function clientsDelete(clientId) {
-  return ClientsMaster_delete(clientId);
+  return AviatorsCode_runRpc_('clientsDelete', function () {
+    return ClientsMaster_delete(clientId);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -963,7 +1092,9 @@ function clientsDelete(clientId) {
 
 /** Métricas agregadas para tarjetas del home (admin y/o contributor según rol). */
 function dashboardHomeMetrics() {
-  return DashboardHome_metrics();
+  return AviatorsCode_runRpc_('dashboardHomeMetrics', function () {
+    return DashboardHome_metrics();
+  });
 }
 
 /**
@@ -972,7 +1103,9 @@ function dashboardHomeMetrics() {
  * @param {number} topN
  */
 function metricsDashboard(range, topN) {
-  return MetricsService_dashboard(range, topN);
+  return AviatorsCode_runRpc_('metricsDashboard', function () {
+    return MetricsService_dashboard(range, topN);
+  });
 }
 
 /**
@@ -980,7 +1113,9 @@ function metricsDashboard(range, topN) {
  * @param {Object} payload
  */
 function metricsTrackQuestion(payload) {
-  return MetricsService_trackQuestionEvent(payload || {});
+  return AviatorsCode_runRpc_('metricsTrackQuestion', function () {
+    return MetricsService_trackQuestionEvent(payload || {});
+  });
 }
 
 /**
@@ -988,12 +1123,16 @@ function metricsTrackQuestion(payload) {
  * @param {Object} filters
  */
 function metricsUnansweredList(filters) {
-  return MetricsService_unansweredList(filters || {});
+  return AviatorsCode_runRpc_('metricsUnansweredList', function () {
+    return MetricsService_unansweredList(filters || {});
+  });
 }
 
 /** Assignees válidos para la cola (admin / presales). */
 function metricsUnansweredAssignees() {
-  return MetricsService_unansweredAssignees_();
+  return AviatorsCode_runRpc_('metricsUnansweredAssignees', function () {
+    return MetricsService_unansweredAssignees_();
+  });
 }
 
 /**
@@ -1002,7 +1141,9 @@ function metricsUnansweredAssignees() {
  * @param {string} assigneeEmail
  */
 function metricsUnansweredAssign(eventId, assigneeEmail) {
-  return MetricsService_unansweredAssign_(eventId, assigneeEmail);
+  return AviatorsCode_runRpc_('metricsUnansweredAssign', function () {
+    return MetricsService_unansweredAssign_(eventId, assigneeEmail);
+  });
 }
 
 /**
@@ -1012,7 +1153,9 @@ function metricsUnansweredAssign(eventId, assigneeEmail) {
  * @param {string=} note
  */
 function metricsUnansweredSetStatus(eventId, status, note) {
-  return MetricsService_unansweredSetStatus_(eventId, status, note);
+  return AviatorsCode_runRpc_('metricsUnansweredSetStatus', function () {
+    return MetricsService_unansweredSetStatus_(eventId, status, note);
+  });
 }
 
 /**
@@ -1021,97 +1164,167 @@ function metricsUnansweredSetStatus(eventId, status, note) {
  * @param {Object} filters
  */
 function metricsLeaderboardList(kind, filters) {
-  return MetricsService_leaderboardList(kind, filters || {});
+  return AviatorsCode_runRpc_('metricsLeaderboardList', function () {
+    return MetricsService_leaderboardList(kind, filters || {});
+  });
 }
 
 /** Reset total de métricas (solo admin). */
 function metricsResetAll() {
-  return MetricsService_resetAll();
+  return AviatorsCode_runRpc_('metricsResetAll', function () {
+    return MetricsService_resetAll();
+  });
 }
 
 /** Solo admin · listado paginado de visitantes sin rol. */
 function adminUsersListVisitors(filters) {
-  return AdminUsers_listVisitors(filters || {});
+  return AviatorsCode_runRpc_('adminUsersListVisitors', function () {
+    return AdminUsers_listVisitors(filters || {});
+  });
 }
 
 /** Solo admin · listado paginado de usuarios con rol. */
 function adminUsersListRoles(filters) {
-  return AdminUsers_listRoles(filters || {});
+  return AviatorsCode_runRpc_('adminUsersListRoles', function () {
+    return AdminUsers_listRoles(filters || {});
+  });
 }
 
 /** Solo admin · opciones de rol para asignación. */
 function adminUsersRoleOptions() {
-  return AdminUsers_roleOptions();
+  return AviatorsCode_runRpc_('adminUsersRoleOptions', function () {
+    return AdminUsers_roleOptions();
+  });
 }
 
 /** Solo admin · convertir visitante en usuario con rol. */
 function adminUsersAssignRole(email, roleKey) {
-  return AdminUsers_assignRole(email, roleKey);
+  return AviatorsCode_runRpc_('adminUsersAssignRole', function () {
+    return AdminUsers_assignRole(email, roleKey);
+  });
 }
 
 /** Solo admin · actualizar rol de un usuario existente. */
 function adminUsersUpdateRole(email, roleKey) {
-  return AdminUsers_updateRole(email, roleKey);
+  return AviatorsCode_runRpc_('adminUsersUpdateRole', function () {
+    return AdminUsers_updateRole(email, roleKey);
+  });
 }
 
 /** Solo admin · quitar rol (vuelve a visitante en próximo acceso). */
 function adminUsersRemoveRole(email) {
-  return AdminUsers_removeRole(email);
+  return AviatorsCode_runRpc_('adminUsersRemoveRole', function () {
+    return AdminUsers_removeRole(email);
+  });
 }
 
 /** Visitante · opciones de rol solicitables. */
 function visitorAccessRequestRoleOptions() {
-  return AccessRequest_roleOptions();
+  return AviatorsCode_runRpc_('visitorAccessRequestRoleOptions', function () {
+    return AccessRequest_roleOptions();
+  });
 }
 
 /** Visitante · solicitud pendiente del usuario actual. */
 function visitorAccessRequestGetMine() {
-  return AccessRequest_getMine();
+  return AviatorsCode_runRpc_('visitorAccessRequestGetMine', function () {
+    return AccessRequest_getMine();
+  });
 }
 
 /** Visitante · enviar solicitud de acceso. */
 function visitorAccessRequestSubmit(roleKey, reason) {
-  return AccessRequest_submit(roleKey, reason);
+  return AviatorsCode_runRpc_('visitorAccessRequestSubmit', function () {
+    return AccessRequest_submit(roleKey, reason);
+  });
 }
 
 /** Solo admin · listado paginado de solicitudes de acceso. */
 function adminUsersListAccessRequests(filters) {
-  return AccessRequest_listForAdmin(filters || {});
+  return AviatorsCode_runRpc_('adminUsersListAccessRequests', function () {
+    return AccessRequest_listForAdmin(filters || {});
+  });
 }
 
 /** Solo admin · descartar solicitud de acceso. */
 function adminUsersDismissAccessRequest(requestId) {
-  return AccessRequest_dismiss(requestId);
+  return AviatorsCode_runRpc_('adminUsersDismissAccessRequest', function () {
+    return AccessRequest_dismiss(requestId);
+  });
 }
 
 /** Solo admin · catálogo de roles y matriz de permisos. */
 function adminRoleConfigGet() {
-  return AdminRoleConfig_get();
+  return AviatorsCode_runRpc_('adminRoleConfigGet', function () {
+    return AdminRoleConfig_get();
+  });
 }
 
 /** Solo admin · guardar matriz de permisos (JSON). */
 function adminRoleConfigSave(configJson) {
-  return AdminRoleConfig_save(configJson);
+  return AviatorsCode_runRpc_('adminRoleConfigSave', function () {
+    return AdminRoleConfig_save(configJson);
+  });
 }
 
 /** Solo admin · crear rol personalizado. */
 function adminRoleConfigAddRole(key, labelEs, labelEn) {
-  return AdminRoleConfig_addRole(key, labelEs, labelEn);
+  return AviatorsCode_runRpc_('adminRoleConfigAddRole', function () {
+    return AdminRoleConfig_addRole(key, labelEs, labelEn);
+  });
 }
 
 /** Solo admin · eliminar rol personalizado sin usuarios asignados. */
 function adminRoleConfigRemoveRole(key) {
-  return AdminRoleConfig_removeRole(key);
+  return AviatorsCode_runRpc_('adminRoleConfigRemoveRole', function () {
+    return AdminRoleConfig_removeRole(key);
+  });
 }
 
 /** Restablece todos los datos operativos en Supabase (solo admin). RPC legacy conserva nombre. */
 function adminResetAllSpreadsheetData() {
-  return AdminReset_resetAllSpreadsheetData();
+  return AviatorsCode_runRpc_('adminResetAllSpreadsheetData', function () {
+    return AdminReset_resetAllSpreadsheetData();
+  });
 }
 
 /** Migra datos desde planillas hacia Supabase (solo admin, one-shot). */
 function adminMigrateSpreadsheetsToSupabase() {
-  return AdminSupabaseMigration_migrateFromSheets();
+  return AviatorsCode_runRpc_('adminMigrateSpreadsheetsToSupabase', function () {
+    return AdminSupabaseMigration_migrateFromSheets();
+  });
+}
+
+/** Solo admin · estado del sync automático Salesforce (programación + última corrida). */
+function adminSalesforceAccountsGetSyncStatus() {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsGetSyncStatus', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_getSyncStatus();
+  });
+}
+
+/** Solo admin · instala trigger diario de sync Salesforce Accounts. */
+function adminSalesforceAccountsInstallDailyTrigger() {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsInstallDailyTrigger', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_installDailyTrigger();
+  });
+}
+
+/** Solo admin · sync manual del roster Salesforce (carga inicial o prueba). */
+function adminSalesforceAccountsRunSync() {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsRunSync', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_runFullSync(true);
+  });
+}
+
+/** Solo admin · actualiza prompt del agente clients en el registry. */
+function adminSalesforceAccountsRefreshClientsPrompt() {
+  return AviatorsCode_runRpc_('adminSalesforceAccountsRefreshClientsPrompt', function () {
+    AdminAuth_requireAdmin();
+    return SalesforceAccounts_refreshClientsAgentPrompt();
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1128,12 +1341,14 @@ function adminMigrateSpreadsheetsToSupabase() {
  * @return {{ok:boolean}}
  */
 function metricsTrackFeedback(eventId, rating, agentId, agentName, questionText) {
-  return MetricsService_trackFeedback_({
-    eventId: eventId,
-    rating: rating,
-    agentId: agentId,
-    agentName: agentName,
-    questionText: questionText,
+  return AviatorsCode_runRpc_('metricsTrackFeedback', function () {
+    return MetricsService_trackFeedback_({
+      eventId: eventId,
+      rating: rating,
+      agentId: agentId,
+      agentName: agentName,
+      questionText: questionText,
+    });
   });
 }
 
@@ -1149,7 +1364,9 @@ function metricsTrackFeedback(eventId, rating, agentId, agentName, questionText)
  * @return {{ok:boolean}}
  */
 function chatHistorySave(convId, title, messagesJson) {
-  return MetricsService_chatHistorySave_(convId, title, messagesJson);
+  return AviatorsCode_runRpc_('chatHistorySave', function () {
+    return MetricsService_chatHistorySave_(convId, title, messagesJson);
+  });
 }
 
 /**
@@ -1157,7 +1374,9 @@ function chatHistorySave(convId, title, messagesJson) {
  * @return {{ok:boolean,items:Array<{convId:string,title:string,tsCreated:string}>}}
  */
 function chatHistoryList() {
-  return MetricsService_chatHistoryList_();
+  return AviatorsCode_runRpc_('chatHistoryList', function () {
+    return MetricsService_chatHistoryList_();
+  });
 }
 
 /**
@@ -1166,7 +1385,9 @@ function chatHistoryList() {
  * @return {{ok:boolean,messagesJson:string}}
  */
 function chatHistoryLoad(convId) {
-  return MetricsService_chatHistoryLoad_(convId);
+  return AviatorsCode_runRpc_('chatHistoryLoad', function () {
+    return MetricsService_chatHistoryLoad_(convId);
+  });
 }
 
 /**
@@ -1175,7 +1396,9 @@ function chatHistoryLoad(convId) {
  * @return {{ok:boolean}}
  */
 function chatHistoryDelete(convId) {
-  return MetricsService_chatHistoryDelete_(convId);
+  return AviatorsCode_runRpc_('chatHistoryDelete', function () {
+    return MetricsService_chatHistoryDelete_(convId);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1187,7 +1410,9 @@ function chatHistoryDelete(convId) {
  * @return {Array<{id:string,es:string,en:string,order:number}>}
  */
 function quickPromptsGet() {
-  return MetricsService_quickPromptsGet_();
+  return AviatorsCode_runRpc_('quickPromptsGet', function () {
+    return MetricsService_quickPromptsGet_();
+  });
 }
 
 /**
@@ -1196,13 +1421,15 @@ function quickPromptsGet() {
  * @return {{ok:boolean}}
  */
 function quickPromptsSave(promptsJson) {
-  AdminAuth_requireAdmin();
-  var prompts = [];
-  try { prompts = JSON.parse(promptsJson); } catch (e) {
-    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
-  }
-  if (!Array.isArray(prompts)) {
-    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
-  }
-  return MetricsService_quickPromptsSave_(prompts);
+  return AviatorsCode_runRpc_('quickPromptsSave', function () {
+    AdminAuth_requireAdmin();
+    var prompts = [];
+    try { prompts = JSON.parse(promptsJson); } catch (e) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    if (!Array.isArray(prompts)) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    return MetricsService_quickPromptsSave_(prompts);
+  });
 }

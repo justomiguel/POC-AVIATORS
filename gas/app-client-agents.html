@@ -419,7 +419,7 @@
       strategyName: 'Chain of Thought',
       promptContext: '',
       promptInstructions: systemPrompt || '',
-      modelName: '',
+      modelName: 'gpt-5.5',
       maxTokens: 4000,
       timeout: 0,
       temperature: 0.2,
@@ -1220,7 +1220,7 @@
   bindAdminAgentDropzone();
   applyAgentsWriteAccess();
   refreshUploadLimitHint();
-  renderAdminApiCatalog('', 'Chain of Thought');
+  renderAdminApiCatalog('gpt-5.5', 'Chain of Thought');
   loadAdminApiCatalog();
   if (adminAgentProfile) {
     adminAgentProfile.addEventListener('input', function () {

@@ -267,7 +267,7 @@ function ContentCatalog_listSupabase_(filters) {
         .toLowerCase();
       if (hay.indexOf(q) < 0) continue;
     }
-    if (tag && tagsCsv.toLowerCase().indexOf(tag) < 0) continue;
+    if (tag && !ContentCatalog_rowHasTag_(tagsCsv, tag)) continue;
 
     var driveFileId = String(row.drive_file_id || '').trim();
     var globantProfile = String(row.globant_profile_name || '').trim();
@@ -312,7 +312,12 @@ function ContentCatalog_listSupabase_(filters) {
 
   var total = items.length;
   var skip = filters && typeof filters.skip === 'number' ? Math.max(0, filters.skip) : 0;
-  var limit = filters && typeof filters.limit === 'number' && filters.limit > 0 ? filters.limit : 0;
+  var limitRaw =
+    filters && typeof filters.limit === 'number' && filters.limit > 0
+      ? filters.limit
+      : 0;
+  var limit =
+    limitRaw > 0 ? Math.min(ContentCatalog_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
   var paged = items;
   var hasMore = false;
   if (limit > 0) {
@@ -323,9 +328,30 @@ function ContentCatalog_listSupabase_(filters) {
     ok: true,
     items: paged,
     total: total,
+    skip: skip,
+    limit: limit,
     hasMore: hasMore,
     controlledTags: ContentCatalog_getControlledTags(),
   };
+}
+
+/** @type {number} */
+var ContentCatalog_LIST_MAX_LIMIT_ = 100;
+
+/**
+ * @param {string} tagsCsv
+ * @param {string} tagFilter normalized lowercase, with optional leading #
+ * @return {boolean}
+ */
+function ContentCatalog_rowHasTag_(tagsCsv, tagFilter) {
+  var want = String(tagFilter || '').trim().toLowerCase();
+  if (!want) return true;
+  if (want.charAt(0) !== '#') want = '#' + want;
+  var tags = ContentCatalog_csvToTags_(tagsCsv);
+  for (var i = 0; i < tags.length; i++) {
+    if (String(tags[i] || '').toLowerCase() === want) return true;
+  }
+  return false;
 }
 
 /**
@@ -437,6 +463,7 @@ function ContentCatalog_upsert(payload) {
     updated_at: now,
   };
   if (!commonRowDb.title) throw new Error('title requerido');
+  specific = ContentExtraction_normalizeSpecific_(ctype, specific);
   var specificHeadersDb = ContentCatalog_headersByType_(ctype);
   var specificRowDb = { content_id: contentId };
   var hd;
@@ -492,25 +519,53 @@ function ContentCatalog_getControlledTags() {
  */
 function ContentCatalog_getAllTags() {
   try {
-    var dbRows = ContentCatalogStore_listAll();
-    var seenDb = {};
-    var outDb = [];
-    for (var di = 0; di < dbRows.length; di++) {
-      var partsDb = String(dbRows[di].tags_csv || '').split(',');
-      for (var dp = 0; dp < partsDb.length; dp++) {
-        var tDb = partsDb[dp].trim();
-        if (!tDb) continue;
-        if (tDb.charAt(0) !== '#') tDb = '#' + tDb;
-        var kDb = tDb.toLowerCase();
-        if (seenDb[kDb]) continue;
-        seenDb[kDb] = true;
-        outDb.push(tDb);
-      }
+    var cloud = ContentCatalog_getTagsCloud_();
+    var out = [];
+    for (var i = 0; i < cloud.length; i++) {
+      out.push(cloud[i].tag);
     }
-    return outDb.sort();
+    return out.sort();
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * Tags con conteo de contenidos (para nube de palabras).
+ * @return {{ok:boolean,tags:Array<{tag:string,count:number}>,total:number}}
+ */
+function ContentCatalog_getTagsCloud() {
+  ContentCatalog_requireAnyRole_();
+  var tags = ContentCatalog_getTagsCloud_();
+  return { ok: true, tags: tags, total: tags.length };
+}
+
+/**
+ * @return {Array<{tag:string,count:number}>}
+ */
+function ContentCatalog_getTagsCloud_() {
+  var dbRows = ContentCatalogStore_listAll();
+  var counts = {};
+  var display = {};
+  for (var di = 0; di < dbRows.length; di++) {
+    var tagList = ContentCatalog_csvToTags_(dbRows[di].tags_csv);
+    for (var ti = 0; ti < tagList.length; ti++) {
+      var t = tagList[ti];
+      var k = t.toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+      if (!display[k]) display[k] = t;
+    }
+  }
+  var out = [];
+  for (var key in counts) {
+    if (!counts.hasOwnProperty(key)) continue;
+    out.push({ tag: display[key] || key, count: counts[key] });
+  }
+  out.sort(function (a, b) {
+    if (b.count !== a.count) return b.count - a.count;
+    return String(a.tag || '').localeCompare(String(b.tag || ''));
+  });
+  return out;
 }
 
 /**

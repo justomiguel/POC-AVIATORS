@@ -60,6 +60,7 @@ function ClientsMaster_headers_() {
     'client_name',
     'normalized_name',
     'industry',
+    'sub_industry',
     'country',
     'main_contact_name',
     'main_contact_email',
@@ -88,7 +89,15 @@ function ClientsMaster_list(filters) {
     if (!apiItem.client_id) continue;
     if (q) {
       var hayDb =
-        (apiItem.client_name + ' ' + apiItem.industry + ' ' + apiItem.country).toLowerCase();
+        (
+          apiItem.client_name +
+          ' ' +
+          apiItem.industry +
+          ' ' +
+          apiItem.sub_industry +
+          ' ' +
+          apiItem.country
+        ).toLowerCase();
       if (hayDb.indexOf(q) < 0) continue;
     }
     items.push(apiItem);
@@ -219,6 +228,13 @@ function ClientsMaster_upsert(data) {
     client_name: clientName,
     normalized_name: normalized,
     industry: resolvedIndustry,
+    sub_industry: String(
+      data.sub_industry != null
+        ? data.sub_industry
+        : existingDb
+          ? existingDb.sub_industry
+          : '',
+    ).trim(),
     country: String(data.country || '').trim(),
     main_contact_name: String(data.main_contact_name || '').trim(),
     main_contact_email: String(data.main_contact_email || '').trim(),
@@ -230,6 +246,88 @@ function ClientsMaster_upsert(data) {
   };
   var savedDb = ClientsMasterStore_upsert(rowDb);
   return { ok: true, item: ClientsMasterStore_toApiItem_(savedDb) };
+}
+
+/**
+ * Rellena industria / sub-industria desde Salesforce sin pisar valores ya cargados.
+ * @param {Object|null} existing
+ * @param {Object} incoming
+ * @return {{industry:string, sub_industry:string}}
+ */
+function ClientsMaster_mergeIndustryFromSync_(existing, incoming) {
+  var sfIndustry = String(incoming.industry || '').trim();
+  var sfSubIndustry = String(incoming.sub_industry || '').trim();
+  var curIndustry = existing ? String(existing.industry || '').trim() : '';
+  var curSub = existing ? String(existing.sub_industry || '').trim() : '';
+
+  var outIndustry = curIndustry;
+  if (!outIndustry && sfIndustry) {
+    outIndustry = ClientsMaster_resolveIndustry_(sfIndustry) || sfIndustry;
+  }
+
+  var outSub = curSub;
+  if (!outSub && sfSubIndustry) {
+    outSub = sfSubIndustry;
+  }
+
+  return { industry: outIndustry, sub_industry: outSub };
+}
+
+/**
+ * Alta/actualización desde sync Salesforce (sin permisos de contribuidor).
+ * Enriquece clientes existentes: industria y sub-industria solo si estaban vacías.
+ * @param {Object} data — client_name, industry, sub_industry, main_contact_name, notes
+ * @return {{client_id:string, created:boolean, enriched:boolean}}
+ */
+function ClientsMaster_upsertFromSync_(data) {
+  if (!data || typeof data !== 'object') throw new Error('Payload inválido');
+  var clientName = String(data.client_name || '').trim();
+  if (!clientName) throw new Error('client_name requerido');
+  var normalized = ClientsMaster_normalizeName_(clientName);
+  var existing = ClientsMasterStore_getByNormalizedName(normalized);
+  var now = new Date().toISOString();
+  var isNew = !existing;
+  var clientId = existing
+    ? String(existing.client_id || '')
+    : Utilities.getUuid();
+
+  var mergedIndustry = ClientsMaster_mergeIndustryFromSync_(existing, data);
+  var sfContact = String(data.main_contact_name || '').trim();
+  var mergedContact = existing
+    ? String(existing.main_contact_name || '').trim() || sfContact
+    : sfContact;
+  var mergedNotes = existing
+    ? String(existing.notes || '').trim()
+    : String(data.notes || '').trim();
+  if (!mergedNotes && data.notes) mergedNotes = String(data.notes || '').trim();
+
+  var enriched =
+    !isNew &&
+    ((!String(existing.industry || '').trim() && !!mergedIndustry.industry) ||
+      (!String(existing.sub_industry || '').trim() && !!mergedIndustry.sub_industry) ||
+      (!String(existing.main_contact_name || '').trim() && !!mergedContact));
+
+  var rowDb = {
+    client_id: clientId,
+    client_name: clientName,
+    normalized_name: normalized,
+    industry: mergedIndustry.industry,
+    sub_industry: mergedIndustry.sub_industry,
+    country: existing ? String(existing.country || '').trim() : '',
+    main_contact_name: mergedContact,
+    main_contact_email: existing
+      ? String(existing.main_contact_email || '').trim()
+      : '',
+    logo_url: existing ? String(existing.logo_url || '').trim() : '',
+    notes: mergedNotes,
+    created_at: isNew ? now : String(existing.created_at || now),
+    created_by: isNew
+      ? 'salesforce-sync'
+      : String(existing.created_by || 'salesforce-sync'),
+    updated_at: now,
+  };
+  ClientsMasterStore_upsert(rowDb);
+  return { client_id: clientId, created: isNew, enriched: enriched };
 }
 
 /**

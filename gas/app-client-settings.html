@@ -19,6 +19,16 @@
   var embeddingsStatus = document.getElementById('settings-embeddings-status');
   var embeddingsBusy = false;
 
+  var sfSyncSection = document.getElementById('admin-sf-sync-section');
+  var sfSyncBtn = document.getElementById('admin-sf-sync-btn');
+  var sfSyncActivateAutoBtn = document.getElementById('admin-sf-sync-activate-auto-btn');
+  var sfSyncStatus = document.getElementById('settings-sf-sync-status');
+  var sfSyncScheduleVal = document.getElementById('admin-sf-sync-schedule-val');
+  var sfSyncTriggerVal = document.getElementById('admin-sf-sync-trigger-val');
+  var sfSyncLastVal = document.getElementById('admin-sf-sync-last-val');
+  var sfSyncBusy = false;
+  var sfSyncStatusLoading = false;
+
   var roleConfigSection = document.getElementById('settings-role-config-section');
   var roleConfigBoard = document.getElementById('role-config-board');
   var roleConfigPoolRead = document.getElementById('role-config-pool-read');
@@ -516,6 +526,83 @@
     embeddingsStatus.classList.toggle('dark:text-slate-400', !t);
   }
 
+  function setSfSyncStatus(text, isError) {
+    if (!sfSyncStatus) return;
+    var t = String(text || '').trim();
+    sfSyncStatus.textContent = t || '\u00a0';
+    sfSyncStatus.classList.toggle('text-red-700', !!isError && !!t);
+    sfSyncStatus.classList.toggle('dark:text-red-400', !!isError && !!t);
+    sfSyncStatus.classList.toggle('text-emerald-700', !isError && !!t);
+    sfSyncStatus.classList.toggle('dark:text-emerald-400', !isError && !!t);
+    sfSyncStatus.classList.toggle('text-slate-600', !t);
+    sfSyncStatus.classList.toggle('dark:text-slate-400', !t);
+  }
+
+  function sfSyncFormatDateTime_(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var loc = S.get('cachedI18n') && S.get('cachedI18n')._locale === 'en' ? 'en' : 'es';
+      return new Intl.DateTimeFormat(loc, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(d);
+    } catch (ignoreFmt) {
+      return String(iso).slice(0, 19);
+    }
+  }
+
+  function sfSyncRenderStatusPanel_(info) {
+    if (!info) return;
+    var hour = info.scheduleHour != null ? String(info.scheduleHour) : '6';
+    if (sfSyncScheduleVal) {
+      sfSyncScheduleVal.textContent = !info.spreadsheetConfigured
+        ? i18n('admin_sf_sync_sheet_missing')
+        : i18nFmt('admin_sf_sync_schedule_value', { hour: hour });
+    }
+    if (sfSyncTriggerVal) {
+      sfSyncTriggerVal.textContent = info.triggerInstalled
+        ? i18n('admin_sf_sync_trigger_on')
+        : i18n('admin_sf_sync_trigger_off');
+    }
+    if (sfSyncActivateAutoBtn) {
+      var showActivate =
+        !!info.spreadsheetConfigured && !info.triggerInstalled;
+      sfSyncActivateAutoBtn.classList.toggle('hidden', !showActivate);
+      sfSyncActivateAutoBtn.disabled = !showActivate || sfSyncBusy;
+    }
+    var st = info.state || {};
+    if (sfSyncLastVal) {
+      if (!st.last_sync_at) {
+        sfSyncLastVal.textContent = i18n('admin_sf_sync_last_none');
+      } else {
+        sfSyncLastVal.textContent = i18nFmt('admin_sf_sync_last_line', {
+          at: sfSyncFormatDateTime_(st.last_sync_at),
+          status: String(st.last_sync_status || '—'),
+          accounts: String(st.accounts_upserted != null ? st.accounts_upserted : '—'),
+          inactivated: String(
+            st.accounts_inactivated != null ? st.accounts_inactivated : '—',
+          ),
+        });
+      }
+    }
+  }
+
+  function sfSyncLoadStatusPanel_() {
+    if (!S.get('canSyncSalesforceAccounts') || sfSyncStatusLoading) return;
+    sfSyncStatusLoading = true;
+    google.script.run
+      .withSuccessHandler(function (info) {
+        sfSyncStatusLoading = false;
+        sfSyncRenderStatusPanel_(info);
+      })
+      .withFailureHandler(function () {
+        sfSyncStatusLoading = false;
+      })
+      .adminSalesforceAccountsGetSyncStatus();
+  }
+
   function rebuildEmbeddingsBatch_(skip, doneAcc, failedAcc, total) {
     google.script.run
       .withSuccessHandler(function (res) {
@@ -555,12 +642,14 @@
       { tabId: 'settings-tab-roles', perm: 'canManageRoleConfig' },
       { tabId: 'settings-tab-users', perm: 'canManageUsers' },
       { tabId: 'settings-tab-chat', perm: 'canManageAgents' },
+      { tabId: 'settings-tab-salesforce', perm: 'canSyncSalesforceAccounts' },
       { tabId: 'settings-tab-data', perm: 'canResetMetrics' },
     ];
     var visibleTabs = [];
     for (var ti = 0; ti < tabPermMap.length; ti++) {
       var entry = tabPermMap[ti];
-      var allowed = !!S.get(entry.perm);
+      var allowed =
+        !!S.get(entry.perm) || (entry.altPerm && !!S.get(entry.altPerm));
       var tabBtn = document.getElementById(entry.tabId);
       if (tabBtn) tabBtn.classList.toggle('hidden', !allowed);
       if (allowed) visibleTabs.push(entry);
@@ -1153,6 +1242,91 @@
     });
   }
 
+  if (sfSyncBtn) {
+    sfSyncBtn.addEventListener('click', function () {
+      if (!S.get('canSyncSalesforceAccounts') || sfSyncBusy) return;
+      sfSyncBusy = true;
+      sfSyncBtn.disabled = true;
+      if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = true;
+      setSfSyncStatus(i18n('admin_sf_sync_busy'), false);
+      A.showBlockingModal(i18n('admin_sf_sync_busy'));
+      google.script.run
+        .withSuccessHandler(function (res) {
+          A.hideBlockingModal();
+          sfSyncBusy = false;
+          sfSyncBtn.disabled = false;
+          if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
+          if (A.cache) {
+            A.cache.invalidate('contentsList');
+            A.cache.invalidate('clientsList');
+          }
+          if (res && res.skipped) {
+            setSfSyncStatus(i18n('admin_sf_sync_skipped'), false);
+          } else {
+            setSfSyncStatus(
+              i18nFmt('admin_sf_sync_done', {
+                accounts: String((res && res.accounts) || 0),
+                inactivated: String((res && res.inactivated) || 0),
+                embeddings: String((res && res.embeddings) || 0),
+              }),
+              false,
+            );
+          }
+          sfSyncLoadStatusPanel_();
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          sfSyncBusy = false;
+          sfSyncBtn.disabled = false;
+          if (sfSyncActivateAutoBtn) sfSyncActivateAutoBtn.disabled = false;
+          setSfSyncStatus((e && e.message) || i18n('admin_sf_sync_error'), true);
+        })
+        .adminSalesforceAccountsRunSync();
+    });
+  }
+
+  if (sfSyncActivateAutoBtn) {
+    sfSyncActivateAutoBtn.addEventListener('click', function () {
+      if (!S.get('canSyncSalesforceAccounts') || sfSyncBusy) return;
+      sfSyncBusy = true;
+      if (sfSyncBtn) sfSyncBtn.disabled = true;
+      sfSyncActivateAutoBtn.disabled = true;
+      setSfSyncStatus(i18n('admin_sf_sync_activate_auto_busy'), false);
+      A.showBlockingModal(i18n('admin_sf_sync_activate_auto_busy'));
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          google.script.run
+            .withSuccessHandler(function (info) {
+              sfSyncBusy = false;
+              if (sfSyncBtn) sfSyncBtn.disabled = false;
+              sfSyncRenderStatusPanel_(info);
+              var h =
+                info && info.scheduleHour != null ? String(info.scheduleHour) : '6';
+              setSfSyncStatus(i18nFmt('admin_sf_sync_activate_auto_done', { hour: h }), false);
+            })
+            .withFailureHandler(function () {
+              sfSyncBusy = false;
+              if (sfSyncBtn) sfSyncBtn.disabled = false;
+              setSfSyncStatus(i18nFmt('admin_sf_sync_activate_auto_done', { hour: '6' }), false);
+              sfSyncLoadStatusPanel_();
+            })
+            .adminSalesforceAccountsGetSyncStatus();
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          sfSyncBusy = false;
+          if (sfSyncBtn) sfSyncBtn.disabled = false;
+          sfSyncActivateAutoBtn.disabled = false;
+          setSfSyncStatus(
+            (e && e.message) || i18n('admin_sf_sync_activate_auto_error'),
+            true,
+          );
+        })
+        .adminSalesforceAccountsInstallDailyTrigger();
+    });
+  }
+
   if (resetAllBtn) {
     resetAllBtn.addEventListener('click', function () {
       if (!S.get('canResetMetrics') || resetBusy) return;
@@ -1224,11 +1398,15 @@
           usersReloadAll();
         });
       }
+      if (S.get('canSyncSalesforceAccounts')) {
+        sfSyncLoadStatusPanel_();
+      }
     },
     onShow: function () {
       initSettingsTabs();
       setResetStatus('', false);
       setEmbeddingsStatus('', false);
+      setSfSyncStatus('', false);
       if (qpStatus) qpStatus.textContent = '';
       roleConfigSetStatus('', false);
       usersSetStatus(visitorsStatus, '', false);
@@ -1241,6 +1419,9 @@
         usersLoadRoleOptions(function () {
           usersReloadAll();
         });
+      }
+      if (S.get('canSyncSalesforceAccounts')) {
+        sfSyncLoadStatusPanel_();
       }
     },
     reloadQuickPrompts: reloadQuickPrompts,

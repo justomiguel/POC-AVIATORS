@@ -21,6 +21,7 @@
   var navBtnHome = document.getElementById('nav-btn-home');
   var navPageAgents = document.getElementById('nav-page-agents');
   var navPageContents = document.getElementById('nav-page-contents');
+  var navPageTags = document.getElementById('nav-page-tags');
   var navPageClients = document.getElementById('nav-page-clients');
   var navPageMetrics = document.getElementById('nav-page-metrics');
   var navPageSettings = document.getElementById('nav-page-settings');
@@ -97,7 +98,7 @@
       pg = 'home';
     }
     if (
-      (pg === 'contents' || pg === 'clients') &&
+      (pg === 'contents' || pg === 'tags' || pg === 'clients') &&
       !S.get('canViewCatalog')
     ) {
       pg = 'home';
@@ -123,6 +124,7 @@
         showAgentsWrite ||
         showAgentsReadOnly ||
         (pg === 'contents' && id === 'page-contents') ||
+        (pg === 'tags' && id === 'page-tags') ||
         (pg === 'clients' && id === 'page-clients') ||
         (pg === 'metrics' && id === 'page-metrics') ||
         (pg === 'settings' && id === 'page-settings') ||
@@ -178,6 +180,11 @@
       A.contents.toggleSpecificSections();
       if (A.contents.applyWriteAccess) A.contents.applyWriteAccess();
       A.contents.loadList();
+    }
+    if (pg === 'tags') {
+      if (A.tags && typeof A.tags.onShow === 'function') {
+        A.tags.onShow();
+      }
     }
     if (pg === 'clients') {
       A.clients.setScreen('list');
@@ -365,9 +372,14 @@
       var canResetMetrics = !!perms.canResetMetrics;
       var canManageUsers = !!perms.canManageUsers;
       var canManageRoleConfig = !!perms.canManageRoleConfig;
+      var canSyncSalesforceAccounts = !!perms.canSyncSalesforceAccounts;
       var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
       var canViewSettings =
-        canManageAgents || canResetMetrics || canManageUsers || canManageRoleConfig;
+        canManageAgents ||
+        canResetMetrics ||
+        canManageUsers ||
+        canManageRoleConfig ||
+        canSyncSalesforceAccounts;
       S.set('canManageAgents', canManageAgents);
       S.set('canWriteContents', canWriteCatalog);
       S.set('canViewAgents', canViewAgents);
@@ -376,6 +388,7 @@
       S.set('canResetMetrics', canResetMetrics);
       S.set('canManageUsers', canManageUsers);
       S.set('canManageRoleConfig', canManageRoleConfig);
+      S.set('canSyncSalesforceAccounts', canSyncSalesforceAccounts);
       S.set('canManageUnansweredQueue', canManageUnansweredQueue);
       S.set('canViewSettings', canViewSettings);
       var adm = bootstrap.admin || {};
@@ -412,6 +425,7 @@
       }
       if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
       if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
+      if (navPageTags) navPageTags.classList.toggle('hidden', !canViewCatalog);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canViewCatalog);
       if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
       if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
@@ -508,9 +522,7 @@
         showApp(bootstrap);
       })
       .withFailureHandler(function (e) {
-        A.setLoginError(
-          e && e.message ? e.message : i18n('err_login_session'),
-        );
+        A.setLoginError(A.serverErrorMessage(e, 'err_login_session'));
       })
       .getBootstrap();
   });
@@ -525,6 +537,12 @@
   }
   if (navPageContents) {
     navPageContents.addEventListener('click', function () { setAppPage('contents'); });
+  }
+  if (navPageTags) {
+    navPageTags.addEventListener('click', function () {
+      if (A.tags && typeof A.tags.backToCloud === 'function') A.tags.backToCloud();
+      setAppPage('tags');
+    });
   }
   if (navPageClients) {
     navPageClients.addEventListener('click', function () { setAppPage('clients'); });
