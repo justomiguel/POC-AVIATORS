@@ -778,6 +778,7 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
   }
 
   if (ContentExtraction_usesClientMetadata_(contentType)) {
+    var llmClientEmpty = !String(common.client_name || '').trim();
     var clientMatch = ClientsMaster_matchFromHints_(common.client_name, fileName);
     if (clientMatch.matched) {
       if (
@@ -793,7 +794,9 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
       if (indFromClient) common.industry = indFromClient;
     } else {
       var nameToEnsure = String(clientMatch.client_name || '').trim();
-      if (nameToEnsure.length >= 2) {
+      var skipFilenameClient =
+        contentType === 'success_case' && llmClientEmpty;
+      if (!skipFilenameClient && nameToEnsure.length >= 2) {
         var ensured = ClientsMaster_ensureByName(nameToEnsure, common.industry);
         common.client_name = ensured.item.client_name;
         if (ensured.created) {
@@ -812,6 +815,17 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
       else {
         common.industry = '';
         warnings.push(UiStrings_t(locale, 'contents_warn_industry_not_in_catalog'));
+      }
+    }
+    if (contentType === 'success_case' && !String(common.client_name || '').trim()) {
+      var indForGeneric = String(common.industry || '').trim();
+      if (indForGeneric) {
+        var genericRes = ClientsMaster_ensureGenericForIndustry(indForGeneric);
+        if (genericRes && genericRes.item) {
+          common.client_name = String(genericRes.item.client_name || '').trim();
+          common.industry = String(genericRes.item.industry || indForGeneric).trim();
+          warnings.push(UiStrings_t(locale, 'contents_warn_client_generic_industry'));
+        }
       }
     }
   } else {
@@ -1480,6 +1494,62 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
     ok: true,
     file: { name: prepared.name, mimeType: prepared.mimeType },
     draft: draft,
+  };
+}
+
+/**
+ * Obtiene el PDF en Drive de un contenido existente como payload base64 para extracción.
+ *
+ * @param {string} contentId
+ * @return {{ok:boolean, contentType:string, file:{name:string,mimeType:string,dataBase64:string}}}
+ */
+function ContentExtraction_getPdfPayloadFromContentId(contentId) {
+  ContentCatalog_requireContributor_();
+  var id = String(contentId || '').trim();
+  if (!id) throw new Error('content_id requerido');
+
+  var item = ContentCatalog_get(id).item;
+  var common = item.common || {};
+  var contentType = String(common.content_type || '').trim();
+  if (!ContentCatalog_isValidType_(contentType)) throw new Error('content_type invalido');
+
+  var driveFileId = String(common.drive_file_id || '').trim();
+  if (!driveFileId) {
+    AviatorsError_throw_('ERR_CONTENT_REEXTRACT_NO_FILE', 'ContentExtraction_getPdfPayloadFromContentId', {
+      contentId: id,
+    });
+  }
+
+  var driveFile = ContentIngestion_getLiveDriveFile_(driveFileId);
+  if (!driveFile) {
+    AviatorsError_throw_('ERR_CONTENT_REEXTRACT_FILE_MISSING', 'ContentExtraction_getPdfPayloadFromContentId', {
+      contentId: id,
+      driveFileId: driveFileId,
+    });
+  }
+
+  var blob = DriveDocuments_getPdfBlobForGlobant(driveFileId);
+  var bytes = blob.getBytes();
+  if (!bytes || bytes.length === 0) throw new Error('Archivo vacio');
+  if (bytes.length > CONTENT_UPLOAD_LOCAL_MAX_BYTES) {
+    throw new Error(
+      UiStrings_fmt_('err_contents_upload_too_large', {
+        name: String(common.file_name || driveFile.getName() || 'document.pdf'),
+        max_mb: String(Math.floor(CONTENT_UPLOAD_LOCAL_MAX_BYTES / (1024 * 1024))),
+      }),
+    );
+  }
+
+  var fileName = String(common.file_name || driveFile.getName() || 'document.pdf').trim();
+  var mimeType = String(blob.getContentType() || common.mime_type || 'application/pdf').trim();
+  return {
+    ok: true,
+    contentType: contentType,
+    file: {
+      name: fileName,
+      mimeType: mimeType,
+      dataBase64: Utilities.base64Encode(bytes),
+    },
   };
 }
 

@@ -93,7 +93,7 @@ function ContentIngestion_indexBlob_(client, profileName, pdfBlob, metadata) {
  * @param {string} contentType
  * @return {Object}
  */
-function ContentIngestion_buildMetadata_(common, contentType) {
+function ContentIngestion_buildMetadata_(common, contentType, specific) {
   var meta = {
     client_name: String(common.client_name || '').trim(),
     content_type: String(contentType || '').trim(),
@@ -101,18 +101,113 @@ function ContentIngestion_buildMetadata_(common, contentType) {
     title: String(common.title || '').trim(),
     file_name: String(common.file_name || '').trim(),
   };
+  if (String(contentType || '').trim() === 'onboarding') {
+    meta.topic = ContentIngestion_resolveOnboardingTopic_(specific, null);
+  }
   console.log('[RAG-META] Building metadata: ' + JSON.stringify(meta));
   return meta;
 }
 
+/** @type {string} Carpeta raíz de todo el material de onboarding en DRIVE_ROOT_FOLDER_ID. */
+var CONTENT_INGESTION_ONBOARDING_DRIVE_ROOT_NAME = 'Onboarding';
+
+/** @type {string} Carpeta Drive cuando el onboarding no define tópico. */
+var CONTENT_INGESTION_ONBOARDING_TOPIC_FALLBACK = 'General';
+
 /**
- * Solo los casos de éxito persisten PDF en la carpeta de proyecto en Drive.
- * El resto de tipos viven en Globant RAG + Supabase (sin drive_file_*).
+ * @param {Object|null|undefined} specific
+ * @param {Object|null|undefined} existingSpecific
+ * @return {string}
+ */
+function ContentIngestion_resolveOnboardingTopic_(specific, existingSpecific) {
+  var topic = String((specific && specific.topic) || '').trim();
+  if (!topic && existingSpecific) {
+    topic = String(existingSpecific.topic || '').trim();
+  }
+  if (!topic) topic = CONTENT_INGESTION_ONBOARDING_TOPIC_FALLBACK;
+  return topic;
+}
+
+/**
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ContentIngestion_getOnboardingDriveRootFolder_() {
+  function getOrCreateChildFolder_(parent, name) {
+    var it = parent.getFoldersByName(name);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(name);
+  }
+
+  var projectRoot = DriveApp.getFolderById(AviatorsConfig_requireDriveRootFolderId_());
+  return getOrCreateChildFolder_(projectRoot, CONTENT_INGESTION_ONBOARDING_DRIVE_ROOT_NAME);
+}
+
+/**
+ * @param {string} raw
+ * @param {string} fallback
+ * @return {string}
+ */
+function ContentIngestion_safeDriveFolderName_(raw, fallback) {
+  var v = String(raw || '').trim();
+  if (!v) v = String(fallback || '').trim();
+  if (!v) v = 'General';
+  v = v
+    .replace(/[\\\/:*?"<>|#%{}~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!v) v = 'General';
+  if (v.length > 110) v = v.slice(0, 110).trim();
+  return v;
+}
+
+/**
+ * @param {string} topic
+ * @param {string} contentTitle
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ContentIngestion_getOnboardingDriveTargetFolder_(topic, contentTitle) {
+  function getOrCreateChildFolder_(parent, name) {
+    var it = parent.getFoldersByName(name);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(name);
+  }
+
+  var onboardingRoot = ContentIngestion_getOnboardingDriveRootFolder_();
+  var topicFolder = getOrCreateChildFolder_(
+    onboardingRoot,
+    ContentIngestion_safeDriveFolderName_(topic, CONTENT_INGESTION_ONBOARDING_TOPIC_FALLBACK),
+  );
+  return getOrCreateChildFolder_(
+    topicFolder,
+    ContentIngestion_safeDriveFolderName_(contentTitle, 'Sin título'),
+  );
+}
+
+/**
+ * @param {string} driveFileId
+ * @return {boolean}
+ */
+function ContentIngestion_onboardingFileUnderDriveRoot_(driveFileId) {
+  var file = ContentIngestion_getLiveDriveFile_(driveFileId);
+  if (!file) return false;
+  var rootId = String(ContentIngestion_getOnboardingDriveRootFolder_().getId() || '');
+  if (!rootId) return false;
+  var parents = file.getParents();
+  while (parents.hasNext()) {
+    if (String(parents.next().getId() || '') === rootId) return true;
+  }
+  return false;
+}
+
+/**
+ * Casos de éxito y onboarding persisten PDF en DRIVE_ROOT_FOLDER_ID.
+ * Otros tipos usan archivo en Drive del desplegador (Aviators/Catalog/…) + RAG.
  * @param {string} contentType
  * @return {boolean}
  */
 function ContentIngestion_usesProjectDriveStorage_(contentType) {
-  return String(contentType || '').trim() === 'success_case';
+  var t = String(contentType || '').trim();
+  return t === 'success_case' || t === 'onboarding';
 }
 
 /**
@@ -163,6 +258,54 @@ function ContentIngestion_storeSuccessCasePdfInDrive_(
 }
 
 /**
+ * @param {GoogleAppsScript.Base.Blob} pdfBlob
+ * @param {string} fileName
+ * @param {string} topic
+ * @param {string} contentTitle
+ * @return {{id:string,url:string,name:string}}
+ */
+function ContentIngestion_storeOnboardingPdfInDrive_(pdfBlob, fileName, topic, contentTitle) {
+  var name = String(fileName || 'content.pdf').trim() || 'content.pdf';
+  var targetFolder = ContentIngestion_getOnboardingDriveTargetFolder_(topic, contentTitle);
+  var file = targetFolder.createFile(pdfBlob.setName(name));
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || name),
+  };
+}
+
+/**
+ * Mueve un PDF de onboarding a la carpeta del tópico/título actual (mismo file id).
+ * @param {string} driveFileId
+ * @param {string} topic
+ * @param {string} contentTitle
+ * @return {{id:string,url:string,name:string}|null}
+ */
+function ContentIngestion_relocateOnboardingDriveFile_(driveFileId, topic, contentTitle) {
+  var file = ContentIngestion_getLiveDriveFile_(driveFileId);
+  if (!file) return null;
+  var targetFolder = ContentIngestion_getOnboardingDriveTargetFolder_(topic, contentTitle);
+  var parents = file.getParents();
+  if (parents.hasNext()) {
+    var parent = parents.next();
+    if (String(parent.getId() || '') === String(targetFolder.getId() || '')) {
+      return {
+        id: String(file.getId() || ''),
+        url: String(file.getUrl() || ''),
+        name: String(file.getName() || ''),
+      };
+    }
+  }
+  file.moveTo(targetFolder);
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || ''),
+  };
+}
+
+/**
  * Copia archivada en Drive del desplegador (fuera de DRIVE_ROOT_FOLDER_ID) para poder ver PDF en la app.
  * @param {GoogleAppsScript.Base.Blob} pdfBlob
  * @param {string} fileName
@@ -202,6 +345,43 @@ function ContentIngestion_trashDriveFile_(driveFileId) {
 }
 
 /**
+ * Resuelve cliente para success case: catálogo, o cliente genérico por industria si no hay cuenta.
+ * @param {Object} common
+ * @param {Object|null} existing
+ * @return {{clientName:string, clientIndustry:string}}
+ */
+function ContentIngestion_resolveSuccessCaseClient_(common, existing) {
+  var clientName = String(common.client_name || '').trim();
+  var clientIndustry = String(common.industry || '').trim();
+  if (clientName) {
+    var clientMatch = ContentExtraction_matchClient_(clientName, String(common.file_name || ''));
+    if (clientMatch.matched) {
+      clientName = clientMatch.client_name;
+      clientIndustry =
+        ClientsMaster_resolveIndustryFromCatalog_(clientMatch.industry) || clientIndustry;
+    }
+    clientIndustry = ClientsMaster_resolveIndustryFromCatalog_(clientIndustry);
+    return { clientName: clientName, clientIndustry: clientIndustry };
+  }
+  clientIndustry =
+    ClientsMaster_resolveIndustryFromCatalog_(clientIndustry) ||
+    (existing && existing.common
+      ? ClientsMaster_resolveIndustryFromCatalog_(String(existing.common.industry || '').trim())
+      : '');
+  if (!clientIndustry) {
+    return { clientName: '', clientIndustry: '' };
+  }
+  var generic = ClientsMaster_ensureGenericForIndustry(clientIndustry);
+  if (!generic || !generic.item) {
+    return { clientName: '', clientIndustry: clientIndustry };
+  }
+  return {
+    clientName: String(generic.item.client_name || '').trim(),
+    clientIndustry: String(generic.item.industry || clientIndustry).trim(),
+  };
+}
+
+/**
  * @param {string} payloadJson
  * @return {{ok:boolean,item:Object,meta:Object}}
  */
@@ -217,6 +397,14 @@ function ContentIngestion_save(payloadJson) {
     var contentType = String(common.content_type || '').trim();
     if (!ContentCatalog_isValidType_(contentType)) throw new Error('content_type invalido');
 
+    var contentId = String(common.content_id || '').trim();
+    var existing = null;
+    if (contentId) {
+      try {
+        existing = ContentCatalog_get(contentId).item;
+      } catch (ignoreMissing) {}
+    }
+
     var clientName = String(common.client_name || '').trim();
     var clientIndustry = String(common.industry || '').trim();
     if (contentType === 'onboarding') {
@@ -224,6 +412,15 @@ function ContentIngestion_save(payloadJson) {
       clientIndustry = '';
       common.client_name = '';
       common.industry = '';
+    } else if (contentType === 'success_case') {
+      var scResolved = ContentIngestion_resolveSuccessCaseClient_(common, existing);
+      clientName = scResolved.clientName;
+      clientIndustry = scResolved.clientIndustry;
+      common.client_name = clientName;
+      common.industry = clientIndustry;
+      if (clientName) {
+        ClientsMaster_ensureByName(clientName, clientIndustry);
+      }
     } else if (clientName) {
       var clientMatch = ContentExtraction_matchClient_(clientName, String(common.file_name || ''));
       if (clientMatch.matched) {
@@ -237,14 +434,6 @@ function ContentIngestion_save(payloadJson) {
       ClientsMaster_ensureByName(clientName, clientIndustry);
     }
 
-    var contentId = String(common.content_id || '').trim();
-    var existing = null;
-    if (contentId) {
-      try {
-        existing = ContentCatalog_get(contentId).item;
-      } catch (ignoreMissing) {}
-    }
-
     var hasNewFile = !!(filePayload.dataBase64 && filePayload.name);
     if (!existing && !hasNewFile) {
       throw new Error('Se requiere archivo para contenido nuevo');
@@ -255,18 +444,43 @@ function ContentIngestion_save(payloadJson) {
     var oldDriveFileId = existing ? String(existing.common.drive_file_id || '').trim() : '';
     var oldDriveFileUrl = existing ? String(existing.common.drive_file_url || '').trim() : '';
     var usesDrive = ContentIngestion_usesProjectDriveStorage_(contentType);
+    var onboardingTopic = '';
+    var onboardingTitle = '';
+    if (contentType === 'onboarding') {
+      onboardingTopic = ContentIngestion_resolveOnboardingTopic_(
+        specific,
+        existing && existing.specific ? existing.specific : null,
+      );
+      onboardingTitle =
+        String(common.title || '').trim() ||
+        (existing && existing.common ? String(existing.common.title || '').trim() : '') ||
+        '';
+    }
     if (hasNewFile) {
       var prepared = ContentExtraction_validateAndPrepareBlob_(filePayload);
       pdfBlob = prepared.blob;
       common.file_name = prepared.name;
       common.mime_type = prepared.mimeType;
       if (usesDrive) {
-        newDriveFile = ContentIngestion_storeSuccessCasePdfInDrive_(
-          pdfBlob,
-          prepared.name,
-          common.client_name || (existing && existing.common && existing.common.client_name) || '',
-          common.title || (existing && existing.common && existing.common.title) || '',
-        );
+        var contentTitle =
+          common.title || (existing && existing.common && existing.common.title) || '';
+        if (contentType === 'onboarding') {
+          newDriveFile = ContentIngestion_storeOnboardingPdfInDrive_(
+            pdfBlob,
+            prepared.name,
+            onboardingTopic,
+            onboardingTitle || contentTitle,
+          );
+        } else {
+          newDriveFile = ContentIngestion_storeSuccessCasePdfInDrive_(
+            pdfBlob,
+            prepared.name,
+            common.client_name ||
+              (existing && existing.common && existing.common.client_name) ||
+              '',
+            contentTitle,
+          );
+        }
       } else {
         if (oldDriveFileId) {
           ContentIngestion_trashDriveFile_(oldDriveFileId);
@@ -281,6 +495,28 @@ function ContentIngestion_save(payloadJson) {
       }
     }
 
+    var onboardingDriveLayoutChanged = false;
+    if (contentType === 'onboarding' && usesDrive && oldDriveFileId && existing) {
+      var prevTopicForLayout = ContentIngestion_resolveOnboardingTopic_(
+        existing.specific || {},
+        null,
+      );
+      var prevTitleForLayout = String(existing.common.title || '').trim();
+      var needsOnboardingFolder =
+        !ContentIngestion_onboardingFileUnderDriveRoot_(oldDriveFileId);
+      onboardingDriveLayoutChanged =
+        needsOnboardingFolder ||
+        onboardingTopic !== prevTopicForLayout ||
+        onboardingTitle !== prevTitleForLayout;
+      if (!hasNewFile && onboardingDriveLayoutChanged) {
+        newDriveFile = ContentIngestion_relocateOnboardingDriveFile_(
+          oldDriveFileId,
+          onboardingTopic,
+          onboardingTitle || prevTitleForLayout,
+        );
+      }
+    }
+
     var agent = ContentIngestion_findAgentByType_(contentType);
     var targetProfile = String(agent.profileName || '').trim();
     if (!targetProfile) throw new Error('profileName vacio para agente destino');
@@ -292,11 +528,15 @@ function ContentIngestion_save(payloadJson) {
       !oldDocId ||
       hasNewFile ||
       oldProfile !== targetProfile ||
-      String(existing.common.content_type || '').trim() !== contentType;
+      String(existing.common.content_type || '').trim() !== contentType ||
+      onboardingDriveLayoutChanged;
 
     var client = ContentIngestion_createRagClient_();
     var newDocId = '';
     if (needReindex) {
+      if (!pdfBlob && contentType === 'onboarding' && oldDriveFileId) {
+        pdfBlob = DriveDocuments_getPdfBlobForGlobant(oldDriveFileId);
+      }
       if (!pdfBlob) {
         throw new Error('Se requiere archivo para reindexar');
       }
@@ -305,9 +545,23 @@ function ContentIngestion_save(payloadJson) {
           client_name: common.client_name,
           industry: clientIndustry,
           title: common.title,
+          file_name: common.file_name,
         },
         contentType,
+        specific,
       );
+      var driveIdForMeta =
+        (newDriveFile && newDriveFile.id) || oldDriveFileId || '';
+      if (driveIdForMeta) {
+        docMetadata.drive_file_id = driveIdForMeta;
+      }
+      var driveUrlForMeta =
+        (newDriveFile && newDriveFile.url) ||
+        oldDriveFileUrl ||
+        '';
+      if (driveUrlForMeta) {
+        docMetadata.drive_file_url = driveUrlForMeta;
+      }
       newDocId = ContentIngestion_indexBlob_(client, targetProfile, pdfBlob, docMetadata);
     }
 
@@ -469,7 +723,7 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
 
     var contentType = String(common.content_type || '').trim();
     if (!ContentIngestion_usesProjectDriveStorage_(contentType)) {
-      throw new Error('ERR_CONTENT_REPAIR_DRIVE_SUCCESS_CASE_ONLY');
+      throw new Error('ERR_CONTENT_REPAIR_DRIVE_PROJECT_ONLY');
     }
 
     var agent = ContentIngestion_findAgentByType_(contentType);
@@ -478,7 +732,13 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
 
     var client = ContentIngestion_createRagClient_();
     var blob = DriveDocuments_getPdfBlobForGlobant(driveFileId);
-    var docMetadata = ContentIngestion_buildMetadata_(common, contentType);
+    var docMetadata = ContentIngestion_buildMetadata_(common, contentType, item.specific || {});
+    if (driveFileId) {
+      docMetadata.drive_file_id = driveFileId;
+    }
+    if (driveFile.getUrl()) {
+      docMetadata.drive_file_url = String(driveFile.getUrl() || '');
+    }
     var newDocId = ContentIngestion_indexBlob_(client, targetProfile, blob, docMetadata);
     var nextCommon = Object.assign({}, common, {
       file_name: String(driveFile.getName() || common.file_name || ''),
@@ -543,7 +803,7 @@ function ContentIngestion_reindexWithMetadata(contentId) {
     }
 
     var contentType = String(common.content_type || '').trim();
-    var docMetadata = ContentIngestion_buildMetadata_(common, contentType);
+    var docMetadata = ContentIngestion_buildMetadata_(common, contentType, item.specific || {});
 
     var client = ContentIngestion_createRagClient_();
     var result = client.reindexDocumentWithMetadata(profile, docId, docMetadata);

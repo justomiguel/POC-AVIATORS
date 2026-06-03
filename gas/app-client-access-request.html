@@ -159,10 +159,6 @@
       setStatus(statusEl, i18n('admin_users_err_role'), true);
       return;
     }
-    if (!reason) {
-      setStatus(statusEl, i18n('access_request_err_reason'), true);
-      return;
-    }
     visitorBusy = true;
     setStatus(statusEl, '', false);
     setVisitorFormDisabled(true);

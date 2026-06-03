@@ -29,9 +29,13 @@ window.Aviators = window.Aviators || {};
     contentsClientNewMode: false,
     contentsListTotal: 0,
     contentsListHasMore: false,
+    contentsListSkip: 0,
+    contentsPageSize: 25,
+    contentsListLoading: false,
     clientsItemsCache: [],
     clientsSelectedId: null,
     clientsListSkip: 0,
+    clientsPageSize: 25,
     clientsListTotal: 0,
     clientsListHasMore: false,
     contextFiles: null,
@@ -41,6 +45,8 @@ window.Aviators = window.Aviators || {};
     contentsPendingOpenId: '',
     canViewAgents: false,
     canViewCatalog: false,
+    canViewTags: false,
+    canViewClients: false,
     canViewMetrics: false,
     canViewSettings: false,
     canManageUsers: false,
@@ -623,16 +629,30 @@ window.Aviators = window.Aviators || {};
       }
     },
 
-    appendMeta: function (dl, label, value) {
-      if (!dl || !String(value || '').trim()) return;
-      var dt = document.createElement('dt');
-      dt.className = 'ficha-meta-label';
-      dt.textContent = label;
-      var dd = document.createElement('dd');
-      dd.className = 'ficha-meta-value';
-      dd.textContent = value;
-      dl.appendChild(dt);
-      dl.appendChild(dd);
+    appendMeta: function (container, label, value, iconClass) {
+      if (!container || !String(value || '').trim()) return;
+      var card = document.createElement('div');
+      card.className = 'ficha-meta-card';
+      card.setAttribute('role', 'listitem');
+      if (iconClass) {
+        var iconWrap = document.createElement('span');
+        iconWrap.className = 'ficha-meta-card-icon';
+        iconWrap.setAttribute('aria-hidden', 'true');
+        iconWrap.innerHTML = '<i class="fa-solid ' + iconClass + '"></i>';
+        card.appendChild(iconWrap);
+      }
+      var body = document.createElement('div');
+      body.className = 'min-w-0 flex-1';
+      var lbl = document.createElement('div');
+      lbl.className = 'ficha-meta-label';
+      lbl.textContent = label;
+      var val = document.createElement('div');
+      val.className = 'ficha-meta-value';
+      val.textContent = value;
+      body.appendChild(lbl);
+      body.appendChild(val);
+      card.appendChild(body);
+      container.appendChild(card);
     },
   };
 })(window.Aviators);

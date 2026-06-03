@@ -106,7 +106,9 @@ function AccessRequestMail_notifyAdmins_(requestApi, locale) {
     email: String(requestApi.email || ''),
     name: String(requestApi.display_name || requestApi.email || ''),
     role: String(requestApi.desired_role_label || requestApi.desired_role_key || ''),
-    reason: String(requestApi.reason || ''),
+    reason:
+      String(requestApi.reason || '').trim() ||
+      UiStrings_t(loc, 'access_request_reason_empty'),
     id: String(requestApi.id || ''),
     url: appUrl || UiStrings_t(loc, 'access_request_mail_url_missing'),
   };

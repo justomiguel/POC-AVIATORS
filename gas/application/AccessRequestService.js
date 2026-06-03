@@ -114,9 +114,6 @@ function AccessRequest_submit(roleKey, reason) {
     throw new Error('ERR_ACCESS_REQUEST_INVALID_ROLE');
   }
   var reasonText = String(reason || '').trim();
-  if (!reasonText) {
-    throw new Error('ERR_ACCESS_REQUEST_REASON_REQUIRED');
-  }
   if (reasonText.length > ACCESS_REQUEST_REASON_MAX) {
     throw new Error('ERR_ACCESS_REQUEST_REASON_TOO_LONG');
   }

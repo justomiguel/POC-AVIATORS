@@ -105,17 +105,10 @@ function ContentCatalog_requireContributor_() {
 }
 
 /**
- * Requiere cualquier rol activo del directorio (lectura). Solo verifica sesión y presencia en el directorio.
+ * Lectura del catálogo de contenidos (pantalla Contenidos).
  */
 function ContentCatalog_requireAnyRole_() {
-  var email = ('' + Session.getActiveUser().getEmail()).trim();
-  if (!email) {
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
-    );
-  }
-  if (AdminAuth_emailCanViewCatalog(email)) return;
-  throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  AdminAuth_requireCatalogView();
 }
 
 /**
@@ -273,7 +266,7 @@ function ContentCatalog_listSupabase_(filters) {
     var globantProfile = String(row.globant_profile_name || '').trim();
     var globantDocId = String(row.globant_document_id || '').trim();
     var driveState = 'exists';
-    if (shouldReconcile && ctype === 'success_case' && driveFileId) {
+    if (shouldReconcile && ContentIngestion_usesProjectDriveStorage_(ctype) && driveFileId) {
       driveState = ContentCatalog_getDriveFileState_(driveFileId);
     }
     if (driveState === 'missing') {
@@ -535,7 +528,7 @@ function ContentCatalog_getAllTags() {
  * @return {{ok:boolean,tags:Array<{tag:string,count:number}>,total:number}}
  */
 function ContentCatalog_getTagsCloud() {
-  ContentCatalog_requireAnyRole_();
+  AdminAuth_requireTagsView();
   var tags = ContentCatalog_getTagsCloud_();
   return { ok: true, tags: tags, total: tags.length };
 }

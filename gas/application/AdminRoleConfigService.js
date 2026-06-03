@@ -8,6 +8,8 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
   'view_agents',
   'manage_agents',
   'view_catalog',
+  'view_tags',
+  'view_clients',
   'write_catalog',
   'view_onboarding',
   'view_metrics',
@@ -22,12 +24,16 @@ var ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED = [
   'view_onboarding',
   'manage_unanswered_queue',
   'sync_salesforce',
+  'view_tags',
+  'view_clients',
 ];
 
 /** @type {Object<string, 'read'|'write'>} */
 var ROLE_CONFIG_PERMISSION_KIND = {
   view_agents: 'read',
   view_catalog: 'read',
+  view_tags: 'read',
+  view_clients: 'read',
   view_onboarding: 'read',
   view_metrics: 'read',
   manage_agents: 'write',
@@ -76,6 +82,8 @@ function RoleConfig_defaultRoles_() {
       system: true,
       permissions: {
         view_catalog: true,
+        view_tags: true,
+        view_clients: true,
         write_catalog: true,
         view_onboarding: true,
         view_metrics: true,
@@ -95,6 +103,8 @@ function RoleConfig_defaultRoles_() {
       permissions: {
         view_agents: true,
         view_catalog: true,
+        view_tags: true,
+        view_clients: true,
         view_onboarding: true,
         view_metrics: true,
       },
@@ -106,6 +116,8 @@ function RoleConfig_defaultRoles_() {
       permissions: {
         view_agents: true,
         view_catalog: true,
+        view_tags: true,
+        view_clients: true,
         view_onboarding: true,
         view_metrics: true,
       },
@@ -172,6 +184,28 @@ function RoleConfig_normalizeStored_(raw) {
         !Object.prototype.hasOwnProperty.call(permsIn, pk)
       ) {
         permsOut[pk] = true;
+      }
+    }
+    if (key !== 'admin' && !Object.prototype.hasOwnProperty.call(permsIn, 'view_tags')) {
+      if (
+        permsOut.view_tags ||
+        permsOut.view_catalog ||
+        permsIn.view_catalog ||
+        permsOut.write_catalog ||
+        permsIn.write_catalog
+      ) {
+        permsOut.view_tags = true;
+      }
+    }
+    if (key !== 'admin' && !Object.prototype.hasOwnProperty.call(permsIn, 'view_clients')) {
+      if (
+        permsOut.view_clients ||
+        permsOut.view_catalog ||
+        permsIn.view_catalog ||
+        permsOut.write_catalog ||
+        permsIn.write_catalog
+      ) {
+        permsOut.view_clients = true;
       }
     }
     byKey[key] = {

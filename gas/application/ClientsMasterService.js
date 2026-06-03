@@ -142,7 +142,7 @@ var CLIENTS_LIST_MAX_LIMIT_ = 100;
  * @return {{ok:boolean, items:Array<Object>, total:number, skip:number, limit:number, hasMore:boolean}}
  */
 function ClientsMaster_list(filters) {
-  ContentCatalog_requireAnyRole_();
+  AdminAuth_requireClientsView();
   var f = filters || {};
   var q = String(f.q || '').toLowerCase().trim();
   var industryFilter = String(f.industry || '').trim();
@@ -215,7 +215,7 @@ function ClientsMaster_list(filters) {
  * }}
  */
 function ClientsMaster_listFilterOptions() {
-  ContentCatalog_requireAnyRole_();
+  AdminAuth_requireClientsView();
   var dbRows = ClientsMasterStore_listAll();
   var industrySet = {};
   var subSet = {};
@@ -279,7 +279,7 @@ function ClientsMaster_listForCombo() {
  * @return {{ok:boolean, item:Object}}
  */
 function ClientsMaster_get(clientId) {
-  ContentCatalog_requireAnyRole_();
+  AdminAuth_requireClientsView();
   var id = String(clientId || '').trim();
   if (!id) throw new Error('client_id requerido');
   var res = ClientsMaster_list({});
@@ -925,6 +925,31 @@ function ClientsMaster_upsertFromSync_(data) {
  * @param {string=} industry
  * @return {{ok:boolean, item:Object, created:boolean}}
  */
+/** Prefijo estable del cliente placeholder por industria (success cases sin cuenta nombrada). */
+var CLIENTS_GENERIC_NAME_PREFIX = 'Cliente genérico — ';
+
+/**
+ * Nombre canónico del cliente genérico para una industria del catálogo.
+ * @param {string} industry — valor ya resuelto contra el maestro
+ * @return {string}
+ */
+function ClientsMaster_genericClientNameForIndustry_(industry) {
+  return CLIENTS_GENERIC_NAME_PREFIX + String(industry || '').trim();
+}
+
+/**
+ * Obtiene o crea el cliente genérico reutilizable para casos de éxito sin cuenta en el PDF.
+ * @param {string} industry
+ * @return {{ok:boolean, item:Object, created:boolean}|null} null si la industria no está en catálogo
+ */
+function ClientsMaster_ensureGenericForIndustry(industry) {
+  var resolvedIndustry = ClientsMaster_resolveIndustryFromCatalog_(industry || '');
+  if (!resolvedIndustry) return null;
+  var name = ClientsMaster_genericClientNameForIndustry_(resolvedIndustry);
+  var res = ClientsMaster_ensureByName(name, resolvedIndustry);
+  return { ok: true, item: res.item, created: res.created };
+}
+
 function ClientsMaster_ensureByName(name, industry) {
   var resolvedIndustry = ClientsMaster_resolveIndustryFromCatalog_(industry || '');
   var existing = ClientsMaster_findByName(name);

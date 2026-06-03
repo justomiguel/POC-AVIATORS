@@ -1,11 +1,12 @@
 ---
-description: Carpeta raíz de Drive para PDFs de casos de éxito
+description: Carpeta raíz de Drive para PDFs de casos de éxito y onboarding
 alwaysApply: true
 ---
 
-# Carpeta raíz de Drive (casos de éxito)
+# Carpeta raíz de Drive (casos de éxito y onboarding)
 
-- **Regla**: la Script Property **`DRIVE_ROOT_FOLDER_ID`** es el destino **únicamente** para PDFs de **casos de éxito** (`content_type: success_case`). Propuestas, clientes y onboarding se indexan en Globant RAG y se registran en Supabase **sin** `drive_file_id` / `drive_file_url`.
-- **Código**: subida en `ContentIngestion_storeSuccessCasePdfInDrive_()`; guard `ContentIngestion_usesProjectDriveStorage_(contentType)`.
-- **Formato canónico**: `AviatorsConfig_requireDriveRootFolderId_()` solo en flujos de success case; no hardcodear IDs de carpeta.
+- **Regla**: la Script Property **`DRIVE_ROOT_FOLDER_ID`** es el destino para PDFs de **casos de éxito** (`content_type: success_case`) y **onboarding** (`content_type: onboarding`). Propuestas y clientes se indexan en Globant RAG y pueden usar archivo en `Aviators/Catalog/{tipo}/` del Drive del desplegador (`ContentIngestion_storeCatalogPdfArchiveInDrive_`).
+- **Onboarding — carpeta grande**: todo PDF vive bajo **`Onboarding/`** en `DRIVE_ROOT_FOLDER_ID` (`ContentIngestion_getOnboardingDriveRootFolder_()`). Dentro: `{tópico}/{título}/` (`specific.topic` o `General`). Al guardar, si el archivo estaba fuera de esa raíz, se mueve adentro.
+- **Código**: casos de éxito en `ContentIngestion_storeSuccessCasePdfInDrive_()` (cliente/título en raíz del proyecto); onboarding en `ContentIngestion_storeOnboardingPdfInDrive_()`; guard `ContentIngestion_usesProjectDriveStorage_(contentType)`.
+- **Formato canónico**: `AviatorsConfig_requireDriveRootFolderId_()` en flujos de success case y onboarding; no hardcodear IDs de carpeta.
 - **Excepción**: otro destino en Drive solo si el usuario lo pide explícitamente para un flujo puntual.

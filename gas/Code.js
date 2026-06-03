@@ -61,6 +61,8 @@ function getBootstrap() {
   var perms = {
     canViewAgents: false,
     canViewCatalog: false,
+    canViewTags: false,
+    canViewClients: false,
     canManageAgents: false,
     canEditCatalog: false,
     canViewMetrics: false,
@@ -78,6 +80,8 @@ function getBootstrap() {
       perms.canEditCatalog = AdminAuth_emailCanWriteCatalog(email);
       perms.canViewAgents = AdminAuth_emailCanViewAgents(email);
       perms.canViewCatalog = AdminAuth_emailCanViewCatalog(email);
+      perms.canViewTags = AdminAuth_emailCanViewTags(email);
+      perms.canViewClients = AdminAuth_emailCanViewClients(email);
       perms.canViewMetrics = AdminAuth_emailCanViewMetrics(email);
       perms.canResetMetrics = AdminAuth_emailCanResetMetrics(email);
       perms.canManageUsers = AdminAuth_emailCanManageUsers(email);
@@ -1097,6 +1101,16 @@ function contentsRepairIndex(contentId) {
 function contentsReindexWithMetadata(contentId) {
   return AviatorsCode_runRpc_('contentsReindexWithMetadata', function () {
     return ContentIngestion_reindexWithMetadata(contentId);
+  });
+}
+
+/**
+ * Devuelve el PDF en Drive de un contenido para re-extraer metadata en el cliente.
+ * @param {string} contentId
+ */
+function contentsReextractMetadata(contentId) {
+  return AviatorsCode_runRpc_('contentsReextractMetadata', function () {
+    return ContentExtraction_getPdfPayloadFromContentId(contentId);
   });
 }
 

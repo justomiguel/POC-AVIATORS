@@ -99,10 +99,13 @@
     if (pg === 'agents' && !S.get('canViewAgents')) {
       pg = 'home';
     }
-    if (
-      (pg === 'contents' || pg === 'tags' || pg === 'clients') &&
-      !S.get('canViewCatalog')
-    ) {
+    if (pg === 'contents' && !S.get('canViewCatalog')) {
+      pg = 'home';
+    }
+    if (pg === 'tags' && !S.get('canViewTags')) {
+      pg = 'home';
+    }
+    if (pg === 'clients' && !S.get('canViewClients')) {
       pg = 'home';
     }
     if (pg === 'metrics' && !S.get('canViewMetrics')) {
@@ -415,6 +418,8 @@
       var canWriteCatalog = !!perms.canEditCatalog;
       var canViewAgents = !!perms.canViewAgents || canManageAgents;
       var canViewCatalog = !!perms.canViewCatalog || canWriteCatalog;
+      var canViewTags = !!perms.canViewTags;
+      var canViewClients = !!perms.canViewClients;
       var canViewMetrics = !!perms.canViewMetrics;
       var canResetMetrics = !!perms.canResetMetrics;
       var canManageUsers = !!perms.canManageUsers;
@@ -432,6 +437,8 @@
       S.set('canWriteContents', canWriteCatalog);
       S.set('canViewAgents', canViewAgents);
       S.set('canViewCatalog', canViewCatalog);
+      S.set('canViewTags', canViewTags);
+      S.set('canViewClients', canViewClients);
       S.set('canViewMetrics', canViewMetrics);
       S.set('canResetMetrics', canResetMetrics);
       S.set('canManageUsers', canManageUsers);
@@ -478,8 +485,8 @@
       }
       if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
       if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
-      if (navPageTags) navPageTags.classList.toggle('hidden', !canViewCatalog);
-      if (navPageClients) navPageClients.classList.toggle('hidden', !canViewCatalog);
+      if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
+      if (navPageClients) navPageClients.classList.toggle('hidden', !canViewClients);
       if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
       if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
       setAppPage('home');
@@ -488,6 +495,8 @@
         A.renderDashboard(bootstrap, {
           showAgentsCard: canManageAgents,
           canManageContents: canWriteCatalog,
+          canViewContents: canViewCatalog,
+          canViewClients: canViewClients,
         });
       }
       if (adminAgentStatus) {

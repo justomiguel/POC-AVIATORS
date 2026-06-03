@@ -1318,11 +1318,28 @@
                       <tbody id="contents-table-body"></tbody>
                     </table>
                   </div>
-                  <div class="mt-3 text-center">
-                    <button type="button" id="contents-load-more-btn" class="hidden btn btn-sm btn-outline">
-                      <i class="fa-solid fa-angles-down" aria-hidden="true"></i>
-                      <span data-i18n="contents_load_more"></span>
-                    </button>
+                  <div id="contents-pagination" class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-3">
+                      <p id="contents-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+                      <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <span data-i18n="contents_pagination_page_size"></span>
+                        <select id="contents-page-size" class="aviators-field py-1 text-sm" aria-label="Page size">
+                          <option value="15">15</option>
+                          <option value="25" selected>25</option>
+                          <option value="50">50</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="flex gap-2">
+                      <button type="button" id="contents-prev-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                        <span data-i18n="pagination_prev"></span>
+                      </button>
+                      <button type="button" id="contents-next-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                        <span data-i18n="pagination_next"></span>
+                        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </div>
                   <p id="contents-list-status" class="mt-2 text-xs text-slate-500">&nbsp;</p>
                 </section>
@@ -1341,6 +1358,10 @@
                           <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
                           <span data-i18n="contents_btn_view_file"></span>
                         </button>
+                        <button type="button" id="contents-edit-btn" class="hidden btn btn-md btn-primary inline-flex items-center gap-2 whitespace-nowrap">
+                          <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                          <span data-i18n="contents_btn_edit"></span>
+                        </button>
                         <button type="button" id="contents-back-btn" class="btn btn-md btn-outline whitespace-nowrap">
                           <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
                           <span data-i18n="contents_btn_back_list"></span>
@@ -1358,16 +1379,27 @@
                   </div>
 
                   <header id="contents-ficha-hero" class="contents-ficha-hero hidden" aria-labelledby="contents-ficha-title">
+                    <div class="ficha-hero-noise" aria-hidden="true"></div>
+                    <div class="ficha-hero-blob ficha-hero-blob--a" aria-hidden="true"></div>
+                    <div class="ficha-hero-blob ficha-hero-blob--b" aria-hidden="true"></div>
                     <div class="contents-ficha-hero-accent" aria-hidden="true"></div>
-                    <div class="contents-ficha-hero-body">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span id="contents-ficha-type-badge" class="contents-ficha-type-badge"></span>
-                        <span id="contents-ficha-file-chip" class="contents-ficha-meta-chip hidden"></span>
+                    <div class="ficha-hero-layout">
+                      <div class="contents-ficha-hero-body">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span id="contents-ficha-type-badge" class="contents-ficha-type-badge"></span>
+                          <span id="contents-ficha-file-chip" class="contents-ficha-meta-chip hidden"></span>
+                        </div>
+                        <h3 id="contents-ficha-title" class="contents-ficha-title"></h3>
+                        <p id="contents-ficha-summary" class="contents-ficha-summary hidden"></p>
+                        <div id="contents-ficha-meta" class="contents-ficha-meta" role="list"></div>
+                        <div id="contents-ficha-tags" class="contents-ficha-tags hidden"></div>
                       </div>
-                      <h3 id="contents-ficha-title" class="contents-ficha-title"></h3>
-                      <p id="contents-ficha-summary" class="contents-ficha-summary hidden"></p>
-                      <dl id="contents-ficha-meta" class="contents-ficha-meta"></dl>
-                      <div id="contents-ficha-tags" class="contents-ficha-tags hidden"></div>
+                      <div class="ficha-hero-visual" aria-hidden="true">
+                        <div class="ficha-hero-visual-ring"></div>
+                        <div class="ficha-hero-visual-icon">
+                          <i id="contents-ficha-hero-deco-icon" class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                        </div>
+                      </div>
                     </div>
                   </header>
 
@@ -1475,16 +1507,25 @@
                       <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="contents_form_lead"></p>
                     </div>
 
-                    <div id="contents-file-card" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800/50">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_current_file_label"></div>
-                          <div id="contents-current-file-name" class="truncate text-slate-600 dark:text-slate-400">&nbsp;</div>
+                    <div id="contents-file-card" class="contents-file-card rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800/50">
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0 flex items-start gap-3">
+                          <span class="contents-file-card-icon" aria-hidden="true"><i class="fa-solid fa-file-pdf"></i></span>
+                          <div class="min-w-0">
+                            <div class="font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_current_file_label"></div>
+                            <div id="contents-current-file-name" class="truncate text-slate-600 dark:text-slate-400">&nbsp;</div>
+                          </div>
                         </div>
-                        <button type="button" id="contents-replace-file-btn" class="btn btn-md btn-outline text-xs whitespace-nowrap">
-                          <i class="fa-solid fa-rotate" aria-hidden="true"></i>
-                          <span data-i18n="contents_btn_replace_file"></span>
-                        </button>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <button type="button" id="contents-reextract-btn" class="hidden btn btn-md btn-outline text-xs whitespace-nowrap">
+                            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                            <span data-i18n="contents_btn_reextract"></span>
+                          </button>
+                          <button type="button" id="contents-replace-file-btn" class="btn btn-md btn-outline text-xs whitespace-nowrap">
+                            <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                            <span data-i18n="contents_btn_replace_file"></span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1565,18 +1606,31 @@
                     </section>
 
                     <section id="contents-specific-success" class="ficha-section ficha-section--success_case hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_success_heading"></h4>
+                      <div class="ficha-section-watermark" aria-hidden="true"><i class="fa-solid fa-trophy"></i></div>
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        <span class="ficha-section-icon ficha-section-icon--success" aria-hidden="true"><i class="fa-solid fa-trophy"></i></span>
+                        <span data-i18n="contents_specific_success_heading"></span>
+                      </h4>
                       <div class="grid gap-4 md:grid-cols-1">
                         <label class="ficha-field block text-sm" for="contents-success-challenge">
-                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_challenge"></span>
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-fire ficha-field-icon ficha-field-icon--challenge" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_challenge"></span>
+                          </span>
                           <textarea id="contents-success-challenge" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                         <label class="ficha-field block text-sm" for="contents-success-solution">
-                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_solution"></span>
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-lightbulb ficha-field-icon ficha-field-icon--solution" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_solution"></span>
+                          </span>
                           <textarea id="contents-success-solution" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                         <label class="ficha-field block text-sm" for="contents-success-impact">
-                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_impact_value"></span>
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-chart-line ficha-field-icon ficha-field-icon--impact" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_impact_value"></span>
+                          </span>
                           <textarea id="contents-success-impact" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                         <label class="ficha-field block text-sm" for="contents-success-notes">
@@ -1587,18 +1641,31 @@
                     </section>
 
                     <section id="contents-specific-client" class="ficha-section ficha-section--client hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_client_heading"></h4>
+                      <div class="ficha-section-watermark" aria-hidden="true"><i class="fa-solid fa-building"></i></div>
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        <span class="ficha-section-icon ficha-section-icon--client" aria-hidden="true"><i class="fa-solid fa-building"></i></span>
+                        <span data-i18n="contents_specific_client_heading"></span>
+                      </h4>
                       <div class="grid gap-4 md:grid-cols-2">
                         <label class="block text-sm" for="contents-client-status">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_account_status"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-signal ficha-field-icon ficha-field-icon--status" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_account_status"></span>
+                          </span>
                           <input type="text" id="contents-client-status" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="block text-sm" for="contents-client-health">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_health_score"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-heart-pulse ficha-field-icon ficha-field-icon--health" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_health_score"></span>
+                          </span>
                           <input type="text" id="contents-client-health" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="block text-sm md:col-span-2" for="contents-client-projects">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_active_projects"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-diagram-project ficha-field-icon ficha-field-icon--projects" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_active_projects"></span>
+                          </span>
                           <input type="text" id="contents-client-projects" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="ficha-field block text-sm md:col-span-2" for="contents-client-notes">
@@ -1609,18 +1676,31 @@
                     </section>
 
                     <section id="contents-specific-onboarding" class="ficha-section ficha-section--onboarding hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_onboarding_heading"></h4>
+                      <div class="ficha-section-watermark" aria-hidden="true"><i class="fa-solid fa-graduation-cap"></i></div>
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        <span class="ficha-section-icon ficha-section-icon--onboarding" aria-hidden="true"><i class="fa-solid fa-graduation-cap"></i></span>
+                        <span data-i18n="contents_specific_onboarding_heading"></span>
+                      </h4>
                       <div class="grid gap-4 md:grid-cols-2">
                         <label class="block text-sm" for="contents-onboarding-topic">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_topic"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-book-open ficha-field-icon ficha-field-icon--topic" aria-hidden="true"></i>
+                            <span data-i18n="contents_onboarding_topic"></span>
+                          </span>
                           <input type="text" id="contents-onboarding-topic" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="block text-sm" for="contents-onboarding-category">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_category"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-tags ficha-field-icon ficha-field-icon--category" aria-hidden="true"></i>
+                            <span data-i18n="contents_onboarding_category"></span>
+                          </span>
                           <input type="text" id="contents-onboarding-category" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="block text-sm md:col-span-2" for="contents-onboarding-audience">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_audience"></span>
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-users ficha-field-icon ficha-field-icon--audience" aria-hidden="true"></i>
+                            <span data-i18n="contents_onboarding_audience"></span>
+                          </span>
                           <input type="text" id="contents-onboarding-audience" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="ficha-field block text-sm md:col-span-2" for="contents-onboarding-notes">
@@ -1861,7 +1941,17 @@
                 </div>
 
                 <div id="clients-pagination" class="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <p id="clients-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status"></p>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <p id="clients-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <span data-i18n="contents_pagination_page_size"></span>
+                      <select id="clients-page-size" class="aviators-field py-1 text-sm" aria-label="Page size">
+                        <option value="15">15</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                      </select>
+                    </label>
+                  </div>
                   <div class="flex gap-2">
                     <button type="button" id="clients-prev-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
                       <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -1882,10 +1972,16 @@
                     <h3 id="clients-editor-title" class="font-semibold text-slate-900 dark:text-slate-100"></h3>
                     <p id="clients-editor-subtitle" class="text-xs text-slate-500 dark:text-slate-400"></p>
                   </div>
-                  <button type="button" id="clients-back-btn" class="btn btn-md btn-outline shrink-0">
-                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    <span data-i18n="clients_btn_back_list"></span>
-                  </button>
+                  <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <button type="button" id="clients-edit-btn" class="hidden btn btn-md btn-primary inline-flex items-center gap-2 whitespace-nowrap">
+                      <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                      <span data-i18n="clients_btn_edit"></span>
+                    </button>
+                    <button type="button" id="clients-back-btn" class="btn btn-md btn-outline shrink-0">
+                      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                      <span data-i18n="clients_btn_back_list"></span>
+                    </button>
+                  </div>
                 </div>
 
                 <div id="clients-editor-readonly-banner" class="hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="status">
@@ -1896,16 +1992,30 @@
                 </div>
 
                 <header id="clients-ficha-hero" class="clients-ficha-hero hidden" aria-labelledby="clients-ficha-display-name">
+                  <div class="ficha-hero-noise" aria-hidden="true"></div>
+                  <div class="ficha-hero-blob ficha-hero-blob--a" aria-hidden="true"></div>
+                  <div class="ficha-hero-blob ficha-hero-blob--b" aria-hidden="true"></div>
                   <div class="clients-ficha-hero-accent" aria-hidden="true"></div>
-                  <div class="clients-ficha-hero-body">
-                    <div class="flex flex-wrap items-start gap-4">
-                      <div id="clients-ficha-logo-wrap" class="clients-ficha-logo hidden h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-900">
-                        <img id="clients-ficha-logo" src="" alt="" class="h-full w-full object-contain" />
+                  <div class="ficha-hero-layout ficha-hero-layout--client">
+                    <div class="clients-ficha-hero-body">
+                      <div class="flex flex-wrap items-start gap-4">
+                        <div id="clients-ficha-logo-wrap" class="clients-ficha-logo hidden shrink-0 overflow-hidden rounded-2xl border-2 border-white/50 bg-white p-1.5 shadow-xl ring-4 ring-white/25 dark:border-amber-900/50 dark:bg-slate-900/90">
+                          <img id="clients-ficha-logo" src="" alt="" class="h-20 w-20 object-contain" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <span class="clients-ficha-type-badge">
+                            <i class="fa-solid fa-building" aria-hidden="true"></i>
+                            <span data-i18n="page_clients_title"></span>
+                          </span>
+                          <h3 id="clients-ficha-display-name" class="clients-ficha-title"></h3>
+                          <div id="clients-ficha-meta" class="clients-ficha-meta" role="list"></div>
+                        </div>
                       </div>
-                      <div class="min-w-0 flex-1">
-                        <span class="clients-ficha-type-badge" data-i18n="page_clients_title"></span>
-                        <h3 id="clients-ficha-display-name" class="clients-ficha-title"></h3>
-                        <dl id="clients-ficha-meta" class="clients-ficha-meta"></dl>
+                    </div>
+                    <div class="ficha-hero-visual" aria-hidden="true">
+                      <div class="ficha-hero-visual-ring"></div>
+                      <div class="ficha-hero-visual-icon">
+                        <i class="fa-solid fa-building" aria-hidden="true"></i>
                       </div>
                     </div>
                   </div>
@@ -1970,7 +2080,10 @@
                   </label>
                 </div>
                 <label id="clients-field-notes-wrap" class="ficha-field block text-sm" for="clients-notes">
-                  <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_notes"></span>
+                  <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                    <i class="fa-solid fa-note-sticky ficha-field-icon ficha-field-icon--notes" aria-hidden="true"></i>
+                    <span data-i18n="clients_lbl_notes"></span>
+                  </span>
                   <textarea id="clients-notes" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                 </label>
                 </div>
@@ -2973,7 +3086,6 @@
                       rows="5"
                       maxlength="2000"
                       data-i18n-placeholder="access_request_reason_ph"
-                      required
                     ></textarea>
                   </div>
                   <div id="access-request-loader" class="settings-inline-loader hidden" role="status" aria-live="polite">

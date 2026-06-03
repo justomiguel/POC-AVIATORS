@@ -847,7 +847,7 @@
   function homeChatResolveRefActions_(ref) {
     if (ref && ref.actions) {
       var merged = ref.actions;
-      if (!merged.clientMaster && ref.clientName && S.get('canViewCatalog')) {
+      if (!merged.clientMaster && ref.clientName && S.get('canViewClients')) {
         merged = Object.assign({}, merged, {
           clientMaster: {
             available: true,

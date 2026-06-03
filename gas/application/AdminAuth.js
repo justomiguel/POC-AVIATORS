@@ -98,6 +98,45 @@ function AdminAuth_emailCanViewCatalog(email) {
  * @param {string} email
  * @return {boolean}
  */
+function AdminAuth_emailCanViewTags(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return (
+    AdminAuth_roleHasPermission_(k, 'view_tags') ||
+    AdminAuth_roleHasPermission_(k, 'view_catalog') ||
+    AdminAuth_roleHasPermission_(k, 'write_catalog')
+  );
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewClients(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return (
+    AdminAuth_roleHasPermission_(k, 'view_clients') ||
+    AdminAuth_roleHasPermission_(k, 'view_catalog') ||
+    AdminAuth_roleHasPermission_(k, 'write_catalog')
+  );
+}
+
+/**
+ * Combo de clientes en formulario de contenidos (lectura de nombres).
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanUseClientsPicker_(email) {
+  return (
+    AdminAuth_emailCanViewClients(email) || AdminAuth_emailCanWriteCatalog(email)
+  );
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
 function AdminAuth_emailCanWriteCatalog(email) {
   var k = AdminAuth_roleKeyForEmail_(email);
   if (!k) return false;
@@ -168,6 +207,42 @@ function AdminAuth_requireOnboardingView() {
   var email = Session.getActiveUser().getEmail();
   if (!AdminAuth_emailCanViewOnboarding(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_onboarding_forbidden'));
+  }
+}
+
+function AdminAuth_requireCatalogView() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
+    );
+  }
+  if (!AdminAuth_emailCanViewCatalog(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_catalog_forbidden'));
+  }
+}
+
+function AdminAuth_requireTagsView() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
+    );
+  }
+  if (!AdminAuth_emailCanViewTags(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_tags_forbidden'));
+  }
+}
+
+function AdminAuth_requireClientsView() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
+    );
+  }
+  if (!AdminAuth_emailCanViewClients(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_clients_forbidden'));
   }
 }
 

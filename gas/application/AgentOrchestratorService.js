@@ -1230,7 +1230,7 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
       url = driveFileUrl;
     } else if (driveFileId) {
       url = ChatReferences_driveOpenUrl_(driveFileId, '');
-    } else if (cType === 'success_case') {
+    } else if (cType === 'success_case' || cType === 'onboarding') {
       url = AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
     }
     scored.push({

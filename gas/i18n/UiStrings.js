@@ -131,8 +131,10 @@ var UI_STRINGS = {
     contents_dropzone_aria: 'Zona para soltar PDFs o elegir archivos',
     err_contents_upload_too_large:
       'El archivo «{name}» supera el tamaño máximo permitido ({max_mb} MB).',
+    err_contents_repair_drive_project_only:
+      'Reparar desde Drive solo aplica a casos de éxito u onboarding con PDF en la carpeta del proyecto.',
     err_contents_repair_drive_success_only:
-      'Reparar desde Drive solo aplica a casos de éxito con PDF en la carpeta del proyecto.',
+      'Reparar desde Drive solo aplica a casos de éxito u onboarding con PDF en la carpeta del proyecto.',
     contents_current_file_label: 'Archivo procesado',
     contents_btn_replace_file: 'Reemplazar',
     contents_list_heading: 'Lista de contenidos',
@@ -160,6 +162,7 @@ var UI_STRINGS = {
     contents_rag_status_pending: 'Pendiente',
     contents_rag_status_missing: 'Sin documento',
     contents_btn_edit: 'Editar',
+    contents_row_open_aria: 'Abrir {title} en vista de detalle',
     contents_list_empty: 'No hay contenidos cargados todavía.',
     contents_list_count: '{n} contenido(s).',
     contents_editor_heading: 'Editor de contenido',
@@ -263,6 +266,8 @@ var UI_STRINGS = {
     contents_warn_client_from_filename: 'Cliente inferido del nombre del archivo.',
     contents_warn_client_created:
       'Cliente nuevo creado en el maestro (no había coincidencia cercana en el catálogo).',
+    contents_warn_client_generic_industry:
+      'Sin cuenta en el documento: asignado al cliente genérico de la industria detectada.',
     contents_warn_tags_enriched:
       'Tags ampliados con temas detectados en el documento (mejor para la nube de tags).',
     contents_warn_challenge_from_summary:
@@ -300,9 +305,19 @@ var UI_STRINGS = {
       'El archivo ya no existe en Drive: se limpió el índice y se quitó la fila.',
     contents_repair_failed: 'No se pudo reparar el índice.',
     contents_btn_reindex_metadata: 'Actualizar metadata',
+    contents_btn_reextract: 'Re-extraer metadata',
     contents_busy_reindexing_metadata: 'Actualizando metadata en RAG…',
+    contents_busy_reextracting: 'Releyendo PDF y extrayendo metadata con IA…',
     contents_reindex_metadata_done: 'Metadata actualizada.',
+    contents_reextract_done: 'Metadata extraída de nuevo. Revisá los campos y guardá.',
     contents_reindex_metadata_failed: 'No se pudo actualizar la metadata.',
+    contents_confirm_reextract:
+      '¿Volver a analizar el PDF con IA? Se sobrescribirán los campos del formulario. No se guarda hasta pulsar Guardar.',
+    contents_err_reextract_no_file: 'No hay PDF en Drive para re-analizar.',
+    err_contents_reextract_no_file:
+      'Este contenido no tiene un PDF asociado en Drive para re-analizar.',
+    err_contents_reextract_file_missing:
+      'El PDF ya no existe en Drive. Reparar índice o subí un archivo nuevo.',
     contents_tooltip_edit: 'Editar',
     contents_tooltip_view: 'Abrir archivo',
     contents_tooltip_repair: 'Reindexar desde Drive',
@@ -332,11 +347,12 @@ var UI_STRINGS = {
       'Completá el formulario para que un administrador de Aviators reciba tu pedido. Te avisaremos cuando se asigne un rol.',
     access_request_form_heading: 'Tu solicitud',
     access_request_form_lead:
-      'Elegí el rol que necesitás y contanos brevemente para qué lo vas a usar. Solo podés tener una solicitud pendiente a la vez.',
+      'Elegí el rol que necesitás. El motivo es opcional. Solo podés tener una solicitud pendiente a la vez.',
     access_request_role_label: 'Rol deseado',
     access_request_role_placeholder: 'Seleccioná un rol…',
-    access_request_reason_label: 'Motivo',
+    access_request_reason_label: 'Motivo (opcional)',
     access_request_reason_ph: 'Ej.: necesito cargar propuestas para el equipo de presales…',
+    access_request_reason_empty: '(sin indicar)',
     access_request_submit_btn: 'Enviar solicitud',
     access_request_busy_submit: 'Enviando solicitud…',
     access_request_submit_done: 'Solicitud enviada. Un administrador la revisará pronto.',
@@ -438,7 +454,7 @@ var UI_STRINGS = {
     label_em_dash: '—',
     err_generic: 'Error.',
     err_drive_root_not_configured:
-      'Falta configurar DRIVE_ROOT_FOLDER_ID en Propiedades del script de Apps Script (carpeta raíz de Drive para PDFs de casos de éxito).',
+      'Falta configurar DRIVE_ROOT_FOLDER_ID en Propiedades del script de Apps Script (carpeta raíz de Drive para PDFs de casos de éxito y onboarding).',
     err_supabase_not_configured:
       'Falta configurar Supabase (SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Propiedades del script).',
     err_salesforce_sheet_not_configured:
@@ -1048,6 +1064,8 @@ var UI_STRINGS = {
     clients_btn_new: 'Nuevo cliente',
     clients_editor_title_view: 'Ver cliente',
     clients_editor_subtitle_view: 'Vista de solo lectura: podés revisar los datos del cliente pero no modificarlos.',
+    clients_btn_edit: 'Editar',
+    clients_row_open_aria: 'Abrir {name} en vista de detalle',
     clients_editor_readonly_banner: 'Modo solo lectura. No tenés permiso para editar este cliente.',
     clients_tooltip_view_detail: 'Ver detalle',
     clients_tooltip_edit: 'Editar',
@@ -1112,6 +1130,7 @@ var UI_STRINGS = {
     contents_client_combo_placeholder: 'Seleccionar cliente…',
     contents_load_more: 'Cargar más',
     contents_showing_of: 'Mostrando {shown} de {total}.',
+    contents_pagination_page_size: 'Por página',
     page_metrics_title: 'Métricas',
     page_metrics_lead:
       'Seguimiento operativo del uso del chat, no respondidas y desempeño por agente, cliente e industria.',
@@ -1186,11 +1205,18 @@ var UI_STRINGS = {
     role_perm_view_agents_desc: 'Acceso de lectura a la pantalla Agentes.',
     role_perm_manage_agents: 'Administrar Agentes',
     role_perm_manage_agents_desc: 'Crear, editar, sincronizar y borrar agentes.',
-    role_perm_view_catalog: 'Ver Contenidos y Clientes',
+    role_perm_view_catalog: 'Ver Contenidos',
     role_perm_view_catalog_desc:
-      'Ver listado y abrir el detalle de cada contenido (campos en solo lectura). Incluye cartera de clientes en lectura.',
+      'Ver listado y abrir el detalle de cada contenido (campos en solo lectura).',
+    role_perm_view_tags: 'Ver Tags',
+    role_perm_view_tags_desc:
+      'Acceso a la pantalla Tags: nube de etiquetas y contenidos asociados.',
+    role_perm_view_clients: 'Ver Clientes',
+    role_perm_view_clients_desc:
+      'Ver listado y ficha de clientes en solo lectura (cartera / maestro).',
     role_perm_write_catalog: 'Editar Contenidos y Clientes',
-    role_perm_write_catalog_desc: 'Alta, edición y borrado en catálogo y clientes.',
+    role_perm_write_catalog_desc:
+      'Alta, edición y borrado de contenidos y de la cartera de clientes.',
     role_perm_view_metrics: 'Ver Métricas',
     role_perm_view_metrics_desc: 'Acceso a la pantalla de métricas.',
     role_perm_reset_metrics: 'Restablecer datos',
@@ -1207,6 +1233,9 @@ var UI_STRINGS = {
     role_perm_sync_salesforce_desc:
       'Ejecutar sync del roster Airlines Accounts y ver la pestaña Salesforce en Configuración.',
     err_onboarding_forbidden: 'No tenés permiso para usar el agente de onboarding.',
+    err_catalog_forbidden: 'No tenés permiso para ver Contenidos.',
+    err_tags_forbidden: 'No tenés permiso para ver Tags.',
+    err_clients_forbidden: 'No tenés permiso para ver Clientes.',
     admin_users_sec_heading: 'Visitantes y usuarios',
     admin_users_sec_lead:
       'Los visitantes son cuentas que entraron sin fila en la tabla de roles. Convertilos asignándoles un rol; quedarán registrados como usuarios con acceso según ese rol.',
@@ -1590,8 +1619,10 @@ var UI_STRINGS = {
     contents_dropzone_title: 'Drop a PDF or pick one',
     err_contents_upload_too_large:
       'File «{name}» exceeds the maximum allowed size ({max_mb} MB).',
+    err_contents_repair_drive_project_only:
+      'Repair from Drive only applies to success cases or onboarding with a PDF in the project folder.',
     err_contents_repair_drive_success_only:
-      'Repair from Drive only applies to success cases with a PDF in the project folder.',
+      'Repair from Drive only applies to success cases or onboarding with a PDF in the project folder.',
     contents_current_file_label: 'Processed file',
     contents_btn_replace_file: 'Replace',
     contents_list_heading: 'Content list',
@@ -1619,6 +1650,7 @@ var UI_STRINGS = {
     contents_rag_status_pending: 'Pending',
     contents_rag_status_missing: 'No document',
     contents_btn_edit: 'Edit',
+    contents_row_open_aria: 'Open {title} in detail view',
     contents_list_empty: 'No content items yet.',
     contents_list_count: '{n} item(s).',
     contents_editor_heading: 'Content editor',
@@ -1722,6 +1754,8 @@ var UI_STRINGS = {
     contents_warn_client_from_filename: 'Client inferred from file name.',
     contents_warn_client_created:
       'New client added to the master list (no close match in the catalog).',
+    contents_warn_client_generic_industry:
+      'No account named in the document: assigned to the generic client for the detected industry.',
     contents_warn_tags_enriched:
       'Tags supplemented from themes detected in the document (better for the tag cloud).',
     contents_warn_challenge_from_summary:
@@ -1759,9 +1793,19 @@ var UI_STRINGS = {
       'The file no longer exists in Drive: the index was cleaned and the row was removed.',
     contents_repair_failed: 'Could not repair the index.',
     contents_btn_reindex_metadata: 'Update metadata',
+    contents_btn_reextract: 'Re-extract metadata',
     contents_busy_reindexing_metadata: 'Updating metadata in RAG…',
+    contents_busy_reextracting: 'Re-reading PDF and extracting metadata with AI…',
     contents_reindex_metadata_done: 'Metadata updated.',
+    contents_reextract_done: 'Metadata re-extracted. Review the fields and save.',
     contents_reindex_metadata_failed: 'Could not update metadata.',
+    contents_confirm_reextract:
+      'Re-analyze the PDF with AI? Form fields will be overwritten. Nothing is saved until you click Save.',
+    contents_err_reextract_no_file: 'No PDF in Drive to re-analyze.',
+    err_contents_reextract_no_file:
+      'This content has no PDF in Drive to re-analyze.',
+    err_contents_reextract_file_missing:
+      'The PDF no longer exists in Drive. Repair the index or upload a new file.',
     contents_tooltip_edit: 'Edit',
     contents_tooltip_view: 'Open file',
     contents_tooltip_repair: 'Re-index from Drive',
@@ -1790,11 +1834,12 @@ var UI_STRINGS = {
       'Fill in the form so an Aviators administrator receives your request. We will notify you when a role is assigned.',
     access_request_form_heading: 'Your request',
     access_request_form_lead:
-      'Choose the role you need and briefly explain why. You can only have one pending request at a time.',
+      'Choose the role you need. The reason is optional. You can only have one pending request at a time.',
     access_request_role_label: 'Desired role',
     access_request_role_placeholder: 'Select a role…',
-    access_request_reason_label: 'Reason',
+    access_request_reason_label: 'Reason (optional)',
     access_request_reason_ph: 'E.g. I need to upload proposals for the presales team…',
+    access_request_reason_empty: '(not provided)',
     access_request_submit_btn: 'Submit request',
     access_request_busy_submit: 'Submitting request…',
     access_request_submit_done: 'Request submitted. An administrator will review it soon.',
@@ -1896,7 +1941,7 @@ var UI_STRINGS = {
     label_em_dash: '—',
     err_generic: 'Error.',
     err_drive_root_not_configured:
-      'Set DRIVE_ROOT_FOLDER_ID in Apps Script project properties (Drive root folder for success case PDFs).',
+      'Set DRIVE_ROOT_FOLDER_ID in Apps Script project properties (Drive root folder for success case and onboarding PDFs).',
     err_supabase_not_configured:
       'Supabase is not configured (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Script Properties).',
     err_salesforce_sheet_not_configured:
@@ -2497,6 +2542,8 @@ var UI_STRINGS = {
     clients_btn_new: 'New client',
     clients_editor_title_view: 'View client',
     clients_editor_subtitle_view: 'Read-only view: you can review client data but cannot change it.',
+    clients_btn_edit: 'Edit',
+    clients_row_open_aria: 'Open {name} in detail view',
     clients_editor_readonly_banner: 'Read-only mode. You do not have permission to edit this client.',
     clients_tooltip_view_detail: 'View details',
     clients_tooltip_edit: 'Edit',
@@ -2561,6 +2608,7 @@ var UI_STRINGS = {
     contents_client_combo_placeholder: 'Select client…',
     contents_load_more: 'Load more',
     contents_showing_of: 'Showing {shown} of {total}.',
+    contents_pagination_page_size: 'Per page',
     page_metrics_title: 'Metrics',
     page_metrics_lead:
       'Operational dashboard for chat usage, unanswered questions, and performance by agent, client and industry.',
@@ -2635,11 +2683,18 @@ var UI_STRINGS = {
     role_perm_view_agents_desc: 'Read-only access to the Agents screen.',
     role_perm_manage_agents: 'Manage Agents',
     role_perm_manage_agents_desc: 'Create, edit, sync, and delete agents.',
-    role_perm_view_catalog: 'View Contents and Clients',
+    role_perm_view_catalog: 'View Contents',
     role_perm_view_catalog_desc:
-      'Browse the catalog and open each item’s detail (read-only fields). Includes read-only client portfolio.',
+      'Browse the catalog and open each item’s detail (read-only fields).',
+    role_perm_view_tags: 'View Tags',
+    role_perm_view_tags_desc:
+      'Access the Tags screen: tag cloud and linked content.',
+    role_perm_view_clients: 'View Clients',
+    role_perm_view_clients_desc:
+      'View the client list and read-only client records.',
     role_perm_write_catalog: 'Edit Contents and Clients',
-    role_perm_write_catalog_desc: 'Create, edit, and delete in catalog and clients.',
+    role_perm_write_catalog_desc:
+      'Create, edit, and delete content and the client roster.',
     role_perm_view_metrics: 'View Metrics',
     role_perm_view_metrics_desc: 'Access to the metrics screen.',
     role_perm_reset_metrics: 'Reset data',
@@ -2656,6 +2711,9 @@ var UI_STRINGS = {
     role_perm_sync_salesforce_desc:
       'Run Airlines Accounts roster sync and open the Salesforce tab in Settings.',
     err_onboarding_forbidden: 'You do not have permission to use the onboarding agent.',
+    err_catalog_forbidden: 'You do not have permission to view Contents.',
+    err_tags_forbidden: 'You do not have permission to view Tags.',
+    err_clients_forbidden: 'You do not have permission to view Clients.',
     admin_users_sec_heading: 'Visitors and users',
     admin_users_sec_lead:
       'Visitors are accounts that signed in without a row in the roles table. Convert them by assigning a role; they become users with access based on that role.',

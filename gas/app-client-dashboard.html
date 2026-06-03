@@ -181,15 +181,16 @@
 
   function applyDashboardMetrics(res) {
     var showAgents = _dashOpts.showAgentsCard;
-    var can = _dashOpts.canManageContents;
+    var canContents = _dashOpts.canViewContents;
+    var canClients = _dashOpts.canViewClients;
 
     if (showAgents && res && res.agents && _agentsCountEl) {
       _agentsCountEl.textContent = String(res.agents.total);
     }
-    if (can && res && res.contents && _contentsCountEl) {
+    if (canContents && res && res.contents && _contentsCountEl) {
       _contentsCountEl.textContent = String(res.contents.total);
     }
-    if (can && res && res.clients && _clientsCountEl) {
+    if (canClients && res && res.clients && _clientsCountEl) {
       _clientsCountEl.textContent = String(res.clients.total);
     }
 
@@ -201,7 +202,7 @@
       setDetailVisible(_agentsDetailEl, '', '');
     }
 
-    if (can && res && res.contents) {
+    if (canContents && res && res.contents) {
       var cl = buildContentsLine(res.contents);
       if (cl.empty) setDetailVisible(_contentsDetailEl, i18n('dash_detail_empty'), '');
       else setDetailVisible(_contentsDetailEl, cl.display, cl.full);
@@ -209,7 +210,7 @@
       setDetailVisible(_contentsDetailEl, '', '');
     }
 
-    if (can && res && res.clients) {
+    if (canClients && res && res.clients) {
       var zl = buildClientsLine(res.clients);
       if (zl.empty) setDetailVisible(_clientsDetailEl, i18n('dash_detail_empty'), '');
       else setDetailVisible(_clientsDetailEl, zl.display, zl.full);
@@ -244,18 +245,21 @@
   function renderDashboard(bootstrap, opts) {
     if (!_metricsEl && !_orchestratorHealthEl) return;
     var showAgentsCard = !!(opts && opts.showAgentsCard);
-    var canManage = !!(opts && opts.canManageContents);
-    _dashOpts = { showAgentsCard: showAgentsCard, canManageContents: canManage };
+    var canViewContents = !!(opts && opts.canViewContents);
+    var canViewClients = !!(opts && opts.canViewClients);
+    _dashOpts = {
+      showAgentsCard: showAgentsCard,
+      canViewContents: canViewContents,
+      canViewClients: canViewClients,
+    };
 
     if (_cardAgents) _cardAgents.classList.toggle('hidden', !showAgentsCard);
-    if (_cardContents) _cardContents.classList.toggle('hidden', !canManage);
-    if (_cardClients) _cardClients.classList.toggle('hidden', !canManage);
+    if (_cardContents) _cardContents.classList.toggle('hidden', !canViewContents);
+    if (_cardClients) _cardClients.classList.toggle('hidden', !canViewClients);
 
     if (showAgentsCard) updateAgentsCount();
-    if (canManage) {
-      updateContentsCount();
-      updateClientsCount();
-    }
+    if (canViewContents) updateContentsCount();
+    if (canViewClients) updateClientsCount();
     loadDashboardMetrics();
   }
 
