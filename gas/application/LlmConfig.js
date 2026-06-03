@@ -13,6 +13,8 @@
  * `appsscript.json` → `urlFetchWhitelist`), **GLOBANT_API_MODE**, GLOBANT_RAG_PROFILE_NAME,
  * GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD, GLOBANT_RAG_EXECUTE_MAX_RETRIES,
  * GLOBANT_RAG_SKIP_AUTO_PROFILE. Opcional Gemini: GEMINI_MODEL.
+ * GLOBANT_CHAT_MODEL — modelo para /v1/chat/completions (roster, catálogo, extracción PDF, doc. efímero);
+ *   ej. vertex_ai/gemini-2.5-flash u openai/gpt-5.5 (Chat API directo, ver docs Globant).
  *
  * **Admin · corpus desde Drive** — perfil único cargado desde **carpetas** + **archivos** seleccionados:
  * - **ADMIN_EMAILS** — emails admin (coma). Notificaciones de solicitudes de acceso;
@@ -56,6 +58,9 @@ var LLM_PROP = Object.freeze({
   ADMIN_SYNC_MAX_FILES: 'ADMIN_SYNC_MAX_FILES',
 
   GLOBANT_EMBEDDING_MODEL: 'GLOBANT_EMBEDDING_MODEL',
+  GLOBANT_CHAT_MODEL: 'GLOBANT_CHAT_MODEL',
+  /** Entero 1–20: tope MB de PDF embebido (RPC base64). Por defecto 12 si no se define. */
+  CHAT_PDF_EMBED_MAX_MB: 'CHAT_PDF_EMBED_MAX_MB',
 });
 
 var LLM_DEFAULTS = Object.freeze({
@@ -64,11 +69,14 @@ var LLM_DEFAULTS = Object.freeze({
   MAX_DOC_CHARS: 18000,
   GLOBANT_EXECUTE_MAX_RETRIES: 3,
   ADMIN_SYNC_MAX_FILES_DEFAULT: 25,
+  /** /v1/chat/completions: evitar gemini-2.0-flash (retirado / sin acceso en varios proyectos Vertex). */
+  GLOBANT_CHAT_MODEL: 'vertex_ai/gemini-2.5-flash',
 });
 
 /** @type {Readonly<Record<string, string>>} Claves de Script Properties del proyecto. */
 var AVIATORS_PROP = Object.freeze({
   DRIVE_ROOT_FOLDER_ID: 'DRIVE_ROOT_FOLDER_ID',
+  CHAT_PDF_EMBED_MAX_MB: LLM_PROP.CHAT_PDF_EMBED_MAX_MB,
   SALESFORCE_ACCOUNTS_SPREADSHEET_ID: 'SALESFORCE_ACCOUNTS_SPREADSHEET_ID',
 
   GLOBANT_PROJECT_ID: 'GLOBANT_PROJECT_ID',

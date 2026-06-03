@@ -10,6 +10,7 @@ var UI_STRINGS = {
   es: {
     app_title: 'Aviators',
     nav_home: 'Inicio',
+    nav_onboarding: 'Onboarding',
     nav_agents: 'Agentes',
     nav_contents: 'Contenidos',
     nav_tags: 'Tags',
@@ -51,7 +52,7 @@ var UI_STRINGS = {
       '<p>Se apoya exclusivamente en el repositorio indexado de <strong>propuestas comerciales</strong>. Orienta la respuesta a ventas y entrega: alcance, supuestos, entregables, fases, riesgos y próximos pasos, de forma breve y alineada a lo documentado.</p><p>Distingue en la práctica lo que está explícito en el PDF frente a inferencias; si falta un dato imprescindible, convendrá pedirlo antes de afirmar. No debe inventar precios, fechas, compromisos ni clientes no respaldados por el índice. Si hay varias propuestas relacionadas, puede resumirlas y preguntar en cuál profundizar.</p><p>Sin propuestas relevantes en el índice, comunica que <strong>no encontró coincidencias</strong> en lugar de fabricar ofertas.</p>',
     faq_agent_clients_title: 'Clientes y proyectos',
     faq_agent_clients_detail_html:
-      '<p>Toma como única fuente la <strong>nómina indexada de clientes actuales y proyectos en mantenimiento</strong>. Objetivo: responder por cuenta, obra vigente, estado y continuidad de la relación.</p><p>No mezcla clientes ni proyectos sin evidencia en el índice; si el nombre es ambiguo, conviene aclarar la entidad antes de afirmar. Cuando aplica, organiza en bloques: Cliente, Proyectos vigentes, Estado, Riesgos o pendientes. No debe inventar contratos, revenue, alcance ni fechas.</p><p>Si el cliente o proyecto no aparece en el índice, la respuesta indica <strong>falta de información indexada</strong>, en lugar de suponer datos comerciales.</p>',
+      '<p>Responde sobre la <strong>cartera de clientes</strong> usando el roster Salesforce y el maestro en <strong>Supabase</strong> (nómina, industria, cuentas activas, owner, status), el <strong>catálogo</strong> vectorizado de Aviators y, cuando existan, PDFs en el índice RAG de clientes.</p><p>Para listados o filtros (p. ej. aviación, activos) prioriza los datos del roster en BD; para una cuenta concreta combina roster, catálogo y documentos indexados. No mezcla clientes sin evidencia en el contexto de esa respuesta; si el nombre es ambiguo, conviene aclarar la entidad antes de afirmar.</p><p>Cuando aplica, organiza en: Cliente, Owner, Portfolio, Estado, Oportunidades, Industria. No debe inventar contratos, revenue, alcance ni fechas. Si no hay datos en roster, catálogo ni RAG para lo pedido, indica <strong>falta de información</strong> en lugar de suponer datos comerciales.</p>',
     faq_agent_onboarding_title: 'Onboarding',
     faq_agent_onboarding_detail_html:
       '<p>Toma como fuente el <strong>repositorio indexado de onboarding</strong> que incluye conceptos de aviación, modelos de negocio de aerolíneas, terminología de dominio (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.) y metodología del Aviation Studio.</p><p>Objetivo: ayudar a nuevos integrantes y al equipo a comprender la industria de aviación y cómo opera el estudio. Explica conceptos de forma clara y didáctica, usando ejemplos del material indexado cuando estén disponibles.</p><p>Si el concepto o tema no aparece en el índice, indica que <strong>no hay información indexada</strong> en lugar de inventar definiciones o procesos.</p>',
@@ -116,7 +117,7 @@ var UI_STRINGS = {
     contents_editor_subtitle_view: 'Vista de solo lectura: podés revisar todos los campos pero no modificarlos.',
     contents_editor_readonly_banner: 'Modo solo lectura. No tenés permiso para editar este contenido.',
     contents_tooltip_view_detail: 'Ver detalle',
-    contents_btn_view_file: 'Abrir archivo',
+    contents_btn_view_file: 'Ver PDF',
     contents_editor_subtitle_new:
       'Elegí el tipo, subí el PDF y revisá los datos antes de guardar.',
     contents_editor_subtitle_edit:
@@ -257,7 +258,13 @@ var UI_STRINGS = {
     contents_extraction_warnings_prefix: 'Advertencias:',
     contents_warn_title_from_filename: 'Título inferido del nombre del archivo.',
     contents_warn_client_from_catalog: 'Cliente ajustado al catálogo existente.',
+    contents_warn_industry_not_in_catalog:
+      'Industria del documento descartada: no coincide con el catálogo de clientes.',
     contents_warn_client_from_filename: 'Cliente inferido del nombre del archivo.',
+    contents_warn_client_created:
+      'Cliente nuevo creado en el maestro (no había coincidencia cercana en el catálogo).',
+    contents_warn_tags_enriched:
+      'Tags ampliados con temas detectados en el documento (mejor para la nube de tags).',
     contents_warn_challenge_from_summary:
       'Challenge inferido del resumen porque el documento no trajo secciones separadas.',
     contents_warn_extraction_pass_empty: 'Pasada {pass} sin datos extraídos.',
@@ -354,6 +361,17 @@ var UI_STRINGS = {
     home_welcome_title: 'Bienvenido a la suite agéntica de Aviators',
     home_welcome_lead_html:
       'Para más información de uso ir al <a href="#" data-nav-page="faq" class="font-medium text-sky-600 underline hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300">FAQ</a>, o hacé una pregunta directamente.',
+    page_onboarding_title: 'Onboarding · Aviation Studio',
+    page_onboarding_lead_html:
+      'Consultá conceptos de aviación, terminología de dominio y metodología del estudio. Todas las respuestas provienen del <strong>agente de onboarding</strong> y su repositorio indexado.',
+    page_onboarding_chat_lead:
+      'Preguntá sobre PSS, NDC, loyalty, procesos del studio u otros temas de onboarding. Siempre responde el agente especializado.',
+    onboarding_consult_heading: 'Conversación con el agente de onboarding',
+    onboarding_consult_lead:
+      'Escribí tu pregunta abajo. No se enruta al orquestador: cada mensaje lo responde el agente de onboarding con su corpus indexado.',
+    chat_empty_hint_onboarding:
+      'Ej.: ¿Qué es PSS? · ¿Cómo funciona NDC? · Metodología del Aviation Studio',
+    orch_step_onboarding_answering: 'El agente de onboarding está respondiendo…',
     dashboard_title: 'Inicio',
     dashboard_lead:
       'Escribí abajo y seguí la conversación arriba. Las respuestas aparecen como mensajes.',
@@ -385,10 +403,11 @@ var UI_STRINGS = {
     home_orchestrator_ok: 'Orquestador activo',
     home_orchestrator_missing_registry: 'Orquestador no configurado en Aviators.',
     home_orchestrator_missing_remote:
-      'El perfil del orquestador ({profile}) no existe en Globant. Creá o sincronizá los agentes por defecto.',
+      'El perfil RAG del orquestador ({profile}) no está en Globant. Creá o sincronizá los agentes por defecto.',
     home_orchestrator_unknown:
       'No se pudo verificar el orquestador en Globant. Revisá la conexión o los agentes.',
-    admin_agent_badge_remote_missing: 'Sin perfil en Globant',
+    admin_agent_badge_remote_missing: 'Sin perfil RAG en Globant',
+    admin_agent_badge_hub_missing: 'Sin Agent en Globant Hub',
     dash_contents_title: 'Contenidos',
     dash_clients_title: 'Clientes',
     contents_readonly_notice: 'Solo lectura',
@@ -513,7 +532,7 @@ var UI_STRINGS = {
     chat_step_composing: 'Redactando la respuesta…',
     chat_attach_btn: 'Adjuntar PDF',
     chat_attach_hint:
-      'Opcional: RFP o documento de logística/aerolíneas. No se guarda; el orquestador lo analiza y lo compara con el catálogo.',
+      'Opcional: adjuntá un PDF para analizarlo. No se guarda; el orquestador lo procesa y lo compara con el catálogo.',
     chat_attach_remove: 'Quitar adjunto',
     chat_attach_selected: 'Adjunto: {name}',
     chat_ephemeral_need_prompt: 'Escribí qué querés analizar del documento adjunto.',
@@ -532,15 +551,27 @@ var UI_STRINGS = {
     chat_sr_you: 'Vos',
     chat_sr_agent: 'Asistente',
     chat_refs_title: 'Fuentes relacionadas',
+    chat_refs_summary: 'Fuentes relacionadas ({count})',
     chat_refs_open_link: 'Abrir archivo',
-    chat_ref_action_drive: 'Abrir PDF',
+    chat_ref_action_drive: 'Ver PDF',
+    chat_ref_action_view_pdf: 'Ver PDF en la app',
     chat_ref_action_catalog: 'Ver ficha',
-    chat_ref_action_rag: 'Ver agente',
+    chat_ref_file_url_label: 'Archivo',
+    chat_ref_open_url: 'Abrir enlace del archivo',
+    chat_ref_action_client: 'Ver cliente',
+    chat_ref_resolving_link: 'Resolviendo enlace del documento…',
     chat_ref_type_selected_file: 'Documento Drive',
     chat_ref_catalog_denied: 'No tenés permiso para ver Contenidos.',
     chat_ref_agents_denied: 'No tenés permiso para ver Agentes.',
     chat_ref_agent_not_in_list: 'No encontré el agente «{profile}» en el listado.',
     chat_ref_not_found: 'No encontré el archivo en Drive.',
+    pdf_viewer_title: 'Documento',
+    pdf_viewer_loading: 'Cargando PDF…',
+    pdf_viewer_error: 'No se pudo mostrar el PDF.',
+    pdf_viewer_open_external: 'Abrir en Drive',
+    pdf_viewer_open_ficha: 'Ver ficha del contenido',
+    pdf_viewer_use_external:
+      'No se pudo incrustar el PDF aquí. Usá «Abrir en Drive» o abrilo en una pestaña nueva.',
     home_chat_banner_setup:
       'El asistente no está disponible por ahora. Si el problema sigue, contactá a quien administra Aviators.',
     ph_question: 'Escribí tu mensaje…',
@@ -668,6 +699,8 @@ var UI_STRINGS = {
     admin_agent_saved: 'Agente guardado en Aviators y Globant.',
     admin_agent_seed_done_added:
       'Se crearon {n} agente(s) por defecto faltantes.',
+    admin_agent_seed_done_globant:
+      'Se sincronizaron {g} agente(s) en Globant Agents API (prompt context/instructions).',
     admin_agent_seed_done_noop:
       'Ya existían todos los agentes por defecto.',
     admin_agent_last_sync: 'Última sincronización: {date}',
@@ -679,10 +712,15 @@ var UI_STRINGS = {
     err_admin_agent_duplicate: 'Ya existe un agente con el perfil «{name}».',
     err_admin_agent_api_model_required:
       'Para guardar en Globant API tenés que indicar un modelo LLM.',
+    err_admin_agent_api_model_invalid:
+      'El modelo «{model}» no está en el catálogo API. Ejemplos válidos: {samples}.',
+    err_admin_agent_api_strategy_invalid:
+      'La estrategia «{strategy}» no está en el catálogo API. Ejemplos: {samples}.',
     err_admin_agent_api_id:
       'Falta idOrName para guardar en Globant API.',
     err_admin_agent_id: 'Falta el identificador del agente.',
     err_admin_agent_not_found: 'No se encontró ese agente.',
+    err_admin_agent_save: 'No se pudo guardar el agente en Globant.',
     err_admin_agent_seed:
       'No se pudieron crear o verificar los agentes por defecto.',
     confirm_delete_agent_registry:
@@ -834,6 +872,10 @@ var UI_STRINGS = {
       'Agregá al menos una carpeta o un archivo (PDF/Google).',
     err_corpus_globant_only: 'El corpus admin solo aplica con proveedor Globant.',
     err_falta_globant_key: 'Falta GLOBANT_AGENTS_API_KEY.',
+    err_falta_globant_project_id:
+      'Falta GLOBANT_PROJECT_ID en Propiedades del script (header ProjectId obligatorio en Agents API v4).',
+    err_globant_agent_upsert_project_hint:
+      'Confirmá GLOBANT_PROJECT_ID (mismo proyecto que en Glob.AI OS) y que el header ProjectId se envíe en cada upsert.',
     err_globant_direct:
       'La prueba directa Globant solo aplica cuando el proveedor activo es Globant.',
     err_globant_only_feature: 'Solo disponible con proveedor Globant.',
@@ -880,6 +922,17 @@ var UI_STRINGS = {
       'Eliminar archivo /v1/files sólo tiene sentido en GLOBANT_API_MODE=assistant.',
     err_globant_api_http: 'Globant {path} · HTTP {code}: {detail}',
     err_globant_api_logical: 'Globant {path} · respuesta: {detail}',
+    err_globant_api_no_detail: 'Sin detalle en la respuesta del servidor.',
+    err_globant_api_auth_hint:
+      'Verificá GLOBANT_AGENTS_API_KEY y GLOBANT_PROJECT_ID en Propiedades del script.',
+    err_globant_agent_upsert_hint:
+      'Sugerencias: revisá que el modelo exista en el catálogo API (p. ej. openai/gpt-5, no un alias inventado), que la estrategia sea válida, que idOrName coincida con el perfil, y que el prompt no supere límites del proveedor.',
+    err_globant_agent_upsert_model: 'Modelo enviado: {model}',
+    err_globant_agent_upsert_id: 'idOrName enviado: {id}',
+    err_globant_agent_upsert_strategy: 'Estrategia enviada: {strategy}',
+    error_dialog_title: 'Error',
+    error_dialog_close: 'Cerrar',
+    error_dialog_detail_heading: 'Detalle técnico',
     err_globant_assistant_empty_file:
       'Archivo vacío para Globant Assistant upload.',
     err_globant_chat_retry_unknown:
@@ -925,6 +978,14 @@ var UI_STRINGS = {
     meta_provider_globant_rag: 'Globant Agents RAG (/v1/search)',
     meta_provider_globant_assistant: 'Globant /v1/assistant/chat',
     meta_provider_globant_execute: 'Globant /v1/search/execute',
+    meta_provider_globant_hub_agent: 'Globant Agents API (Hub)',
+    meta_provider_globant_hub_agent_fallback:
+      'Globant Agents API (Hub) · fallback chat',
+    meta_filter_hub_agent: 'Agent Hub: {agent}',
+    meta_filter_hub_agent_fallback: 'Agent Hub (fallback): {agent}',
+    err_globant_hub_agent_empty: 'El Agent Hub respondió sin texto.',
+    err_globant_hub_agent_run:
+      'No se pudo ejecutar el Agent Hub. Publicá el agente (automaticPublish) o revisá permisos de ejecución externa.',
     meta_filter_assistant_no_rag:
       'modo Assistant (sin filtro documento RAG)',
     meta_filter_rag_doc_id: 'id = {id}',
@@ -934,6 +995,43 @@ var UI_STRINGS = {
       'Enrutado a {agent} · confianza {confidence}',
     meta_filter_client_docs: 'Filtrando por {client} ({count} docs)',
     meta_filter_direct_context: 'Contexto directo: {client} ({count} docs)',
+    meta_filter_roster_context: 'Roster BD: {count} cuentas',
+    clients_roster_direct_count:
+      'En el roster de Aviators (Salesforce / Supabase) hay {total} cuentas que coinciden con tu consulta ({active} activas{inactivePart}).{filterNote}{truncNote}',
+    clients_roster_direct_count_inactive_part: ', {inactive} inactivas',
+    clients_roster_direct_count_none:
+      'No hay cuentas en el roster que coincidan con los filtros inferidos de tu consulta.',
+    clients_roster_direct_filter_aviation:
+      ' Filtro: aviación (Passenger Airlines / aerolíneas de pasajeros).',
+    clients_roster_direct_filter_aerospace:
+      ' Filtro: aeropuertos y agencias aeroespaciales.',
+    clients_roster_direct_list_intro:
+      '**{total}** cuentas en el roster de Aviators:{filterNote}',
+    clients_roster_direct_list_owner_intro:
+      '**{total}** cuentas con vendedor / client partner / account owner «{owner}» en el roster de Aviators:{filterNote}',
+    clients_roster_direct_count_none_owner:
+      'No hay cuentas en el roster para el vendedor / client partner / account owner «{owner}».',
+    clients_roster_direct_owner:
+      '**{account}** — vendedor / client partner / account owner: **{owner}**.',
+    clients_roster_direct_owner_none:
+      'No hay vendedor / client partner / account owner registrado para **{account}**.',
+    clients_roster_direct_list_inactive_tag: '_(inactiva)_',
+    clients_roster_direct_filter_industry: ' Filtro: industria «{industry}».',
+    clients_roster_direct_filter_sub_industry:
+      ' Filtro: subindustria «{subIndustry}».',
+    clients_roster_direct_filter_active: ' Solo cuentas activas.',
+    clients_roster_direct_filter_inactive: ' Solo cuentas inactivas.',
+    clients_roster_direct_filter_owner:
+      ' Vendedor / client partner / account owner «{owner}».',
+    clients_roster_direct_trunc:
+      ' El total refleja todas las coincidencias (el detalle listado está limitado a {cap} filas).',
+    clients_roster_oppty_direct: '**{account}** (roster Salesforce):\n{lines}',
+    clients_roster_oppty_direct_none:
+      '**{account}** está en el roster pero no hay fechas de oportunidades registradas en la última sincronización.',
+    clients_roster_oppty_line_last_created: '• Última oportunidad creada: {date}',
+    clients_roster_oppty_line_last_won: '• Última oportunidad ganada: {date}',
+    clients_roster_oppty_line_first_won: '• Primera oportunidad ganada: {date}',
+    clients_roster_oppty_line_last_worked: '• Última oportunidad trabajada: {date}',
     meta_filter_orchestrator_catalog: 'Catálogo de contenidos ({count} filas)',
     meta_provider_globant_chat: 'Globant Chat',
     meta_provider_gemini_api: 'Gemini API',
@@ -976,6 +1074,7 @@ var UI_STRINGS = {
     clients_filter_industry: 'Industria',
     clients_filter_industry_all: 'Todas las industrias',
     clients_filter_sub_industry: 'Subindustria',
+    clients_filter_sub_industry_all: 'Todas las subindustrias',
     clients_filter_sub_industry_placeholder: 'Filtrar por subindustria…',
     clients_filter_clear: 'Limpiar filtros',
     clients_industry_placeholder: 'Seleccionar industria…',
@@ -992,12 +1091,18 @@ var UI_STRINGS = {
     clients_btn_delete: 'Eliminar',
     clients_btn_cancel: 'Cancelar',
     clients_busy_loading: 'Cargando clientes…',
+    clients_busy_opening: 'Abriendo cliente…',
     clients_busy_saving: 'Guardando cliente…',
     clients_busy_deleting: 'Eliminando cliente…',
     clients_saved: 'Cliente guardado.',
     clients_deleted: 'Cliente eliminado.',
     clients_err_name_required: 'El nombre del cliente es requerido.',
-    clients_err_industry_invalid: 'La industria debe ser una de las opciones permitidas.',
+    clients_err_industry_invalid:
+      'La industria debe coincidir con un valor ya presente en el catálogo de clientes (o dejarse vacía).',
+    clients_err_sub_industry_invalid:
+      'La subindustria debe coincidir con un valor ya presente en el catálogo de clientes (o dejarse vacía).',
+    err_client_id_invalid:
+      'No se pudo eliminar: identificador de cliente inválido. Recargá la lista e intentá de nuevo.',
     clients_confirm_delete: '¿Eliminar este cliente permanentemente?',
     clients_no_items: 'No hay clientes registrados.',
     clients_no_results: 'Ningún cliente coincide con los filtros.',
@@ -1028,6 +1133,7 @@ var UI_STRINGS = {
     settings_tab_data: 'Datos',
     settings_users_subtab_visitors: 'Visitantes',
     settings_users_subtab_requests: 'Solicitudes',
+    settings_users_subtab_bulk: 'Acceso masivo',
     settings_users_subtab_members: 'Con rol',
     role_config_sec_heading: 'Roles y permisos',
     role_config_sec_lead:
@@ -1091,6 +1197,16 @@ var UI_STRINGS = {
     role_perm_reset_metrics_desc: 'Borrado masivo de datos operativos (zona peligrosa).',
     role_perm_manage_users: 'Gestionar usuarios',
     role_perm_manage_users_desc: 'Asignar roles a visitantes y usuarios.',
+    role_perm_view_onboarding: 'Ver Onboarding',
+    role_perm_view_onboarding_desc:
+      'Acceso a la sección Onboarding y al agente de onboarding (chat y prompts sugeridos).',
+    role_perm_manage_unanswered_queue: 'Gestionar cola no respondidas',
+    role_perm_manage_unanswered_queue_desc:
+      'Asignar y cambiar estado de consultas sin respuesta en Métricas.',
+    role_perm_sync_salesforce: 'Sincronizar Salesforce',
+    role_perm_sync_salesforce_desc:
+      'Ejecutar sync del roster Airlines Accounts y ver la pestaña Salesforce en Configuración.',
+    err_onboarding_forbidden: 'No tenés permiso para usar el agente de onboarding.',
     admin_users_sec_heading: 'Visitantes y usuarios',
     admin_users_sec_lead:
       'Los visitantes son cuentas que entraron sin fila en la tabla de roles. Convertilos asignándoles un rol; quedarán registrados como usuarios con acceso según ese rol.',
@@ -1104,10 +1220,37 @@ var UI_STRINGS = {
     admin_users_col_reason: 'Motivo',
     admin_users_col_requested_at: 'Fecha',
     admin_users_no_requests: 'No hay solicitudes pendientes.',
+    admin_users_no_requests_filtered: 'No hay solicitudes con este filtro.',
+    admin_users_requests_status_filter_lbl: 'Estado',
+    admin_users_requests_status_pending: 'Pendientes',
+    admin_users_requests_status_all: 'Todas',
+    admin_users_requests_status_approved: 'Aprobadas',
+    admin_users_requests_status_dismissed: 'Descartadas',
     admin_users_dismiss_request_btn: 'Descartar',
     admin_users_dismiss_request_confirm: '¿Descartar esta solicitud de acceso?',
     admin_users_dismiss_request_done: 'Solicitud descartada.',
     admin_users_busy_dismiss_request: 'Descartando solicitud…',
+    admin_users_bulk_heading: 'Asignar rol a una lista',
+    admin_users_bulk_lead:
+      'Pegá una lista de contactos (formato de invitación de correo: Nombre <email@dominio.com>, …). Solo se usan las direcciones de correo. Se asigna el mismo rol a todos.',
+    admin_users_bulk_role_label: 'Rol a asignar',
+    admin_users_bulk_paste_label: 'Lista de personas',
+    admin_users_bulk_paste_ph:
+      'Ej.: Ana López <ana@empresa.com>, otro@empresa.com, …',
+    admin_users_bulk_preview_none: 'No se detectaron correos en el texto.',
+    admin_users_bulk_preview_count: '{count} correo(s) detectado(s).',
+    admin_users_bulk_assign_btn: 'Asignar acceso',
+    admin_users_bulk_busy: 'Asignando acceso ({done}/{total})…',
+    admin_users_bulk_busy_parse: 'Analizando lista…',
+    admin_users_bulk_confirm:
+      '¿Asignar el rol «{role}» a {count} cuenta(s)? Esta acción actualiza la tabla de roles en Supabase.',
+    admin_users_bulk_done:
+      'Listo: {success} de {total} con rol «{role}».{failedPart}',
+    admin_users_bulk_done_failed_part: ' {failed} con error (ver detalle abajo).',
+    admin_users_bulk_err_no_emails: 'No se encontró ningún correo en el texto pegado.',
+    admin_users_bulk_err_too_many: 'Demasiados correos (máximo {max} por operación).',
+    admin_users_bulk_err_role: 'Elegí un rol antes de asignar.',
+    admin_users_bulk_err_paste: 'Pegá la lista de personas primero.',
     admin_users_roles_heading: 'Usuarios con rol',
     admin_users_roles_lead:
       'Cuentas con permisos asignados. Podés cambiar el rol o quitarlo (vuelven a visitante).',
@@ -1195,6 +1338,11 @@ var UI_STRINGS = {
       'Sync completado: {accounts} cuentas, {inactivated} inactivadas, {embeddings} indexados ({failed} con error).',
     admin_sf_sync_skipped: 'Sin cambios detectados en la planilla (no se actualizó nada).',
     admin_sf_sync_error: 'No se pudo sincronizar el roster Salesforce.',
+    admin_clients_dedupe_btn: 'Fusionar clientes duplicados',
+    admin_clients_dedupe_busy: 'Fusionando clientes con el mismo nombre (acentos)…',
+    admin_clients_dedupe_done:
+      'Fusionados {groups} grupo(s): {removed} registro(s) eliminado(s), {contents} contenido(s) actualizado(s).',
+    admin_clients_dedupe_none: 'No hay duplicados por variación de acentos en el maestro de clientes.',
     metrics_overview_heading: 'Resumen',
     metrics_overview_lead:
       'Indicadores globales para entender volumen de preguntas y consultas sin respuesta.',
@@ -1273,10 +1421,23 @@ var UI_STRINGS = {
     chat_regenerate_no_attachment: 'No hay adjunto para repetir el análisis del documento.',
     chat_export_btn: 'Exportar',
     chat_export_markdown: 'Descargar Markdown',
-    chat_export_pdf: 'Imprimir / PDF',
+    chat_export_pdf: 'Exportar conversación (PDF)',
+    chat_export_pdf_turn: 'Exportar respuesta (PDF)',
+    chat_export_busy: 'Generando PDF…',
     chat_export_empty: 'No hay mensajes para exportar',
-    chat_export_done: 'Conversación exportada',
-    chat_export_title: 'Conversación Aviators',
+    chat_export_done: 'PDF descargado',
+    chat_export_error: 'No se pudo generar el PDF',
+    chat_export_title: 'Consulta Aviators',
+    chat_export_turn_title: 'Respuesta Aviators',
+    chat_export_doc_subtitle: 'Generado el {date}',
+    chat_export_footer: 'Documento generado con Aviators',
+    chat_action_export_pdf: 'Exportar PDF',
+    err_chat_export_empty: 'No hay mensajes para exportar a PDF.',
+    err_chat_export_pdf: 'No se pudo generar el archivo PDF. Intentá de nuevo.',
+    err_pdf_not_available: 'No hay un PDF disponible para este contenido.',
+    err_pdf_drive: 'No se pudo leer el archivo desde Drive.',
+    err_pdf_globant_onboarding:
+      'No hay enlace disponible para este documento de onboarding en Globant.',
     chat_history_untitled: 'Sin título',
     chat_history_heading: 'Conversaciones anteriores',
     chat_history_open_btn: 'Historial',
@@ -1286,8 +1447,14 @@ var UI_STRINGS = {
     chat_history_save_error: 'No se pudo guardar la conversación',
     chat_history_load_error: 'No se pudo cargar la conversación',
     chat_quick_prompts_label: 'Preguntas frecuentes',
-    admin_quick_prompts_sec_heading: 'Prompts rápidos',
-    admin_quick_prompts_sec_lead: 'Configurá las preguntas sugeridas que aparecen en el chat. Cada prompt tiene texto en español e inglés.',
+    chat_quick_prompts_onboarding_label: 'Temas de onboarding',
+    admin_quick_prompts_sec_heading: 'Prompts rápidos (Inicio)',
+    admin_quick_prompts_sec_lead:
+      'Preguntas sugeridas en el chat de Inicio (orquestador). Cada prompt tiene texto en español e inglés.',
+    admin_onboarding_quick_prompts_sec_heading: 'Prompts rápidos (Onboarding)',
+    admin_onboarding_quick_prompts_sec_lead:
+      'Preguntas sugeridas en la sección Onboarding. Siempre las responde el agente de onboarding con su corpus indexado.',
+    admin_onboarding_quick_prompts_save_btn: 'Guardar prompts de onboarding',
     admin_quick_prompts_save_btn: 'Guardar prompts',
     admin_quick_prompts_add_btn: 'Agregar prompt',
     admin_quick_prompts_save_busy: 'Guardando prompts…',
@@ -1303,6 +1470,7 @@ var UI_STRINGS = {
   en: {
     app_title: 'Aviators',
     nav_home: 'Home',
+    nav_onboarding: 'Onboarding',
     nav_agents: 'Agents',
     nav_contents: 'Content',
     nav_tags: 'Tags',
@@ -1344,7 +1512,7 @@ var UI_STRINGS = {
       '<p>Grounds exclusively in the indexed <strong>commercial proposal</strong> corpus. It frames answers around sales and delivery: scope, assumptions, deliverables, phases, risks and next steps—brief and faithful to what is documented.</p><p>In practice it separates what the PDF states from inference; if a critical fact is missing, it should ask before asserting. It must not invent prices, dates, commitments or undocumented clients. If several proposals relate to the ask, it may summarize them and ask which one to deepen.</p><p>With no matching proposals in the index, it reports <strong>no relevant hits</strong> instead of fabricating offers.</p>',
     faq_agent_clients_title: 'Clients and projects',
     faq_agent_clients_detail_html:
-      '<p>Uses only the indexed roster of <strong>current clients and maintenance projects</strong>. Goal: answer by account, active work, status and relationship continuity.</p><p>It does not mix clients or projects without evidence in the index; ambiguous names should be clarified before stating facts. When it helps, it organizes into Client, Active projects, Status, and Risks or open items. It must not invent contracts, revenue, scope or dates.</p><p>If the client or project is not in the index, the reply signals <strong>missing indexed information</strong> instead of guessing commercial details.</p>',
+      '<p>Answers about the <strong>client portfolio</strong> using the Salesforce roster and master in <strong>Supabase</strong> (roster, industry, active accounts, owner, status), Aviators <strong>catalog</strong> vector search, and indexed client PDFs in RAG when available.</p><p>For lists or filters (e.g. aviation, active accounts) it prioritizes live roster data; for a specific account it combines roster, catalog, and indexed documents. It does not mix clients without evidence in that turn’s context; ambiguous names should be clarified before stating facts.</p><p>When helpful, it organizes by: Account, Owner, Portfolio, Status, Opportunities, Industry. It must not invent contracts, revenue, scope or dates. If roster, catalog and RAG have nothing for the request, it signals <strong>missing information</strong> instead of guessing commercial details.</p>',
     faq_agent_onboarding_title: 'Onboarding',
     faq_agent_onboarding_detail_html:
       '<p>Sources from the <strong>indexed onboarding repository</strong> which includes aviation concepts, airline business models, domain terminology (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.) and Aviation Studio methodology.</p><p>Goal: help new joiners and the team understand the aviation industry and how the studio operates. Explains concepts clearly and didactically, using examples from indexed material when available.</p><p>If the concept or topic is not in the index, it indicates <strong>no indexed information</strong> rather than inventing definitions or processes.</p>',
@@ -1409,7 +1577,7 @@ var UI_STRINGS = {
     contents_editor_subtitle_view: 'Read-only view: you can review all fields but cannot change them.',
     contents_editor_readonly_banner: 'Read-only mode. You do not have permission to edit this content.',
     contents_tooltip_view_detail: 'View details',
-    contents_btn_view_file: 'Open file',
+    contents_btn_view_file: 'View PDF',
     contents_editor_subtitle_new:
       'Pick a type, upload the PDF and review the data before saving.',
     contents_editor_subtitle_edit:
@@ -1549,7 +1717,13 @@ var UI_STRINGS = {
     contents_extraction_warnings_prefix: 'Warnings:',
     contents_warn_title_from_filename: 'Title inferred from file name.',
     contents_warn_client_from_catalog: 'Client matched to existing catalog entry.',
+    contents_warn_industry_not_in_catalog:
+      'Document industry discarded: not in the client catalog.',
     contents_warn_client_from_filename: 'Client inferred from file name.',
+    contents_warn_client_created:
+      'New client added to the master list (no close match in the catalog).',
+    contents_warn_tags_enriched:
+      'Tags supplemented from themes detected in the document (better for the tag cloud).',
     contents_warn_challenge_from_summary:
       'Challenge inferred from summary because the document had no separate sections.',
     contents_warn_extraction_pass_empty: 'Pass {pass} returned no extracted data.',
@@ -1645,6 +1819,17 @@ var UI_STRINGS = {
     home_welcome_title: 'Welcome to the Aviators agentic suite',
     home_welcome_lead_html:
       'For more info go to the <a href="#" data-nav-page="faq" class="font-medium text-sky-600 underline hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300">FAQ</a>, or ask a question directly.',
+    page_onboarding_title: 'Onboarding · Aviation Studio',
+    page_onboarding_lead_html:
+      'Ask about aviation concepts, domain terminology and studio methodology. Every answer comes from the <strong>onboarding agent</strong> and its indexed repository.',
+    page_onboarding_chat_lead:
+      'Ask about PSS, NDC, loyalty, studio processes or other onboarding topics. The specialized agent always responds.',
+    onboarding_consult_heading: 'Conversation with the onboarding agent',
+    onboarding_consult_lead:
+      'Type your question below. The orchestrator is bypassed: each message is answered by the onboarding agent using its indexed corpus.',
+    chat_empty_hint_onboarding:
+      'E.g.: What is PSS? · How does NDC work? · Aviation Studio methodology',
+    orch_step_onboarding_answering: 'The onboarding agent is answering…',
     dashboard_title: 'Home',
     dashboard_lead:
       'Write below and follow the conversation above. Replies appear as messages.',
@@ -1676,10 +1861,11 @@ var UI_STRINGS = {
     home_orchestrator_ok: 'Orchestrator active',
     home_orchestrator_missing_registry: 'Orchestrator is not configured in Aviators.',
     home_orchestrator_missing_remote:
-      'Orchestrator profile ({profile}) is missing on Globant. Create or sync default agents.',
+      'Orchestrator RAG profile ({profile}) is missing in Globant. Create or sync default agents.',
     home_orchestrator_unknown:
       'Could not verify the orchestrator on Globant. Check the connection or agents.',
-    admin_agent_badge_remote_missing: 'No Globant profile',
+    admin_agent_badge_remote_missing: 'No RAG profile in Globant',
+    admin_agent_badge_hub_missing: 'No Hub Agent in Globant',
     dash_contents_title: 'Contents',
     dash_clients_title: 'Clients',
     contents_readonly_notice: 'Read-only',
@@ -1798,7 +1984,7 @@ var UI_STRINGS = {
     chat_step_composing: 'Composing the answer…',
     chat_attach_btn: 'Attach PDF',
     chat_attach_hint:
-      'Optional: RFP or logistics/airline document. Not stored; the orchestrator analyzes it and compares it with the catalog.',
+      'Optional: attach a PDF to analyze it. Not stored; the orchestrator processes it and compares it with the catalog.',
     chat_attach_remove: 'Remove attachment',
     chat_attach_selected: 'Attached: {name}',
     chat_ephemeral_need_prompt: 'Describe what you want analyzed in the attached document.',
@@ -1817,15 +2003,27 @@ var UI_STRINGS = {
     chat_sr_you: 'You',
     chat_sr_agent: 'Assistant',
     chat_refs_title: 'Related sources',
+    chat_refs_summary: 'Related sources ({count})',
     chat_refs_open_link: 'Open file',
-    chat_ref_action_drive: 'Open PDF',
+    chat_ref_action_drive: 'View PDF',
+    chat_ref_action_view_pdf: 'View PDF in app',
     chat_ref_action_catalog: 'View record',
-    chat_ref_action_rag: 'View agent',
+    chat_ref_file_url_label: 'File',
+    chat_ref_open_url: 'Open file link',
+    chat_ref_action_client: 'View client',
+    chat_ref_resolving_link: 'Resolving document link…',
     chat_ref_type_selected_file: 'Drive document',
     chat_ref_catalog_denied: 'You do not have permission to view Content.',
     chat_ref_agents_denied: 'You do not have permission to view Agents.',
     chat_ref_agent_not_in_list: 'Agent «{profile}» was not found in the list.',
     chat_ref_not_found: 'I could not find that file in Drive.',
+    pdf_viewer_title: 'Document',
+    pdf_viewer_loading: 'Loading PDF…',
+    pdf_viewer_error: 'Could not display the PDF.',
+    pdf_viewer_open_external: 'Open in Drive',
+    pdf_viewer_open_ficha: 'View content record',
+    pdf_viewer_use_external:
+      'The PDF could not be embedded here. Use «Open in Drive» or open it in a new tab.',
     home_chat_banner_setup:
       'The assistant is not available right now. If this keeps happening, contact your Aviators admin.',
     lbl_question_sronly: 'Question',
@@ -1953,6 +2151,8 @@ var UI_STRINGS = {
     admin_agent_saved: 'Agent saved in Aviators and Globant.',
     admin_agent_seed_done_added:
       'Created {n} missing default agent(s).',
+    admin_agent_seed_done_globant:
+      'Synced {g} agent(s) to Globant Agents API (prompt context/instructions).',
     admin_agent_seed_done_noop:
       'All default agents already exist.',
     admin_agent_last_sync: 'Last sync: {date}',
@@ -1964,10 +2164,15 @@ var UI_STRINGS = {
     err_admin_agent_duplicate: 'An agent with profile «{name}» already exists.',
     err_admin_agent_api_model_required:
       'To save to Globant API you must provide an LLM model.',
+    err_admin_agent_api_model_invalid:
+      'Model «{model}» is not in the API catalog. Valid examples: {samples}.',
+    err_admin_agent_api_strategy_invalid:
+      'Strategy «{strategy}» is not in the API catalog. Examples: {samples}.',
     err_admin_agent_api_id:
       'Missing idOrName to save in Globant API.',
     err_admin_agent_id: 'Agent id is required.',
     err_admin_agent_not_found: 'That agent was not found.',
+    err_admin_agent_save: 'Could not save the agent to Globant.',
     err_admin_agent_seed:
       'Could not create or verify default agents.',
     confirm_delete_agent_registry:
@@ -2118,6 +2323,10 @@ var UI_STRINGS = {
     err_sources_need_one: 'Add at least one folder or file (PDF/Google).',
     err_corpus_globant_only: 'Admin corpus only applies with Globant provider.',
     err_falta_globant_key: 'GLOBANT_AGENTS_API_KEY is missing.',
+    err_falta_globant_project_id:
+      'GLOBANT_PROJECT_ID is missing in Script Properties (ProjectId header is required for Agents API v4).',
+    err_globant_agent_upsert_project_hint:
+      'Confirm GLOBANT_PROJECT_ID matches your Glob.AI OS project and is sent on every upsert.',
     err_globant_direct:
       'Globant direct test only applies when Globant is the active provider.',
     err_globant_only_feature: 'Only available with Globant provider.',
@@ -2162,6 +2371,17 @@ var UI_STRINGS = {
       'Deleting /v1/files only applies with GLOBANT_API_MODE=assistant.',
     err_globant_api_http: 'Globant {path} · HTTP {code}: {detail}',
     err_globant_api_logical: 'Globant {path} · response: {detail}',
+    err_globant_api_no_detail: 'No detail in the server response.',
+    err_globant_api_auth_hint:
+      'Check GLOBANT_AGENTS_API_KEY and GLOBANT_PROJECT_ID in Script Properties.',
+    err_globant_agent_upsert_hint:
+      'Suggestions: verify the model exists in the API catalog (e.g. openai/gpt-5, not a made-up alias), strategy is valid, idOrName matches the profile, and the prompt does not exceed provider limits.',
+    err_globant_agent_upsert_model: 'Model sent: {model}',
+    err_globant_agent_upsert_id: 'idOrName sent: {id}',
+    err_globant_agent_upsert_strategy: 'Strategy sent: {strategy}',
+    error_dialog_title: 'Error',
+    error_dialog_close: 'Close',
+    error_dialog_detail_heading: 'Technical detail',
     err_globant_assistant_empty_file:
       'Empty file for Globant Assistant upload.',
     err_globant_chat_retry_unknown:
@@ -2207,6 +2427,14 @@ var UI_STRINGS = {
     meta_provider_globant_rag: 'Globant Agents RAG (/v1/search)',
     meta_provider_globant_assistant: 'Globant /v1/assistant/chat',
     meta_provider_globant_execute: 'Globant /v1/search/execute',
+    meta_provider_globant_hub_agent: 'Globant Agents API (Hub)',
+    meta_provider_globant_hub_agent_fallback:
+      'Globant Agents API (Hub) · fallback chat',
+    meta_filter_hub_agent: 'Hub Agent: {agent}',
+    meta_filter_hub_agent_fallback: 'Hub Agent (fallback): {agent}',
+    err_globant_hub_agent_empty: 'Hub Agent returned no text.',
+    err_globant_hub_agent_run:
+      'Could not run Hub Agent. Publish the agent (automaticPublish) or check external execution permissions.',
     meta_filter_assistant_no_rag:
       'Assistant mode (no RAG document filter)',
     meta_filter_rag_doc_id: 'id = {id}',
@@ -2216,6 +2444,43 @@ var UI_STRINGS = {
       'Routed to {agent} · confidence {confidence}',
     meta_filter_client_docs: 'Filtering by {client} ({count} docs)',
     meta_filter_direct_context: 'Direct context: {client} ({count} docs)',
+    meta_filter_roster_context: 'DB roster: {count} accounts',
+    clients_roster_direct_count:
+      'The Aviators roster (Salesforce / Supabase) has {total} accounts matching your question ({active} active{inactivePart}).{filterNote}{truncNote}',
+    clients_roster_direct_count_inactive_part: ', {inactive} inactive',
+    clients_roster_direct_count_none:
+      'No accounts in the roster match the filters inferred from your question.',
+    clients_roster_direct_filter_aviation:
+      ' Filter: aviation (Passenger Airlines).',
+    clients_roster_direct_filter_aerospace:
+      ' Filter: airports and aerospace agencies.',
+    clients_roster_direct_list_intro:
+      '**{total}** accounts in the Aviators roster:{filterNote}',
+    clients_roster_direct_list_owner_intro:
+      '**{total}** accounts with salesperson / client partner / account owner «{owner}» in the Aviators roster:{filterNote}',
+    clients_roster_direct_count_none_owner:
+      'No accounts in the roster for salesperson / client partner / account owner «{owner}».',
+    clients_roster_direct_owner:
+      '**{account}** — salesperson / client partner / account owner: **{owner}**.',
+    clients_roster_direct_owner_none:
+      'No salesperson / client partner / account owner on record for **{account}**.',
+    clients_roster_direct_list_inactive_tag: '_(inactive)_',
+    clients_roster_direct_filter_industry: ' Filter: industry «{industry}».',
+    clients_roster_direct_filter_sub_industry:
+      ' Filter: sub-industry «{subIndustry}».',
+    clients_roster_direct_filter_active: ' Active accounts only.',
+    clients_roster_direct_filter_inactive: ' Inactive accounts only.',
+    clients_roster_direct_filter_owner:
+      ' Salesperson / client partner / account owner «{owner}».',
+    clients_roster_direct_trunc:
+      ' The total includes all matches (listed detail is capped at {cap} rows).',
+    clients_roster_oppty_direct: '**{account}** (Salesforce roster):\n{lines}',
+    clients_roster_oppty_direct_none:
+      '**{account}** is in the roster but has no opportunity dates recorded in the latest sync.',
+    clients_roster_oppty_line_last_created: '• Last opportunity created: {date}',
+    clients_roster_oppty_line_last_won: '• Last opportunity won: {date}',
+    clients_roster_oppty_line_first_won: '• First opportunity won: {date}',
+    clients_roster_oppty_line_last_worked: '• Last worked opportunity: {date}',
     meta_filter_orchestrator_catalog: 'Content catalog ({count} rows)',
     meta_provider_globant_chat: 'Globant Chat',
     meta_provider_gemini_api: 'Gemini API',
@@ -2258,6 +2523,7 @@ var UI_STRINGS = {
     clients_filter_industry: 'Industry',
     clients_filter_industry_all: 'All industries',
     clients_filter_sub_industry: 'Sub-industry',
+    clients_filter_sub_industry_all: 'All sub-industries',
     clients_filter_sub_industry_placeholder: 'Filter by sub-industry…',
     clients_filter_clear: 'Clear filters',
     clients_industry_placeholder: 'Select industry…',
@@ -2274,12 +2540,18 @@ var UI_STRINGS = {
     clients_btn_delete: 'Delete',
     clients_btn_cancel: 'Cancel',
     clients_busy_loading: 'Loading clients…',
+    clients_busy_opening: 'Opening client…',
     clients_busy_saving: 'Saving client…',
     clients_busy_deleting: 'Deleting client…',
     clients_saved: 'Client saved.',
     clients_deleted: 'Client deleted.',
     clients_err_name_required: 'Client name is required.',
-    clients_err_industry_invalid: 'Industry must be one of the allowed options.',
+    clients_err_industry_invalid:
+      'Industry must match a value already in the client catalog (or be left empty).',
+    clients_err_sub_industry_invalid:
+      'Sub-industry must match a value already in the client catalog (or be left empty).',
+    err_client_id_invalid:
+      'Could not delete: invalid client id. Reload the list and try again.',
     clients_confirm_delete: 'Delete this client permanently?',
     clients_no_items: 'No clients registered.',
     clients_no_results: 'No clients match the current filters.',
@@ -2310,6 +2582,7 @@ var UI_STRINGS = {
     settings_tab_data: 'Data',
     settings_users_subtab_visitors: 'Visitors',
     settings_users_subtab_requests: 'Requests',
+    settings_users_subtab_bulk: 'Bulk access',
     settings_users_subtab_members: 'With role',
     role_config_sec_heading: 'Roles and permissions',
     role_config_sec_lead:
@@ -2373,6 +2646,16 @@ var UI_STRINGS = {
     role_perm_reset_metrics_desc: 'Bulk wipe of operational data (danger zone).',
     role_perm_manage_users: 'Manage users',
     role_perm_manage_users_desc: 'Assign roles to visitors and users.',
+    role_perm_view_onboarding: 'View Onboarding',
+    role_perm_view_onboarding_desc:
+      'Access the Onboarding section and onboarding agent (chat and suggested prompts).',
+    role_perm_manage_unanswered_queue: 'Manage unanswered queue',
+    role_perm_manage_unanswered_queue_desc:
+      'Assign and update status of unanswered questions in Metrics.',
+    role_perm_sync_salesforce: 'Sync Salesforce',
+    role_perm_sync_salesforce_desc:
+      'Run Airlines Accounts roster sync and open the Salesforce tab in Settings.',
+    err_onboarding_forbidden: 'You do not have permission to use the onboarding agent.',
     admin_users_sec_heading: 'Visitors and users',
     admin_users_sec_lead:
       'Visitors are accounts that signed in without a row in the roles table. Convert them by assigning a role; they become users with access based on that role.',
@@ -2386,10 +2669,36 @@ var UI_STRINGS = {
     admin_users_col_reason: 'Reason',
     admin_users_col_requested_at: 'Date',
     admin_users_no_requests: 'No pending requests.',
+    admin_users_no_requests_filtered: 'No requests match this filter.',
+    admin_users_requests_status_filter_lbl: 'Status',
+    admin_users_requests_status_pending: 'Pending',
+    admin_users_requests_status_all: 'All',
+    admin_users_requests_status_approved: 'Approved',
+    admin_users_requests_status_dismissed: 'Dismissed',
     admin_users_dismiss_request_btn: 'Dismiss',
     admin_users_dismiss_request_confirm: 'Dismiss this access request?',
     admin_users_dismiss_request_done: 'Request dismissed.',
     admin_users_busy_dismiss_request: 'Dismissing request…',
+    admin_users_bulk_heading: 'Assign role to a list',
+    admin_users_bulk_lead:
+      'Paste a contact list (e.g. invitation format: Name <email@domain.com>, …). Only email addresses are used. The same role is assigned to everyone.',
+    admin_users_bulk_role_label: 'Role to assign',
+    admin_users_bulk_paste_label: 'People list',
+    admin_users_bulk_paste_ph: 'E.g. Jane Doe <jane@company.com>, other@company.com, …',
+    admin_users_bulk_preview_none: 'No email addresses detected in the text.',
+    admin_users_bulk_preview_count: '{count} email address(es) detected.',
+    admin_users_bulk_assign_btn: 'Grant access',
+    admin_users_bulk_busy: 'Granting access ({done}/{total})…',
+    admin_users_bulk_busy_parse: 'Parsing list…',
+    admin_users_bulk_confirm:
+      'Assign role «{role}» to {count} account(s)? This updates the roles table in Supabase.',
+    admin_users_bulk_done:
+      'Done: {success} of {total} assigned role «{role}».{failedPart}',
+    admin_users_bulk_done_failed_part: ' {failed} failed (see details below).',
+    admin_users_bulk_err_no_emails: 'No email addresses found in the pasted text.',
+    admin_users_bulk_err_too_many: 'Too many emails (maximum {max} per operation).',
+    admin_users_bulk_err_role: 'Choose a role before assigning.',
+    admin_users_bulk_err_paste: 'Paste the people list first.',
     admin_users_roles_heading: 'Users with a role',
     admin_users_roles_lead:
       'Accounts with assigned permissions. You can change the role or remove it (they become visitors again).',
@@ -2477,6 +2786,11 @@ var UI_STRINGS = {
       'Sync complete: {accounts} accounts, {inactivated} inactivated, {embeddings} indexed ({failed} failed).',
     admin_sf_sync_skipped: 'No changes detected in the spreadsheet (nothing updated).',
     admin_sf_sync_error: 'Could not sync the Salesforce roster.',
+    admin_clients_dedupe_btn: 'Merge duplicate clients',
+    admin_clients_dedupe_busy: 'Merging clients with the same name (accents)…',
+    admin_clients_dedupe_done:
+      'Merged {groups} group(s): {removed} duplicate record(s) removed, {contents} content item(s) updated.',
+    admin_clients_dedupe_none: 'No accent-variant duplicates found in the client master.',
     metrics_overview_heading: 'Overview',
     metrics_overview_lead:
       'Top-level indicators to understand total question volume and unanswered requests.',
@@ -2555,10 +2869,23 @@ var UI_STRINGS = {
     chat_regenerate_no_attachment: 'No attachment available to repeat document analysis.',
     chat_export_btn: 'Export',
     chat_export_markdown: 'Download Markdown',
-    chat_export_pdf: 'Print / PDF',
+    chat_export_pdf: 'Export conversation (PDF)',
+    chat_export_pdf_turn: 'Export answer (PDF)',
+    chat_export_busy: 'Generating PDF…',
     chat_export_empty: 'No messages to export',
-    chat_export_done: 'Conversation exported',
-    chat_export_title: 'Aviators conversation',
+    chat_export_done: 'PDF downloaded',
+    chat_export_error: 'Could not generate PDF',
+    chat_export_title: 'Aviators consultation',
+    chat_export_turn_title: 'Aviators answer',
+    chat_export_doc_subtitle: 'Generated on {date}',
+    chat_export_footer: 'Document generated with Aviators',
+    chat_action_export_pdf: 'Export PDF',
+    err_chat_export_empty: 'No messages to export to PDF.',
+    err_chat_export_pdf: 'Could not generate the PDF file. Please try again.',
+    err_pdf_not_available: 'No PDF is available for this content.',
+    err_pdf_drive: 'Could not read the file from Drive.',
+    err_pdf_globant_onboarding:
+      'No link is available for this onboarding document in Globant.',
     chat_history_untitled: 'Untitled',
     chat_history_heading: 'Previous conversations',
     chat_history_open_btn: 'History',
@@ -2568,8 +2895,14 @@ var UI_STRINGS = {
     chat_history_save_error: 'Could not save conversation',
     chat_history_load_error: 'Could not load conversation',
     chat_quick_prompts_label: 'Quick prompts',
-    admin_quick_prompts_sec_heading: 'Quick prompts',
-    admin_quick_prompts_sec_lead: 'Configure the suggested questions that appear in the chat. Each prompt has text in Spanish and English.',
+    chat_quick_prompts_onboarding_label: 'Onboarding topics',
+    admin_quick_prompts_sec_heading: 'Quick prompts (Home)',
+    admin_quick_prompts_sec_lead:
+      'Suggested questions in the Home chat (orchestrator). Each prompt has Spanish and English text.',
+    admin_onboarding_quick_prompts_sec_heading: 'Quick prompts (Onboarding)',
+    admin_onboarding_quick_prompts_sec_lead:
+      'Suggested questions in the Onboarding section. Always answered by the onboarding agent from its indexed corpus.',
+    admin_onboarding_quick_prompts_save_btn: 'Save onboarding prompts',
     admin_quick_prompts_save_btn: 'Save prompts',
     admin_quick_prompts_add_btn: 'Add prompt',
     admin_quick_prompts_save_busy: 'Saving prompts…',

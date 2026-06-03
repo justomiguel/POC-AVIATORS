@@ -9,6 +9,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const pngPath = path.join(ROOT, 'logo.png');
 const htmlPath = path.join(ROOT, 'gas', 'index.html');
+const exportLogoPath = path.join(ROOT, 'gas', 'chat-export-logo.html');
 
 if (!fs.existsSync(pngPath)) {
   console.error('No se encontró logo.png en la raíz del proyecto.');
@@ -39,4 +40,8 @@ const img = `<img
 const re = new RegExp(`${START}[\\s\\S]*?${END}`, 'm');
 html = html.replace(re, `${START}\n        ${img}\n        ${END}`);
 fs.writeFileSync(htmlPath, html, 'utf8');
-console.log(`→ Logo embebido: logo.png (${buf.length} bytes → gas/index.html)`);
+
+const exportFragment = `<img src="${dataUrl}" alt="Aviators" width="120" height="120" />\n`;
+fs.writeFileSync(exportLogoPath, exportFragment, 'utf8');
+
+console.log(`→ Logo embebido: logo.png (${buf.length} bytes → gas/index.html, chat-export-logo.html)`);

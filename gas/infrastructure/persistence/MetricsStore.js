@@ -372,22 +372,30 @@ function MetricsStore_chatHistoryDelete(convId, email) {
 }
 
 /**
+ * @param {string=} scope — «home» u «onboarding»
  * @return {Array<Object>}
  */
-function MetricsStore_quickPromptsList() {
+function MetricsStore_quickPromptsList(scope) {
+  var sc = String(scope || 'home').trim() || 'home';
   return SupabaseRest_select(
     SUPABASE_TABLE.QUICK_PROMPTS,
-    'select=id,es,en,sort_order&order=sort_order.asc',
+    SupabaseRest_query_([
+      'select=id,es,en,sort_order,scope',
+      'order=sort_order.asc',
+      SupabaseRest_filter_('scope', 'eq', sc),
+    ]),
   );
 }
 
 /**
  * @param {Array<Object>} prompts
+ * @param {string=} scope
  */
-function MetricsStore_quickPromptsReplaceAll(prompts) {
+function MetricsStore_quickPromptsReplaceAll(prompts, scope) {
+  var sc = String(scope || 'home').trim() || 'home';
   SupabaseRest_delete(
     SUPABASE_TABLE.QUICK_PROMPTS,
-    SupabaseRest_filter_('id', 'neq', ''),
+    SupabaseRest_query_([SupabaseRest_filter_('scope', 'eq', sc)]),
   );
   if (!prompts || !prompts.length) return;
   var rows = [];
@@ -398,6 +406,7 @@ function MetricsStore_quickPromptsReplaceAll(prompts) {
       es: String(p.es || '').trim(),
       en: String(p.en || '').trim(),
       sort_order: Number(p.order || 0) || (i + 1),
+      scope: sc,
     });
   }
   SupabaseRest_insert(SUPABASE_TABLE.QUICK_PROMPTS, rows, { prefer: 'return=minimal' });

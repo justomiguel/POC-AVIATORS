@@ -271,3 +271,49 @@ function DriveDocuments_collectGoogleDocIdsFromFolders(
 function DriveDocuments_exportGoogleDocAsPdf(fileId) {
   return DriveDocuments_getPdfBlobForGlobant(fileId);
 }
+
+/**
+ * @param {string} raw
+ * @return {string}
+ */
+function DriveDocuments_escapeQueryLiteral_(raw) {
+  return String(raw || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
+}
+
+/**
+ * Busca un archivo por título exacto (carpeta raíz de proyecto primero, luego todo Drive).
+ * @param {string} fileName
+ * @return {string} drive file id
+ */
+function DriveDocuments_findFileIdByExactTitle_(fileName) {
+  var name = String(fileName || '').trim();
+  if (!name) return '';
+  var esc = DriveDocuments_escapeQueryLiteral_(name);
+  var queries = [];
+  try {
+    var rootFolderId = AviatorsConfig_driveRootFolderId_();
+    if (rootFolderId) {
+      queries.push(
+        '"' +
+          DriveDocuments_escapeQueryLiteral_(rootFolderId) +
+          '" in parents and trashed = false and title = "' +
+          esc +
+          '"',
+      );
+    }
+  } catch (ignoreRoot) {}
+  queries.push('trashed = false and title = "' + esc + '"');
+  var qi;
+  for (qi = 0; qi < queries.length; qi++) {
+    try {
+      var it = DriveApp.searchFiles(queries[qi]);
+      if (it.hasNext()) {
+        var f = it.next();
+        return String(f.getId() || '');
+      }
+    } catch (ignoreSearch) {}
+  }
+  return '';
+}

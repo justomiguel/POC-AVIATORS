@@ -114,7 +114,9 @@ function AccessRequestsStore_toApiItem_(row) {
     desired_role_key: String(row.desired_role_key || '').trim().toLowerCase(),
     desired_role_label: String(row.desired_role_label || '').trim(),
     reason: String(row.reason || '').trim(),
-    status: String(row.status || ACCESS_REQUEST_STATUS.PENDING).trim(),
+    status: String(row.status || ACCESS_REQUEST_STATUS.PENDING)
+      .trim()
+      .toLowerCase(),
     created_at: String(row.created_at || ''),
     updated_at: String(row.updated_at || ''),
     reviewed_by_email: String(row.reviewed_by_email || '').trim(),

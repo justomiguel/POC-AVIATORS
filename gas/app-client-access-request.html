@@ -16,6 +16,7 @@
   var pendingDetail = document.getElementById('access-request-pending-detail');
 
   var requestsSearch = document.getElementById('admin-users-requests-search');
+  var requestsStatusFilter = document.getElementById('admin-users-requests-status-filter');
   var requestsLoader = document.getElementById('admin-users-requests-loader');
   var requestsLoaderMsg = document.getElementById('admin-users-requests-loader-msg');
   var requestsBody = document.getElementById('admin-users-requests-body');
@@ -32,6 +33,14 @@
   var adminRequestsBusy = false;
   var adminRequestsSearchTimer = null;
   var REQUESTS_PAGE_SIZE = 25;
+  var adminRequestsStatusFilter = 'pending';
+
+  function adminRequestsStatusParam_() {
+    if (requestsStatusFilter && requestsStatusFilter.value) {
+      return String(requestsStatusFilter.value).trim().toLowerCase();
+    }
+    return adminRequestsStatusFilter || 'pending';
+  }
 
   function setStatus(el, msg, isErr) {
     if (!el) return;
@@ -215,7 +224,11 @@
       var tdEmpty = document.createElement('td');
       tdEmpty.colSpan = 6;
       tdEmpty.className = 'px-4 py-6 text-center text-sm text-slate-400';
-      tdEmpty.textContent = i18n('admin_users_no_requests');
+      var emptyKey =
+        adminRequestsStatusParam_() === 'pending'
+          ? 'admin_users_no_requests'
+          : 'admin_users_no_requests_filtered';
+      tdEmpty.textContent = i18n(emptyKey);
       trEmpty.appendChild(tdEmpty);
       requestsBody.appendChild(trEmpty);
       return;
@@ -234,7 +247,11 @@
         tr.appendChild(tdName);
         var tdRole = document.createElement('td');
         tdRole.className = 'text-slate-600 dark:text-slate-400';
-        tdRole.textContent = item.desired_role_label || item.desired_role_key || '\u2014';
+        var roleText = item.desired_role_label || item.desired_role_key || '\u2014';
+        if (item.status && item.status !== 'pending') {
+          roleText += ' (' + item.status + ')';
+        }
+        tdRole.textContent = roleText;
         tr.appendChild(tdRole);
         var tdReason = document.createElement('td');
         tdReason.className = 'max-w-xs truncate text-slate-600 dark:text-slate-400';
@@ -247,35 +264,39 @@
         tr.appendChild(tdDate);
         var tdActions = document.createElement('td');
         tdActions.className = 'text-right whitespace-nowrap';
-        var assignBtn = document.createElement('button');
-        assignBtn.type = 'button';
-        assignBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-2 mr-2';
-        assignBtn.innerHTML =
-          '<i class="fa-solid fa-user-plus" aria-hidden="true"></i>' +
-          '<span>' +
-          i18n('admin_users_assign_btn') +
-          '</span>';
-        assignBtn.addEventListener('click', function () {
-          if (A.settings && A.settings.usersAssignRoleFromRequest) {
-            A.settings.usersAssignRoleFromRequest(
-              item.email,
-              item.desired_role_key,
-            );
-          }
-        });
-        tdActions.appendChild(assignBtn);
-        var dismissBtn = document.createElement('button');
-        dismissBtn.type = 'button';
-        dismissBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
-        dismissBtn.innerHTML =
-          '<i class="fa-solid fa-xmark" aria-hidden="true"></i>' +
-          '<span>' +
-          i18n('admin_users_dismiss_request_btn') +
-          '</span>';
-        dismissBtn.addEventListener('click', function () {
-          adminDismissRequest(item.id);
-        });
-        tdActions.appendChild(dismissBtn);
+        if (item.status === 'pending') {
+          var assignBtn = document.createElement('button');
+          assignBtn.type = 'button';
+          assignBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-2 mr-2';
+          assignBtn.innerHTML =
+            '<i class="fa-solid fa-user-plus" aria-hidden="true"></i>' +
+            '<span>' +
+            i18n('admin_users_assign_btn') +
+            '</span>';
+          assignBtn.addEventListener('click', function () {
+            if (A.settings && A.settings.usersAssignRoleFromRequest) {
+              A.settings.usersAssignRoleFromRequest(
+                item.email,
+                item.desired_role_key,
+              );
+            }
+          });
+          tdActions.appendChild(assignBtn);
+          var dismissBtn = document.createElement('button');
+          dismissBtn.type = 'button';
+          dismissBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+          dismissBtn.innerHTML =
+            '<i class="fa-solid fa-xmark" aria-hidden="true"></i>' +
+            '<span>' +
+            i18n('admin_users_dismiss_request_btn') +
+            '</span>';
+          dismissBtn.addEventListener('click', function () {
+            adminDismissRequest(item.id);
+          });
+          tdActions.appendChild(dismissBtn);
+        } else {
+          tdActions.textContent = '\u2014';
+        }
         tr.appendChild(tdActions);
         requestsBody.appendChild(tr);
       })(adminRequestsItems[i]);
@@ -296,19 +317,25 @@
       })
       .withFailureHandler(function (err) {
         adminSetRequestsBusy(false);
-        setStatus(
-          requestsStatus,
-          (err && err.message) || i18n('err_generic'),
-          true,
-        );
+        var msg =
+          (A.mapServerError && A.mapServerError(err)) ||
+          (err && err.message) ||
+          i18n('err_generic');
+        setStatus(requestsStatus, msg, true);
+        if (A.toast) A.toast.error(msg);
         adminUpdatePager();
       })
       .adminUsersListAccessRequests({
         skip: adminRequestsSkip,
         limit: REQUESTS_PAGE_SIZE,
         q: requestsSearch ? requestsSearch.value.trim() : '',
-        status: 'pending',
+        status: adminRequestsStatusParam_(),
       });
+  }
+
+  function adminReloadRequests_() {
+    adminRequestsSkip = 0;
+    adminLoadRequests();
   }
 
   function adminDismissRequest(id) {
@@ -350,6 +377,20 @@
     });
   }
 
+  if (requestsStatusFilter) {
+    requestsStatusFilter.addEventListener('change', function () {
+      adminRequestsSkip = 0;
+      adminLoadRequests();
+    });
+  }
+
+  var requestsTabBtn = document.getElementById('settings-users-tab-requests');
+  if (requestsTabBtn) {
+    requestsTabBtn.addEventListener('click', function () {
+      adminReloadRequests_();
+    });
+  }
+
   if (requestsPrev) {
     requestsPrev.addEventListener('click', function () {
       if (adminRequestsBusy || adminRequestsSkip <= 0) return;
@@ -375,6 +416,7 @@
     syncVisitorNav: syncVisitorNav,
     onShow: loadVisitorState,
     adminLoad: adminLoadRequests,
+    adminReload: adminReloadRequests_,
     adminResetPager: function () {
       adminRequestsSkip = 0;
     },

@@ -13,6 +13,64 @@ var CONTENT_UPLOAD_LOCAL_MAX_BYTES =
     ? ADMIN_UPLOAD_LOCAL_MAX_BYTES
     : 50 * 1024 * 1024;
 
+/** Máximo de tags por documento (nube de tags). */
+var CONTENT_TAGS_MAX = 16;
+
+/** @type {Object<string,string>} */
+var CONTENT_INDUSTRY_TAG_MAP_ = {
+  Logistica: '#logistics',
+  'Agencias de Turismo': '#travelAgencies',
+  'Agencias AeroEspaciales': '#aerospace',
+  Aeropuertos: '#airports',
+};
+
+/** @type {Object<string,string>} */
+var CONTENT_TYPE_TAG_MAP_ = {
+  success_case: '#successCase',
+  proposal: '#commercialProposal',
+  client: '#clientProfile',
+  onboarding: '#onboarding',
+};
+
+/**
+ * @param {string} raw
+ * @return {string} clave estable sin #
+ */
+function ContentExtraction_tagKey_(raw) {
+  return String(raw || '')
+    .replace(/^#+/, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * @param {string} raw
+ * @return {string} #camelCase o ''
+ */
+function ContentExtraction_toCamelTag_(raw) {
+  var s = String(raw || '')
+    .replace(/^#+/, '')
+    .trim()
+    .replace(/[^a-zA-Z0-9\s\-_]/g, ' ');
+  if (!s) return '';
+  var parts = s.split(/[\s\-_]+/);
+  var words = [];
+  var i;
+  for (i = 0; i < parts.length; i++) {
+    var p = String(parts[i] || '').trim();
+    if (p.length >= 1) words.push(p);
+  }
+  if (!words.length) return '';
+  var camel = words[0].toLowerCase();
+  for (i = 1; i < words.length; i++) {
+    var w = words[i].toLowerCase();
+    if (!w) continue;
+    camel += w.charAt(0).toUpperCase() + w.slice(1);
+  }
+  if (camel.length < 2) return '';
+  return '#' + camel;
+}
+
 /**
  * Normaliza tags: inglés, camelCase, sin espacios, con #.
  * @param {Array<string>} tags
@@ -23,16 +81,275 @@ function ContentExtraction_normalizeTags_(tags) {
   var out = [];
   var seen = {};
   for (var i = 0; i < tags.length; i++) {
-    var t = String(tags[i] || '').trim();
+    var t = ContentExtraction_toCamelTag_(tags[i]);
     if (!t) continue;
-    t = t.replace(/[^a-zA-Z0-9#]/g, '');
-    if (t.charAt(0) !== '#') t = '#' + t;
-    var key = t.toLowerCase();
-    if (seen[key]) continue;
+    var key = ContentExtraction_tagKey_(t);
+    if (!key || seen[key]) continue;
     seen[key] = true;
     out.push(t);
   }
   return out;
+}
+
+/**
+ * @return {Object<string,string>} tagKey → display #tag (catálogo)
+ */
+function ContentExtraction_buildCatalogTagIndex_() {
+  var index = {};
+  var cloud = [];
+  try {
+    cloud = ContentCatalog_getTagsCloud_();
+  } catch (ignoreCloud) {
+    return index;
+  }
+  var ci;
+  for (ci = 0; ci < cloud.length; ci++) {
+    var display = ContentExtraction_toCamelTag_(cloud[ci].tag);
+    if (!display) continue;
+    index[ContentExtraction_tagKey_(display)] = display;
+  }
+  return index;
+}
+
+/**
+ * Si un tag nuevo es casi igual a uno del catálogo, usa el del catálogo (cohesión nube).
+ * @param {string} tag
+ * @param {Object<string,string>} catalogIndex
+ * @return {string}
+ */
+function ContentExtraction_preferCatalogTag_(tag, catalogIndex) {
+  var normalized = ContentExtraction_toCamelTag_(tag);
+  if (!normalized) return '';
+  var key = ContentExtraction_tagKey_(normalized);
+  if (catalogIndex[key]) return catalogIndex[key];
+
+  var best = '';
+  var bestScore = 0;
+  var ck;
+  for (ck in catalogIndex) {
+    if (!catalogIndex.hasOwnProperty(ck)) continue;
+    var score = 0;
+    if (key === ck) return catalogIndex[ck];
+    if (key.indexOf(ck) >= 0 || ck.indexOf(key) >= 0) {
+      score =
+        Math.min(key.length, ck.length) / Math.max(key.length, ck.length);
+    } else if (typeof ClientsMaster_nameMatchScore_ === 'function') {
+      score = ClientsMaster_nameMatchScore_(key, ck);
+    }
+    if (score > bestScore && score >= 0.82) {
+      bestScore = score;
+      best = catalogIndex[ck];
+    }
+  }
+  return best || normalized;
+}
+
+/**
+ * @param {Array<string>} tags
+ * @param {Object<string,string>} catalogIndex
+ * @return {Array<string>}
+ */
+function ContentExtraction_alignTagsToCatalog_(tags, catalogIndex) {
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < tags.length; i++) {
+    var aligned = ContentExtraction_preferCatalogTag_(tags[i], catalogIndex);
+    if (!aligned) continue;
+    var k = ContentExtraction_tagKey_(aligned);
+    if (seen[k]) continue;
+    seen[k] = true;
+    out.push(aligned);
+  }
+  return out;
+}
+
+/**
+ * @return {string}
+ */
+function ContentExtraction_getTagsHintForPrompt_() {
+  var cloud = [];
+  try {
+    cloud = ContentCatalog_getTagsCloud_();
+  } catch (ignoreCloud) {
+    return '';
+  }
+  if (!cloud.length) return '';
+  var top = cloud.slice(0, 55);
+  var parts = [];
+  var i;
+  for (i = 0; i < top.length; i++) {
+    parts.push(String(top[i].tag || '') + '(' + String(top[i].count || 0) + ')');
+  }
+  return 'FREQUENT CATALOG TAGS (reuse when meaning matches; counts help the tag cloud): ' + parts.join(', ');
+}
+
+/**
+ * @param {string} contentType
+ * @return {string}
+ */
+function ContentExtraction_buildTagPromptBlock_(contentType) {
+  var minTags = contentType === 'success_case' ? 8 : 5;
+  var maxTags = contentType === 'success_case' ? 14 : 10;
+  return [
+    'TAG STRATEGY — tags feed the Aviators tag cloud (search, filters, discovery). Be thoughtful and varied.',
+    'Output ' + minTags + '-' + maxTags + ' tags in common.tags when the document supports them.',
+    'Mix several DIMENSIONS (English camelCase, leading # only):',
+    '- Capability: #customerExperience, #dataAnalytics, #applicationModernization, #enterpriseIntegration, #cybersecurity',
+    '- Technology: #cloudComputing, #generativeAI, #machineLearning, #sap, #salesforce, #apiFirst, #microservices',
+    '- Aviation domain: #aviation, #airlines, #airports, #cargo, #groundHandling, #loyalty, #ancillaries, #ndc, #pss, #dcs, #revenueManagement',
+    '- Engagement: #staffAugmentation, #fixedPrice, #timeAndMaterials, #discovery, #mvp, #transformationProgram',
+    '- Outcome: #costReduction, #revenueGrowth, #timeToMarket, #operationalEfficiency, #customerSatisfaction, #automation',
+    '- Geography or segment (only if explicit): #latam, #emea, #enterprise, #lowCostCarrier',
+    'Rules:',
+    '- REUSE a FREQUENT CATALOG TAG when the meaning matches (keeps the cloud cohesive).',
+    '- ALSO invent 2-5 NEW specific tags for distinctive themes in THIS document (products, regulations, methods, tools).',
+    '- No duplicate synonyms (#analytics vs #dataAnalytics — pick one). No filler (#document, #pdf, #business).',
+    '- Scan logos, tech stacks, chapter titles, KPI callouts, and methodology boxes for tag ideas.',
+    ContentExtraction_getTagsHintForPrompt_(),
+  ]
+    .filter(function (line) {
+      return !!line;
+    })
+    .join('\n');
+}
+
+/**
+ * @param {string} blob
+ * @return {Array<string>}
+ */
+function ContentExtraction_inferTagsFromText_(blob) {
+  var text = String(blob || '');
+  if (!text) return [];
+  /** @type {Array<{re:RegExp, tag:string}>} */
+  var rules = [
+    { re: /\b(cloud|aws|azure|gcp|kubernetes|k8s|serverless|microservices?)\b/i, tag: '#cloudComputing' },
+    { re: /\b(gen(?:erative)?\s*ai|llm|chatgpt|copilot|rag|vector\s*search)\b/i, tag: '#generativeAI' },
+    { re: /\b(machine\s*learning|mlops|predictive\s*analytics)\b/i, tag: '#machineLearning' },
+    { re: /\b(data\s*(?:lake|warehouse|platform|analytics)|bi\b|snowflake|databricks)\b/i, tag: '#dataAnalytics' },
+    { re: /\b(sap|s\/4hana|erp)\b/i, tag: '#sap' },
+    { re: /\b(salesforce|crm)\b/i, tag: '#salesforce' },
+    { re: /\b(ndc|new\s*distribution\s*capability)\b/i, tag: '#ndc' },
+    { re: /\b(pss|passenger\s*service\s*system)\b/i, tag: '#pss' },
+    { re: /\b(dcs|departure\s*control)\b/i, tag: '#dcs' },
+    { re: /\b(loyalty|frequent\s*flyer|miles)\b/i, tag: '#loyalty' },
+    { re: /\b(ancillar(?:y|ies)|merchandising)\b/i, tag: '#ancillaries' },
+    { re: /\b(cargo|freight|logistics|supply\s*chain)\b/i, tag: '#cargo' },
+    { re: /\b(airport|ground\s*handling|aeropuerto)\b/i, tag: '#airports' },
+    { re: /\b(airline|aerolinea|aerolínea|carrier)\b/i, tag: '#airlines' },
+    { re: /\b(mobile|app\s*store|ios|android)\b/i, tag: '#mobile' },
+    { re: /\b(devops|ci\/cd|platform\s*engineering)\b/i, tag: '#devops' },
+    { re: /\b(cyber|security|soc\b|zero\s*trust)\b/i, tag: '#cybersecurity' },
+    { re: /\b(customer\s*experience|cx\b|passenger\s*experience)\b/i, tag: '#customerExperience' },
+    { re: /\b(cost\s*reduc|ahorro|opex|efficienc)/i, tag: '#costReduction' },
+    { re: /\b(time\s*to\s*market|go-?live|faster\s*launch)/i, tag: '#timeToMarket' },
+    { re: /\b(digital\s*transform|moderniz)/i, tag: '#digitalTransformation' },
+    { re: /\b(staff\s*aug|time\s*and\s*materials|t&m)\b/i, tag: '#staffAugmentation' },
+    { re: /\b(fixed\s*price|fixed\s*bid)\b/i, tag: '#fixedPrice' },
+    { re: /\b(rfp|tender|propuesta|proposal)\b/i, tag: '#commercialProposal' },
+    { re: /\b(success\s*case|caso\s*de\s*(?:éxito|exito))\b/i, tag: '#successCase' },
+  ];
+  var out = [];
+  var seen = {};
+  var ri;
+  for (ri = 0; ri < rules.length; ri++) {
+    if (!rules[ri].re.test(text)) continue;
+    var k = ContentExtraction_tagKey_(rules[ri].tag);
+    if (seen[k]) continue;
+    seen[k] = true;
+    out.push(rules[ri].tag);
+  }
+  return out;
+}
+
+/**
+ * @param {string} contentType
+ * @param {Object} common
+ * @param {Object} specific
+ * @return {Array<string>}
+ */
+function ContentExtraction_inferTagsFromDraft_(contentType, common, specific) {
+  var parts = [
+    String(common.title || ''),
+    String(common.summary || ''),
+  ];
+  if (ContentExtraction_usesClientMetadata_(contentType)) {
+    parts.push(String(common.client_name || ''), String(common.industry || ''));
+  }
+  parts.push(
+    String(specific.challenge || ''),
+    String(specific.solution || ''),
+    String(specific.impact_metric || ''),
+    String(specific.impact_value || ''),
+    String(specific.evidence || ''),
+    String(specific.notes || ''),
+    String(specific.stage || ''),
+    String(specific.pricing_model || ''),
+    String(specific.topic || ''),
+  );
+  var inferred = ContentExtraction_inferTagsFromText_(parts.join('\n'));
+
+  var typeTag = CONTENT_TYPE_TAG_MAP_[contentType];
+  if (typeTag) inferred.push(typeTag);
+
+  if (ContentExtraction_usesClientMetadata_(contentType)) {
+    var ind = String(common.industry || '').trim();
+    if (ind && CONTENT_INDUSTRY_TAG_MAP_[ind]) inferred.push(CONTENT_INDUSTRY_TAG_MAP_[ind]);
+  }
+
+  if (contentType === 'proposal') {
+    var stage = String(specific.stage || '').trim().toUpperCase();
+    if (stage === 'WIN') inferred.push('#win');
+    if (stage === 'NEGOTIATION') inferred.push('#negotiation');
+    var pm = String(specific.pricing_model || '').trim();
+    if (pm === 'TIME_AND_MATERIALS') inferred.push('#timeAndMaterials');
+    if (pm === 'FIXED_PRICE') inferred.push('#fixedPrice');
+    if (pm === 'STAFF_AUGMENTATION') inferred.push('#staffAugmentation');
+  }
+
+  return ContentExtraction_normalizeTags_(inferred);
+}
+
+/**
+ * Combina tags del LLM + heurísticas y alinea al catálogo para la nube.
+ * @param {Array<string>} llmTags
+ * @param {string} contentType
+ * @param {Object} common
+ * @param {Object} specific
+ * @return {{tags:Array<string>, supplemented:boolean}}
+ */
+function ContentExtraction_enrichTags_(llmTags, contentType, common, specific) {
+  var catalogIndex = ContentExtraction_buildCatalogTagIndex_();
+  var merged = ContentExtraction_alignTagsToCatalog_(
+    ContentExtraction_normalizeTags_(llmTags || []),
+    catalogIndex,
+  );
+  var llmCount = merged.length;
+
+  var inferred = ContentExtraction_inferTagsFromDraft_(contentType, common, specific);
+  var inferredAligned = ContentExtraction_alignTagsToCatalog_(inferred, catalogIndex);
+
+  var seen = {};
+  var out = [];
+  var i;
+  for (i = 0; i < merged.length; i++) {
+    var k = ContentExtraction_tagKey_(merged[i]);
+    if (seen[k]) continue;
+    seen[k] = true;
+    out.push(merged[i]);
+  }
+  for (i = 0; i < inferredAligned.length; i++) {
+    if (out.length >= CONTENT_TAGS_MAX) break;
+    var ik = ContentExtraction_tagKey_(inferredAligned[i]);
+    if (seen[ik]) continue;
+    seen[ik] = true;
+    out.push(inferredAligned[i]);
+  }
+
+  var minWant = contentType === 'success_case' ? 6 : 4;
+  var supplemented = out.length > llmCount || (llmCount < minWant && out.length >= minWant);
+
+  return { tags: out.slice(0, CONTENT_TAGS_MAX), supplemented: supplemented };
 }
 
 /**
@@ -95,7 +412,6 @@ var CONTENT_ALLOWED_CLIENT_INDUSTRIES =
         'Logistica',
         'Agencias AeroEspaciales',
         'Aeropuertos',
-        'Aerolineas',
       ];
 
 /** @type {Object<string,string>} Etiquetas legibles por content_type para el prompt */
@@ -105,6 +421,15 @@ var CONTENT_EXTRACTION_TYPE_LABELS = {
   client: 'client profile / account overview / CRM export',
   onboarding: 'onboarding / training / enablement material',
 };
+
+/**
+ * Onboarding es material interno de enablement: no lleva cliente ni industria.
+ * @param {string} contentType
+ * @return {boolean}
+ */
+function ContentExtraction_usesClientMetadata_(contentType) {
+  return String(contentType || '').trim() !== 'onboarding';
+}
 
 /**
  * @return {string}
@@ -125,7 +450,7 @@ function ContentExtraction_getClientsHint_() {
   var max = 80;
   if (names.length > max) {
     return (
-      'KNOWN CLIENTS (use exact spelling when the document matches; do NOT invent variants): ' +
+      'KNOWN CLIENTS (use the closest catalog name when the document matches; small typos or accents OK): ' +
       names.slice(0, max).join(', ') +
       ' … and ' +
       String(names.length - max) +
@@ -133,7 +458,8 @@ function ContentExtraction_getClientsHint_() {
     );
   }
   return (
-    'KNOWN CLIENTS (use exact spelling when the document matches; do NOT invent variants): ' +
+    'KNOWN CLIENTS (when the document refers to one of these accounts, use the closest catalog ' +
+    'spelling; small typos or missing accents are OK — do NOT invent a new variant): ' +
     names.join(', ')
   );
 }
@@ -157,87 +483,31 @@ function ContentExtraction_titleFromFileName_(fileName) {
 /**
  * @param {string} rawName
  * @param {string} fileName
- * @return {{client_name:string, industry:string, matched:boolean}}
+ * @return {{client_name:string, industry:string, sub_industry:string, matched:boolean}}
  */
 function ContentExtraction_matchClient_(rawName, fileName) {
-  var empty = {
-    client_name: String(rawName || '').trim(),
-    industry: '',
-    matched: false,
+  var m = ClientsMaster_matchFromHints_(rawName, fileName);
+  return {
+    client_name: m.client_name,
+    industry: m.industry,
+    sub_industry: m.sub_industry,
+    matched: m.matched,
   };
-  var rows = ClientsMasterStore_listAll();
-  if (!rows.length) return empty;
+}
 
-  var candidates = [];
-  var raw = String(rawName || '').trim();
-  if (raw) candidates.push(raw);
-
-  var stem = String(fileName || '').replace(/\.[^.]+$/i, '');
-  var segs = stem.split(/[\s_\-–—]+/);
-  var si;
-  for (si = 0; si < segs.length; si++) {
-    var seg = String(segs[si] || '').trim();
-    if (seg.length >= 2) candidates.push(seg);
+/**
+ * @return {string}
+ */
+function ContentExtraction_getIndustryCatalogHint_() {
+  var catalog = ClientsMaster_listFilterOptions();
+  var ind = catalog.industries || [];
+  if (!ind.length) {
+    return 'INDUSTRY: leave common.industry empty unless clearly stated and already known.';
   }
-  if (segs.length >= 2) {
-    candidates.push((String(segs[0] || '') + ' ' + String(segs[1] || '')).trim());
-  }
-
-  var seenC = {};
-  var uniq = [];
-  var ci;
-  for (ci = 0; ci < candidates.length; ci++) {
-    var key = ClientsMaster_normalizeName_(candidates[ci]);
-    if (!key || seenC[key]) continue;
-    seenC[key] = true;
-    uniq.push(candidates[ci]);
-  }
-
-  for (ci = 0; ci < uniq.length; ci++) {
-    var exact = ClientsMaster_findByName(uniq[ci]);
-    if (exact) {
-      return {
-        client_name: exact.client_name,
-        industry: String(exact.industry || '').trim(),
-        matched: true,
-      };
-    }
-  }
-
-  var best = null;
-  var bestScore = 0;
-  var ri;
-  for (ri = 0; ri < rows.length; ri++) {
-    var client = ClientsMasterStore_toApiItem_(rows[ri]);
-    var cn = ClientsMaster_normalizeName_(client.client_name);
-    if (!cn || cn.length < 3) continue;
-    for (var uj = 0; uj < uniq.length; uj++) {
-      var cand = ClientsMaster_normalizeName_(uniq[uj]);
-      if (!cand || cand.length < 3) continue;
-      if (cand === cn) {
-        return {
-          client_name: client.client_name,
-          industry: String(client.industry || '').trim(),
-          matched: true,
-        };
-      }
-      if (cand.indexOf(cn) >= 0 || cn.indexOf(cand) >= 0) {
-        var score = Math.min(cand.length, cn.length) / Math.max(cand.length, cn.length);
-        if (score > bestScore && score >= 0.6) {
-          bestScore = score;
-          best = client;
-        }
-      }
-    }
-  }
-  if (best) {
-    return {
-      client_name: best.client_name,
-      industry: String(best.industry || '').trim(),
-      matched: true,
-    };
-  }
-  return empty;
+  return (
+    'INDUSTRY (use ONLY one of these exact catalog values when applicable; otherwise empty string): ' +
+    ind.join(', ')
+  );
 }
 
 /**
@@ -507,24 +777,62 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
     }
   }
 
-  var clientMatch = ContentExtraction_matchClient_(common.client_name, fileName);
-  if (clientMatch.matched) {
-    if (
-      String(common.client_name || '').trim() &&
-      common.client_name !== clientMatch.client_name
-    ) {
-      warnings.push(UiStrings_t(locale, 'contents_warn_client_from_catalog'));
-    } else if (!String(common.client_name || '').trim()) {
-      warnings.push(UiStrings_t(locale, 'contents_warn_client_from_filename'));
+  if (ContentExtraction_usesClientMetadata_(contentType)) {
+    var clientMatch = ClientsMaster_matchFromHints_(common.client_name, fileName);
+    if (clientMatch.matched) {
+      if (
+        String(common.client_name || '').trim() &&
+        common.client_name !== clientMatch.client_name
+      ) {
+        warnings.push(UiStrings_t(locale, 'contents_warn_client_from_catalog'));
+      } else if (!String(common.client_name || '').trim()) {
+        warnings.push(UiStrings_t(locale, 'contents_warn_client_from_filename'));
+      }
+      common.client_name = clientMatch.client_name;
+      var indFromClient = ClientsMaster_resolveIndustryFromCatalog_(clientMatch.industry);
+      if (indFromClient) common.industry = indFromClient;
+    } else {
+      var nameToEnsure = String(clientMatch.client_name || '').trim();
+      if (nameToEnsure.length >= 2) {
+        var ensured = ClientsMaster_ensureByName(nameToEnsure, common.industry);
+        common.client_name = ensured.item.client_name;
+        if (ensured.created) {
+          warnings.push(UiStrings_t(locale, 'contents_warn_client_created'));
+        }
+        var indNew = ClientsMaster_resolveIndustryFromCatalog_(
+          String(ensured.item.industry || '').trim(),
+        );
+        if (indNew) common.industry = indNew;
+      }
     }
-    common.client_name = clientMatch.client_name;
-    if (!String(common.industry || '').trim() && clientMatch.industry) {
-      common.industry = ClientsMaster_resolveIndustry_(clientMatch.industry);
+    var llmIndustry = String(common.industry || '').trim();
+    if (llmIndustry) {
+      var catalogIndustry = ClientsMaster_resolveIndustryFromCatalog_(llmIndustry);
+      if (catalogIndustry) common.industry = catalogIndustry;
+      else {
+        common.industry = '';
+        warnings.push(UiStrings_t(locale, 'contents_warn_industry_not_in_catalog'));
+      }
     }
+  } else {
+    common.client_name = '';
+    common.industry = '';
+  }
+
+  var specificNorm = ContentExtraction_normalizeSpecific_(contentType, parsed.specific || {});
+  var tagEnrich = ContentExtraction_enrichTags_(
+    common.tags,
+    contentType,
+    common,
+    specificNorm,
+  );
+  common.tags = tagEnrich.tags;
+  if (tagEnrich.supplemented) {
+    warnings.push(UiStrings_t(locale, 'contents_warn_tags_enriched'));
   }
 
   parsed.common = common;
-  parsed.specific = ContentExtraction_normalizeSpecific_(contentType, parsed.specific || {});
+  parsed.specific = specificNorm;
 
   if (contentType === 'success_case') {
     var spEnriched = parsed.specific || {};
@@ -537,6 +845,14 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
       spEnriched.challenge = summaryText;
       parsed.specific = spEnriched;
       warnings.push(UiStrings_t(locale, 'contents_warn_challenge_from_summary'));
+      var tagRetry = ContentExtraction_enrichTags_(
+        common.tags,
+        contentType,
+        common,
+        spEnriched,
+      );
+      common.tags = tagRetry.tags;
+      parsed.common = common;
     }
   }
 
@@ -551,37 +867,44 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
  */
 function ContentExtraction_promptForType_(contentType, hints) {
   hints = hints || {};
-  var existingTags = ContentCatalog_getAllTags();
-  var tagsHint = existingTags.length
-    ? 'EXISTING TAGS (reuse these, do NOT create synonyms): ' + existingTags.join(', ')
-    : '';
   var typeLabel = CONTENT_EXTRACTION_TYPE_LABELS[contentType] || contentType;
   var fileName = String(hints.fileName || '').trim();
   var clientsHint = String(hints.clientsHint || '').trim();
 
+  var usesClient = ContentExtraction_usesClientMetadata_(contentType);
   var commonInstructions = [
     'Extract metadata for content type: ' + typeLabel + '.',
-    fileName ? 'Original file name: "' + fileName + '". Use it as a hint when the document title or client is unclear.' : '',
-    clientsHint,
+    fileName
+      ? usesClient
+        ? 'Original file name: "' + fileName + '". Use it as a hint when the document title or client is unclear.'
+        : 'Original file name: "' + fileName + '". Use it as a hint when the document title is unclear.'
+      : '',
+    usesClient ? clientsHint : '',
     'Analyze the full document (cover, headers, footers, tables, logos, metadata blocks).',
     'Return ONLY valid JSON. No markdown fences, no comments outside JSON.',
     'If a value is missing or uncertain, use empty string and explain briefly in warnings[] (same language as the document).',
-    'Set confidence to high only when title and client_name are clearly supported by the document.',
-    'TAGS RULES:',
-    '- Always in English',
-    '- camelCase format (e.g. #dataAnalytics, #cloudMigration)',
-    '- No spaces, no special chars except #',
-    '- Reuse existing tags when meaning matches. Do NOT create synonyms.',
-    '- Suggest 3-8 relevant tags when the document supports them.',
-    tagsHint,
-    'INDUSTRY RULES:',
-    '- common.industry MUST be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
-    '- No synonyms, no translations, no free text.',
-    'Common structure:',
-    '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
-    'common.summary: 1-3 sentences describing the document purpose and scope.',
-    'common.client_name: legal or commercial name of the customer/account when present.',
+    usesClient
+      ? 'Set confidence to high only when title and client_name are clearly supported by the document.'
+      : 'Set confidence to high only when title is clearly supported by the document.',
+    ContentExtraction_buildTagPromptBlock_(contentType),
   ];
+  if (usesClient) {
+    commonInstructions.push(
+      ContentExtraction_getIndustryCatalogHint_(),
+      '- Do NOT invent industry values; empty string if not in the catalog.',
+      'Common structure:',
+      '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
+      'common.summary: 1-3 sentences describing the document purpose and scope.',
+      'common.client_name: legal or commercial name of the customer/account when present.',
+    );
+  } else {
+    commonInstructions.push(
+      'Common structure:',
+      '{"common":{"title":"","summary":"","tags":[]},"specific":{},"confidence":"high|medium|low","warnings":[]}',
+      'common.summary: 1-3 sentences describing the document purpose and scope.',
+      'Do NOT extract client_name or industry for this content type.',
+    );
+  }
   if (contentType === 'proposal') {
     commonInstructions.push(
       'specific for proposal: {"stage":"","pricing_model":"","effort_estimate":"","timeline":"","win_probability":"","notes":""}',
@@ -631,6 +954,7 @@ function ContentExtraction_systemPrompt_() {
     'You are a metadata extraction specialist for Aviators, a B2B knowledge base for aviation, airlines, airports, logistics and related industries.',
     'You receive business documents (often PDF) and extract structured catalog fields.',
     'Be conservative: never invent client names, dates, or metrics not supported by the document.',
+    'For tags: be creative and specific — they power a tag cloud used for search and discovery across the portfolio.',
     'Return ONLY valid JSON as requested. No markdown.',
   ].join('\n');
 }
@@ -686,7 +1010,7 @@ function ContentExtraction_parseJson_(text) {
     parsed.common.tags = legacyTags;
   }
   parsed.common.tags = ContentExtraction_normalizeTags_(parsed.common.tags);
-  parsed.common.industry = ClientsMaster_resolveIndustry_(parsed.common.industry || '');
+  parsed.common.industry = ClientsMaster_resolveIndustryFromCatalog_(parsed.common.industry || '');
   delete parsed.common.tags_controlled;
   delete parsed.common.tags_free;
   if (!Array.isArray(parsed.warnings)) parsed.warnings = [];
@@ -695,8 +1019,14 @@ function ContentExtraction_parseJson_(text) {
   return parsed;
 }
 
-/** @type {string} Modelo multimodal para extracción (Gemini con soporte PDF) */
-var CONTENT_EXTRACTION_MODEL = 'vertex_ai/gemini-2.0-flash-exp';
+/**
+ * Modelo para /v1/chat/completions con PDF inline (extracción de contenidos).
+ * Usa GLOBANT_CHAT_MODEL vía GlobantAssistant_resolveChatModel_ (defecto vertex_ai/gemini-2.5-flash).
+ * @return {string}
+ */
+function ContentExtraction_resolveChatModel_() {
+  return GlobantAssistant_resolveChatModel_();
+}
 
 /** @type {Array<string>} Pasadas de extracción para success cases (PDF reenviado en cada una). */
 var CONTENT_SUCCESS_CASE_PASSES = ['common', 'challenge', 'solution', 'impact'];
@@ -730,7 +1060,7 @@ function ContentExtraction_parseLooseJson_(text) {
  */
 function ContentExtraction_chatFilePass_(client, systemPrompt, userPrompt, b64, mime) {
   return client.chatWithFileInline(
-    CONTENT_EXTRACTION_MODEL,
+    ContentExtraction_resolveChatModel_(),
     systemPrompt,
     userPrompt,
     b64,
@@ -752,21 +1082,18 @@ function ContentExtraction_promptSuccessCasePass_(passId, hints) {
     : '';
 
   if (passId === 'common') {
-    var existingTags = ContentCatalog_getAllTags();
-    var tagsHint = existingTags.length
-      ? 'EXISTING TAGS (reuse, no synonyms): ' + existingTags.join(', ')
-      : '';
     return [
       'Extract COMMON catalog metadata from this success case / case study PDF.',
       fileHint,
       clientsHint,
       'Read cover, headers, footers, logos, tables, and metadata blocks.',
       'Return ONLY valid JSON. No markdown.',
-      tagsHint,
+      ContentExtraction_buildTagPromptBlock_('success_case'),
       'INDUSTRY must be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
       'Schema:',
       '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"confidence":"high|medium|low","warnings":[]}',
       'common.summary: 1-3 sentences — document purpose only (NOT challenge/solution detail).',
+      'common.tags: rich set for tag-cloud discovery (capabilities, tech, aviation domain, outcomes).',
       'Do NOT extract challenge, solution, or impact here — other passes handle those.',
     ]
       .filter(function (line) {
@@ -802,9 +1129,10 @@ function ContentExtraction_promptSuccessCasePass_(passId, hints) {
       'Solution, Solución, Solucion, Approach, What we did, Lo que hicimos, Our response,',
       'Delivery, Implementation, Scope, How we helped, Services, Technologies, Equipo.',
       'Return ONLY valid JSON:',
-      '{"solution":"<2-6 sentences from the document>","confidence":"high|medium|low","warnings":[]}',
+      '{"solution":"<2-6 sentences from the document>","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
       'Rules:',
       '- solution MUST describe what Globant/the team delivered — approach, scope, technologies.',
+      '- tags (optional): 0-4 English #camelCase tags for tech stack, methods, or capabilities visible in this section only.',
       '- Do NOT leave solution empty if any section describes the work done or approach.',
       '- Do NOT repeat the challenge or impact/results here.',
       '- Use the document language. Quote or paraphrase faithfully; do not invent.',
@@ -819,8 +1147,9 @@ function ContentExtraction_promptSuccessCasePass_(passId, hints) {
       'Search for: Impact, Impacto, Results, Resultados, Outcomes, Benefits, Beneficios, KPI, Metrics,',
       'Métricas, Value, ROI, testimonial quotes, awards, proof points.',
       'Return ONLY valid JSON:',
-      '{"impact_metric":"","impact_value":"","evidence":"","notes":"","confidence":"high|medium|low","warnings":[]}',
+      '{"impact_metric":"","impact_value":"","evidence":"","notes":"","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
       'Field rules:',
+      '- tags (optional): 0-3 #camelCase outcome or domain tags (e.g. #costReduction, #customerSatisfaction) if supported here.',
       '- impact_metric: KPI name only (e.g. "cost reduction", "time to market", "NPS").',
       '- impact_value: quantified outcome with numbers when present (e.g. "30%", "$2M", "6 months faster").',
       '- evidence: client quotes, awards, testimonials, or proof points if stated.',
@@ -896,6 +1225,12 @@ function ContentExtraction_mergeSuccessCasePass_(passId, parsed, draft, locale) 
       if (nt) specific.notes = nt;
     }
     draft.specific = specific;
+    if (Array.isArray(parsed.tags) && parsed.tags.length) {
+      var commonForTags = draft.common || {};
+      var prevTags = Array.isArray(commonForTags.tags) ? commonForTags.tags : [];
+      commonForTags.tags = prevTags.concat(parsed.tags);
+      draft.common = commonForTags;
+    }
   }
 
   if (Array.isArray(parsed.warnings)) {
@@ -1111,10 +1446,10 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
 
   var b64 = payload.dataBase64 || '';
   var mime = prepared.mimeType || 'application/pdf';
-  var hints = {
-    fileName: prepared.name,
-    clientsHint: ContentExtraction_getClientsHint_(),
-  };
+  var hints = { fileName: prepared.name };
+  if (ContentExtraction_usesClientMetadata_(contentType)) {
+    hints.clientsHint = ContentExtraction_getClientsHint_();
+  }
 
   var draft;
   if (contentType === 'success_case') {

@@ -33,9 +33,48 @@
   ];
   var CHAT_PROGRESS_TICK_MS = 5200;
   var MAX_HISTORY = 10;
+  var CHAT_AGENT_ONBOARDING = 'onboarding';
+
+  var dashboardTitleEl = document.getElementById('dashboard-title');
+  var dashboardLeadEl = document.getElementById('dashboard-lead');
+
+  function homeChatIsOnboardingPage_() {
+    return S.get('activePage') === 'onboarding';
+  }
+
+  function homeChatHistKey_() {
+    return homeChatIsOnboardingPage_() ? 'onboardingChatHistory' : 'chatHistory';
+  }
+
+  function homeChatConvKey_() {
+    return homeChatIsOnboardingPage_() ? 'onboardingChatConvId' : 'chatConvId';
+  }
+
+  function homeChatGetHistory_() {
+    return S.get(homeChatHistKey_()) || [];
+  }
+
+  function homeChatSetHistory_(hist) {
+    S.set(homeChatHistKey_(), hist);
+  }
+
+  function homeChatForcedAgentId_() {
+    return homeChatIsOnboardingPage_() ? CHAT_AGENT_ONBOARDING : null;
+  }
+
+  function homeChatStartersKey_() {
+    return homeChatIsOnboardingPage_() ? 'onboardingChatStartersShown' : 'chatStartersShown';
+  }
+
+  function homeChatGetQuickPrompts_() {
+    if (homeChatIsOnboardingPage_()) {
+      return S.get('onboardingQuickPrompts') || [];
+    }
+    return S.get('quickPrompts') || [];
+  }
 
   function pushHistory(role, content, extra) {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     var entry = { role: role, content: content, ts: Date.now() };
     if (extra && typeof extra === 'object') {
       if (extra.metaLine != null) entry.metaLine = extra.metaLine;
@@ -48,17 +87,17 @@
     }
     hist.push(entry);
     while (hist.length > MAX_HISTORY * 2) hist.shift();
-    S.set('chatHistory', hist);
+    homeChatSetHistory_(hist);
     return hist.length - 1;
   }
 
   function homeChatGetTurn_(idx) {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     return typeof idx === 'number' && idx >= 0 && idx < hist.length ? hist[idx] : null;
   }
 
   function homeChatFindUserTurnForAgentIdx_(agentHistIdx) {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     for (var i = agentHistIdx - 1; i >= 0; i--) {
       if (hist[i] && hist[i].role === 'user') return { turn: hist[i], idx: i };
     }
@@ -66,7 +105,7 @@
   }
 
   function homeChatHistoryJsonForRegenerate_() {
-    var hist = (S.get('chatHistory') || []).slice();
+    var hist = homeChatGetHistory_().slice();
     if (hist.length && hist[hist.length - 1].role === 'assistant') hist.pop();
     return JSON.stringify(hist);
   }
@@ -98,7 +137,7 @@
 
   function homeChatRefExportUrl_(ref) {
     var actions = homeChatResolveRefActions_(ref);
-    if (actions.drive.available) return actions.drive.url;
+    if (actions.drive.available && actions.drive.url) return actions.drive.url;
     if (actions.catalog.available) return 'aviators://contents/' + actions.catalog.contentId;
     if (actions.rag.available) return 'aviators://agents/' + encodeURIComponent(actions.rag.profileName);
     return '';
@@ -137,7 +176,7 @@
   }
 
   function homeChatBuildConversationMarkdown_() {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     if (!hist.length) return '';
     var lines = ['# ' + i18n('chat_export_title'), ''];
     for (var i = 0; i < hist.length; i++) {
@@ -172,7 +211,7 @@
   function homeChatRefreshRegenerateButtons_() {
     var thread = document.getElementById('chat-thread');
     if (!thread) return;
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     var lastUserIdx = -1;
     for (var hi = hist.length - 1; hi >= 0; hi--) {
       if (hist[hi] && hist[hi].role === 'user') {
@@ -197,9 +236,9 @@
     var last = agents[agents.length - 1];
     var idxAttr = last.getAttribute('data-hist-idx');
     last.parentNode.removeChild(last);
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     if (hist.length && hist[hist.length - 1].role === 'assistant') hist.pop();
-    S.set('chatHistory', hist);
+    homeChatSetHistory_(hist);
     homeChatRefreshRegenerateButtons_();
     return idxAttr != null ? parseInt(idxAttr, 10) : null;
   }
@@ -207,10 +246,10 @@
   /** Quita del hilo e historial todas las respuestas posteriores al turno de usuario dado. */
   function homeChatRemoveAssistantRepliesAfterUserIdx_(userHistIdx) {
     var thread = document.getElementById('chat-thread');
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     if (userHistIdx < 0 || userHistIdx >= hist.length) return;
     while (hist.length > userHistIdx + 1) hist.pop();
-    S.set('chatHistory', hist);
+    homeChatSetHistory_(hist);
     if (thread) {
       var nodes = thread.querySelectorAll('.chat-msg-agent[data-hist-idx]');
       for (var ni = 0; ni < nodes.length; ni++) {
@@ -260,51 +299,250 @@
       .replace(/"/g, '&quot;');
   }
 
-  function homeChatConversationHtmlForPrint_() {
-    var hist = S.get('chatHistory') || [];
-    var blocks = [];
-    for (var i = 0; i < hist.length; i++) {
-      var m = hist[i];
-      var heading = m.role === 'user' ? i18n('chat_sr_you') : i18n('chat_sr_agent');
-      var body = homeChatEscapeHtml_(m.content || '').replace(/\n/g, '<br>');
-      var extra = '';
-      if (m.metaLine) {
-        extra += '<p class="meta">' + homeChatEscapeHtml_(m.metaLine) + '</p>';
+  function homeChatSanitizeMarkdownUrl_(href) {
+    var h = String(href || '').trim();
+    if (/^https?:\/\//i.test(h) || /^mailto:/i.test(h)) return h;
+    return '';
+  }
+
+  function homeChatInlineMarkdown_(escaped) {
+    var s = String(escaped || '');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_m, label, url) {
+      var safe = homeChatSanitizeMarkdownUrl_(url);
+      if (!safe) return label;
+      return (
+        '<a href="' +
+        safe +
+        '" target="_blank" rel="noopener noreferrer" class="chat-md-a">' +
+        label +
+        '</a>'
+      );
+    });
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong class="chat-md-strong">$1</strong>');
+    s = s.replace(/\*([^*\n]+)\*/g, '<em class="chat-md-em">$1</em>');
+    s = s.replace(/`([^`\n]+)`/g, '<code class="chat-md-code">$1</code>');
+    return s;
+  }
+
+  /**
+   * Subconjunto Markdown seguro (sin HTML crudo del modelo).
+   * @param {string} raw
+   * @return {string}
+   */
+  function homeChatRenderMarkdown_(raw) {
+    var text = String(raw || '');
+    if (!text.trim()) return '';
+
+    var lines = text.split(/\r?\n/);
+    var html = [];
+    var inCode = false;
+    var codeBuf = [];
+    var listType = null;
+    var para = [];
+
+    function flushPara() {
+      if (!para.length) return;
+      html.push(
+        '<p class="chat-md-p">' +
+          homeChatInlineMarkdown_(homeChatEscapeHtml_(para.join(' '))) +
+          '</p>',
+      );
+      para = [];
+    }
+
+    function closeList() {
+      if (listType) {
+        html.push('</' + listType + '>');
+        listType = null;
       }
-      if (m.references && m.references.length) {
-        extra += '<div class="refs"><strong>' + homeChatEscapeHtml_(i18n('chat_refs_title')) + '</strong><ul>';
-        for (var ri = 0; ri < m.references.length; ri++) {
-          var ref = m.references[ri] || {};
-          var li =
-            homeChatEscapeHtml_(homeChatRefTypeLabel_(ref.contentType)) +
-            ' — ' +
-            homeChatEscapeHtml_(ref.title || i18n('chat_history_untitled'));
-          var url = homeChatRefExportUrl_(ref);
-          if (url) li += ' <span class="url">(' + homeChatEscapeHtml_(url) + ')</span>';
-          extra += '<li>' + li + '</li>';
+    }
+
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^```/.test(line)) {
+        flushPara();
+        closeList();
+        if (inCode) {
+          html.push(
+            '<pre class="chat-md-pre"><code>' +
+              homeChatEscapeHtml_(codeBuf.join('\n')) +
+              '</code></pre>',
+          );
+          codeBuf = [];
+          inCode = false;
+        } else {
+          inCode = true;
         }
-        extra += '</ul></div>';
+        continue;
       }
-      blocks.push(
-        '<section class="turn"><h2>' +
-        homeChatEscapeHtml_(heading) +
-        '</h2><div class="body">' +
-        body +
-        '</div>' +
-        extra +
-        '</section>',
+      if (inCode) {
+        codeBuf.push(line);
+        continue;
+      }
+
+      var ul = /^(\s*)[-*•]\s+(.+)$/.exec(line);
+      var ol = /^(\s*)\d+\.\s+(.+)$/.exec(line);
+      if (ul) {
+        flushPara();
+        if (listType !== 'ul') {
+          closeList();
+          html.push('<ul class="chat-md-ul">');
+          listType = 'ul';
+        }
+        html.push(
+          '<li class="chat-md-li">' +
+            homeChatInlineMarkdown_(homeChatEscapeHtml_(ul[2])) +
+            '</li>',
+        );
+        continue;
+      }
+      if (ol) {
+        flushPara();
+        if (listType !== 'ol') {
+          closeList();
+          html.push('<ol class="chat-md-ol">');
+          listType = 'ol';
+        }
+        html.push(
+          '<li class="chat-md-li">' +
+            homeChatInlineMarkdown_(homeChatEscapeHtml_(ol[2])) +
+            '</li>',
+        );
+        continue;
+      }
+
+      closeList();
+      if (!String(line || '').trim()) {
+        flushPara();
+        continue;
+      }
+
+      var hd = /^(#{1,3})\s+(.+)$/.exec(line);
+      if (hd) {
+        flushPara();
+        var level = hd[1].length;
+        var tag = 'h' + level;
+        html.push(
+          '<' +
+            tag +
+            ' class="chat-md-h' +
+            level +
+            '">' +
+            homeChatInlineMarkdown_(homeChatEscapeHtml_(hd[2])) +
+            '</' +
+            tag +
+            '>',
+        );
+        continue;
+      }
+
+      para.push(String(line).trim());
+    }
+
+    flushPara();
+    closeList();
+    if (inCode && codeBuf.length) {
+      html.push(
+        '<pre class="chat-md-pre"><code>' +
+          homeChatEscapeHtml_(codeBuf.join('\n')) +
+          '</code></pre>',
       );
     }
-    return blocks.join('');
+
+    return '<div class="chat-md">' + html.join('') + '</div>';
+  }
+
+  function homeChatSetAgentBubbleHtml_(bubbleEl, rawMarkdown) {
+    if (!bubbleEl) return;
+    bubbleEl.classList.add('chat-bubble-agent--md');
+    bubbleEl.innerHTML = homeChatRenderMarkdown_(rawMarkdown);
+  }
+
+  function homeChatResolveExportLocale_() {
+    return homeChatResolveUiLocale_(null);
+  }
+
+  function homeChatLogoDataUrl_() {
+    var img = document.getElementById('aviators-logo');
+    if (!img) return '';
+    return String(img.getAttribute('src') || img.src || '').trim();
+  }
+
+  function homeChatDownloadPdfBase64_(filename, pdfBase64) {
+    var b64 = String(pdfBase64 || '');
+    if (!b64) return;
+    var binary = atob(b64);
+    var len = binary.length;
+    var bytes = new Uint8Array(len);
+    var i;
+    for (i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: 'application/pdf' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'aviators-export.pdf';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 200);
+  }
+
+  /**
+   * @param {{mode?: string, turnIndex?: number}} opts
+   */
+  function homeChatExportPdf_(opts) {
+    var options = opts || {};
+    var hist = homeChatGetHistory_();
+    if (!hist.length) {
+      if (A.toast) A.toast.info(i18n('chat_export_empty'));
+      return;
+    }
+    var mode = options.mode === 'turn' ? 'turn' : 'conversation';
+    if (mode === 'turn') {
+      var tIdx = options.turnIndex;
+      if (typeof tIdx !== 'number' || !hist[tIdx] || hist[tIdx].role !== 'assistant') {
+        if (A.toast) A.toast.info(i18n('chat_export_empty'));
+        return;
+      }
+    }
+    A.showBlockingModal(i18n('chat_export_busy'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        if (!res || !res.ok || !res.pdfBase64) {
+          if (A.toast) A.toast.error(i18n('chat_export_error'));
+          return;
+        }
+        homeChatDownloadPdfBase64_(res.filename, res.pdfBase64);
+        if (A.toast) A.toast.success(i18n('chat_export_done'));
+      })
+      .withFailureHandler(function (err) {
+        A.reportRpcError(err, {
+          scope: 'chatExportPdf',
+          fallbackKey: 'chat_export_error',
+          modal: true,
+          toast: true,
+        });
+      })
+      .chatExportPdf({
+        mode: mode,
+        locale: homeChatResolveExportLocale_(),
+        logoSrc: homeChatLogoDataUrl_(),
+        messages: hist,
+        turnIndex: mode === 'turn' ? options.turnIndex : undefined,
+      });
   }
 
   function getHistoryJson() {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     return JSON.stringify(hist);
   }
 
   function clearHistory() {
-    S.set('chatHistory', []);
+    homeChatSetHistory_([]);
   }
 
   function updateHomeChatBanner(cfg) {
@@ -480,7 +718,7 @@
     }
     S.set('chatAttachedFile', fileWrap);
     if (chatAttachName) {
-      chatAttachName.textContent = i18nFmt('chat_attach_selected', { name: fileWrap.name });
+      chatAttachName.textContent = fileWrap.name;
     }
     if (chatAttachChip) chatAttachChip.classList.remove('hidden');
   }
@@ -539,6 +777,25 @@
     return Math.abs(h) % 360;
   }
 
+  function homeChatBuildAttachmentChipEl_(fileName) {
+    var name = String(fileName || '').trim();
+    if (!name) return null;
+    var chip = document.createElement('span');
+    chip.className =
+      'chat-attach-chip inline-flex max-w-full items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100';
+    chip.setAttribute('role', 'note');
+    chip.setAttribute('aria-label', i18nFmt('chat_attach_selected', { name: name }));
+    var icon = document.createElement('i');
+    icon.className = 'fa-solid fa-file-pdf shrink-0';
+    icon.setAttribute('aria-hidden', 'true');
+    var nameEl = document.createElement('span');
+    nameEl.className = 'truncate';
+    nameEl.textContent = name;
+    chip.appendChild(icon);
+    chip.appendChild(nameEl);
+    return chip;
+  }
+
   function homeChatAppendUser(text, attachmentName) {
     var thread = document.getElementById('chat-thread');
     if (!thread) return;
@@ -549,17 +806,16 @@
     var sr = document.createElement('span');
     sr.className = 'sr-only';
     sr.textContent = i18n('chat_sr_you');
+    var col = document.createElement('div');
+    col.className = 'flex max-w-[min(100%,36rem)] flex-col items-end gap-1.5';
     var bub = document.createElement('div');
     bub.className = 'chat-bubble-user';
     bub.textContent = text;
+    col.appendChild(bub);
+    var attChip = attachmentName ? homeChatBuildAttachmentChipEl_(attachmentName) : null;
+    if (attChip) col.appendChild(attChip);
     wrap.appendChild(sr);
-    wrap.appendChild(bub);
-    if (attachmentName) {
-      var att = document.createElement('p');
-      att.className = 'mt-1 text-right text-[11px] text-slate-500 dark:text-slate-400';
-      att.textContent = i18nFmt('chat_attach_selected', { name: attachmentName });
-      wrap.appendChild(att);
-    }
+    wrap.appendChild(col);
     thread.appendChild(wrap);
     homeChatScrollToBottom();
   }
@@ -574,34 +830,133 @@
     return t || i18n('label_em_dash');
   }
 
+  function homeChatRefPdfAvailable_(ref) {
+    var r = ref || {};
+    if (String(r.driveFileId || r.url || r.globantDocumentId || '').trim()) return true;
+    var ct = String(r.contentType || '').trim();
+    if (ct === 'onboarding' && String(r.globantDocumentId || r.documentId || '').trim()) {
+      return true;
+    }
+    var contentId = String(r.contentId || '').trim();
+    if (!contentId) return false;
+    if (ct === 'proposal' || ct === 'success_case' || ct === 'onboarding') return true;
+    var fn = String(r.fileName || '').trim();
+    return /\.pdf$/i.test(fn);
+  }
+
   function homeChatResolveRefActions_(ref) {
-    if (ref && ref.actions) return ref.actions;
+    if (ref && ref.actions) {
+      var merged = ref.actions;
+      if (!merged.clientMaster && ref.clientName && S.get('canViewCatalog')) {
+        merged = Object.assign({}, merged, {
+          clientMaster: {
+            available: true,
+            clientName: String(ref.clientName || '').trim(),
+          },
+        });
+      }
+      if (merged.drive) {
+        var driveUrl = String(merged.drive.url || ref.url || '').trim();
+        merged = Object.assign({}, merged, {
+          drive: {
+            available: !!(driveUrl && (merged.drive.available || homeChatRefPdfAvailable_(ref))),
+            url: driveUrl,
+          },
+        });
+      }
+      return merged;
+    }
     var r = ref || {};
     var driveUrl = String(r.url || '').trim();
     if (!driveUrl && r.driveFileId) {
-      driveUrl = 'https://drive.google.com/open?id=' + encodeURIComponent(String(r.driveFileId));
+      driveUrl =
+        'https://drive.google.com/open?id=' + encodeURIComponent(String(r.driveFileId));
     }
+    var contentId = String(r.contentId || '').trim();
+    var clientName = String(r.clientName || '').trim();
+    var canCatalog = !!S.get('canViewCatalog');
     return {
-      drive: { available: !!driveUrl, url: driveUrl },
-      catalog: {
-        available: !!(r.contentId && S.get('canViewCatalog')),
-        contentId: String(r.contentId || ''),
+      drive: {
+        available: !!(driveUrl && homeChatRefPdfAvailable_(r)),
+        url: driveUrl,
       },
-      rag: {
-        available: !!(r.globantProfileName && S.get('canViewAgents')),
-        profileName: String(r.globantProfileName || r.profileName || ''),
-        documentId: String(r.globantDocumentId || r.documentId || ''),
+      catalog: {
+        available: !!(contentId && canCatalog),
+        contentId: contentId,
+      },
+      clientMaster: {
+        available: !!(clientName && canCatalog && !contentId),
+        clientName: clientName,
       },
     };
   }
 
-  function homeChatOpenDriveRef_(url) {
+  function homeChatOpenExternalUrl_(url) {
     var u = String(url || '').trim();
     if (!u) {
       if (A.toast) A.toast.error(i18n('chat_ref_not_found'));
       return;
     }
     window.open(u, '_blank', 'noopener,noreferrer');
+  }
+
+  function homeChatRefSortKey_(ref) {
+    var actions = homeChatResolveRefActions_(ref);
+    if (actions.drive.available && actions.drive.url) return 0;
+    if (homeChatRefPdfAvailable_(ref) && (ref.url || ref.driveFileId || ref.globantDocumentId)) {
+      return 0;
+    }
+    if (actions.catalog.available) return 1;
+    if (actions.clientMaster && actions.clientMaster.available) return 3;
+    return 2;
+  }
+
+  function homeChatSortRefs_(references) {
+    var refs = Array.isArray(references) ? references.slice() : [];
+    refs.sort(function (a, b) {
+      return homeChatRefSortKey_(a) - homeChatRefSortKey_(b);
+    });
+    return refs;
+  }
+
+  function homeChatOpenPdfRef_(ref) {
+    var r = ref || {};
+    var actions = homeChatResolveRefActions_(ref);
+    var direct = String(actions.drive.url || r.url || '').trim();
+    if (direct) {
+      homeChatOpenExternalUrl_(direct);
+      return;
+    }
+    if (A.showBlockingModal) {
+      A.showBlockingModal(i18n('chat_ref_resolving_link'));
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (A.hideBlockingModal) A.hideBlockingModal();
+        if (res && res.openUrl) {
+          homeChatOpenExternalUrl_(res.openUrl);
+          return;
+        }
+        if (A.toast) A.toast.error(i18n('err_pdf_not_available'));
+      })
+      .withFailureHandler(function (e) {
+        if (A.hideBlockingModal) A.hideBlockingModal();
+        A.reportRpcError(e, {
+          scope: 'chatRefOpenUrl',
+          fallbackKey: 'err_pdf_not_available',
+          modal: true,
+          toast: true,
+        });
+      })
+      .chatReferenceOpenUrl(
+        JSON.stringify({
+          contentId: r.contentId || actions.catalog.contentId || '',
+          driveFileId: r.driveFileId || '',
+          url: r.url || '',
+          globantDocumentId: r.globantDocumentId || r.documentId || '',
+          globantProfileName: r.globantProfileName || r.profileName || '',
+        }),
+      );
   }
 
   function homeChatOpenCatalogRef_(contentId) {
@@ -611,33 +966,33 @@
       if (A.toast) A.toast.error(i18n('chat_ref_catalog_denied'));
       return;
     }
+    S.set('contentsPendingOpenId', id);
     A.setAppPage('contents');
-    if (A.contents && A.contents.selectById) A.contents.selectById(id);
   }
 
-  function homeChatOpenRagProfile_(profileName) {
-    var name = String(profileName || '').trim();
+  function homeChatOpenClientRef_(clientName) {
+    var name = String(clientName || '').trim();
     if (!name) return;
-    if (!S.get('canViewAgents')) {
-      if (A.toast) A.toast.error(i18n('chat_ref_agents_denied'));
+    if (!S.get('canViewCatalog')) {
+      if (A.toast) A.toast.error(i18n('chat_ref_catalog_denied'));
       return;
     }
-    S.set('agentsPendingProfileName', name);
-    A.setAppPage('agents');
+    S.set('clientsPendingOpenName', name);
+    A.setAppPage('clients');
   }
 
   function homeChatRefPrimaryOpen_(ref) {
     var actions = homeChatResolveRefActions_(ref);
-    if (actions.drive.available) {
-      homeChatOpenDriveRef_(actions.drive.url);
+    if (actions.drive.available || homeChatRefPdfAvailable_(ref)) {
+      homeChatOpenPdfRef_(ref);
       return;
     }
     if (actions.catalog.available) {
       homeChatOpenCatalogRef_(actions.catalog.contentId);
       return;
     }
-    if (actions.rag.available) {
-      homeChatOpenRagProfile_(actions.rag.profileName);
+    if (actions.clientMaster && actions.clientMaster.available) {
+      homeChatOpenClientRef_(actions.clientMaster.clientName);
     }
   }
 
@@ -654,6 +1009,133 @@
       '</span>';
     btn.addEventListener('click', onClick);
     return btn;
+  }
+
+  /**
+   * Bloque de fuentes relacionadas (colapsado por defecto).
+   * @param {Array<Object>} references
+   * @return {HTMLElement|null}
+   */
+  function homeChatBuildRefsElement_(references) {
+    var refs = homeChatSortRefs_(references);
+    if (!refs.length) return null;
+
+    var details = document.createElement('details');
+    details.className = 'chat-refs-details';
+
+    var summary = document.createElement('summary');
+    summary.className = 'chat-refs-summary';
+    summary.setAttribute(
+      'aria-label',
+      i18nFmt('chat_refs_summary', { count: String(refs.length) }),
+    );
+    var chevron = document.createElement('i');
+    chevron.className = 'fa-solid fa-chevron-right chat-refs-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    summary.appendChild(chevron);
+    var summaryText = document.createElement('span');
+    summaryText.textContent = i18nFmt('chat_refs_summary', { count: String(refs.length) });
+    summary.appendChild(summaryText);
+    details.appendChild(summary);
+
+    var refsList = document.createElement('ul');
+    refsList.className = 'chat-refs-list';
+    refsList.setAttribute('aria-label', i18n('chat_refs_title'));
+
+    var ri;
+    for (ri = 0; ri < refs.length; ri++) {
+      (function (refItem) {
+        var actions = homeChatResolveRefActions_(refItem);
+        var hasAnyAction =
+          actions.catalog.available ||
+          (actions.clientMaster && actions.clientMaster.available) ||
+          actions.drive.available ||
+          homeChatRefPdfAvailable_(refItem);
+        if (!hasAnyAction && !refItem.title) return;
+
+        var li = document.createElement('li');
+        li.className =
+          'rounded-md border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-600 dark:bg-slate-900/40';
+
+        var topRow = document.createElement('div');
+        topRow.className = 'flex items-start gap-2';
+
+        var typeBadge = document.createElement('span');
+        typeBadge.className =
+          'mt-0.5 shrink-0 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200';
+        typeBadge.textContent = homeChatRefTypeLabel_(refItem.contentType);
+        topRow.appendChild(typeBadge);
+
+        var titleBtn = document.createElement('button');
+        titleBtn.type = 'button';
+        titleBtn.className =
+          'min-w-0 flex-1 text-left text-slate-800 underline-offset-2 hover:underline dark:text-slate-100';
+        titleBtn.textContent = refItem.title || i18n('chat_history_untitled');
+        if (hasAnyAction) {
+          titleBtn.addEventListener('click', function () {
+            homeChatRefPrimaryOpen_(refItem);
+          });
+        } else {
+          titleBtn.classList.remove('hover:underline');
+          titleBtn.disabled = true;
+        }
+        topRow.appendChild(titleBtn);
+        li.appendChild(topRow);
+
+        if (refItem.clientName) {
+          var clientP = document.createElement('p');
+          clientP.className = 'mt-1 text-[11px] text-slate-500 dark:text-slate-400';
+          clientP.textContent = refItem.clientName;
+          li.appendChild(clientP);
+        }
+
+        var fileUrl = String(
+          (actions.drive && actions.drive.url) || refItem.url || '',
+        ).trim();
+        var canOpenPdf = actions.drive.available || homeChatRefPdfAvailable_(refItem);
+        if (fileUrl || canOpenPdf) {
+          var urlRow = document.createElement('p');
+          urlRow.className = 'mt-1.5 text-[11px] text-slate-600 dark:text-slate-400';
+          var urlLbl = document.createElement('span');
+          urlLbl.className = 'font-medium text-slate-500 dark:text-slate-400';
+          urlLbl.textContent = i18n('chat_ref_file_url_label') + ': ';
+          var urlLink = document.createElement('button');
+          urlLink.type = 'button';
+          urlLink.className =
+            'break-all text-left font-medium text-sky-700 underline underline-offset-2 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200';
+          urlLink.textContent = fileUrl || i18n('chat_ref_action_view_pdf');
+          urlLink.addEventListener('click', function () {
+            homeChatOpenPdfRef_(refItem);
+          });
+          urlRow.appendChild(urlLbl);
+          urlRow.appendChild(urlLink);
+          li.appendChild(urlRow);
+        }
+
+        var actionRow = document.createElement('div');
+        actionRow.className = 'mt-2 flex flex-wrap gap-1.5';
+        if (actions.catalog.available) {
+          actionRow.appendChild(
+            homeChatBuildRefActionBtn_('fa-folder-open', i18n('chat_ref_action_catalog'), function () {
+              homeChatOpenCatalogRef_(actions.catalog.contentId);
+            }),
+          );
+        }
+        if (actions.clientMaster && actions.clientMaster.available) {
+          actionRow.appendChild(
+            homeChatBuildRefActionBtn_('fa-building', i18n('chat_ref_action_client'), function () {
+              homeChatOpenClientRef_(actions.clientMaster.clientName);
+            }),
+          );
+        }
+        if (actionRow.children.length) li.appendChild(actionRow);
+        refsList.appendChild(li);
+      })(refs[ri] || {});
+    }
+
+    if (!refsList.children.length) return null;
+    details.appendChild(refsList);
+    return details;
   }
 
   function homeChatAppendAgent(body, metaLine, references, agentKey, eventId, agentId, histIdx) {
@@ -676,7 +1158,7 @@
       bub.classList.add('chat-bubble-agent-tinted');
       bub.style.setProperty('--agent-h', String(agentHue));
     }
-    bub.textContent = body || '';
+    homeChatSetAgentBubbleHtml_(bub, body || '');
     col.appendChild(bub);
     if (metaLine) {
       var metaP = document.createElement('p');
@@ -684,101 +1166,20 @@
       metaP.textContent = metaLine;
       col.appendChild(metaP);
     }
-    var refs = Array.isArray(references) ? references : [];
-    if (refs.length) {
-      var refsWrap = document.createElement('div');
-      refsWrap.className =
-        'mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-600 dark:bg-slate-800';
-      var refsTitle = document.createElement('p');
-      refsTitle.className = 'mb-2 font-semibold text-slate-600 dark:text-slate-300';
-      refsTitle.textContent = i18n('chat_refs_title');
-      refsWrap.appendChild(refsTitle);
-      var refsList = document.createElement('ul');
-      refsList.className = 'space-y-2';
-      refsList.setAttribute('aria-label', i18n('chat_refs_title'));
-      for (var ri = 0; ri < refs.length; ri++) {
-        (function (refItem) {
-          var actions = homeChatResolveRefActions_(refItem);
-          var hasAnyAction =
-            actions.drive.available ||
-            actions.catalog.available ||
-            actions.rag.available;
-          if (!hasAnyAction && !refItem.title) return;
-
-          var li = document.createElement('li');
-          li.className =
-            'rounded-md border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-600 dark:bg-slate-900/40';
-
-          var topRow = document.createElement('div');
-          topRow.className = 'flex items-start gap-2';
-
-          var typeBadge = document.createElement('span');
-          typeBadge.className =
-            'mt-0.5 shrink-0 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200';
-          typeBadge.textContent = homeChatRefTypeLabel_(refItem.contentType);
-          topRow.appendChild(typeBadge);
-
-          var titleBtn = document.createElement('button');
-          titleBtn.type = 'button';
-          titleBtn.className =
-            'min-w-0 flex-1 text-left text-slate-800 underline-offset-2 hover:underline dark:text-slate-100';
-          titleBtn.textContent = refItem.title || i18n('chat_history_untitled');
-          if (hasAnyAction) {
-            titleBtn.addEventListener('click', function () {
-              homeChatRefPrimaryOpen_(refItem);
-            });
-          } else {
-            titleBtn.classList.remove('hover:underline');
-            titleBtn.disabled = true;
-          }
-          topRow.appendChild(titleBtn);
-          li.appendChild(topRow);
-
-          if (refItem.clientName) {
-            var clientP = document.createElement('p');
-            clientP.className = 'mt-1 pl-0 text-[11px] text-slate-500 dark:text-slate-400';
-            clientP.textContent = refItem.clientName;
-            li.appendChild(clientP);
-          }
-
-          var actionRow = document.createElement('div');
-          actionRow.className = 'mt-2 flex flex-wrap gap-1.5';
-          if (actions.drive.available) {
-            actionRow.appendChild(
-              homeChatBuildRefActionBtn_('fa-file-pdf', i18n('chat_ref_action_drive'), function () {
-                homeChatOpenDriveRef_(actions.drive.url);
-              }),
-            );
-          }
-          if (actions.catalog.available) {
-            actionRow.appendChild(
-              homeChatBuildRefActionBtn_('fa-folder-open', i18n('chat_ref_action_catalog'), function () {
-                homeChatOpenCatalogRef_(actions.catalog.contentId);
-              }),
-            );
-          }
-          if (actions.rag.available) {
-            actionRow.appendChild(
-              homeChatBuildRefActionBtn_('fa-robot', i18n('chat_ref_action_rag'), function () {
-                homeChatOpenRagProfile_(actions.rag.profileName);
-              }),
-            );
-          }
-          if (actionRow.children.length) li.appendChild(actionRow);
-          refsList.appendChild(li);
-        })(refs[ri] || {});
-      }
-      if (refsList.children.length) {
-        refsWrap.appendChild(refsList);
-        col.appendChild(refsWrap);
-      }
-    }
+    var refsEl = homeChatBuildRefsElement_(references);
+    if (refsEl) col.appendChild(refsEl);
 
     if (typeof histIdx === 'number') {
       (function (turnIdx) {
         var actionsRow = document.createElement('div');
         actionsRow.className = 'chat-msg-actions';
         var copyBtn = homeChatBuildActionBtn_('fa-copy', 'chat_action_copy', 'copy', turnIdx);
+        var pdfBtn = homeChatBuildActionBtn_(
+          'fa-file-pdf',
+          'chat_action_export_pdf',
+          'export-pdf',
+          turnIdx,
+        );
         var regenBtn = homeChatBuildActionBtn_(
           'fa-rotate-right',
           'chat_action_regenerate',
@@ -806,6 +1207,14 @@
               copyBtn.disabled = false;
             });
         });
+        pdfBtn.addEventListener('click', function () {
+          if (pdfBtn.disabled) return;
+          pdfBtn.disabled = true;
+          homeChatExportPdf_({ mode: 'turn', turnIndex: turnIdx });
+          setTimeout(function () {
+            pdfBtn.disabled = false;
+          }, 1200);
+        });
         regenBtn.addEventListener('click', function () {
           if (regenBtn.disabled) return;
           homeChatRegenerateFromAgentIdx_(turnIdx);
@@ -821,6 +1230,7 @@
           } catch (eSel) {}
         });
         actionsRow.appendChild(copyBtn);
+        actionsRow.appendChild(pdfBtn);
         actionsRow.appendChild(regenBtn);
         actionsRow.appendChild(reformBtn);
         col.appendChild(actionsRow);
@@ -886,9 +1296,90 @@
     var p = document.createElement('p');
     p.id = 'chat-empty';
     p.className = 'chat-empty';
-    p.setAttribute('data-i18n', 'chat_empty_hint');
-    p.textContent = i18n('chat_empty_hint');
+    p.setAttribute('data-i18n', homeChatIsOnboardingPage_() ? 'chat_empty_hint_onboarding' : 'chat_empty_hint');
+    p.textContent = i18n(
+      homeChatIsOnboardingPage_() ? 'chat_empty_hint_onboarding' : 'chat_empty_hint',
+    );
     thread.appendChild(p);
+  }
+
+  function homeChatApplyPageChrome_(page) {
+    var pg = page || S.get('activePage') || 'home';
+    var isOb = pg === 'onboarding';
+    if (dashboardTitleEl) {
+      dashboardTitleEl.textContent = i18n(isOb ? 'page_onboarding_title' : 'dashboard_title');
+    }
+    if (dashboardLeadEl) {
+      dashboardLeadEl.textContent = i18n(isOb ? 'page_onboarding_chat_lead' : 'dashboard_lead');
+    }
+    if (consultHeadingEl) {
+      consultHeadingEl.textContent = i18n(isOb ? 'onboarding_consult_heading' : 'static_consult_heading');
+    }
+    var composerLead = document.querySelector('.chat-composer-lead');
+    if (composerLead) {
+      composerLead.textContent = i18n(isOb ? 'onboarding_consult_lead' : 'static_consult_lead');
+    }
+    if (chatAttachRow && homeChatIsOnboardingPage_()) {
+      homeChatClearAttachment_();
+    }
+    if (chatAttachRow) {
+      var llm = S.get('lastLlmCfg') || {};
+      chatAttachRow.classList.toggle(
+        'hidden',
+        llm.mode !== 'globant' || isOb,
+      );
+    }
+    var emptyEl = document.getElementById('chat-empty');
+    if (emptyEl && !emptyEl.classList.contains('hidden')) {
+      emptyEl.textContent = i18n(isOb ? 'chat_empty_hint_onboarding' : 'chat_empty_hint');
+    }
+    var qpLabel = document.getElementById('chat-quick-prompts-label');
+    if (qpLabel) {
+      qpLabel.setAttribute(
+        'data-i18n',
+        isOb ? 'chat_quick_prompts_onboarding_label' : 'chat_quick_prompts_label',
+      );
+      qpLabel.textContent = i18n(
+        isOb ? 'chat_quick_prompts_onboarding_label' : 'chat_quick_prompts_label',
+      );
+    }
+  }
+
+  function homeChatRebuildThreadFromState_() {
+    var hist = homeChatGetHistory_();
+    homeChatResetThread();
+    if (!hist.length) {
+      homeChatRestoreQuickPromptStarters_();
+      return;
+    }
+    homeChatHideQuickPromptStarters_();
+    for (var i = 0; i < hist.length; i++) {
+      var m = hist[i];
+      if (m.role === 'user') {
+        homeChatAppendUser(m.content || '', m.attachmentName || '');
+        if (m.submitMode) S.set('chatLastSubmitMode', m.submitMode);
+      } else if (m.role === 'assistant') {
+        homeChatAppendAgent(
+          m.content || '',
+          m.metaLine || '',
+          m.references || [],
+          m.agentKey || '',
+          m.eventId || '',
+          m.agentId || '',
+          i,
+        );
+      }
+    }
+    homeChatRefreshRegenerateButtons_();
+  }
+
+  function homeChatOnEnterChatPage_(page) {
+    homeChatApplyPageChrome_(page);
+    homeChatRebuildThreadFromState_();
+    homeChatApplyQuickPromptsForActivePage_(null);
+    if (page === 'home' && A.dashboard && typeof A.dashboard.loadMetrics === 'function') {
+      A.dashboard.loadMetrics();
+    }
   }
 
   function applyConsultModeLabels(llmCfg) {
@@ -906,7 +1397,7 @@
     if (geminiDocsBlock) geminiDocsBlock.classList.toggle('hidden', !geminiUi);
     if (askDriveRow) askDriveRow.classList.toggle('hidden', llmCfg.mode === 'globant');
     if (globantAgentRow) globantAgentRow.classList.toggle('hidden', llmCfg.mode !== 'globant');
-    if (chatAttachRow) chatAttachRow.classList.toggle('hidden', llmCfg.mode !== 'globant');
+    if (chatAttachRow) chatAttachRow.classList.toggle('hidden', llmCfg.mode !== 'globant' || homeChatIsOnboardingPage_());
     if (llmCfg.mode !== 'globant') homeChatClearAttachment_();
     var askBtnLabel =
       askBtn &&
@@ -942,16 +1433,20 @@
   }
 
   function homeChatEnsureConvId_() {
-    var cid = S.get('chatConvId');
+    var key = homeChatConvKey_();
+    var cid = S.get(key);
     if (!cid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(cid))) {
       cid = homeChatNewConvId_();
-      S.set('chatConvId', cid);
+      S.set(key, cid);
     }
     return cid;
   }
 
   if (!S.get('chatConvId')) {
     S.set('chatConvId', homeChatNewConvId_());
+  }
+  if (!S.get('onboardingChatConvId')) {
+    S.set('onboardingChatConvId', homeChatNewConvId_());
   }
 
   // ── History panel ─────────────────────────────────────────────────────────
@@ -963,19 +1458,23 @@
   var histToggleBtn = document.getElementById('chat-history-toggle-btn');
 
   function homeChatSaveCurrentConversation_() {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     if (!hist.length) return;
+    var convKey = homeChatConvKey_();
     var convId = homeChatEnsureConvId_();
     var firstUser = '';
     for (var k = 0; k < hist.length; k++) {
       if (hist[k].role === 'user') { firstUser = String(hist[k].content || ''); break; }
     }
-    var title = (firstUser || i18n('chat_history_untitled')).slice(0, 80);
+    var titlePrefix = homeChatIsOnboardingPage_()
+      ? i18n('nav_onboarding') + ': '
+      : '';
+    var title = (titlePrefix + (firstUser || i18n('chat_history_untitled'))).slice(0, 80);
     try {
       google.script.run
         .withSuccessHandler(function (res) {
           if (res && res.convId && res.convId !== convId) {
-            S.set('chatConvId', res.convId);
+            S.set(convKey, res.convId);
           }
         })
         .withFailureHandler(function () {
@@ -1062,11 +1561,11 @@
         if (!msgs.length) return;
         homeChatResetThread();
         clearHistory();
-        S.set('chatConvId', convId);
+        S.set(homeChatConvKey_(), convId);
         var lastUser = '';
         for (var i = 0; i < msgs.length; i++) {
           var m = msgs[i];
-          var h = S.get('chatHistory') || [];
+          var h = homeChatGetHistory_();
           var entry = {
             role: m.role,
             content: m.content,
@@ -1081,7 +1580,7 @@
           };
           h.push(entry);
           while (h.length > MAX_HISTORY * 2) h.shift();
-          S.set('chatHistory', h);
+          homeChatSetHistory_(h);
           var turnIdx = h.length - 1;
           if (m.role === 'user') {
             homeChatAppendUser(m.content || '', m.attachmentName || '');
@@ -1146,49 +1645,6 @@
     if (A.toast) A.toast.success(i18n('chat_export_done'));
   }
 
-  function homeChatExportPdf_() {
-    var hist = S.get('chatHistory') || [];
-    if (!hist.length) {
-      if (A.toast) A.toast.info(i18n('chat_export_empty'));
-      return;
-    }
-    var bodyHtml = homeChatConversationHtmlForPrint_();
-    var w = window.open('', '_blank', 'noopener,noreferrer');
-    if (!w) {
-      if (A.toast) A.toast.error(i18n('chat_copy_error'));
-      return;
-    }
-    var docTitle = i18n('chat_export_title');
-    w.document.write(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' +
-      homeChatEscapeHtml_(docTitle) +
-      '</title><style>' +
-      'body{font-family:system-ui,-apple-system,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#0f172a;line-height:1.5}' +
-      'h1{font-size:1.25rem;margin-bottom:1.5rem}' +
-      '.turn{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid #e2e8f0}' +
-      'h2{font-size:.875rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:0 0 .5rem}' +
-      '.body{white-space:pre-wrap;font-size:.9375rem}' +
-      '.meta{font-size:.75rem;color:#64748b;margin-top:.5rem}' +
-      '.refs{margin-top:.75rem;font-size:.75rem}' +
-      '.refs ul{margin:.25rem 0 0 1rem;padding:0}' +
-      '.url{color:#0369a1;word-break:break-all}' +
-      '@media print{body{margin:1cm}}' +
-      '</style></head><body><h1>' +
-      homeChatEscapeHtml_(docTitle) +
-      '</h1>' +
-      bodyHtml +
-      '</body></html>',
-    );
-    w.document.close();
-    w.focus();
-    setTimeout(function () {
-      try {
-        w.print();
-      } catch (ePr) {}
-    }, 400);
-    if (A.toast) A.toast.success(i18n('chat_export_done'));
-  }
-
   if (exportToggleBtn) {
     exportToggleBtn.addEventListener('click', function () {
       if (!exportPanel) return;
@@ -1211,7 +1667,11 @@
   if (exportPdfBtn) {
     exportPdfBtn.addEventListener('click', function () {
       if (exportPanel) A.hideFloatingPanel(exportPanel);
-      homeChatExportPdf_();
+      exportPdfBtn.disabled = true;
+      homeChatExportPdf_({ mode: 'conversation' });
+      setTimeout(function () {
+        exportPdfBtn.disabled = false;
+      }, 1200);
     });
   }
 
@@ -1257,16 +1717,25 @@
   }
 
   function homeChatHideQuickPromptStarters_() {
-    S.set('chatStartersShown', false);
+    S.set(homeChatStartersKey_(), false);
     var container = document.getElementById('chat-quick-prompts');
     if (container) container.classList.add('hidden');
   }
 
   function homeChatRestoreQuickPromptStarters_() {
-    var qp = S.get('quickPrompts');
+    var qp = homeChatGetQuickPrompts_();
     if (!qp || !qp.length) return;
-    S.set('chatStartersShown', true);
+    S.set(homeChatStartersKey_(), true);
     homeChatApplyQuickPrompts_(qp, null);
+  }
+
+  function homeChatApplyQuickPromptsForActivePage_(locale) {
+    var hist = homeChatGetHistory_();
+    if (hist.length) return;
+    var qp = homeChatGetQuickPrompts_();
+    if (!qp || !qp.length) return;
+    S.set(homeChatStartersKey_(), true);
+    homeChatApplyQuickPrompts_(qp, locale);
   }
 
   function homeChatApplyQuickPrompts_(prompts, locale) {
@@ -1295,7 +1764,7 @@
       list.appendChild(btn);
     });
     container.classList.toggle('hidden', !list.children.length);
-    if (S.get('chatStartersShown') === false) {
+    if (S.get(homeChatStartersKey_()) === false) {
       container.classList.add('hidden');
     }
   }
@@ -1410,6 +1879,53 @@
       .globantAnalyzeEphemeralDocument(gp, attachPayloadJson, histJson);
   }
 
+  function homeChatRunForcedAgentQuery_(agentId, gp, skipUserAppend) {
+    if (!skipUserAppend) {
+      homeChatAppendUser(gp);
+      pushHistory('user', gp, { submitMode: 'onboarding' });
+      S.set('chatLastSubmitMode', 'onboarding');
+    }
+    askAgentBtn.disabled = true;
+    askBtn.disabled = true;
+    homeChatBeginAnswerProgress_('orch_step_onboarding_answering', null);
+    askStatus.textContent = i18n('orch_step_onboarding_answering');
+    var histJson = skipUserAppend ? homeChatHistoryJsonForRegenerate_() : getHistoryJson();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        askAgentBtn.disabled = false;
+        askBtn.disabled = false;
+        homeChatRemoveThinking();
+        var answer = res.answer || '';
+        var badge = i18nFmt('orch_routed_badge', {
+          agent: res.agentName || i18n('faq_agent_onboarding_title'),
+        });
+        homeChatFinishAgentResponse_(
+          answer,
+          badge,
+          (res.meta && res.meta.references) || [],
+          res.agentName || 'onboarding',
+          res.eventId || '',
+          agentId,
+          'onboarding',
+        );
+      })
+      .withFailureHandler(function (e) {
+        askAgentBtn.disabled = false;
+        askBtn.disabled = false;
+        homeChatRemoveThinking();
+        A.reportRpcError(e, {
+          scope: 'onboardingChat',
+          fallbackKey: 'err_ask_agent',
+          modal: true,
+          setStatus: function (msg) {
+            askStatus.textContent = msg;
+            askStatus.classList.add('err');
+          },
+        });
+      })
+      .globantAnswerWithAgent(gp, agentId, histJson);
+  }
+
   function homeChatRunOrchestratorQuery_(gp, skipUserAppend) {
     if (!skipUserAppend) {
       homeChatAppendUser(gp);
@@ -1465,10 +1981,10 @@
                   combined.push(results[k].answer || '');
                 }
                 if (combined.length > 1) {
-                  var hist = S.get('chatHistory') || [];
+                  var hist = homeChatGetHistory_();
                   if (hist.length && hist[hist.length - 1].role === 'assistant') {
                     hist[hist.length - 1].content = combined.join('\n---\n');
-                    S.set('chatHistory', hist);
+                    homeChatSetHistory_(hist);
                   }
                 }
               }
@@ -1527,7 +2043,7 @@
   }
 
   function homeChatRegenerateFromAgentIdx_(agentHistIdx) {
-    var hist = S.get('chatHistory') || [];
+    var hist = homeChatGetHistory_();
     if (!hist.length || hist[hist.length - 1].role !== 'assistant') return;
     if (agentHistIdx < 0 || agentHistIdx >= hist.length || hist[agentHistIdx].role !== 'assistant') return;
     var pair = homeChatFindUserTurnForAgentIdx_(agentHistIdx);
@@ -1557,6 +2073,10 @@
         return;
       }
       homeChatRunEphemeralQuery_(q, payload, true);
+      return;
+    }
+    if (mode === 'onboarding') {
+      homeChatRunForcedAgentQuery_(CHAT_AGENT_ONBOARDING, q, true);
       return;
     }
     homeChatRunOrchestratorQuery_(q, true);
@@ -1617,9 +2137,10 @@
       askStatus.textContent = '';
       askStatus.classList.remove('err');
       var gp = (questionEl.value || '').trim();
+      var forcedAgent = homeChatForcedAgentId_();
       var attached = homeChatGetAttachment_();
 
-      if (attached) {
+      if (attached && !forcedAgent) {
         if (!gp) {
           askStatus.textContent = i18n('chat_ephemeral_need_prompt');
           askStatus.classList.add('err');
@@ -1643,6 +2164,10 @@
       questionEl.value = '';
       askAgentBtn.disabled = true;
       askBtn.disabled = true;
+      if (forcedAgent) {
+        homeChatRunForcedAgentQuery_(forcedAgent, gp, false);
+        return;
+      }
       homeChatRunOrchestratorQuery_(gp, false);
     });
   }
@@ -1652,7 +2177,7 @@
     chatNewBtn.addEventListener('click', function () {
       homeChatSaveCurrentConversation_();
       clearHistory();
-      S.set('chatConvId', homeChatNewConvId_());
+      S.set(homeChatConvKey_(), homeChatNewConvId_());
       homeChatResetThread();
       if (questionEl) questionEl.value = '';
       homeChatClearAttachment_();
@@ -1683,6 +2208,8 @@
     updateHomeChatBanner: updateHomeChatBanner,
     applyConsultModeLabels: applyConsultModeLabels,
     applyConsultModeInitialState: applyConsultModeInitialState,
+    applyPageChrome: homeChatApplyPageChrome_,
+    onEnterChatPage: homeChatOnEnterChatPage_,
     resetThread: homeChatResetThread,
     appendUser: homeChatAppendUser,
     appendAgent: homeChatAppendAgent,
@@ -1691,6 +2218,7 @@
     updateThinking: homeChatUpdateThinking,
     saveCurrentConversation: homeChatSaveCurrentConversation_,
     applyQuickPrompts: homeChatApplyQuickPrompts_,
+    applyQuickPromptsForActivePage: homeChatApplyQuickPromptsForActivePage_,
     restoreQuickPromptStarters: homeChatRestoreQuickPromptStarters_,
     THINKING_ID: CHAT_THINKING_ID,
   };

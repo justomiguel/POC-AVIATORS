@@ -145,7 +145,10 @@ function AccessRequest_submit(roleKey, reason) {
  * @return {{ok:boolean,items:Array<Object>,total:number,skip:number,limit:number,hasMore:boolean}}
  */
 function AccessRequest_listForAdmin(filters) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireManageUsers();
+  if (!AviatorsDataBackend_supabaseConfigured_()) {
+    throw new Error('ERR_SUPABASE_NOT_CONFIGURED');
+  }
   var f = filters || {};
   var q = String(f.q || '').trim().toLowerCase();
   var status = String(f.status || 'pending').trim().toLowerCase();
@@ -202,7 +205,7 @@ function AccessRequest_listForAdmin(filters) {
  * @return {{ok:boolean,id:string}}
  */
 function AccessRequest_dismiss(requestId) {
-  AdminAuth_requireAdmin();
+  AdminAuth_requireManageUsers();
   var id = String(requestId || '').trim();
   if (!id) {
     throw new Error('ERR_ACCESS_REQUEST_ID_REQUIRED');

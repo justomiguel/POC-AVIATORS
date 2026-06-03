@@ -59,6 +59,15 @@
     ERR_ACCESS_REQUEST_ALREADY_PENDING: 'access_request_err_pending',
     ERR_ACCESS_REQUEST_NO_SESSION: 'err_login_session',
     ERR_ACCESS_REQUEST_ID_REQUIRED: 'err_generic',
+    ERR_ADMIN_USERS_BULK_NO_EMAILS: 'admin_users_bulk_err_no_emails',
+    ERR_ADMIN_USERS_BULK_TOO_MANY: 'admin_users_bulk_err_too_many',
+    ERR_CLIENT_ID_INVALID: 'err_client_id_invalid',
+    ERR_CHAT_EXPORT_EMPTY: 'err_chat_export_empty',
+    ERR_CHAT_EXPORT_PDF: 'err_chat_export_pdf',
+    ERR_PDF_NOT_AVAILABLE: 'err_pdf_not_available',
+    ERR_PDF_DRIVE: 'err_pdf_drive',
+    ERR_ADMIN_AGENT_API_MODEL_INVALID: 'err_admin_agent_api_model_invalid',
+    ERR_ADMIN_AGENT_API_STRATEGY_INVALID: 'err_admin_agent_api_strategy_invalid',
   };
 
   A.extractServerErrorCode = function (err) {
@@ -87,6 +96,11 @@
       if (code.indexOf('ERR_SUPABASE_JSON') === 0) return A.i18n('err_supabase_json');
       var key = SERVER_ERROR_I18N[code];
       if (key) return A.i18n(key);
+      var colon = raw.indexOf(': ');
+      if (colon > 0 && raw.indexOf(code) === 0) {
+        var detailMsg = raw.slice(colon + 2).trim();
+        if (detailMsg) return detailMsg;
+      }
       return A.i18nFmt('err_server_code', { code: code });
     }
     if (raw) return raw;
@@ -102,11 +116,20 @@
   A.reportRpcError = function (err, opts) {
     var o = opts || {};
     var scope = o.scope || 'rpc';
+    var raw = err && err.message != null ? String(err.message).trim() : '';
     var msg = A.serverErrorMessage(err, o.fallbackKey);
     if (window.console && console.error) {
-      console.error('[Aviators RPC]', scope, err && err.message != null ? err.message : err);
+      console.error('[Aviators RPC]', scope, raw || err);
     }
     if (o.hideModal !== false && A.hideBlockingModal) A.hideBlockingModal();
+    if (o.modal && A.showErrorDialog) {
+      A.showErrorDialog({
+        title: o.title || A.i18n('error_dialog_title'),
+        message: msg,
+        detail: raw && raw !== msg ? raw : '',
+      });
+      if (o.toast === undefined) o.toast = false;
+    }
     if (o.toast !== false && A.toast) A.toast.error(msg);
     if (typeof o.setStatus === 'function') o.setStatus(msg, true);
     return msg;

@@ -163,6 +163,34 @@ function ContentIngestion_storeSuccessCasePdfInDrive_(
 }
 
 /**
+ * Copia archivada en Drive del desplegador (fuera de DRIVE_ROOT_FOLDER_ID) para poder ver PDF en la app.
+ * @param {GoogleAppsScript.Base.Blob} pdfBlob
+ * @param {string} fileName
+ * @param {string} contentType
+ * @return {{id:string,url:string,name:string}}
+ */
+function ContentIngestion_storeCatalogPdfArchiveInDrive_(pdfBlob, fileName, contentType) {
+  function getOrCreateChildFolder_(parent, folderName) {
+    var it = parent.getFoldersByName(folderName);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(folderName);
+  }
+
+  var name = String(fileName || 'content.pdf').trim() || 'content.pdf';
+  var typeKey = String(contentType || 'other').trim() || 'other';
+  var root = DriveApp.getRootFolder();
+  var aviators = getOrCreateChildFolder_(root, 'Aviators');
+  var catalog = getOrCreateChildFolder_(aviators, 'Catalog');
+  var typeFolder = getOrCreateChildFolder_(catalog, typeKey);
+  var file = typeFolder.createFile(pdfBlob.setName(name));
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || name),
+  };
+}
+
+/**
  * @param {string} driveFileId
  */
 function ContentIngestion_trashDriveFile_(driveFileId) {
@@ -191,7 +219,21 @@ function ContentIngestion_save(payloadJson) {
 
     var clientName = String(common.client_name || '').trim();
     var clientIndustry = String(common.industry || '').trim();
-    if (clientName) {
+    if (contentType === 'onboarding') {
+      clientName = '';
+      clientIndustry = '';
+      common.client_name = '';
+      common.industry = '';
+    } else if (clientName) {
+      var clientMatch = ContentExtraction_matchClient_(clientName, String(common.file_name || ''));
+      if (clientMatch.matched) {
+        clientName = clientMatch.client_name;
+        clientIndustry =
+          ClientsMaster_resolveIndustryFromCatalog_(clientMatch.industry) || clientIndustry;
+      }
+      clientIndustry = ClientsMaster_resolveIndustryFromCatalog_(clientIndustry);
+      common.client_name = clientName;
+      common.industry = clientIndustry;
       ClientsMaster_ensureByName(clientName, clientIndustry);
     }
 
@@ -225,8 +267,15 @@ function ContentIngestion_save(payloadJson) {
           common.client_name || (existing && existing.common && existing.common.client_name) || '',
           common.title || (existing && existing.common && existing.common.title) || '',
         );
-      } else if (oldDriveFileId) {
-        ContentIngestion_trashDriveFile_(oldDriveFileId);
+      } else {
+        if (oldDriveFileId) {
+          ContentIngestion_trashDriveFile_(oldDriveFileId);
+        }
+        newDriveFile = ContentIngestion_storeCatalogPdfArchiveInDrive_(
+          pdfBlob,
+          prepared.name,
+          contentType,
+        );
         oldDriveFileId = '';
         oldDriveFileUrl = '';
       }
@@ -277,12 +326,8 @@ function ContentIngestion_save(payloadJson) {
           ('content-' + contentType),
         mime_type:
           common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
-        drive_file_id: usesDrive
-          ? (newDriveFile ? newDriveFile.id : oldDriveFileId)
-          : '',
-        drive_file_url: usesDrive
-          ? (newDriveFile ? newDriveFile.url : oldDriveFileUrl)
-          : '',
+        drive_file_id: newDriveFile ? newDriveFile.id : oldDriveFileId,
+        drive_file_url: newDriveFile ? newDriveFile.url : oldDriveFileUrl,
         globant_profile_name: targetProfile,
         globant_document_id: needReindex
           ? newDocId

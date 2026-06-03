@@ -1,0 +1,47 @@
+---
+description: Errores visibles al usuario vía modal centralizado, i18n y mensajes técnicos legibles (Aviators / HtmlService)
+globs: gas/**/*.html,gas/**/*.js
+alwaysApply: true
+---
+
+# Errores visibles al usuario (Aviators / HtmlService)
+
+- **Norma**: todo error que llegue al usuario (fallo de RPC `google.script.run`, APIs externas, validación de servidor que aborta una acción) **debe** mostrarse de forma **visible y accionable**, no solo en una línea pequeña, `console` o toast fácil de perder.
+
+## Cliente (obligatorio en acciones async)
+
+1. **Modal centralizado**: usar `A.reportRpcError(err, { modal: true, scope: '…', fallbackKey: '…' })` o `A.showErrorDialog({ title, message, detail })` definidos en `app-client-core.html` / `app-client-i18n.html`.
+2. **Resumen + detalle**: el modal muestra un **resumen legible** (primera parte del mensaje / i18n) y, si aplica, bloque **Detalle técnico** (`error_dialog_detail_heading`) con el texto completo (HTTP body, hints, código `ERR_*`).
+3. **Cierre de loader**: en fallos RPC, `hideBlockingModal` siempre (lo hace `reportRpcError` salvo `hideModal: false`).
+4. **Estado local opcional**: además del modal, una línea corta en el `status` de la sección (`setStatus` / `adminAgentStatus`) está bien; **no sustituye** al modal.
+5. **i18n**: mensajes visibles desde `gas/i18n/UiStrings.js`. Mapear códigos `ERR_*` en `SERVER_ERROR_I18N` (`app-client-i18n.html`) cuando el servidor los emita.
+6. **Patrón recomendado** (módulos admin):
+
+```javascript
+.withFailureHandler(function (e) {
+  A.reportRpcError(e, {
+    scope: 'miModulo',
+    fallbackKey: 'err_mi_accion',
+    modal: true,
+    toast: true,
+    setStatus: function (msg) { /* status corto en la sección */ },
+  });
+})
+```
+
+## Servidor (GAS)
+
+1. **Códigos estables**: errores de negocio/validación con `AviatorsError_throw_('ERR_*', scope, detail)` (`AviatorsErrorService.js`).
+2. **HTTP externo** (Globant, Supabase, Drive): formatear con helpers compartidos (p. ej. `GlobantHttp_formatApiError_`) — incluir código HTTP, detalle parseado del body y **hints** cuando el 4xx sea ambiguo (modelo, id, estrategia).
+3. **No** devolver al cliente solo `Bad Request` sin contexto si el backend puede añadir pista (modelo enviado, endpoint, etc.).
+4. **Logs**: `AviatorsError_log_` en fallos RPC; no exponer secretos en el mensaje al cliente.
+
+## Excepciones
+
+- Validación **síncrona local** antes de RPC (campo vacío): mensaje inline en el formulario basta; no hace falta modal.
+- Lecturas silenciosas en background (prefetch, cache) pueden limitarse a consola si no bloquean una acción del usuario.
+
+## Coherencia
+
+- Operaciones async: loader/modal bloqueante al inicio → **cerrar siempre** al error → **modal de error**. Detalle: `gas-ui-async-feedback.mdc`, `gas-destructive-actions-blocking-modal.mdc`.
+- i18n: `gas-i18n.mdc`. UI compartida: `#app-error-modal` en `index.html`.

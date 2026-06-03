@@ -9,20 +9,33 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
   'manage_agents',
   'view_catalog',
   'write_catalog',
+  'view_onboarding',
   'view_metrics',
   'reset_metrics',
   'manage_users',
+  'manage_unanswered_queue',
+  'sync_salesforce',
+];
+
+/** Permisos añadidos en matriz v2: se heredan del default del rol sistema si no estaban guardados. */
+var ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED = [
+  'view_onboarding',
+  'manage_unanswered_queue',
+  'sync_salesforce',
 ];
 
 /** @type {Object<string, 'read'|'write'>} */
 var ROLE_CONFIG_PERMISSION_KIND = {
   view_agents: 'read',
   view_catalog: 'read',
+  view_onboarding: 'read',
   view_metrics: 'read',
   manage_agents: 'write',
   write_catalog: 'write',
   reset_metrics: 'write',
   manage_users: 'write',
+  manage_unanswered_queue: 'write',
+  sync_salesforce: 'write',
 };
 
 /**
@@ -32,6 +45,18 @@ var ROLE_CONFIG_PERMISSION_KIND = {
 function RoleConfig_permissionKind_(permKey) {
   var k = String(permKey || '').trim();
   return ROLE_CONFIG_PERMISSION_KIND[k] === 'write' ? 'write' : 'read';
+}
+
+/**
+ * @param {string} permKey
+ * @return {boolean}
+ */
+function RoleConfig_isNewPermissionKey_(permKey) {
+  var p = String(permKey || '').trim();
+  for (var i = 0; i < ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED.length; i++) {
+    if (ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED[i] === p) return true;
+  }
+  return false;
 }
 
 /**
@@ -52,14 +77,16 @@ function RoleConfig_defaultRoles_() {
       permissions: {
         view_catalog: true,
         write_catalog: true,
+        view_onboarding: true,
         view_metrics: true,
+        manage_unanswered_queue: true,
       },
     },
     {
       key: 'manager',
       label: { es: 'Manager', en: 'Manager' },
       system: true,
-      permissions: { view_metrics: true },
+      permissions: { view_onboarding: true, view_metrics: true },
     },
     {
       key: 'tech',
@@ -68,6 +95,7 @@ function RoleConfig_defaultRoles_() {
       permissions: {
         view_agents: true,
         view_catalog: true,
+        view_onboarding: true,
         view_metrics: true,
       },
     },
@@ -78,6 +106,7 @@ function RoleConfig_defaultRoles_() {
       permissions: {
         view_agents: true,
         view_catalog: true,
+        view_onboarding: true,
         view_metrics: true,
       },
     },
@@ -85,7 +114,7 @@ function RoleConfig_defaultRoles_() {
       key: 'miembro',
       label: { es: 'Miembro', en: 'Member' },
       system: true,
-      permissions: {},
+      permissions: { view_onboarding: true },
     },
   ];
 }
@@ -134,6 +163,14 @@ function RoleConfig_normalizeStored_(raw) {
       if (key === 'admin') {
         permsOut[pk] = true;
       } else if (permsIn[pk]) {
+        permsOut[pk] = true;
+      } else if (
+        base.system &&
+        base.permissions &&
+        base.permissions[pk] &&
+        RoleConfig_isNewPermissionKey_(pk) &&
+        !Object.prototype.hasOwnProperty.call(permsIn, pk)
+      ) {
         permsOut[pk] = true;
       }
     }

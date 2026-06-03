@@ -37,6 +37,8 @@ window.Aviators = window.Aviators || {};
     contextFiles: null,
     contextFilesNote: '',
     chatHistory: [],
+    onboardingChatHistory: [],
+    contentsPendingOpenId: '',
     canViewAgents: false,
     canViewCatalog: false,
     canViewMetrics: false,
@@ -46,6 +48,8 @@ window.Aviators = window.Aviators || {};
     canResetMetrics: false,
     canSyncSalesforceAccounts: false,
     canManageUnansweredQueue: false,
+    canViewOnboarding: false,
+    webAppUrl: '',
     driveExpStack: [],
     driveExpNextToken: '',
     lastLlmCfg: null,
@@ -341,6 +345,73 @@ window.Aviators = window.Aviators || {};
     });
   }
 
+  var errorModal = document.getElementById('app-error-modal');
+  var errorDialog = document.getElementById('app-error-dialog');
+  var errorTitle = document.getElementById('app-error-title');
+  var errorMessage = document.getElementById('app-error-message');
+  var errorDetailWrap = document.getElementById('app-error-detail-wrap');
+  var errorDetail = document.getElementById('app-error-detail');
+  var errorCloseBtn = document.getElementById('app-error-close');
+
+  function closeErrorModal() {
+    if (errorModal) {
+      errorModal.classList.add('hidden');
+      errorModal.setAttribute('aria-hidden', 'true');
+    }
+    document.removeEventListener('keydown', errorKeyHandler);
+  }
+
+  function errorKeyHandler(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeErrorModal();
+    }
+  }
+
+  /**
+   * Modal de error visible (resumen + detalle técnico opcional).
+   * @param {{title?:string, message?:string, detail?:string}} opts
+   */
+  A.showErrorDialog = function (opts) {
+    var o = opts || {};
+    var message = String(o.message || '').trim();
+    var detail = String(o.detail || '').trim();
+    if (!detail && message.indexOf('\n') >= 0) {
+      var parts = message.split('\n\n');
+      message = parts[0].trim();
+      detail = parts.slice(1).join('\n\n').trim();
+    }
+    if (errorTitle) {
+      errorTitle.textContent =
+        o.title || (A.i18n ? A.i18n('error_dialog_title') : 'Error');
+    }
+    if (errorMessage) errorMessage.textContent = message || (A.i18n ? A.i18n('err_generic') : '');
+    if (errorDetail) errorDetail.textContent = detail;
+    if (errorDetailWrap) errorDetailWrap.classList.toggle('hidden', !detail);
+    if (errorModal) {
+      errorModal.classList.remove('hidden');
+      errorModal.setAttribute('aria-hidden', 'false');
+    }
+    document.addEventListener('keydown', errorKeyHandler);
+    setTimeout(function () {
+      if (errorCloseBtn) errorCloseBtn.focus();
+      else if (errorDialog) errorDialog.focus();
+    }, 0);
+  };
+
+  A.hideErrorDialog = closeErrorModal;
+
+  if (errorCloseBtn) {
+    errorCloseBtn.addEventListener('click', function () {
+      closeErrorModal();
+    });
+  }
+  if (errorModal) {
+    errorModal.addEventListener('click', function (e) {
+      if (e.target === errorModal) closeErrorModal();
+    });
+  }
+
   A.setBusy = function (busy, msg) {
     var btn = document.getElementById('login-btn');
     var st = document.getElementById('login-status');
@@ -450,7 +521,9 @@ window.Aviators = window.Aviators || {};
 
   A.initTabGroup = function (root) {
     if (!root) return { activate: function () {} };
-    var tabs = root.querySelectorAll('[role="tab"]');
+    // Solo tabs del tablist hijo directo; evita mezclar sub-grupos anidados (p. ej. Usuarios en Configuración).
+    var tabListEl = root.querySelector(':scope > [role="tablist"]');
+    var tabs = tabListEl ? tabListEl.querySelectorAll('[role="tab"]') : [];
     var tabList = [];
     var i;
     for (i = 0; i < tabs.length; i++) tabList.push(tabs[i]);
@@ -509,6 +582,58 @@ window.Aviators = window.Aviators || {};
       activate(initial);
     }
     return { activate: activate };
+  };
+
+  /**
+   * Ficha solo lectura: textareas sin scroll interno y campos vacíos ocultos.
+   * @param {HTMLElement|null} root
+   */
+  A.fichaReadonly = {
+    syncTextareas: function (root) {
+      if (!root) return;
+      var list = root.querySelectorAll('textarea');
+      var i;
+      for (i = 0; i < list.length; i++) {
+        var ta = list[i];
+        ta.style.height = 'auto';
+        ta.style.overflow = 'hidden';
+        ta.style.resize = 'none';
+        var h = ta.scrollHeight;
+        if (h > 0) ta.style.height = h + 'px';
+      }
+    },
+
+    hideEmptyFields: function (root) {
+      if (!root) return;
+      var blocks = root.querySelectorAll('.ficha-field');
+      var bi;
+      for (bi = 0; bi < blocks.length; bi++) {
+        var block = blocks[bi];
+        var control = block.querySelector('input, select, textarea');
+        if (!control) continue;
+        var val = '';
+        if (control.tagName === 'SELECT') {
+          var opt = control.options[control.selectedIndex];
+          val = opt ? String(opt.textContent || opt.value || '').trim() : '';
+          if (val === '—' || val === '\u2014') val = '';
+        } else {
+          val = String(control.value || '').trim();
+        }
+        block.classList.toggle('ficha-field--empty', !val);
+      }
+    },
+
+    appendMeta: function (dl, label, value) {
+      if (!dl || !String(value || '').trim()) return;
+      var dt = document.createElement('dt');
+      dt.className = 'ficha-meta-label';
+      dt.textContent = label;
+      var dd = document.createElement('dd');
+      dd.className = 'ficha-meta-value';
+      dd.textContent = value;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    },
   };
 })(window.Aviators);
 </script>

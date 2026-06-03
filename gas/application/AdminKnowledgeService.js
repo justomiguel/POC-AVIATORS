@@ -413,17 +413,15 @@ function AdminKnowledge_syncCorpusWithOptions(opts) {
       : defaultDesc;
 
   var prompt = (opts.searchPrompt || '').trim();
-  if (prompt) {
-    client.createProfile(
-      GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
-        profileName,
-        desc,
-        prompt,
-      ),
-    );
-  } else {
-    client.createProfile(GlobantRagDefaults_buildCreateProfileBody(profileName, desc));
-  }
+  client.createProfile(
+    prompt
+      ? GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
+          profileName,
+          desc,
+          prompt,
+        )
+      : GlobantRagDefaults_buildCreateProfileBody(profileName, desc),
+  );
 
   var uploaded = 0;
   var idx = 0;

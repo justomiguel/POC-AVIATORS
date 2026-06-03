@@ -135,6 +135,50 @@ function AdminAuth_emailCanManageUsers(email) {
 }
 
 /**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewOnboarding(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'view_onboarding');
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanManageUnansweredQueue(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'manage_unanswered_queue');
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanSyncSalesforce(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'sync_salesforce');
+}
+
+function AdminAuth_requireOnboardingView() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanViewOnboarding(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_onboarding_forbidden'));
+  }
+}
+
+function AdminAuth_requireSyncSalesforce() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanSyncSalesforce(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  }
+}
+
+/**
  * @return {boolean}
  */
 function AdminAuth_sessionCanManageAgents() {
@@ -157,6 +201,16 @@ function AdminAuth_requireAgentsView() {
 
 function AdminAuth_requireAdmin() {
   if (!AdminAuth_sessionIsAdmin()) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
+  }
+}
+
+/**
+ * Gestión de usuarios / solicitudes de acceso (misma puerta que canManageUsers en bootstrap).
+ */
+function AdminAuth_requireManageUsers() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanManageUsers(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_only'));
   }
 }

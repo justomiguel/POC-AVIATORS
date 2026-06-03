@@ -282,6 +282,12 @@ function AgentOrchestrator_filterDocsForAgent_(docs, agentId) {
  */
 function AgentOrchestrator_agentHasAnswerSource_(chosen, agentDocs) {
   if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) return true;
+  if (
+    chosen.id === _ADMIN_AGENT_ID_CLIENTS &&
+    ClientsRosterQuery_hasRosterData_()
+  ) {
+    return true;
+  }
   if (AgentOrchestrator_profileHasDocuments_(chosen.profileName)) return true;
   return AgentOrchestrator_docsHaveUsableCatalogContext_(agentDocs);
 }
@@ -376,7 +382,11 @@ function AgentOrchestrator_answerOrchestratorCatalogFallback_(
   });
 
   console.log('[ORCH] Catalog fallback via orchestrator, rows=' + docs.length);
-  var chatResult = client.chatSimple(systemPrompt, userMessage);
+  var chatResult = client.chatSimple(
+    systemPrompt,
+    userMessage,
+    GlobantAssistant_resolveChatModel_(),
+  );
   var answer = chatResult.text || '';
   var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
   answer = AgentOrchestrator_sanitizeAnswer_(answer);
@@ -428,17 +438,45 @@ function AgentOrchestrator_answerOrchestratorCatalogFallback_(
  * @return {Object}
  */
 function AgentOrchestrator_catalogDocToReference_(doc) {
+  var driveFileId = String(doc.driveFileId || '').trim();
+  var url = String(doc.driveUrl || '').trim();
+  if (!url && driveFileId) {
+    url = ChatReferences_driveOpenUrl_(driveFileId, '');
+  }
+  var previewUrl = ChatReferences_drivePreviewUrl_(driveFileId, url);
+  var contentId = String(doc.contentId || '').trim();
+  var contentType = String(doc.contentType || '').trim();
+  var pdfAvailable =
+    !!(driveFileId || url || previewUrl) ||
+    (contentId &&
+      (contentType === 'proposal' ||
+        contentType === 'success_case' ||
+        contentType === 'onboarding'));
   return {
-    contentId: doc.contentId || '',
+    contentId: contentId,
     title: doc.title || doc.fileName || 'Documento',
-    contentType: doc.contentType || '',
+    contentType: contentType,
     clientName: doc.clientName || '',
-    url: doc.driveUrl || '',
+    url: url,
+    previewUrl: previewUrl,
     fileName: doc.fileName || '',
-    driveFileId: doc.driveFileId || '',
+    driveFileId: driveFileId,
     globantDocumentId: doc.documentId || '',
     globantProfileName: doc.profileName || '',
     matched: true,
+    actions: {
+      drive: { available: pdfAvailable, url: url, previewUrl: previewUrl },
+      catalog: { available: !!contentId, contentId: contentId },
+      clientMaster: {
+        available: !!(doc.clientName && !contentId),
+        clientName: String(doc.clientName || '').trim(),
+      },
+      rag: {
+        available: !!(doc.profileName && doc.documentId),
+        profileName: String(doc.profileName || '').trim(),
+        documentId: String(doc.documentId || '').trim(),
+      },
+    },
   };
 }
 
@@ -533,7 +571,11 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
 
   console.log('[ORCH] Using direct context for client "' + clientName + '" with ' + docs.length + ' docs');
 
-  var chatResult = client.chatSimple(systemPrompt, userMessage);
+  var chatResult = client.chatSimple(
+    systemPrompt,
+    userMessage,
+    GlobantAssistant_resolveChatModel_(),
+  );
 
   var answer = chatResult.text || '';
   var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
@@ -572,6 +614,142 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
 }
 
 /**
+ * Responde consultas de nómina/cartera usando roster en Supabase (sin RAG PDF).
+ * @param {string} question
+ * @param {Object} agent
+ * @param {{items:Array<Object>, total:number, source:string, truncated:boolean, filters:Object}} rosterResult
+ * @param {Array=} history
+ * @return {Object|null}
+ */
+function AgentOrchestrator_answerWithClientsRoster_(question, agent, rosterResult, history) {
+  if (!rosterResult) return null;
+  var q = String(question || '').trim();
+
+  if (
+    ClientsRosterQuery_shouldAnswerDirectly_(q) ||
+    (rosterResult.total === 1 &&
+      rosterResult.items &&
+      rosterResult.items.length === 1 &&
+      (ClientsRosterQuery_wantsOpportunityDirect_(q) ||
+        ClientsRosterQuery_wantsOwnerDirect_(q)))
+  ) {
+    var direct = ClientsRosterQuery_buildDirectResponse_(q, rosterResult);
+    var directFilter = UiStrings_fmt_('meta_orchestrator_selected_agent', {
+      agent: agent.profileName,
+      confidence: 'routed',
+    });
+    directFilter +=
+      ' | ' +
+      UiStrings_fmt_('meta_filter_roster_context', {
+        count: rosterResult.total,
+      });
+    console.log(
+      '[ORCH] Clients roster direct: total=' +
+        String(rosterResult.total) +
+        ' refs=' +
+        String(direct.references.length),
+    );
+    return {
+      answer: direct.answer,
+      model: 'roster-direct',
+      providerLabel: UiStrings_fmt_('meta_filter_roster_context', {
+        count: rosterResult.total,
+      }),
+      rawJson: '',
+      agentName: agent.profileName,
+      references: direct.references,
+      filterLabel: directFilter,
+      isUnanswered: false,
+      unansweredCode: '',
+    };
+  }
+
+  var rosterContext = ClientsRosterQuery_buildContext_(rosterResult);
+
+  var systemPrompt = AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, q);
+  systemPrompt += '\n\n[CONTEXTO ROSTER CLIENTES — BASE DE DATOS AVIATORS]\n';
+  systemPrompt += rosterContext;
+  systemPrompt += '\n[/CONTEXTO ROSTER CLIENTES]\n';
+  systemPrompt +=
+    '\nNota: los datos provienen del roster Salesforce sincronizado y/o maestro de clientes en Supabase; no dependen del índice RAG de PDFs.';
+  systemPrompt +=
+    '\nNota: vendedor, client partner y account owner son sinónimos (mismo campo account_owner en Salesforce).';
+  systemPrompt += '\nINSTRUCCIONES DE RESPUESTA:';
+  systemPrompt += '\n1. Usa ÚNICAMENTE las cuentas listadas arriba.';
+  systemPrompt += '\n2. Para listados, organizá por industria o estado si aplica.';
+  systemPrompt += '\n3. Indicá el total cuando la pregunta lo pida.';
+  systemPrompt +=
+    '\n4. NO respondas con [[NO_RELEVANT_CONTENT]] si hay cuentas pertinentes en el contexto.';
+  if (!rosterResult.items || !rosterResult.items.length) {
+    systemPrompt +=
+      '\n5. Si no hay cuentas que coincidan, decilo claramente según los filtros inferidos.';
+  }
+
+  var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = (p.getProperty('GLOBANT_AGENTS_API_KEY') || '').trim();
+  var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
+  var client = GlobantAssistantApiClient_create({
+    apiKey: apiKey,
+    baseUrl: baseUrl || undefined,
+  });
+
+  console.log(
+    '[ORCH] Clients roster BD context: total=' +
+      rosterResult.total +
+      ' shown=' +
+      (rosterResult.items ? rosterResult.items.length : 0),
+  );
+
+  var chatModel = GlobantAssistant_resolveChatModel_();
+  var chatResult = client.chatSimple(systemPrompt, userMessage, chatModel);
+  var answer = chatResult.text || '';
+  var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer);
+  answer = AgentOrchestrator_sanitizeAnswer_(answer);
+
+  var rawA = JSON.stringify(chatResult.parsed, null, 2);
+  if (rawA.length > 6000) {
+    rawA = rawA.substring(0, 6000) + '...(truncado)';
+  }
+
+  var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
+    agent: agent.profileName,
+    confidence: 'routed',
+  });
+  filterLabel +=
+    ' | ' +
+    UiStrings_fmt_('meta_filter_roster_context', {
+      count: rosterResult.total,
+    });
+
+  return {
+    answer: answer,
+    model: chatModel,
+    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
+    rawJson: rawA,
+    agentName: agent.profileName,
+    references: [],
+    filterLabel: filterLabel,
+    isUnanswered: isUnanswered,
+    unansweredCode: isUnanswered ? 'NO_RELEVANT_CONTENT' : '',
+  };
+}
+
+/**
+ * @param {string} question
+ * @param {Object} agent
+ * @param {Array=} history
+ * @param {string} clientNameDetected
+ * @return {Object|null}
+ */
+function AgentOrchestrator_tryClientsRosterAnswer_(question, agent, history, clientNameDetected) {
+  if (!agent || agent.id !== _ADMIN_AGENT_ID_CLIENTS) return null;
+  var rosterResult = ClientsRosterQuery_tryPrepare_(question, clientNameDetected);
+  if (!rosterResult) return null;
+  return AgentOrchestrator_answerWithClientsRoster_(question, agent, rosterResult, history);
+}
+
+/**
  * Paso 1: clasifica la consulta y devuelve el/los agente(s) elegido(s).
  * @param {string} question
  * @return {{ agents: Array<{id:string, name:string}>, confidence: string, reason: string, isSelf: boolean }}
@@ -582,6 +760,20 @@ function AgentOrchestrator_routeOnly(question) {
   var q = AgentOrchestrator_requireQuestion_(question);
 
   var ctx = AgentOrchestrator_loadContext_();
+  var clientsAgent = ctx.byId[_ADMIN_AGENT_ID_CLIENTS];
+  if (
+    clientsAgent &&
+    ClientsRosterQuery_isRosterQuestion_(q, '') &&
+    ClientsRosterQuery_hasRosterData_()
+  ) {
+    return {
+      agents: [{ id: clientsAgent.id, name: clientsAgent.profileName }],
+      confidence: 'high',
+      reason: 'roster_fast',
+      isSelf: false,
+    };
+  }
+
   var route = AgentOrchestrator_route_(q, ctx.orchestrator, ctx.candidates);
 
   var agentList = route.agents || [route.agentId];
@@ -620,7 +812,12 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
 
   var ctx = AgentOrchestrator_loadContext_();
   if (!catalogPrefetch || !catalogPrefetch.length) {
-    catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
+    var skipCatalogPrefetch =
+      agentId === _ADMIN_AGENT_ID_CLIENTS &&
+      ClientsRosterQuery_isRosterQuestion_(q, '');
+    catalogPrefetch = skipCatalogPrefetch
+      ? []
+      : AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
   }
   var chosen = ctx.byId[agentId] || ctx.orchestrator;
   var clientDetection = AgentOrchestrator_detectClientDocs_(q, catalogPrefetch);
@@ -629,6 +826,14 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
     clientDetection.clientName ||
     (agentDocs.length && agentDocs[0].clientName) ||
     '';
+
+  var rosterAnswer = AgentOrchestrator_tryClientsRosterAnswer_(
+    q,
+    chosen,
+    history,
+    clientLabel,
+  );
+  if (rosterAnswer) return rosterAnswer;
 
   if (
     chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
@@ -713,6 +918,14 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
   answer.unansweredCode = isUnanswered ? 'NO_RELEVANT_CONTENT' : '';
 
   if (isUnanswered) {
+    var rosterFb = AgentOrchestrator_tryClientsRosterAnswer_(
+      q,
+      chosen,
+      history,
+      clientLabel,
+    );
+    if (rosterFb) return rosterFb;
+
     var orchFb = AgentOrchestrator_tryOrchestratorCatalogFallback_(
       q,
       history,
@@ -769,6 +982,17 @@ function AgentOrchestrator_answerMulti(question, agentIds, history, catalogPrefe
       clientDetection.clientName ||
       (agentDocs.length && agentDocs[0].clientName) ||
       '';
+
+    var rosterMulti = AgentOrchestrator_tryClientsRosterAnswer_(
+      q,
+      chosen,
+      history,
+      clientLabel,
+    );
+    if (rosterMulti) {
+      results.push(rosterMulti);
+      continue;
+    }
 
     if (
       chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
@@ -967,7 +1191,7 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
   try {
     var wanted = Object.keys(typeSet);
     if (!wanted.length) {
-      wanted = ['proposal', 'success_case', 'client'];
+      wanted = ['proposal', 'success_case', 'client', 'onboarding'];
     }
     for (i = 0; i < wanted.length; i++) {
       var list = ContentCatalog_list({ contentType: wanted[i], skip: 0, limit: 300 });
@@ -1002,8 +1226,12 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
     if (score <= 0) continue;
 
     var url = '';
-    if (cType === 'success_case') {
-      url = driveFileUrl || AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
+    if (driveFileUrl) {
+      url = driveFileUrl;
+    } else if (driveFileId) {
+      url = ChatReferences_driveOpenUrl_(driveFileId, '');
+    } else if (cType === 'success_case') {
+      url = AgentOrchestrator_resolveDriveUrlByFileName_(fileName);
     }
     scored.push({
       score: score,
@@ -1457,7 +1685,7 @@ function AgentOrchestrator_keywordFallback_(question, candidates) {
   var matchPR = exists(_ADMIN_AGENT_ID_PROPOSALS) &&
     /(propuesta|proposal|alcance|rfp|estimaci[oó]n|pricing|entregable|cronograma)/.test(q);
   var matchCL = exists(_ADMIN_AGENT_ID_CLIENTS) &&
-    /(cliente|cuenta|account|proyecto activo|mantenimiento|n[oó]mina)/.test(q);
+    /(cliente|cuenta|account|proyecto activo|mantenimiento|n[oó]mina|aviacion|aviation|aerolineas|airlines|cartera|roster)/.test(q);
   var matchWork = /(que hicimos|experiencia|hemos hecho|trabajamos|trabajos|proyectos?)/.test(q);
 
   var agents = [];
@@ -1520,7 +1748,7 @@ function AgentOrchestrator_debugRagDiagnostics_(question) {
 
   if (LlmProviderGlobant_isAssistantMode(props)) {
     out.notes.push(
-      'GLOBANT_API_MODE=assistant: los agentes aviators-* usan RAG /search/execute; el orquestador usa Assistant chat.',
+      'Agentes aviators-* (incl. orquestador): RAG /v1/search/execute.',
     );
   }
 
@@ -1649,33 +1877,30 @@ function AgentOrchestrator_validateEphemeralPayload_(payload) {
 }
 
 /**
- * Clasifica si el PDF es elegible (RFP / logística / aerolíneas).
+ * Extrae metadata del PDF adjunto (tema, industria, cliente) para enriquecer la búsqueda en catálogo.
  * @param {Object} client GlobantAssistantApiClient
  * @param {string} fileBase64
  * @param {string} mimeType
- * @return {{eligible:boolean,reason:string,docKind:string,topics:Array<string>,industry:string,clientHint:string}}
+ * @return {{reason:string,docKind:string,topics:Array<string>,industry:string,clientHint:string}}
  */
 function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeType) {
   var classifyPrompt = [
     'Analizá el documento adjunto y respondé SOLO con JSON válido (sin markdown):',
     '{',
-    '  "eligible": boolean,',
-    '  "reason": "string breve",',
-    '  "docKind": "rfp|logistics|airline|airport|other",',
+    '  "summary": "string breve (1-2 oraciones) del tema del documento",',
+    '  "docKind": "tipo detectado, ej. rfp|contract|report|proposal|other",',
     '  "topics": ["3-8 palabras clave en español o inglés"],',
-    '  "industry": "industria detectada o vacío",',
+    '  "industry": "industria o sector detectado, o vacío",',
     '  "clientHint": "nombre de empresa/cliente si aparece, o vacío"',
     '}',
     '',
-    'eligible=true SOLO si el documento es:',
-    '- una RFP, tender, solicitud de propuesta, pliego, o brief comercial similar, O',
-    '- documentación operativa/comercial de empresa de logística, freight, cargo, supply chain, aerolíneas, aeropuertos o aviación.',
-    'eligible=false para contratos genéricos, CVs, marketing no relacionado, IT genérico, etc.',
+    'Aceptá cualquier tipo de documento (contratos, informes, RFP, marketing, CVs, etc.).',
+    'Enfocate en extraer tema, industria y entidades mencionadas.',
   ].join('\n');
 
   var result = client.chatWithFileInline(
-    CONTENT_EXTRACTION_MODEL,
-    'Sos un clasificador estricto. Devolvé únicamente JSON.',
+    ContentExtraction_resolveChatModel_(),
+    'Sos un analizador de documentos. Devolvé únicamente JSON.',
     classifyPrompt,
     fileBase64,
     mimeType,
@@ -1686,7 +1911,6 @@ function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeTy
   var end = raw.lastIndexOf('}');
   if (start < 0 || end < start) {
     return {
-      eligible: false,
       reason: 'classification_parse_error',
       docKind: 'other',
       topics: [],
@@ -1704,8 +1928,7 @@ function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeTy
       }
     }
     return {
-      eligible: !!o.eligible,
-      reason: String(o.reason || '').trim(),
+      reason: String(o.summary || o.reason || '').trim(),
       docKind: String(o.docKind || 'other').trim(),
       topics: topics,
       industry: String(o.industry || '').trim(),
@@ -1713,7 +1936,6 @@ function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeTy
     };
   } catch (eParse) {
     return {
-      eligible: false,
       reason: 'classification_parse_error',
       docKind: 'other',
       topics: [],
@@ -1793,11 +2015,6 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
     prepared.dataBase64,
     prepared.mimeType,
   );
-  if (!classification.eligible) {
-    throw new Error(
-      UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_not_eligible'),
-    );
-  }
 
   var catalogDocs = ContentCatalog_findRowsForEphemeralDocument_(q, classification, {
     limit: 8,
@@ -1816,7 +2033,7 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
     '\n\n[DOCUMENTO ADJUNTO — analizá el PDF adjunto y respondé según las instrucciones del sistema.]';
 
   var answerResult = client.chatWithFileInline(
-    CONTENT_EXTRACTION_MODEL,
+    ContentExtraction_resolveChatModel_(),
     systemPrompt,
     userMessage,
     prepared.dataBase64,
@@ -1838,7 +2055,7 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
 
   return {
     answer: answer,
-    model: CONTENT_EXTRACTION_MODEL,
+    model: ContentExtraction_resolveChatModel_(),
     providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
     rawJson: rawA,
     agentName: orchestrator.profileName,

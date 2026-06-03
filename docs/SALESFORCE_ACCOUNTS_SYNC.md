@@ -101,7 +101,7 @@ O editar manualmente el agente **clients** en Admin → Agentes (texto alineado 
 | Cuentas dadas de baja en SF | `is_active = false` en `salesforce_accounts`; filas de catálogo con nota histórica; **no se borran** |
 | Clave | `Account Name` normalizado (único) |
 | Account Owner | Solo nombre en catálogo/chat (no se crean usuarios ni roles automáticamente) |
-| Chat | Agente **clients** usa catálogo semántico + RAG PDF cuando existan documentos subidos |
+| Chat | Agente **clients**: consultas de nómina/cartera leen **Supabase en tiempo real** (roster Salesforce + maestro de clientes); PDFs opcionales vía RAG. El catálogo vectorizado complementa búsquedas puntuales. |
 
 ## Usuarios y roles
 
@@ -118,9 +118,13 @@ El sync **no** crea filas en `roles`. El Account Owner queda como texto en el ro
 
 En el chat, elegir agente **Clientes** y preguntar por ejemplo:
 
+- «¿Qué clientes tiene Globant en aviación?»
+- «¿Qué clientes tenemos activos?»
 - «¿Quién es el account owner de Vueling Airlines?»
 - «¿Qué cuentas están en prospect en Airlines 100Sq?»
 - «Última oportunidad ganada de C.H. Robinson»
+
+Las dos primeras leen el roster en **Supabase** (no requieren PDFs en RAG). Las demás usan cuenta concreta vía catálogo/RAG.
 
 ## Referencia de código
 

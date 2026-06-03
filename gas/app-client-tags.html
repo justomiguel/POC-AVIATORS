@@ -181,10 +181,8 @@
         openBtn.addEventListener('click', function () {
           var id = String(c.content_id || '').trim();
           if (!id) return;
-          if (A.contents && A.contents.selectById) {
-            A.setAppPage('contents');
-            A.contents.selectById(id);
-          }
+          S.set('contentsPendingOpenId', id);
+          A.setAppPage('contents');
         });
         actTd.appendChild(openBtn);
         tr.appendChild(actTd);

@@ -14,8 +14,8 @@ function LlmProviderGlobant_isAssistantMode(props) {
 }
 
 /**
- * Perfiles Aviators de agentes especialistas deben usar RAG /search/execute
- * aunque GLOBANT_API_MODE=assistant (el chat assistant no indexa esos corpus).
+ * Todos los perfiles Aviators (incl. orquestador) usan RAG /search/execute salvo modo assistant
+ * con perfil que no sea aviators-*.
  * @param {string} profileName
  * @param {GoogleAppsScript.Properties.Properties} props
  * @return {boolean}
@@ -24,7 +24,6 @@ function LlmProviderGlobant_useRagExecuteForProfile_(profileName, props) {
   if (!LlmProviderGlobant_isAssistantMode(props)) return true;
   var pn = String(profileName || '').trim().toLowerCase();
   if (pn.indexOf('aviators-') !== 0) return false;
-  if (pn === 'aviators-orquestador') return false;
   return true;
 }
 
@@ -403,34 +402,33 @@ function LlmProviderGlobant_consultPromptWithAgent(
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
 
-  if (
-    LlmProviderGlobant_isAssistantMode(p) &&
-    !LlmProviderGlobant_useRagExecuteForProfile_(pn, p)
-  ) {
-    var ast = GlobantAssistantApiClient_create({
-      apiKey: apiKey,
-      baseUrl: baseUrl || undefined,
-    });
-    var chatOut = GlobantAssistantApiClient_sendChatWithRetry(
-      ast,
-      pn,
-      finalPrompt,
-      maxRetries,
-    );
-    var rawA = JSON.stringify(chatOut.parsed, null, 2);
-    if (rawA.length > 6000) {
-      rawA = rawA.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
+  if (!LlmProviderGlobant_useRagExecuteForProfile_(pn, p)) {
+    if (LlmProviderGlobant_isAssistantMode(p)) {
+      var ast = GlobantAssistantApiClient_create({
+        apiKey: apiKey,
+        baseUrl: baseUrl || undefined,
+      });
+      var chatOut = GlobantAssistantApiClient_sendChatWithRetry(
+        ast,
+        pn,
+        finalPrompt,
+        maxRetries,
+      );
+      var rawA = JSON.stringify(chatOut.parsed, null, 2);
+      if (rawA.length > 6000) {
+        rawA = rawA.substring(0, 6000) + UiStrings_fmt_('drive_text_truncated_suffix');
+      }
+      return {
+        answer: chatOut.text,
+        model: 'globant-assistant',
+        providerLabel: UiStrings_t(
+          UiStrings_activeLocale_(),
+          'meta_provider_globant_assistant',
+        ),
+        rawJson: rawA,
+        filterLabel: UiStrings_fmt_('meta_filter_profile', { profile: pn }),
+      };
     }
-    return {
-      answer: chatOut.text,
-      model: 'globant-assistant',
-      providerLabel: UiStrings_t(
-        UiStrings_activeLocale_(),
-        'meta_provider_globant_assistant',
-      ),
-      rawJson: rawA,
-      filterLabel: UiStrings_fmt_('meta_filter_profile', { profile: pn }),
-    };
   }
 
   var ragExecuteMaxChars = 14000;

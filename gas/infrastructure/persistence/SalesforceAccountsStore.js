@@ -13,6 +13,42 @@ function SalesforceAccountsStore_listAll() {
 }
 
 /**
+ * Lista cuentas con filtros en PostgREST (evita cargar todo el roster en memoria).
+ * @param {{activeOnly?:boolean|null, industry?:string, industries?:Array<string>, subIndustry?:string}} filters
+ * @return {Array<Object>}
+ */
+function SalesforceAccountsStore_listMatching_(filters) {
+  filters = filters || {};
+  var qParts = ['select=*', 'order=account_name.asc'];
+  if (filters.activeOnly === true) {
+    qParts.push(SupabaseRest_filter_('is_active', 'eq', true));
+  } else if (filters.activeOnly === false) {
+    qParts.push(SupabaseRest_filter_('is_active', 'eq', false));
+  }
+  if (filters.industry) {
+    qParts.push(SupabaseRest_filter_('industry', 'eq', filters.industry));
+  } else if (filters.industries && filters.industries.length) {
+    var inParts = [];
+    var ii;
+    for (ii = 0; ii < filters.industries.length; ii++) {
+      var ind = String(filters.industries[ii] || '').trim();
+      if (!ind) continue;
+      inParts.push('"' + ind.replace(/"/g, '') + '"');
+    }
+    if (inParts.length) {
+      qParts.push(SupabaseRest_filter_('industry', 'in', '(' + inParts.join(',') + ')'));
+    }
+  }
+  if (filters.subIndustry) {
+    qParts.push(SupabaseRest_filter_('sub_industry', 'eq', filters.subIndustry));
+  }
+  return SupabaseRest_select(
+    SUPABASE_TABLE.SALESFORCE_ACCOUNTS,
+    SupabaseRest_query_(qParts),
+  );
+}
+
+/**
  * @param {string} accountKey
  * @return {Object|null}
  */

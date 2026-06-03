@@ -47,22 +47,25 @@ var SALESFORCE_ACCOUNTS_COL_ = {
 function SalesforceAccounts_defaultClientsAgentPrompt_() {
   return (
     'You are the Aviators Clients Agent.\n' +
-    'Your sources of truth are:\n' +
-    '1) The Salesforce Airlines Accounts roster synced into Aviators (account owner, portfolio, status, opportunities dates, industry).\n' +
-    '2) Indexed client PDFs and curated client documents in the aviators-clients corpus when present.\n' +
+    'Your sources of truth are (in order of specificity for each question):\n' +
+    '1) The Salesforce Airlines Accounts roster and client master in Aviators Supabase (account owner, portfolio, status, opportunity dates, industry, sub-industry, active/inactive). For roster or portfolio questions, the orchestrator may inject this data directly — use it when provided in the prompt context.\n' +
+    '2) The Aviators content catalog for client rows (curated summaries and vector search), including roster rows synced from Salesforce.\n' +
+    '3) Indexed client PDFs and curated documents in the aviators-clients RAG corpus when present.\n' +
     'Do NOT use external knowledge.\n\n' +
-    'Goal: answer about clients, account ownership, portfolio, farming/hunting status, opportunity timelines, and continuity. ' +
-    'When both roster data and uploaded PDFs exist, combine them without contradiction; prefer the most specific dated fact.\n\n' +
+    'Goal: answer about clients, account ownership, portfolio, farming/hunting status, opportunity timelines, industry filters, and relationship continuity. ' +
+    'When roster data, catalog summaries, and uploaded PDFs overlap, combine them without contradiction; prefer the most specific dated fact.\n\n' +
     'Rules:\n' +
-    '1) Do not mix clients or accounts without evidence in the index.\n' +
+    '1) Do not mix clients or accounts without evidence in the context provided for this turn (roster block, catalog excerpts, or RAG retrieval).\n' +
     '2) If names are ambiguous, ask which account before asserting facts.\n' +
     '3) Do not invent contracts, revenue, scope, or dates.\n' +
-    '4) Account Owner names from Salesforce may be used when present in the roster.\n' +
-    '5) When applicable, structure by: Account, Owner, Portfolio, Status, Opportunities, Industry.\n\n' +
+    '4) Account Owner, Client Partner and Vendedor are the same role in the roster (Salesforce field account_owner). Treat those terms as synonyms in every language.\n' +
+    '5) Account Owner names from Salesforce may be used when present in the roster.\n' +
+    '6) For list or filter questions (industry, active accounts, sub-industry), summarize from roster/catalog context; state totals when helpful.\n' +
+    '7) When applicable, structure by: Account, Owner, Portfolio, Status, Opportunities, Industry.\n\n' +
     'CRITICAL RULE - no content:\n' +
-    'If your indexed corpus has NO information about the requested client or account, reply EXACTLY with this text and nothing else:\n' +
-    '[[NO_RELEVANT_CONTENT]]\n' +
-    'Do not invent or suggest content when there is no real match in the index.'
+    'Reply with [[NO_RELEVANT_CONTENT]] ONLY if this turn provides NO roster context, NO catalog excerpts, and RAG retrieval has NO information about the requested client or account.\n' +
+    'Do not use [[NO_RELEVANT_CONTENT]] when Supabase roster or catalog context already lists matching accounts.\n' +
+    'Do not invent or suggest content when there is no real match in the provided context.'
   );
 }
 
@@ -233,7 +236,9 @@ function SalesforceAccounts_buildSummary_(account, isActive) {
     );
   }
   lines.push('Account: ' + account.account_name);
-  if (account.account_owner) lines.push('Account Owner: ' + account.account_owner);
+  if (account.account_owner) {
+    lines.push('Account Owner / Client Partner / Vendedor: ' + account.account_owner);
+  }
   if (account.portfolio) lines.push('Portfolio: ' + account.portfolio);
   if (account.account_status) lines.push('Client status: ' + account.account_status);
   if (account.account_type) lines.push('Account type: ' + account.account_type);
@@ -605,12 +610,32 @@ function SalesforceAccounts_runSyncData_(force) {
 
   SalesforceAccounts_storeEmbeddingQueue_(embeddingContentIds);
 
+  var dedupeStats = null;
+  try {
+    dedupeStats = ClientsMaster_reconcileDuplicates().stats;
+  } catch (eDedupe) {
+    console.log('[SF-SYNC] client dedupe: ' + (eDedupe && eDedupe.message ? eDedupe.message : eDedupe));
+  }
+
+  var syncMsg =
+    'accounts=' +
+    upserted +
+    ',emb_pending=' +
+    embeddingContentIds.length;
+  if (dedupeStats && dedupeStats.mergedGroups > 0) {
+    syncMsg +=
+      ',clients_merged=' +
+      dedupeStats.mergedGroups +
+      ',clients_removed=' +
+      dedupeStats.clientsRemoved;
+  }
+
   SalesforceAccountsSyncStateStore_save_({
     last_event_row: eventRow,
     last_sheet_hash: sheetHash,
     last_sync_at: new Date().toISOString(),
     last_sync_status: 'ok',
-    last_sync_message: 'accounts=' + upserted + ',emb_pending=' + embeddingContentIds.length,
+    last_sync_message: syncMsg,
     accounts_upserted: upserted,
     accounts_inactivated: inactivated,
   });
@@ -623,6 +648,7 @@ function SalesforceAccounts_runSyncData_(force) {
     inactivated: inactivated,
     total: accounts.length,
     embeddingTotal: embeddingContentIds.length,
+    clientDedupe: dedupeStats,
   };
 }
 

@@ -3,6 +3,34 @@
  * Equivalente al flujo legacy `AssistantProvider` (no confundir con /v1/search RAG).
  */
 
+/** Ruta Chat API (Direct LLM / OpenAI-compatible). Doc: docs.globant.ai → Chat API. */
+var GLOBANT_CHAT_COMPLETIONS_PATH = '/v1/chat/completions';
+
+/**
+ * Modelo para POST /v1/chat/completions (roster, catálogo). Script Property GLOBANT_CHAT_MODEL o LLM_DEFAULTS.
+ * Remapea alias obsoletos (gemini-2.0-flash) a versiones disponibles en Vertex vía Globant.
+ *
+ * @return {string}
+ */
+function GlobantAssistant_resolveChatModel_() {
+  var p = PropertiesService.getScriptProperties();
+  var raw = (p.getProperty(LLM_PROP.GLOBANT_CHAT_MODEL) || '').trim();
+  if (!raw) {
+    raw = (p.getProperty(LLM_PROP.GEMINI_MODEL) || '').trim();
+  }
+  var aliases = {
+    'gemini-2.0-flash': LLM_DEFAULTS.GLOBANT_CHAT_MODEL,
+    'gemini-2.0-flash-exp': LLM_DEFAULTS.GLOBANT_CHAT_MODEL,
+    'vertex_ai/gemini-2.0-flash': LLM_DEFAULTS.GLOBANT_CHAT_MODEL,
+    'vertex_ai/gemini-2.0-flash-exp': LLM_DEFAULTS.GLOBANT_CHAT_MODEL,
+  };
+  if (raw && aliases[raw]) return aliases[raw];
+  if (raw && raw.indexOf('/') < 0) {
+    return 'vertex_ai/' + raw;
+  }
+  return raw || LLM_DEFAULTS.GLOBANT_CHAT_MODEL;
+}
+
 /**
  * @typedef {Object} GlobantAssistantApiClientConfig
  * @property {string} apiKey
@@ -278,7 +306,7 @@ function GlobantAssistantApiClient_create(config) {
   }
 
   /**
-   * Envía un mensaje con un archivo adjunto (base64 inline) al /chat endpoint.
+   * Envía un mensaje con un archivo adjunto (base64 inline) al Chat API.
    * Usa modelos multimodales (Gemini) para analizar PDFs/archivos sin indexación.
    * @param {string} model e.g. "vertex_ai/gemini-2.0-flash-exp"
    * @param {string} systemPrompt
@@ -306,7 +334,7 @@ function GlobantAssistantApiClient_create(config) {
       max_tokens: 8192,
       temperature: 0.1,
     });
-    var r = BearerHttp_fetch(baseUrl + '/chat', {
+    var r = BearerHttp_fetch(baseUrl + GLOBANT_CHAT_COMPLETIONS_PATH, {
       method: 'post',
       contentType: 'application/json',
       headers: authHeaders({}),
@@ -317,7 +345,7 @@ function GlobantAssistantApiClient_create(config) {
     if (!BearerHttp_isSuccess(code)) {
       throw new Error(
         UiStrings_fmt_('err_globant_api_http', {
-          path: '/chat (inline file)',
+          path: GLOBANT_CHAT_COMPLETIONS_PATH + ' (inline file)',
           code: String(code),
           detail: text.slice(0, 800),
         }),
@@ -337,11 +365,11 @@ function GlobantAssistantApiClient_create(config) {
    * Chat completion simple sin RAG. Envía un prompt con contexto directo.
    * @param {string} systemPrompt
    * @param {string} userMessage
-   * @param {string=} model — modelo a usar, default 'vertex_ai/gemini-2.0-flash-exp'
+   * @param {string=} model — modelo a usar; por defecto GlobantAssistant_resolveChatModel_()
    * @return {{text:string, parsed:Object}}
    */
   function chatSimple(systemPrompt, userMessage, model) {
-    var mdl = model || 'vertex_ai/gemini-2.0-flash-exp';
+    var mdl = model || GlobantAssistant_resolveChatModel_();
     var messages = [];
     if (systemPrompt) {
       messages.push({ role: 'system', content: systemPrompt });
@@ -354,7 +382,7 @@ function GlobantAssistantApiClient_create(config) {
       max_tokens: 8192,
       temperature: 0.2,
     });
-    var r = BearerHttp_fetch(baseUrl + '/chat', {
+    var r = BearerHttp_fetch(baseUrl + GLOBANT_CHAT_COMPLETIONS_PATH, {
       method: 'post',
       contentType: 'application/json',
       headers: authHeaders({}),
@@ -365,7 +393,7 @@ function GlobantAssistantApiClient_create(config) {
     if (!BearerHttp_isSuccess(code)) {
       throw new Error(
         UiStrings_fmt_('err_globant_api_http', {
-          path: '/chat (simple)',
+          path: GLOBANT_CHAT_COMPLETIONS_PATH + ' (simple)',
           code: String(code),
           detail: text.slice(0, 800),
         }),

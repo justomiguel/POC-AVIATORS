@@ -13,7 +13,19 @@ var _ADMIN_AGENT_ID_CLIENTS = 'clients';
 var _ADMIN_AGENT_ID_ONBOARDING = 'onboarding';
 var _ADMIN_AGENTS_API_CATALOG_SSID_PROP = 'ADMIN_AGENTS_API_CATALOG_SPREADSHEET_ID';
 var _ADMIN_AGENTS_API_CATALOG_TAB = 'agent_api_catalog';
-var ADMIN_AGENT_DEFAULT_MODEL = 'gpt-5.5';
+var ADMIN_AGENT_DEFAULT_MODEL = 'openai/gpt-5.5';
+
+/** Perfil RAG del orquestador (misma API /v1/search/profile que especialistas). */
+var ADMIN_AGENT_ORCHESTRATOR_PROFILE = 'aviators-orquestador';
+
+/** Alias históricos de modelo → id canónico en Globant API. */
+var ADMIN_AGENT_MODEL_ALIASES_ = {
+  'gpt-5.5': 'openai/gpt-5.5',
+  'gpt-5': 'openai/gpt-5.5',
+  gpt5: 'openai/gpt-5.5',
+  'openai/gpt-5': 'openai/gpt-5.5',
+  'gpt-4o': 'openai/gpt-4.1',
+};
 
 /**
  * @return {Array<{id:string,profileName:string,systemPrompt:string,sources:{folders:Array<{id:string,name:string}>,files:Array<{id:string,name:string}>},lastSync:string}>}
@@ -167,6 +179,45 @@ function AdminAgents_isValidProfileName_(name) {
 }
 
 /**
+ * @param {string} agentId
+ * @return {boolean}
+ */
+function AdminAgents_isOrchestratorAgentId_(agentId) {
+  return String(agentId || '').trim() === _ADMIN_AGENT_ID_ORCHESTRATOR;
+}
+
+/**
+ * @param {string} profileName
+ * @return {boolean}
+ */
+function AdminAgents_isOrchestratorProfileName_(profileName) {
+  return (
+    String(profileName || '').trim().toLowerCase() ===
+    ADMIN_AGENT_ORCHESTRATOR_PROFILE
+  );
+}
+
+/**
+ * Agents Hub (v4 upsert). Desactivado: todos los agentes Aviators usan RAG.
+ * @param {string} agentId
+ * @param {string=} profileName
+ * @return {boolean}
+ */
+function AdminAgents_usesHubAgent_(agentId, profileName) {
+  return false;
+}
+
+/**
+ * Asistente RAG (/v1/search/profile), incluido el orquestador.
+ * @param {string} agentId
+ * @param {string=} profileName
+ * @return {boolean}
+ */
+function AdminAgents_usesRagAssistant_(agentId, profileName) {
+  return true;
+}
+
+/**
  * @param {unknown} v
  * @param {number} min
  * @param {number} max
@@ -220,9 +271,73 @@ function AdminAgents_defaultGlobantAgentConfig_(agentLike) {
     promptInstructions: prompt,
     modelName: ADMIN_AGENT_DEFAULT_MODEL,
     maxTokens: 4000,
-    timeout: 0,
+    timeout: 120,
     temperature: 0.2,
   };
+}
+
+/**
+ * @return {Array<string>}
+ */
+function AdminAgents_listKnownModels_() {
+  var cat = AdminAgents_apiCatalog();
+  return cat.models || [];
+}
+
+/**
+ * @return {Array<string>}
+ */
+function AdminAgents_listKnownStrategies_() {
+  var cat = AdminAgents_apiCatalog();
+  return cat.strategies || [];
+}
+
+/**
+ * @param {string} raw
+ * @param {Array<string>} list
+ * @return {string}
+ */
+function AdminAgents_resolveFromCatalogList_(raw, list) {
+  var trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  var token = trimmed.toLowerCase();
+  if (ADMIN_AGENT_MODEL_ALIASES_[token]) {
+    trimmed = ADMIN_AGENT_MODEL_ALIASES_[token];
+    token = trimmed.toLowerCase();
+  }
+  var items = list || [];
+  if (!items.length) {
+    return ADMIN_AGENT_MODEL_ALIASES_[token] || trimmed;
+  }
+  var i;
+  for (i = 0; i < items.length; i++) {
+    var item = String(items[i] || '').trim();
+    if (!item) continue;
+    if (item.toLowerCase() === token) return item;
+  }
+  for (i = 0; i < items.length; i++) {
+    var item2 = String(items[i] || '').trim();
+    if (!item2) continue;
+    var tok2 = item2.toLowerCase();
+    if (token.indexOf(tok2) >= 0 || tok2.indexOf(token) >= 0) return item2;
+  }
+  return ADMIN_AGENT_MODEL_ALIASES_[String(raw || '').trim().toLowerCase()] || '';
+}
+
+/**
+ * @param {string} raw
+ * @return {string}
+ */
+function AdminAgents_resolveModelName_(raw) {
+  return AdminAgents_resolveFromCatalogList_(raw, AdminAgents_listKnownModels_());
+}
+
+/**
+ * @param {string} raw
+ * @return {string}
+ */
+function AdminAgents_resolveStrategyName_(raw) {
+  return AdminAgents_resolveFromCatalogList_(raw, AdminAgents_listKnownStrategies_());
 }
 
 /**
@@ -253,9 +368,9 @@ function AdminAgents_apiCatalog() {
     'vertex_ai/gemini-2.5-flash',
     'vertex_ai/gemini-2.5-flash-lite',
     'vertex_ai/gemini-2.0-flash',
+    'openai/gpt-5.5',
     'openai/gpt-5',
     'openai/gpt-5-mini',
-    ADMIN_AGENT_DEFAULT_MODEL,
     'openai/gpt-4.1',
     'anthropic/claude-sonnet-4-20250514',
   ];
@@ -325,14 +440,19 @@ function AdminAgents_normalizeGlobantAgentConfig_(raw, agentLike) {
     jobDescription: String(inCfg.jobDescription || '').trim(),
     avatarImage: String(inCfg.avatarImage || '').trim(),
     description: String(inCfg.description || '').trim(),
-    strategyName: String(inCfg.strategyName || base.strategyName).trim(),
+    strategyName:
+      AdminAgents_resolveStrategyName_(
+        String(inCfg.strategyName || base.strategyName).trim(),
+      ) || String(inCfg.strategyName || base.strategyName).trim(),
     promptContext: String(inCfg.promptContext || '').trim(),
-    promptInstructions: String(
-      inCfg.promptInstructions != null
-        ? inCfg.promptInstructions
-        : base.promptInstructions,
+    promptInstructions: AdminAgents_resolvePromptInstructions_(
+      inCfg,
+      agentLike,
+      base,
     ),
-    modelName: String(inCfg.modelName || base.modelName || '').trim(),
+    modelName: AdminAgents_resolveModelName_(
+      String(inCfg.modelName || base.modelName || '').trim(),
+    ),
     maxTokens: AdminAgents_numberOrDefault_(
       inCfg.maxTokens,
       1,
@@ -545,33 +665,84 @@ function AdminAgents_maybeCreateRagClient_(props) {
 }
 
 /**
- * Crea el perfil RAG en Globant si aún no existe para este proyecto.
+ * Crea o actualiza el asistente RAG en Globant (`searchOptions.search.prompt`).
+ * Asistente RAG (/v1/search/profile): prompt en searchOptions.search.prompt vía GlobantRagDefaults.
+ * No usar Agents API v4 ni AdminAgents_buildGlobantAgentDefinition_ aquí.
  *
  * @param {Object} client — GlobantRagApiClient_create
  * @param {string} profileName
- * @param {string} systemPrompt · plantilla de búsqueda si viene no vacía
+ * @param {string} systemPrompt · instrucciones / plantilla de búsqueda Aviators
+ * @return {'created'|'updated'|'unchanged'}
  */
-function AdminAgents_ensureRagProfileExists_(client, profileName, systemPrompt) {
-  var exists = AdminAgents_listRemoteProfilesSet_(client);
-  if (exists[profileName]) return;
+function AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt) {
+  var name = String(profileName || '').trim();
+  if (!name) return 'unchanged';
+
   var defaultDesc = UiStrings_t(
     UiStrings_activeLocale_(),
     'admin_rag_default_profile_description',
   );
-  var prompt = ('' + (systemPrompt || '')).trim();
-  if (prompt) {
-    client.createProfile(
-      GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
-        profileName,
-        defaultDesc,
-        prompt,
-      ),
+  var exists = AdminAgents_listRemoteProfilesSet_(client);
+  var searchPrompt = GlobantRagDefaults_coerceSearchPromptTemplate(systemPrompt);
+
+  if (exists[name]) {
+    client.updateProfile(
+      name,
+      GlobantRagDefaults_buildUpdateSearchPromptBody(defaultDesc, systemPrompt),
     );
-  } else {
-    client.createProfile(
-      GlobantRagDefaults_buildCreateProfileBody(profileName, defaultDesc),
+    console.log(
+      '[AdminAgents] RAG profile prompt updated name=' +
+        name +
+        ' promptLen=' +
+        searchPrompt.length,
     );
+    return 'updated';
   }
+
+  client.createProfile(
+    GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
+      name,
+      defaultDesc,
+      systemPrompt,
+    ),
+  );
+  console.log(
+    '[AdminAgents] RAG profile created name=' +
+      name +
+      ' promptLen=' +
+      searchPrompt.length,
+  );
+  return 'created';
+}
+
+/**
+ * @param {Object} client
+ * @param {string} profileName
+ * @param {string} systemPrompt
+ */
+function AdminAgents_ensureRagProfileExists_(client, profileName, systemPrompt) {
+  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt);
+}
+
+/**
+ * Sincroniza prompt RAG si el proveedor es Globant y no es modo assistant-only.
+ *
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @param {string} profileName
+ * @param {string} systemPrompt
+ */
+function AdminAgents_maybeSyncRagProfilePrompt_(
+  props,
+  profileName,
+  systemPrompt,
+  agentId,
+) {
+  if (AdminAgents_usesHubAgent_(agentId, profileName)) return;
+  if (LlmOrchestrator_resolveProviderKind() !== 'globant') return;
+  if (LlmProviderGlobant_isAssistantMode(props)) return;
+  var client = AdminAgents_maybeCreateRagClient_(props);
+  if (!client) return;
+  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt);
 }
 
 /**
@@ -595,6 +766,106 @@ function AdminAgents_createGlobantAgentsApiClient_(props) {
 }
 
 /**
+ * Instrucciones del agente en Globant API: prioriza promptInstructions no vacío,
+ * luego systemPrompt del registro Aviators.
+ *
+ * @param {Object} cfg
+ * @param {string} systemPrompt
+ * @return {{context:string, instructions:string}}
+ */
+function AdminAgents_buildGlobantPrompt_(cfg, systemPrompt) {
+  var instructions = String(
+    cfg.promptInstructions != null ? cfg.promptInstructions : systemPrompt,
+  ).trim();
+  if (!instructions) {
+    instructions = String(systemPrompt || '').trim();
+  }
+  return {
+    context: String(cfg.promptContext || '').trim(),
+    instructions: instructions,
+  };
+}
+
+/**
+ * @param {Object<string, unknown>} inCfg
+ * @param {Object=} agentLike
+ * @param {Object} base
+ * @return {string}
+ */
+function AdminAgents_resolvePromptInstructions_(inCfg, agentLike, base) {
+  var raw =
+    inCfg.promptInstructions != null
+      ? inCfg.promptInstructions
+      : base.promptInstructions;
+  var s = String(raw || '').trim();
+  if (s) return s;
+  return String(
+    (agentLike && agentLike.systemPrompt) || base.promptInstructions || '',
+  ).trim();
+}
+
+/**
+ * Solo Agents Hub (v4 upsert). Los asistentes RAG no usan permissions ni este mapper.
+ * @param {string} sharingScope
+ * @return {{chatSharing:string, externalExecution:string}}
+ */
+function AdminAgents_mapSharingScopeToPermissions_(sharingScope) {
+  var scope = String(sharingScope || 'organization').trim().toLowerCase();
+  if (scope === 'none') {
+    return { chatSharing: 'none', externalExecution: 'none' };
+  }
+  if (scope === 'everybody') {
+    return { chatSharing: 'public', externalExecution: 'public' };
+  }
+  return { chatSharing: 'organization', externalExecution: 'organization' };
+}
+
+/**
+ * Cuerpo agentDefinition para Agents Hub API v4 (PUT …/upsert) — solo orquestador (Hub).
+ * Especialistas usan AdminAgents_syncRagProfilePrompt_ + GlobantRagDefaults (perfil RAG).
+ * @param {Object} cfg — salida de AdminAgents_normalizeGlobantAgentConfig_
+ * @param {string} profileName
+ * @param {string} systemPrompt
+ * @return {Object}
+ */
+function AdminAgents_buildGlobantAgentDefinition_(cfg, profileName, systemPrompt) {
+  var name = String(cfg.name || profileName || cfg.idOrName).trim();
+  var prompt = AdminAgents_buildGlobantPrompt_(cfg, systemPrompt);
+  var strategyName = String(cfg.strategyName || 'Chain of Thought').trim();
+  var modelName = String(cfg.modelName || '').trim();
+  var llmConfig = {
+    maxTokens: cfg.maxTokens,
+    sampling: {
+      temperature: cfg.temperature,
+    },
+    timeout: Number(cfg.timeout) > 0 ? cfg.timeout : 0,
+  };
+  var modelEntry = { name: modelName, llmConfig: llmConfig };
+  var agentDefinition = {
+    name: name,
+    accessScope: String(cfg.accessScope || 'private'),
+    permissions: AdminAgents_mapSharingScopeToPermissions_(cfg.sharingScope),
+    agentData: {
+      strategyName: strategyName,
+      prompt: {
+        context: prompt.context,
+        instructions: prompt.instructions,
+      },
+      llmConfig: llmConfig,
+      models: [modelEntry],
+    },
+  };
+  var job = String(cfg.jobDescription || '').trim();
+  if (job) agentDefinition.jobDescription = job;
+  var desc = String(cfg.description || '').trim();
+  if (desc) agentDefinition.description = desc;
+  var avatar = String(cfg.avatarImage || '').trim();
+  if (avatar) agentDefinition.avatarImage = avatar;
+  return agentDefinition;
+}
+
+/**
+ * Persiste en Globant Agents Hub (v4). No crea ni actualiza perfiles RAG.
  * @param {GoogleAppsScript.Properties.Properties} props
  * @param {string} profileName
  * @param {string} systemPrompt
@@ -616,6 +887,38 @@ function AdminAgents_upsertRemoteGlobantAgent_(
       UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_api_model_required'),
     );
   }
+  var knownModels = AdminAgents_listKnownModels_();
+  if (knownModels.length && knownModels.indexOf(cfg.modelName) < 0) {
+    AviatorsError_throw_(
+      'ERR_ADMIN_AGENT_API_MODEL_INVALID',
+      'AdminAgents_upsertRemoteGlobantAgent_',
+      UiStrings_fmt_('err_admin_agent_api_model_invalid', {
+        model: String(cfg.modelName),
+        samples: knownModels.slice(0, 4).join(', '),
+      }),
+    );
+  }
+  var knownStrategies = AdminAgents_listKnownStrategies_();
+  if (
+    knownStrategies.length &&
+    cfg.strategyName &&
+    knownStrategies.indexOf(cfg.strategyName) < 0
+  ) {
+    AviatorsError_throw_(
+      'ERR_ADMIN_AGENT_API_STRATEGY_INVALID',
+      'AdminAgents_upsertRemoteGlobantAgent_',
+      UiStrings_fmt_('err_admin_agent_api_strategy_invalid', {
+        strategy: String(cfg.strategyName),
+        samples: knownStrategies.slice(0, 4).join(', '),
+      }),
+    );
+  }
+  var projectId = (props.getProperty(AVIATORS_PROP.GLOBANT_PROJECT_ID) || '').trim();
+  if (!projectId) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_falta_globant_project_id'),
+    );
+  }
   var idOrName = String(cfg.idOrName || cfg.name || profileName).trim();
   if (!idOrName) {
     throw new Error(
@@ -623,39 +926,28 @@ function AdminAgents_upsertRemoteGlobantAgent_(
     );
   }
   var name = String(cfg.name || profileName || idOrName).trim();
-  var instructions = String(
-    cfg.promptInstructions != null ? cfg.promptInstructions : systemPrompt,
+  var prompt = AdminAgents_buildGlobantPrompt_(cfg, systemPrompt);
+  var agentDefinition = AdminAgents_buildGlobantAgentDefinition_(
+    cfg,
+    profileName,
+    systemPrompt,
   );
-  var agentDefinition = {
-    name: name,
-    accessScope: cfg.accessScope,
-    sharingScope: cfg.sharingScope,
-    status: cfg.status,
-    jobDescription: String(cfg.jobDescription || ''),
-    avatarImage: String(cfg.avatarImage || ''),
-    description: String(cfg.description || ''),
-    agentData: {
-      strategyName: String(cfg.strategyName || ''),
-      prompt: {
-        context: String(cfg.promptContext || ''),
-        instructions: instructions,
-      },
-      llmConfig: {
-        maxTokens: cfg.maxTokens,
-        timeout: cfg.timeout,
-        sampling: {
-          temperature: cfg.temperature,
-        },
-      },
-      models: [{ name: String(cfg.modelName || '') }],
-    },
-  };
   var client = AdminAgents_createGlobantAgentsApiClient_(props);
-  var remote = client.upsertAgent(idOrName, agentDefinition, !!cfg.automaticPublish);
+  var remote = client.upsertAgent(
+    idOrName,
+    agentDefinition,
+    !!cfg.automaticPublish,
+    {
+      modelName: String(cfg.modelName || ''),
+      idOrName: idOrName,
+      strategyName: String(cfg.strategyName || ''),
+    },
+  );
 
   cfg.idOrName = idOrName;
   cfg.name = name;
-  cfg.promptInstructions = instructions;
+  cfg.promptContext = prompt.context;
+  cfg.promptInstructions = prompt.instructions;
   return { config: cfg, remote: remote };
 }
 
@@ -708,18 +1000,21 @@ function AdminAgents_tryListRemoteProfilesSet_(ragClient) {
  * @param {Object<string, boolean>|null} remoteSet
  */
 function AdminAgents_annotateRagProfileOnRemote_(agents, remoteSet) {
-  if (!remoteSet || !agents || !agents.length) return;
+  if (!agents || !agents.length) return;
   var i;
   for (i = 0; i < agents.length; i++) {
-    var pn = String(agents[i].profileName || '').trim();
-    agents[i].ragProfileOnRemote = !!remoteSet[pn];
+    var ag = agents[i];
+    if (!ag) continue;
+    ag.ragProfileOnRemote = remoteSet
+      ? !!remoteSet[String(ag.profileName || '').trim()]
+      : false;
   }
 }
 
 /**
- * Estado del agente orquestador (registro local + perfil RAG remoto si se puede consultar).
+ * Estado del orquestador: registro local + perfil RAG en Globant.
  * @param {GoogleAppsScript.Properties.Properties} props
- * @return {{ ok: boolean, inRegistry: boolean, onRemote: boolean, remoteChecked: boolean, profileName: string }}
+ * @return {{ ok: boolean, inRegistry: boolean, onRemote: boolean, remoteChecked: boolean, profileName: string, hubAgentIdOrName: string }}
  */
 function AdminAgents_orchestratorHealth_(props) {
   var reg = AdminAgents_loadRegistry_(props);
@@ -739,17 +1034,18 @@ function AdminAgents_orchestratorHealth_(props) {
       onRemote: false,
       remoteChecked: false,
       profileName: '',
+      hubAgentIdOrName: '',
     };
   }
   var pn = String(orch.profileName || '').trim();
-  var ragClient = AdminAgents_tryMaybeCreateRagClient_(props);
   var onRemote = false;
   var remoteChecked = false;
-  if (ragClient && pn) {
-    var remoteSet = AdminAgents_tryListRemoteProfilesSet_(ragClient);
-    if (remoteSet) {
-      remoteChecked = true;
-      onRemote = !!remoteSet[pn];
+  if (LlmOrchestrator_resolveProviderKind() === 'globant' && pn) {
+    var ragClient = AdminAgents_tryMaybeCreateRagClient_(props);
+    if (ragClient) {
+      var exists = AdminAgents_tryListRemoteProfilesSet_(ragClient);
+      remoteChecked = exists !== null;
+      onRemote = exists ? !!exists[pn] : false;
     }
   }
   return {
@@ -758,36 +1054,78 @@ function AdminAgents_orchestratorHealth_(props) {
     onRemote: onRemote,
     remoteChecked: remoteChecked,
     profileName: pn,
+    hubAgentIdOrName: pn,
   };
 }
 
 /**
+ * Crea o actualiza perfiles RAG de los agentes por defecto (prompt según registro/código).
+ *
  * @param {Object} ragClient
  * @param {Array<Object>} defaultsInRegistry
- * @return {number}
+ * @return {{ created: number, updated: number }}
  */
 function AdminAgents_ensureRemoteProfilesForDefaults_(
   ragClient,
   defaultsInRegistry,
 ) {
-  var existing = AdminAgents_listRemoteProfilesSet_(ragClient);
   var created = 0;
+  var updated = 0;
   var i;
   for (i = 0; i < defaultsInRegistry.length; i++) {
     var ag = defaultsInRegistry[i];
     if (!ag || typeof ag !== 'object') continue;
     var name = String(ag.profileName || '').trim();
     if (!AdminAgents_isValidProfileName_(name)) continue;
-    if (existing[name]) continue;
-    var body = GlobantRagDefaults_buildCreateProfileBody(
+    var outcome = AdminAgents_syncRagProfilePrompt_(
+      ragClient,
       name,
-      UiStrings_t(UiStrings_activeLocale_(), 'llm_auto_created_profile_desc'),
+      String(ag.systemPrompt || ''),
     );
-    ragClient.createProfile(body);
-    existing[name] = true;
-    created++;
+    if (outcome === 'created') created++;
+    else if (outcome === 'updated') updated++;
   }
-  return created;
+  return { created: created, updated: updated };
+}
+
+/**
+ * Upsert en Globant Agents API de los agentes por defecto (prompt context/instructions).
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @param {Array<Object>} defaultsInRegistry
+ * @return {{ synced: number, errors: Array<string> }}
+ */
+function AdminAgents_ensureRemoteGlobantAgentsForDefaults_(
+  props,
+  defaultsInRegistry,
+) {
+  var synced = 0;
+  var errors = [];
+  var i;
+  for (i = 0; i < defaultsInRegistry.length; i++) {
+    var ag = defaultsInRegistry[i];
+    if (!ag || typeof ag !== 'object') continue;
+    if (!AdminAgents_usesHubAgent_(ag.id, ag.profileName)) continue;
+    var profileName = String(ag.profileName || '').trim();
+    if (!AdminAgents_isValidProfileName_(profileName)) continue;
+    try {
+      var remoteSave = AdminAgents_upsertRemoteGlobantAgent_(
+        props,
+        profileName,
+        String(ag.systemPrompt || ''),
+        AdminAgents_normalizeGlobantAgentConfig_(ag.globantAgent, ag),
+      );
+      ag.globantAgent = remoteSave.config;
+      synced++;
+    } catch (eSync) {
+      var msg = (eSync && eSync.message) || String(eSync);
+      errors.push(profileName + ': ' + msg);
+      AviatorsError_log_(
+        'AdminAgents_ensureRemoteGlobantAgentsForDefaults_',
+        profileName + ' ' + msg,
+      );
+    }
+  }
+  return { synced: synced, errors: errors };
 }
 
 /**
@@ -845,6 +1183,38 @@ function AdminAgents_list() {
 }
 
 /**
+ * @param {Array<Object>} agents
+ * @param {GoogleAppsScript.Properties.Properties} props
+ */
+function AdminAgents_annotateHubAgentsOnRemote_(agents, props) {
+  if (!agents || !agents.length) return;
+  if (LlmOrchestrator_resolveProviderKind() !== 'globant') return;
+  var client;
+  try {
+    client = AdminAgents_createGlobantAgentsApiClient_(props);
+  } catch (eClient) {
+    return;
+  }
+  var i;
+  for (i = 0; i < agents.length; i++) {
+    var ag = agents[i];
+    if (!ag || !AdminAgents_usesHubAgent_(ag.id, ag.profileName)) continue;
+    var cfg = AdminAgents_normalizeGlobantAgentConfig_(ag.globantAgent, ag);
+    var hubId = String(cfg.idOrName || ag.profileName || '').trim();
+    if (!hubId) {
+      ag.hubAgentOnRemote = false;
+      continue;
+    }
+    try {
+      client.getAgent(hubId, true);
+      ag.hubAgentOnRemote = true;
+    } catch (eGet) {
+      ag.hubAgentOnRemote = false;
+    }
+  }
+}
+
+/**
  * Lista mínima para métricas del home (sin prompts ni fuentes).
  * Solo quien puede administrar agentes en Aviators.
  *
@@ -894,23 +1264,27 @@ function AdminAgents_ensureDefaults() {
   var before = reg.agents.length;
   var changedLocal = AdminAgents_ensureDefaultAgentsInRegistry_(reg);
   var after = reg.agents.length;
-  if (changedLocal) {
-    AdminAgents_saveRegistry_(props, reg);
-  }
-  var createdProfiles = 0;
+  var defaults = AdminAgents_pickDefaultAgents_(reg);
+  var ragProfileStats = { created: 0, updated: 0 };
   var ragClient = AdminAgents_maybeCreateRagClient_(props);
   if (ragClient) {
-    createdProfiles = AdminAgents_ensureRemoteProfilesForDefaults_(
+    ragProfileStats = AdminAgents_ensureRemoteProfilesForDefaults_(
       ragClient,
-      AdminAgents_pickDefaultAgents_(reg),
+      defaults,
     );
+  }
+  if (changedLocal) {
+    AdminAgents_saveRegistry_(props, reg);
   }
   var createdLocal = Math.max(0, after - before);
   return {
     ok: true,
-    created: createdLocal + createdProfiles,
+    created: createdLocal + ragProfileStats.created,
     createdRegistry: createdLocal,
-    createdProfiles: createdProfiles,
+    createdProfiles: ragProfileStats.created,
+    updatedProfiles: ragProfileStats.updated,
+    syncedGlobantAgents: 0,
+    globantSyncErrors: [],
     total: after,
   };
 }
@@ -964,15 +1338,13 @@ function AdminAgents_upsert(agentIn) {
     }
   }
 
-  // El guardado de Agentes siempre refleja la definición en Globant antes
-  // de persistir localmente en Drive.
-  var remoteSave = AdminAgents_upsertRemoteGlobantAgent_(
-    props,
-    profileName,
-    systemPrompt,
-    agentIn.globantAgent,
-  );
-  var globantAgent = remoteSave.config;
+  AdminAgents_maybeSyncRagProfilePrompt_(props, profileName, systemPrompt, id);
+
+  var globantAgent = AdminAgents_normalizeGlobantAgentConfig_(agentIn.globantAgent, {
+    id: id,
+    profileName: profileName,
+    systemPrompt: systemPrompt,
+  });
 
   var entry = {
     id: id,
@@ -996,9 +1368,10 @@ function AdminAgents_upsert(agentIn) {
     agent: entry,
     globant: {
       idOrName: String(globantAgent.idOrName || ''),
-      revision: Number((remoteSave.remote && remoteSave.remote.revision) || 0),
-      isDraft: !!(remoteSave.remote && remoteSave.remote.isDraft),
-      status: String((remoteSave.remote && remoteSave.remote.status) || ''),
+      revision: 0,
+      isDraft: false,
+      status: '',
+      hubAgent: false,
     },
   };
 }
@@ -1032,9 +1405,13 @@ function AdminAgents_delete(agentId) {
   AdminAgents_saveRegistry_(props, { agents: next });
 
   if (LlmOrchestrator_resolveProviderKind() === 'globant') {
-    if (!LlmProviderGlobant_isAssistantMode(props)) {
+    var pn = String(removed.profileName || '').trim();
+    if (
+      !LlmProviderGlobant_isAssistantMode(props) &&
+      AdminAgents_usesRagAssistant_(removed.id, pn)
+    ) {
       try {
-        GlobantControl_deleteRagProfile(String(removed.profileName || '').trim());
+        GlobantControl_deleteRagProfile(pn);
       } catch (ignore) {}
     }
   }

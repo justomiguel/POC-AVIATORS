@@ -113,8 +113,7 @@ function MetricsAuth_requireReset() {
  * @return {boolean}
  */
 function MetricsAuth_canManageQueue(email) {
-  var k = AdminAuth_roleKeyForEmail_(email);
-  return k === 'admin' || k === 'presales';
+  return AdminAuth_emailCanManageUnansweredQueue(email);
 }
 
 function MetricsAuth_requireManageQueue() {
@@ -491,10 +490,10 @@ function MetricsService_unansweredAssignees_() {
   var i;
   for (i = 0; i < rows.length; i++) {
     var row = rows[i] || {};
-    var roleKey = String(row.role_key || '').trim();
-    if (roleKey !== 'admin' && roleKey !== 'presales') continue;
     var em = String(row.email || '').trim();
     if (!em || seen[em.toLowerCase()]) continue;
+    if (!AdminAuth_emailCanManageUnansweredQueue(em)) continue;
+    var roleKey = String(row.role_key || '').trim();
     seen[em.toLowerCase()] = true;
     var localPart = em.split('@')[0] || em;
     out.push({
@@ -797,14 +796,23 @@ var METRICS_QUICK_PROMPTS_DEFAULTS_ = [
   { id: 'qp3', es: '¿Qué clientes tiene Globant en aviación?', en: 'Which clients does Globant have in aviation?', order: 3 },
 ];
 
+var METRICS_ONBOARDING_QUICK_PROMPTS_DEFAULTS_ = [
+  { id: 'ob1', es: '¿Qué es PSS y para qué sirve?', en: 'What is PSS and what is it for?', order: 1 },
+  { id: 'ob2', es: '¿Qué es NDC?', en: 'What is NDC?', order: 2 },
+  { id: 'ob3', es: '¿Cómo funciona un programa de loyalty?', en: 'How does a loyalty program work?', order: 3 },
+  { id: 'ob4', es: 'Metodología del Aviation Studio', en: 'Aviation Studio methodology', order: 4 },
+  { id: 'ob5', es: '¿Qué es un GDS?', en: 'What is a GDS?', order: 5 },
+];
+
 /**
- * Lee la hoja quick_prompts y devuelve el array ordenado.
- * Si la hoja está vacía devuelve los prompts de ejemplo.
+ * @param {string} scope — «home» u «onboarding»
+ * @param {Array<{id:string,es:string,en:string,order:number}>} defaults
  * @return {Array<{id:string,es:string,en:string,order:number}>}
  */
-function MetricsService_quickPromptsGet_() {
-  var sbRows = MetricsStore_quickPromptsList();
-  if (!sbRows.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+function MetricsService_quickPromptsGetForScope_(scope, defaults) {
+  var sc = String(scope || 'home').trim() || 'home';
+  var sbRows = MetricsStore_quickPromptsList(sc);
+  if (!sbRows.length) return defaults;
   var outSb = [];
   for (var si = 0; si < sbRows.length; si++) {
     outSb.push({
@@ -814,20 +822,55 @@ function MetricsService_quickPromptsGet_() {
       order: Number(sbRows[si].sort_order || 0) || (si + 1),
     });
   }
-  if (!outSb.length) return METRICS_QUICK_PROMPTS_DEFAULTS_;
+  if (!outSb.length) return defaults;
   outSb.sort(function (a, b) { return a.order - b.order; });
   return outSb;
 }
 
 /**
- * Reemplaza todos los prompts rápidos (clear + re-append).
- * Solo admin.
+ * Lee prompts del chat home (orquestador).
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function MetricsService_quickPromptsGet_() {
+  return MetricsService_quickPromptsGetForScope_('home', METRICS_QUICK_PROMPTS_DEFAULTS_);
+}
+
+/**
+ * Lee prompts del chat onboarding.
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function MetricsService_onboardingQuickPromptsGet_() {
+  return MetricsService_quickPromptsGetForScope_(
+    'onboarding',
+    METRICS_ONBOARDING_QUICK_PROMPTS_DEFAULTS_,
+  );
+}
+
+/**
+ * Reemplaza prompts de un alcance (clear + re-append).
+ * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
+ * @param {string=} scope
+ * @return {{ok:boolean}}
+ */
+function MetricsService_quickPromptsSaveForScope_(prompts, scope) {
+  if (!Array.isArray(prompts)) return { ok: false };
+  var sc = String(scope || 'home').trim() || 'home';
+  MetricsStore_quickPromptsReplaceAll(prompts, sc);
+  return { ok: true };
+}
+
+/**
  * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
  * @return {{ok:boolean}}
  */
 function MetricsService_quickPromptsSave_(prompts) {
-  if (!Array.isArray(prompts)) return { ok: false };
+  return MetricsService_quickPromptsSaveForScope_(prompts, 'home');
+}
 
-  MetricsStore_quickPromptsReplaceAll(prompts);
-  return { ok: true };
+/**
+ * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
+ * @return {{ok:boolean}}
+ */
+function MetricsService_onboardingQuickPromptsSave_(prompts) {
+  return MetricsService_quickPromptsSaveForScope_(prompts, 'onboarding');
 }

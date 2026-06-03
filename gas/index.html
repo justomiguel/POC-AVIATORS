@@ -174,6 +174,15 @@
               </button>
               <button
                 type="button"
+                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                data-app-page="onboarding"
+                id="nav-page-onboarding"
+              >
+                <i class="fa-solid fa-graduation-cap w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                <span data-i18n="nav_onboarding"></span>
+              </button>
+              <button
+                type="button"
                 class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
                 data-app-page="agents"
                 id="nav-page-agents"
@@ -432,6 +441,26 @@
           </div>
         </div>
 
+            </div>
+            </div>
+
+            <div
+              id="page-onboarding"
+              class="app-page app-page-onboarding hidden space-y-6"
+              data-app-page="onboarding"
+            >
+              <header id="onboarding-welcome" class="mb-6 text-center">
+                <h1
+                  class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl dark:text-slate-100"
+                  data-i18n="page_onboarding_title"
+                ></h1>
+                <p
+                  class="mx-auto mt-2 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-400"
+                  data-i18n-html="page_onboarding_lead_html"
+                ></p>
+              </header>
+            </div>
+
         <section
           id="home-chat-shell"
           class="home-chat-shell"
@@ -583,7 +612,11 @@
           aria-label=""
           data-i18n-aria-label="chat_quick_prompts_label"
         >
-          <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-400" data-i18n="chat_quick_prompts_label"></p>
+          <p
+            id="chat-quick-prompts-label"
+            class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-400"
+            data-i18n="chat_quick_prompts_label"
+          ></p>
           <div class="chat-qp-list flex flex-wrap gap-1.5"></div>
         </div>
         <label
@@ -682,9 +715,6 @@
         <p id="ask-status" class="status-msg ask-status-mt"></p>
         </div>
         </section>
-
-        </div>
-            </div>
 
             <div
               id="page-agents"
@@ -1306,10 +1336,16 @@
                         <h2 id="contents-editor-title" class="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="contents_editor_title_new"></h2>
                         <p id="contents-editor-subtitle" class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="contents_editor_subtitle_new"></p>
                       </div>
-                      <button type="button" id="contents-back-btn" class="btn btn-md btn-outline whitespace-nowrap">
-                        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                        <span data-i18n="contents_btn_back_list"></span>
-                      </button>
+                      <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <button type="button" id="contents-view-drive-btn" class="hidden btn btn-md btn-outline inline-flex items-center gap-2 whitespace-nowrap">
+                          <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+                          <span data-i18n="contents_btn_view_file"></span>
+                        </button>
+                        <button type="button" id="contents-back-btn" class="btn btn-md btn-outline whitespace-nowrap">
+                          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                          <span data-i18n="contents_btn_back_list"></span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <h3 id="contents-editor-heading" class="sr-only" data-i18n="contents_editor_heading"></h3>
@@ -1320,6 +1356,20 @@
                       <span data-i18n="contents_editor_readonly_banner"></span>
                     </span>
                   </div>
+
+                  <header id="contents-ficha-hero" class="contents-ficha-hero hidden" aria-labelledby="contents-ficha-title">
+                    <div class="contents-ficha-hero-accent" aria-hidden="true"></div>
+                    <div class="contents-ficha-hero-body">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span id="contents-ficha-type-badge" class="contents-ficha-type-badge"></span>
+                        <span id="contents-ficha-file-chip" class="contents-ficha-meta-chip hidden"></span>
+                      </div>
+                      <h3 id="contents-ficha-title" class="contents-ficha-title"></h3>
+                      <p id="contents-ficha-summary" class="contents-ficha-summary hidden"></p>
+                      <dl id="contents-ficha-meta" class="contents-ficha-meta"></dl>
+                      <div id="contents-ficha-tags" class="contents-ficha-tags hidden"></div>
+                    </div>
+                  </header>
 
                   <ol id="contents-stepper" class="contents-stepper flex flex-wrap items-center gap-2 text-xs">
                     <li id="contents-step-1" class="contents-step is-active">
@@ -1419,13 +1469,13 @@
                     </div>
                   </section>
 
-                  <section id="contents-block-form" class="hidden space-y-5" aria-labelledby="contents-form-heading">
-                    <div class="border-b border-slate-100 pb-3 dark:border-slate-700">
+                  <section id="contents-block-form" class="contents-ficha-form hidden space-y-5" aria-labelledby="contents-form-heading">
+                    <div id="contents-form-intro" class="border-b border-slate-100 pb-3 dark:border-slate-700">
                       <h3 id="contents-form-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="contents_form_heading"></h3>
                       <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="contents_form_lead"></p>
                     </div>
 
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800/50">
+                    <div id="contents-file-card" class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800/50">
                       <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                           <div class="font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_current_file_label"></div>
@@ -1438,18 +1488,18 @@
                       </div>
                     </div>
 
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <label class="block text-sm md:col-span-2" for="contents-title">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_title"></span>
+                    <div id="contents-form-core-fields" class="grid gap-4 md:grid-cols-2">
+                      <label id="contents-field-title-wrap" class="ficha-field block text-sm md:col-span-2" for="contents-title">
+                        <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_title"></span>
                         <input type="text" id="contents-title" class="aviators-field w-full text-sm" />
                       </label>
-                      <label class="block text-sm md:col-span-2" for="contents-summary">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_summary"></span>
-                        <textarea id="contents-summary" rows="3" class="aviators-field w-full text-sm"></textarea>
+                      <label id="contents-field-summary-wrap" class="ficha-field block text-sm md:col-span-2" for="contents-summary">
+                        <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_summary"></span>
+                        <textarea id="contents-summary" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                       </label>
-                      <div class="block text-sm md:col-span-2">
+                      <div id="contents-common-client" class="ficha-field block text-sm md:col-span-2">
                         <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_client"></span>
-                        <div class="flex flex-wrap items-center gap-2">
+                        <div class="contents-client-picker-row flex flex-wrap items-center gap-2">
                           <select id="contents-client" class="aviators-field min-w-[12rem] flex-1 text-sm">
                             <option value="" data-i18n="contents_client_combo_placeholder"></option>
                           </select>
@@ -1462,10 +1512,10 @@
                           <input type="text" id="contents-client-new" class="aviators-field w-full text-sm" />
                         </label>
                       </div>
-                      <div class="block text-sm md:col-span-2">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_tags"></span>
+                      <div id="contents-field-tags-wrap" class="ficha-field block text-sm md:col-span-2">
+                        <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_tags"></span>
                         <div id="contents-tags-chips" class="flex min-h-[2.5rem] flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-600 dark:bg-slate-900"></div>
-                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <div id="contents-tags-edit-row" class="mt-2 flex flex-wrap items-center gap-2">
                           <label class="min-w-[12rem] flex-1" for="contents-tag-input">
                             <span class="sr-only" data-i18n="contents_lbl_tags"></span>
                             <input type="text" id="contents-tag-input" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_ph_add_tag" list="contents-tag-suggestions" />
@@ -1479,8 +1529,8 @@
                       </div>
                     </div>
 
-                    <section id="contents-specific-proposal" class="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
+                    <section id="contents-specific-proposal" class="ficha-section ficha-section--proposal space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
                       <div class="grid gap-4 md:grid-cols-2">
                         <label class="block text-sm" for="contents-proposal-stage">
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_stage"></span>
@@ -1507,37 +1557,37 @@
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_effort"></span>
                           <input type="text" id="contents-proposal-effort" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-proposal-notes">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
-                          <textarea id="contents-proposal-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-proposal-notes">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-proposal-notes" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                       </div>
                     </section>
 
-                    <section id="contents-specific-success" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_success_heading"></h4>
-                      <div class="grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm md:col-span-2" for="contents-success-challenge">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_challenge"></span>
-                          <textarea id="contents-success-challenge" rows="3" class="aviators-field w-full text-sm"></textarea>
+                    <section id="contents-specific-success" class="ficha-section ficha-section--success_case hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_success_heading"></h4>
+                      <div class="grid gap-4 md:grid-cols-1">
+                        <label class="ficha-field block text-sm" for="contents-success-challenge">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_challenge"></span>
+                          <textarea id="contents-success-challenge" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-success-solution">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_solution"></span>
-                          <textarea id="contents-success-solution" rows="3" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm" for="contents-success-solution">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_solution"></span>
+                          <textarea id="contents-success-solution" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-success-impact">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_impact_value"></span>
-                          <textarea id="contents-success-impact" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm" for="contents-success-impact">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_impact_value"></span>
+                          <textarea id="contents-success-impact" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-success-notes">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
-                          <textarea id="contents-success-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm" for="contents-success-notes">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-success-notes" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                       </div>
                     </section>
 
-                    <section id="contents-specific-client" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_client_heading"></h4>
+                    <section id="contents-specific-client" class="ficha-section ficha-section--client hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_client_heading"></h4>
                       <div class="grid gap-4 md:grid-cols-2">
                         <label class="block text-sm" for="contents-client-status">
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_account_status"></span>
@@ -1551,15 +1601,15 @@
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_active_projects"></span>
                           <input type="text" id="contents-client-projects" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-client-notes">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
-                          <textarea id="contents-client-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-client-notes">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-client-notes" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                       </div>
                     </section>
 
-                    <section id="contents-specific-onboarding" class="hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_onboarding_heading"></h4>
+                    <section id="contents-specific-onboarding" class="ficha-section ficha-section--onboarding hidden space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_onboarding_heading"></h4>
                       <div class="grid gap-4 md:grid-cols-2">
                         <label class="block text-sm" for="contents-onboarding-topic">
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_topic"></span>
@@ -1573,18 +1623,14 @@
                           <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_onboarding_audience"></span>
                           <input type="text" id="contents-onboarding-audience" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-onboarding-notes">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
-                          <textarea id="contents-onboarding-notes" rows="2" class="aviators-field w-full text-sm"></textarea>
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-onboarding-notes">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_notes"></span>
+                          <textarea id="contents-onboarding-notes" rows="2" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                         </label>
                       </div>
                     </section>
 
                     <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
-                      <button type="button" id="contents-view-drive-btn" class="hidden btn btn-md btn-outline">
-                        <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
-                        <span data-i18n="contents_btn_view_file"></span>
-                      </button>
                       <button type="button" id="contents-cancel-btn" class="btn btn-md btn-outline">
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                         <span data-i18n="contents_btn_cancel"></span>
@@ -1768,16 +1814,13 @@
                       <span class="mb-1 block font-medium" data-i18n="clients_filter_industry"></span>
                       <select id="clients-filter-industry" class="aviators-field w-full text-sm">
                         <option value="" data-i18n="clients_filter_industry_all"></option>
-                        <option value="Agencias de Turismo" data-i18n="clients_industry_tourism_agencies"></option>
-                        <option value="Logistica" data-i18n="clients_industry_logistics"></option>
-                        <option value="Agencias AeroEspaciales" data-i18n="clients_industry_aerospace_agencies"></option>
-                        <option value="Aeropuertos" data-i18n="clients_industry_airports"></option>
-                        <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
                       </select>
                     </label>
                     <label class="md:col-span-3 block text-sm text-slate-700 dark:text-slate-300" for="clients-filter-sub-industry">
                       <span class="mb-1 block font-medium" data-i18n="clients_filter_sub_industry"></span>
-                      <input type="text" id="clients-filter-sub-industry" class="aviators-field w-full text-sm" autocomplete="off" data-i18n-placeholder="clients_filter_sub_industry_placeholder" />
+                      <select id="clients-filter-sub-industry" class="aviators-field w-full text-sm">
+                        <option value="" data-i18n="clients_filter_sub_industry_all"></option>
+                      </select>
                     </label>
                     <div class="md:col-span-1 flex md:justify-end">
                       <button type="button" id="clients-filter-clear-btn" class="btn btn-sm btn-outline w-full inline-flex items-center justify-center gap-2 md:w-auto" data-i18n-aria-label="clients_filter_clear">
@@ -1833,13 +1876,13 @@
                 <p id="clients-list-status" class="mt-2 text-xs text-slate-500">&nbsp;</p>
               </div>
 
-              <div id="clients-screen-editor" class="hidden rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 space-y-4">
-                <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                  <div>
-                    <h3 id="clients-editor-title" class="font-semibold text-slate-900"></h3>
-                    <p id="clients-editor-subtitle" class="text-xs text-slate-500"></p>
+              <div id="clients-screen-editor" class="clients-ficha-shell hidden rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 space-y-4">
+                <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-700">
+                  <div class="min-w-0">
+                    <h3 id="clients-editor-title" class="font-semibold text-slate-900 dark:text-slate-100"></h3>
+                    <p id="clients-editor-subtitle" class="text-xs text-slate-500 dark:text-slate-400"></p>
                   </div>
-                  <button type="button" id="clients-back-btn" class="btn btn-md btn-outline">
+                  <button type="button" id="clients-back-btn" class="btn btn-md btn-outline shrink-0">
                     <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
                     <span data-i18n="clients_btn_back_list"></span>
                   </button>
@@ -1852,10 +1895,27 @@
                   </span>
                 </div>
 
+                <header id="clients-ficha-hero" class="clients-ficha-hero hidden" aria-labelledby="clients-ficha-display-name">
+                  <div class="clients-ficha-hero-accent" aria-hidden="true"></div>
+                  <div class="clients-ficha-hero-body">
+                    <div class="flex flex-wrap items-start gap-4">
+                      <div id="clients-ficha-logo-wrap" class="clients-ficha-logo hidden h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-900">
+                        <img id="clients-ficha-logo" src="" alt="" class="h-full w-full object-contain" />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <span class="clients-ficha-type-badge" data-i18n="page_clients_title"></span>
+                        <h3 id="clients-ficha-display-name" class="clients-ficha-title"></h3>
+                        <dl id="clients-ficha-meta" class="clients-ficha-meta"></dl>
+                      </div>
+                    </div>
+                  </div>
+                </header>
+
                 <input type="hidden" id="clients-id" />
                 <input type="hidden" id="clients-logo-url" value="" />
 
-                <section class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/40" aria-labelledby="clients-logo-heading">
+                <div id="clients-ficha-body" class="clients-ficha-body space-y-4">
+                <section id="clients-logo-section" class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/40" aria-labelledby="clients-logo-heading">
                   <h4 id="clients-logo-heading" class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="clients_logo_heading"></h4>
                   <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="clients_logo_lead"></p>
                   <div class="mt-3 flex flex-wrap items-center gap-4">
@@ -1879,45 +1939,41 @@
                   </div>
                 </section>
 
-                <label class="block text-sm" for="clients-name">
-                  <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_name"></span>
+                <label id="clients-field-name-wrap" class="ficha-field block text-sm" for="clients-name">
+                  <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_name"></span>
                   <input type="text" id="clients-name" class="aviators-field w-full text-sm" />
                 </label>
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <label class="block text-sm" for="clients-industry">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_industry"></span>
+                <div id="clients-fields-grid" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <label class="ficha-field block text-sm" for="clients-industry">
+                    <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_industry"></span>
                     <select id="clients-industry" class="aviators-field w-full text-sm">
                       <option value="" data-i18n="clients_industry_placeholder"></option>
-                      <option value="Agencias de Turismo" data-i18n="clients_industry_tourism_agencies"></option>
-                      <option value="Logistica" data-i18n="clients_industry_logistics"></option>
-                      <option value="Agencias AeroEspaciales" data-i18n="clients_industry_aerospace_agencies"></option>
-                      <option value="Aeropuertos" data-i18n="clients_industry_airports"></option>
-                      <option value="Aerolineas" data-i18n="clients_industry_airlines"></option>
                     </select>
                   </label>
-                  <label class="block text-sm" for="clients-sub-industry">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_sub_industry"></span>
+                  <label class="ficha-field block text-sm" for="clients-sub-industry">
+                    <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_sub_industry"></span>
                     <input type="text" id="clients-sub-industry" class="aviators-field w-full text-sm" />
                   </label>
-                  <label class="block text-sm" for="clients-country">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_country"></span>
+                  <label class="ficha-field block text-sm" for="clients-country">
+                    <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_country"></span>
                     <input type="text" id="clients-country" class="aviators-field w-full text-sm" />
                   </label>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <label class="block text-sm" for="clients-contact-name">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_name"></span>
+                <div id="clients-contact-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label class="ficha-field block text-sm" for="clients-contact-name">
+                    <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_name"></span>
                     <input type="text" id="clients-contact-name" class="aviators-field w-full text-sm" />
                   </label>
-                  <label class="block text-sm" for="clients-contact-email">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_email"></span>
+                  <label class="ficha-field block text-sm" for="clients-contact-email">
+                    <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_contact_email"></span>
                     <input type="email" id="clients-contact-email" class="aviators-field w-full text-sm" />
                   </label>
                 </div>
-                <label class="block text-sm" for="clients-notes">
-                  <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_notes"></span>
-                  <textarea id="clients-notes" rows="3" class="aviators-field w-full text-sm"></textarea>
+                <label id="clients-field-notes-wrap" class="ficha-field block text-sm" for="clients-notes">
+                  <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="clients_lbl_notes"></span>
+                  <textarea id="clients-notes" rows="3" class="aviators-field ficha-textarea w-full text-sm"></textarea>
                 </label>
+                </div>
                 <div class="flex flex-wrap gap-2 pt-2">
                   <button type="button" id="clients-cancel-btn" class="btn btn-md btn-outline">
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -2480,6 +2536,18 @@
                           <button
                             type="button"
                             role="tab"
+                            id="settings-users-tab-bulk"
+                            class="app-tab-btn"
+                            aria-controls="settings-users-panel-bulk"
+                            aria-selected="false"
+                            tabindex="-1"
+                          >
+                            <i class="fa-solid fa-users-gear" aria-hidden="true"></i>
+                            <span data-i18n="settings_users_subtab_bulk"></span>
+                          </button>
+                          <button
+                            type="button"
+                            role="tab"
                             id="settings-users-tab-members"
                             class="app-tab-btn"
                             aria-controls="settings-users-panel-members"
@@ -2557,15 +2625,26 @@
                             <h4 id="admin-users-requests-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="admin_users_requests_heading"></h4>
                             <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="admin_users_requests_lead"></p>
                           </div>
-                          <div class="settings-search-wrap mb-4">
-                            <i class="fa-solid fa-magnifying-glass settings-search-icon" aria-hidden="true"></i>
-                            <input
-                              type="search"
-                              id="admin-users-requests-search"
-                              class="settings-search-field aviators-field w-full rounded-xl py-2.5 pl-10 pr-3 text-sm"
-                              data-i18n-placeholder="admin_users_search_ph"
-                              autocomplete="off"
-                            />
+                          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                            <div class="settings-search-wrap min-w-0 flex-1">
+                              <i class="fa-solid fa-magnifying-glass settings-search-icon" aria-hidden="true"></i>
+                              <input
+                                type="search"
+                                id="admin-users-requests-search"
+                                class="settings-search-field aviators-field w-full rounded-xl py-2.5 pl-10 pr-3 text-sm"
+                                data-i18n-placeholder="admin_users_search_ph"
+                                autocomplete="off"
+                              />
+                            </div>
+                            <div class="shrink-0">
+                              <label for="admin-users-requests-status-filter" class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="admin_users_requests_status_filter_lbl"></label>
+                              <select id="admin-users-requests-status-filter" class="aviators-field rounded-xl px-3 py-2.5 text-sm">
+                                <option value="pending" data-i18n="admin_users_requests_status_pending"></option>
+                                <option value="all" data-i18n="admin_users_requests_status_all"></option>
+                                <option value="approved" data-i18n="admin_users_requests_status_approved"></option>
+                                <option value="dismissed" data-i18n="admin_users_requests_status_dismissed"></option>
+                              </select>
+                            </div>
                           </div>
                           <div id="admin-users-requests-loader" class="settings-inline-loader hidden" role="status" aria-live="polite">
                             <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
@@ -2600,6 +2679,40 @@
                             </div>
                           </div>
                           <p id="admin-users-requests-status" class="settings-status-msg" role="status" aria-live="polite">&nbsp;</p>
+                        </div>
+
+                        <div
+                          role="tabpanel"
+                          id="settings-users-panel-bulk"
+                          class="app-tab-panel hidden"
+                          aria-labelledby="settings-users-tab-bulk"
+                          hidden
+                        >
+                          <div class="settings-subpanel-head">
+                            <h4 id="admin-users-bulk-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="admin_users_bulk_heading"></h4>
+                            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="admin_users_bulk_lead"></p>
+                          </div>
+                          <div class="mb-4 max-w-md">
+                            <label for="admin-users-bulk-role" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="admin_users_bulk_role_label"></label>
+                            <select id="admin-users-bulk-role" class="aviators-field w-full rounded-xl px-3 py-2.5 text-sm"></select>
+                          </div>
+                          <div class="mb-3">
+                            <label for="admin-users-bulk-paste" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="admin_users_bulk_paste_label"></label>
+                            <textarea
+                              id="admin-users-bulk-paste"
+                              class="aviators-field w-full rounded-xl px-3 py-2.5 text-sm font-mono leading-relaxed"
+                              rows="10"
+                              data-i18n-placeholder="admin_users_bulk_paste_ph"
+                            ></textarea>
+                          </div>
+                          <p id="admin-users-bulk-preview" class="mb-3 text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite">&nbsp;</p>
+                          <div class="flex flex-wrap items-center gap-3">
+                            <button type="button" id="admin-users-bulk-assign-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                              <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+                              <span data-i18n="admin_users_bulk_assign_btn"></span>
+                            </button>
+                          </div>
+                          <p id="admin-users-bulk-status" class="settings-status-msg mt-3" role="status" aria-live="polite">&nbsp;</p>
                         </div>
 
                         <div
@@ -2685,6 +2798,24 @@
                         <p id="admin-qp-status" class="settings-status-msg" role="status" aria-live="polite"></p>
                       </div>
                     </div>
+                    <div id="settings-qp-onboarding-section" class="settings-panel-inner mt-8 border-t border-slate-200 pt-8 dark:border-slate-600">
+                      <div class="settings-panel-head">
+                        <h3 id="admin-qp-onboarding-heading" class="settings-panel-title" data-i18n="admin_onboarding_quick_prompts_sec_heading"></h3>
+                        <p class="settings-panel-lead" data-i18n="admin_onboarding_quick_prompts_sec_lead"></p>
+                      </div>
+                      <div id="admin-qp-onboarding-list" class="mb-5 space-y-3"></div>
+                      <div class="settings-panel-footer">
+                        <button type="button" id="admin-qp-onboarding-add-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                          <span data-i18n="admin_quick_prompts_add_btn"></span>
+                        </button>
+                        <button type="button" id="admin-qp-onboarding-save-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                          <span data-i18n="admin_onboarding_quick_prompts_save_btn"></span>
+                        </button>
+                        <p id="admin-qp-onboarding-status" class="settings-status-msg" role="status" aria-live="polite"></p>
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Panel: Salesforce -->
@@ -2738,6 +2869,10 @@
                         <button type="button" id="admin-sf-sync-btn" class="btn btn-md btn-secondary inline-flex items-center gap-2">
                           <i class="fa-solid fa-rotate" aria-hidden="true"></i>
                           <span data-i18n="admin_sf_sync_btn"></span>
+                        </button>
+                        <button type="button" id="admin-clients-dedupe-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-code-merge" aria-hidden="true"></i>
+                          <span data-i18n="admin_clients_dedupe_btn"></span>
                         </button>
                         <p id="settings-sf-sync-status" class="settings-status-msg w-full" role="status" aria-live="polite">&nbsp;</p>
                       </div>
@@ -3159,6 +3294,57 @@
           >
             <i class="fa-solid fa-check" aria-hidden="true"></i>
             <span data-i18n="confirm_dialog_confirm"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      id="app-error-modal"
+      class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
+      aria-hidden="true"
+    >
+      <div
+        id="app-error-dialog"
+        class="flex w-full max-w-lg max-h-[min(90vh,32rem)] flex-col rounded-2xl border border-red-200 bg-white shadow-xl outline-none dark:border-red-900/50 dark:bg-slate-800"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="app-error-title"
+        aria-describedby="app-error-message"
+        tabindex="-1"
+      >
+        <div class="flex items-start gap-3 border-b border-red-100 px-6 py-4 dark:border-red-900/40">
+          <span
+            class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300"
+            aria-hidden="true"
+          >
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2
+              id="app-error-title"
+              class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+              data-i18n="error_dialog_title"
+            ></h2>
+            <p
+              id="app-error-message"
+              class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+            ></p>
+          </div>
+        </div>
+        <div id="app-error-detail-wrap" class="hidden min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <p
+            class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+            data-i18n="error_dialog_detail_heading"
+          ></p>
+          <pre
+            id="app-error-detail"
+            class="whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-relaxed text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          ></pre>
+        </div>
+        <div class="flex justify-end border-t border-slate-100 px-6 py-4 dark:border-slate-600">
+          <button type="button" id="app-error-close" class="btn btn-md btn-outline">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            <span data-i18n="error_dialog_close"></span>
           </button>
         </div>
       </div>

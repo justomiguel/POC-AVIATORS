@@ -2,7 +2,14 @@
  * Web app — Aviators: Drive + consultas IA (Globant RAG, Globant Assistant o Gemini API).
  * Despliegue: «Ejecutar como: usuario que accede».
  */
-function doGet() {
+function doGet(e) {
+  e = e || {};
+  var globantDocId =
+    e.parameter && String(e.parameter.globantDoc || e.parameter.pdf || '').trim();
+  if (globantDocId) {
+    return ChatReferences_serveGlobantDocHttp_(globantDocId);
+  }
+
   var tpl = HtmlService.createTemplateFromFile('index');
   tpl.cssInclude = HtmlService.createHtmlOutputFromFile('tailwind-include')
     .getContent();
@@ -62,6 +69,7 @@ function getBootstrap() {
     canManageRoleConfig: false,
     canManageUnansweredQueue: false,
     canSyncSalesforceAccounts: false,
+    canViewOnboarding: false,
   };
   try {
     var email = ('' + Session.getActiveUser().getEmail()).trim();
@@ -74,8 +82,9 @@ function getBootstrap() {
       perms.canResetMetrics = AdminAuth_emailCanResetMetrics(email);
       perms.canManageUsers = AdminAuth_emailCanManageUsers(email);
       perms.canManageRoleConfig = AdminAuth_emailIsAdmin(email);
-      perms.canManageUnansweredQueue = MetricsAuth_canManageQueue(email);
-      perms.canSyncSalesforceAccounts = AdminAuth_emailIsAdmin(email);
+      perms.canManageUnansweredQueue = AdminAuth_emailCanManageUnansweredQueue(email);
+      perms.canSyncSalesforceAccounts = AdminAuth_emailCanSyncSalesforce(email);
+      perms.canViewOnboarding = AdminAuth_emailCanViewOnboarding(email);
     }
   } catch (ePerms) {}
 
@@ -87,6 +96,16 @@ function getBootstrap() {
 
   var quickPrompts = [];
   try { quickPrompts = MetricsService_quickPromptsGet_(); } catch (eQp) {}
+  var onboardingQuickPrompts = [];
+  try {
+    onboardingQuickPrompts = MetricsService_onboardingQuickPromptsGet_();
+  } catch (eQpOb) {}
+
+  var webAppUrl = '';
+  try {
+    var svc = ScriptApp.getService();
+    if (svc) webAppUrl = String(svc.getUrl() || '').trim();
+  } catch (ignoreSvc) {}
 
   return {
     session: getSessionInfo(),
@@ -95,7 +114,9 @@ function getBootstrap() {
     i18n: UiStrings_getClientPack_(),
     permissions: perms,
     quickPrompts: quickPrompts,
+    onboardingQuickPrompts: onboardingQuickPrompts,
     dataBackend: AviatorsDataBackend_mode_(),
+    webAppUrl: webAppUrl,
   };
 });
 }
@@ -538,6 +559,12 @@ function ChatReferences_enrichFromCatalog_(ref) {
     var resolved = resolveDriveFileUrlByName(n.fileName);
     if (resolved.ok) n.url = resolved.url;
   }
+  if (!n.url && n.globantDocumentId) {
+    n.url = ChatReferences_resolveGlobantOpenUrl_(
+      n.globantProfileName,
+      n.globantDocumentId,
+    );
+  }
   return n;
 }
 
@@ -549,25 +576,24 @@ function ChatReferences_enrichFromCatalog_(ref) {
 function ChatReferences_buildActions_(ref, email) {
   var n = ChatReferences_enrichFromCatalog_(ref);
   var canCatalog = false;
-  var canAgents = false;
   try {
     canCatalog = AdminAuth_emailCanViewCatalog(email);
   } catch (ignoreCat) {}
-  try {
-    canAgents = AdminAuth_emailCanViewAgents(email);
-  } catch (ignoreAg) {}
 
-  var driveUrl = n.url;
-  if (!driveUrl && n.driveFileId) {
-    driveUrl = 'https://drive.google.com/open?id=' + encodeURIComponent(n.driveFileId);
+  var openUrl = ChatReferences_driveOpenUrl_(n.driveFileId, n.url);
+  if (!openUrl && n.globantDocumentId) {
+    openUrl = ChatReferences_resolveGlobantOpenUrl_(
+      n.globantProfileName,
+      n.globantDocumentId,
+    );
   }
 
-  var hasDrive =
-    !!driveUrl &&
-    (n.contentType === 'success_case' ||
-      n.contentType === 'selected_file' ||
-      !!n.driveFileId ||
-      /\.pdf($|\?)/i.test(driveUrl));
+  var hasPdfLink = !!(
+    openUrl ||
+    n.driveFileId ||
+    n.globantDocumentId ||
+    (n.fileName && /\.pdf$/i.test(n.fileName))
+  );
 
   return {
     contentId: n.contentId,
@@ -575,21 +601,45 @@ function ChatReferences_buildActions_(ref, email) {
     contentType: n.contentType,
     clientName: n.clientName,
     fileName: n.fileName,
+    url: openUrl || '',
     globantDocumentId: n.globantDocumentId,
     globantProfileName: n.globantProfileName,
     actions: {
-      drive: { available: hasDrive, url: hasDrive ? driveUrl : '' },
+      drive: {
+        available: hasPdfLink && !!openUrl,
+        url: openUrl || '',
+      },
       catalog: {
         available: !!(n.contentId && canCatalog),
         contentId: n.contentId,
       },
-      rag: {
-        available: !!(n.globantProfileName && canAgents),
-        profileName: n.globantProfileName,
-        documentId: n.globantDocumentId,
+      clientMaster: {
+        available: !!(n.clientName && canCatalog && !n.contentId),
+        clientName: n.clientName,
       },
     },
   };
+}
+
+/**
+ * @param {Object} a
+ * @param {Object} b
+ * @return {number}
+ */
+function ChatReferences_compareSort_(a, b) {
+  var score = function (ref) {
+    var r = ref || {};
+    var act = r.actions || {};
+    var drive = act.drive || {};
+    if (drive.available && drive.url) return 0;
+    if (r.url || r.driveFileId || r.globantDocumentId) return 0;
+    if (act.catalog && act.catalog.available) return 1;
+    if (r.contentId) return 1;
+    if (act.clientMaster && act.clientMaster.available) return 3;
+    if (r.clientName && r.contentType === 'client') return 3;
+    return 2;
+  };
+  return score(a) - score(b);
 }
 
 /**
@@ -621,12 +671,13 @@ function ChatReferences_enrichList_(refs, email) {
     if (
       enriched.actions.drive.available ||
       enriched.actions.catalog.available ||
-      enriched.actions.rag.available ||
+      enriched.actions.clientMaster.available ||
       enriched.title
     ) {
       out.push(enriched);
     }
   }
+  out.sort(ChatReferences_compareSort_);
   return out.slice(0, 8);
 }
 
@@ -643,6 +694,35 @@ function resolveChatReference(ref) {
     } catch (ignore) {}
     return ChatReferences_buildActions_(ref || {}, email);
   });
+}
+
+/**
+ * Resuelve URL de apertura externa. Payload: { contentId?, driveFileId?, url?, globantDocumentId?, globantProfileName? }
+ * @param {string} payloadJson
+ */
+function chatReferenceOpenUrl(payloadJson) {
+  return AviatorsCode_runRpc_('chatReferenceOpenUrl', function () {
+    var opts = {};
+    try {
+      if (payloadJson) opts = JSON.parse(payloadJson);
+    } catch (eParse) {
+      AviatorsError_throw_('ERR_PDF_NOT_AVAILABLE', 'chatReferenceOpenUrl', 'invalid_json');
+    }
+    var resolved = ChatReferences_resolveOpenUrl_(opts);
+    if (!resolved.ok) {
+      AviatorsError_throw_(
+        resolved.code || 'ERR_PDF_NOT_AVAILABLE',
+        'chatReferenceOpenUrl',
+        resolved.message || '',
+      );
+    }
+    return resolved;
+  });
+}
+
+/** @deprecated usar chatReferenceOpenUrl */
+function chatReferencePdfView(payloadJson) {
+  return chatReferenceOpenUrl(payloadJson);
 }
 
 /**
@@ -740,6 +820,10 @@ function globantAnalyzeEphemeralDocument(prompt, payloadJson, historyJson) {
  */
 function globantAnswerWithAgent(prompt, agentId, historyJson) {
   return AviatorsCode_runRpc_('globantAnswerWithAgent', function () {
+    var aid = String(agentId || '').trim().toLowerCase();
+    if (aid === 'onboarding') {
+      AdminAuth_requireOnboardingView();
+    }
     var history = [];
     try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
     var r = AgentOrchestrator_answerWith(prompt, agentId, history);
@@ -1061,6 +1145,20 @@ function clientsListForCombo() {
   });
 }
 
+function clientsListFilterOptions() {
+  return AviatorsCode_runRpc_('clientsListFilterOptions', function () {
+    return ClientsMaster_listFilterOptions();
+  });
+}
+
+/** Solo admin · fusiona clientes duplicados por variaciones de acentos en el nombre. */
+function adminClientsReconcileDuplicates() {
+  return AviatorsCode_runRpc_('adminClientsReconcileDuplicates', function () {
+    AdminAuth_requireAdmin();
+    return ClientsMaster_reconcileDuplicates();
+  });
+}
+
 function clientsGet(clientId) {
   return AviatorsCode_runRpc_('clientsGet', function () {
     return ClientsMaster_get(clientId);
@@ -1204,6 +1302,20 @@ function adminUsersAssignRole(email, roleKey) {
   });
 }
 
+/** Solo admin · vista previa de correos en lista pegada. */
+function adminUsersPreviewBulkEmails(rawText) {
+  return AviatorsCode_runRpc_('adminUsersPreviewBulkEmails', function () {
+    return AdminUsers_previewBulkEmails(rawText);
+  });
+}
+
+/** Solo admin · asignar rol a lista pegada (solo extrae emails). */
+function adminUsersAssignRoleBulk(rawText, roleKey) {
+  return AviatorsCode_runRpc_('adminUsersAssignRoleBulk', function () {
+    return AdminUsers_assignRoleBulk(rawText, roleKey);
+  });
+}
+
 /** Solo admin · actualizar rol de un usuario existente. */
 function adminUsersUpdateRole(email, roleKey) {
   return AviatorsCode_runRpc_('adminUsersUpdateRole', function () {
@@ -1295,50 +1407,50 @@ function adminMigrateSpreadsheetsToSupabase() {
   });
 }
 
-/** Solo admin · estado del sync automático Salesforce (programación + última corrida). */
+/** Requiere permiso sync_salesforce · estado del sync automático Salesforce. */
 function adminSalesforceAccountsGetSyncStatus() {
   return AviatorsCode_runRpc_('adminSalesforceAccountsGetSyncStatus', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_getSyncStatus();
   });
 }
 
-/** Solo admin · instala trigger diario de sync Salesforce Accounts. */
+/** Requiere permiso sync_salesforce · instala trigger diario de sync Salesforce Accounts. */
 function adminSalesforceAccountsInstallDailyTrigger() {
   return AviatorsCode_runRpc_('adminSalesforceAccountsInstallDailyTrigger', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_installDailyTrigger();
   });
 }
 
-/** Solo admin · sync manual del roster Salesforce (carga inicial o prueba). */
+/** Requiere permiso sync_salesforce · sync manual del roster Salesforce. */
 function adminSalesforceAccountsRunSync() {
   return AviatorsCode_runRpc_('adminSalesforceAccountsRunSync', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_runFullSync(true);
   });
 }
 
-/** Solo admin · fase 1: lee planilla y persiste cuentas (sin embeddings). */
+/** Requiere permiso sync_salesforce · fase 1: lee planilla y persiste cuentas (sin embeddings). */
 function adminSalesforceAccountsRunSyncData(force) {
   return AviatorsCode_runRpc_('adminSalesforceAccountsRunSyncData', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_runSyncData_(!!force);
   });
 }
 
-/** Solo admin · fase 2: indexa embeddings del último sync (lotes con progreso). */
+/** Requiere permiso sync_salesforce · fase 2: indexa embeddings del último sync. */
 function adminSalesforceAccountsRunSyncEmbeddingsBatch(start, limit) {
   return AviatorsCode_runRpc_('adminSalesforceAccountsRunSyncEmbeddingsBatch', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_runSyncEmbeddingsBatch_(start, limit);
   });
 }
 
-/** Solo admin · actualiza prompt del agente clients en el registry. */
+/** Requiere permiso sync_salesforce · actualiza prompt del agente clients en el registry. */
 function adminSalesforceAccountsRefreshClientsPrompt() {
   return AviatorsCode_runRpc_('adminSalesforceAccountsRefreshClientsPrompt', function () {
-    AdminAuth_requireAdmin();
+    AdminAuth_requireSyncSalesforce();
     return SalesforceAccounts_refreshClientsAgentPrompt();
   });
 }
@@ -1417,6 +1529,17 @@ function chatHistoryDelete(convId) {
   });
 }
 
+/**
+ * Genera PDF de conversacion completa o de un turno (respuesta + pregunta previa).
+ * @param {Object} payload { mode, locale, logoSrc, messages, turnIndex? }
+ * @return {{ok:boolean, filename:string, mimeType:string, pdfBase64:string}}
+ */
+function chatExportPdf(payload) {
+  return AviatorsCode_runRpc_('chatExportPdf', function () {
+    return ChatExportPdf_export_(payload);
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Quick prompts
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1448,4 +1571,37 @@ function quickPromptsSave(promptsJson) {
     }
     return MetricsService_quickPromptsSave_(prompts);
   });
+}
+
+/**
+ * Prompts rápidos del chat onboarding.
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function onboardingQuickPromptsGet() {
+  return AviatorsCode_runRpc_('onboardingQuickPromptsGet', function () {
+    return MetricsService_onboardingQuickPromptsGet_();
+  });
+}
+
+/**
+ * Guarda prompts rápidos de onboarding. Solo admin.
+ * @param {string} promptsJson
+ * @return {{ok:boolean}}
+ */
+function onboardingQuickPromptsSave(promptsJson) {
+  return AviatorsCode_runRpc_('onboardingQuickPromptsSave', function () {
+    AdminAuth_requireAdmin();
+    var prompts = [];
+    try { prompts = JSON.parse(promptsJson); } catch (eOb) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    if (!Array.isArray(prompts)) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    return MetricsService_onboardingQuickPromptsSave_(prompts);
+  });
+}
+
+function runSalesforceDailySync() {
+  SalesforceAccounts_dailySyncJob_();
 }

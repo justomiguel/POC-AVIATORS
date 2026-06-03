@@ -19,6 +19,7 @@
   var sessionNote = document.getElementById('session-note');
   var backLogin = document.getElementById('logout-toolbar');
   var navBtnHome = document.getElementById('nav-btn-home');
+  var navPageOnboarding = document.getElementById('nav-page-onboarding');
   var navPageAgents = document.getElementById('nav-page-agents');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageTags = document.getElementById('nav-page-tags');
@@ -93,6 +94,7 @@
 
   function setAppPage(page) {
     var pg = page;
+    var prevPage = S.get('activePage') || '';
     var canManageAgents = !!S.get('canManageAgents');
     if (pg === 'agents' && !S.get('canViewAgents')) {
       pg = 'home';
@@ -109,8 +111,19 @@
     if (pg === 'settings' && !S.get('canViewSettings')) {
       pg = 'home';
     }
+    if (pg === 'onboarding' && !S.get('canViewOnboarding')) {
+      pg = 'home';
+    }
     if (pg === 'request-access' && !S.get('isVisitor')) {
       pg = 'home';
+    }
+    if (
+      (prevPage === 'home' || prevPage === 'onboarding') &&
+      pg !== prevPage &&
+      A.chat &&
+      typeof A.chat.saveCurrentConversation === 'function'
+    ) {
+      A.chat.saveCurrentConversation();
     }
     var nodes = document.querySelectorAll('.app-page');
     var i;
@@ -121,6 +134,7 @@
       var showAgentsReadOnly = pg === 'agents' && !canManageAgents && id === 'page-agents-readonly';
       var show =
         (pg === 'home' && id === 'page-home') ||
+        (pg === 'onboarding' && id === 'page-onboarding') ||
         showAgentsWrite ||
         showAgentsReadOnly ||
         (pg === 'contents' && id === 'page-contents') ||
@@ -132,6 +146,10 @@
         (pg === 'faq' && id === 'page-faq');
       p.classList.toggle('hidden', !show);
     }
+    var chatShell = document.getElementById('home-chat-shell');
+    if (chatShell) {
+      chatShell.classList.toggle('hidden', pg !== 'home' && pg !== 'onboarding');
+    }
     if (homeMember) {
       homeMember.classList.toggle('hidden', pg === 'faq' || pg === 'request-access');
     }
@@ -139,6 +157,9 @@
       homeVisitante.classList.toggle('hidden', !(S.get('isVisitor') && pg === 'home'));
     }
     S.set('activePage', pg || '');
+    if ((pg === 'home' || pg === 'onboarding') && A.chat && typeof A.chat.onEnterChatPage === 'function') {
+      A.chat.onEnterChatPage(pg);
+    }
     var viewApp = document.getElementById('view-app');
     if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
     var scrollArea = document.querySelector('.app-content-scroll');
@@ -176,10 +197,25 @@
       }
     }
     if (pg === 'contents') {
-      A.contents.setScreen('list');
-      A.contents.toggleSpecificSections();
-      if (A.contents.applyWriteAccess) A.contents.applyWriteAccess();
-      A.contents.loadList();
+      var pendingContentId = String(S.get('contentsPendingOpenId') || '').trim();
+      if (A.contents && A.contents.applyWriteAccess) A.contents.applyWriteAccess();
+      if (pendingContentId) {
+        S.set('contentsPendingOpenId', '');
+        if (A.contents && A.contents.setScreen) {
+          A.contents.setScreen('editor');
+        }
+        if (A.contents && A.contents.openViewById) {
+          A.contents.openViewById(pendingContentId);
+        } else if (A.contents && A.contents.selectById) {
+          A.contents.selectById(pendingContentId);
+        }
+      } else {
+        if (A.contents && A.contents.setScreen) {
+          A.contents.setScreen('list');
+        }
+        if (A.contents && A.contents.toggleSpecificSections) A.contents.toggleSpecificSections();
+        if (A.contents && A.contents.loadList) A.contents.loadList();
+      }
     }
     if (pg === 'tags') {
       if (A.tags && typeof A.tags.onShow === 'function') {
@@ -187,9 +223,16 @@
       }
     }
     if (pg === 'clients') {
-      A.clients.setScreen('list');
-      if (A.clients.applyWriteAccess) A.clients.applyWriteAccess();
-      A.clients.loadList();
+      var pendingClientName = String(S.get('clientsPendingOpenName') || '').trim();
+      if (A.clients && A.clients.applyWriteAccess) A.clients.applyWriteAccess();
+      if (pendingClientName) {
+        if (A.clients && A.clients.setScreen) A.clients.setScreen('editor');
+        if (A.clients && A.clients.tryOpenPendingName) A.clients.tryOpenPendingName();
+      } else {
+        if (A.clients && A.clients.setScreen) A.clients.setScreen('list');
+        if (A.clients && A.clients.loadFilterOptions) A.clients.loadFilterOptions();
+        if (A.clients && A.clients.loadList) A.clients.loadList();
+      }
     }
     if (pg === 'agents' && S.get('canViewAgents') && A.agents && A.agents.loadList) {
       A.agents.loadList(null, true);
@@ -205,15 +248,19 @@
       A.chat.applyConsultModeLabels(llm);
       A.chat.updateHomeChatBanner(llm);
     }
-    var qp = S.get('quickPrompts');
-    if (A.chat && A.chat.applyQuickPrompts && qp && qp.length) {
+    if (A.chat && A.chat.applyQuickPromptsForActivePage) {
       var ci = S.get('cachedI18n');
       var locUi = ci && ci._locale === 'en' ? 'en' : 'es';
-      A.chat.applyQuickPrompts(qp, locUi);
+      A.chat.applyQuickPromptsForActivePage(locUi);
     }
     var ce = document.getElementById('chat-empty');
     if (ce && !ce.classList.contains('hidden')) {
-      ce.textContent = i18n('chat_empty_hint');
+      ce.textContent = i18n(
+        S.get('activePage') === 'onboarding' ? 'chat_empty_hint_onboarding' : 'chat_empty_hint',
+      );
+    }
+    if (A.chat && typeof A.chat.applyPageChrome === 'function') {
+      A.chat.applyPageChrome(S.get('activePage') || 'home');
     }
     if (A.dashboard && typeof A.dashboard.loadMetrics === 'function') {
       A.dashboard.loadMetrics();
@@ -374,6 +421,7 @@
       var canManageRoleConfig = !!perms.canManageRoleConfig;
       var canSyncSalesforceAccounts = !!perms.canSyncSalesforceAccounts;
       var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
+      var canViewOnboarding = !!perms.canViewOnboarding;
       var canViewSettings =
         canManageAgents ||
         canResetMetrics ||
@@ -390,7 +438,9 @@
       S.set('canManageRoleConfig', canManageRoleConfig);
       S.set('canSyncSalesforceAccounts', canSyncSalesforceAccounts);
       S.set('canManageUnansweredQueue', canManageUnansweredQueue);
+      S.set('canViewOnboarding', canViewOnboarding);
       S.set('canViewSettings', canViewSettings);
+      S.set('webAppUrl', String(bootstrap.webAppUrl || '').trim());
       var adm = bootstrap.admin || {};
       var maxUp =
         adm.adminUploadMaxBytes != null
@@ -423,6 +473,9 @@
           })
           .debugRoleDirectory();
       }
+      if (navPageOnboarding) {
+        navPageOnboarding.classList.toggle('hidden', !canViewOnboarding);
+      }
       if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
       if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
       if (navPageTags) navPageTags.classList.toggle('hidden', !canViewCatalog);
@@ -450,14 +503,16 @@
       // Apply quick prompts from bootstrap (guardados para refresco al cambiar idioma)
       var qpBootstrap = bootstrap.quickPrompts || [];
       S.set('quickPrompts', qpBootstrap);
-      if (A.chat.applyQuickPrompts && qpBootstrap.length) {
+      var qpObBootstrap = bootstrap.onboardingQuickPrompts || [];
+      S.set('onboardingQuickPrompts', qpObBootstrap);
+      if (A.chat.applyQuickPromptsForActivePage) {
         var locale = (bootstrap.i18n && bootstrap.i18n._locale) || 'es';
-        A.chat.applyQuickPrompts(qpBootstrap, locale);
+        A.chat.applyQuickPromptsForActivePage(locale);
       }
 
       // Settings page (quick prompts + destructive reset)
       if (canViewSettings && A.settings && A.settings.init) {
-        A.settings.init(bootstrap.quickPrompts || []);
+        A.settings.init(qpBootstrap, qpObBootstrap);
       }
 
       loadContextFilesLazy();
@@ -531,6 +586,9 @@
 
   if (navBtnHome) {
     navBtnHome.addEventListener('click', function () { setAppPage('home'); });
+  }
+  if (navPageOnboarding) {
+    navPageOnboarding.addEventListener('click', function () { setAppPage('onboarding'); });
   }
   if (navPageAgents) {
     navPageAgents.addEventListener('click', function () { setAppPage('agents'); });

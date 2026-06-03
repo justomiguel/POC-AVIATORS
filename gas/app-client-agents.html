@@ -88,6 +88,33 @@
     if (A.hideBlockingModal) A.hideBlockingModal();
   }
 
+  function adminReportAgentError(err, fallbackKey) {
+    if (A.reportRpcError) {
+      A.reportRpcError(err, {
+        scope: 'agents',
+        fallbackKey: fallbackKey || 'err_generic',
+        modal: true,
+        toast: true,
+        setStatus: function (m) {
+          setAdminAgentBusy(false, '\u00a0');
+          if (adminAgentStatus) {
+            var short = m.length > 160 ? m.slice(0, 157) + '\u2026' : m;
+            adminAgentStatus.textContent = short;
+            adminAgentStatus.classList.add('err');
+          }
+        },
+      });
+      return;
+    }
+    adminHideBlocking();
+    setAdminAgentBusy(false, '\u00a0');
+    if (adminAgentStatus) {
+      adminAgentStatus.textContent =
+        err && err.message ? err.message : i18n(fallbackKey || 'err_generic');
+      adminAgentStatus.classList.add('err');
+    }
+  }
+
   function agentsIsReadOnlyMode() {
     return !!(S.get('canViewAgents') && !S.get('canManageAgents'));
   }
@@ -388,13 +415,15 @@
         var span = document.createElement('span');
         span.textContent = ag.profileName || ag.id;
         bt.appendChild(span);
-        if (ag.ragProfileOnRemote === false) {
+        var remoteMissing = ag.ragProfileOnRemote === false;
+        if (remoteMissing) {
           var badge = document.createElement('span');
           badge.className =
             'ml-2 inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300';
-          badge.setAttribute('title', i18n('admin_agent_badge_remote_missing'));
+          var badgeKey = 'admin_agent_badge_remote_missing';
+          badge.setAttribute('title', i18n(badgeKey));
           badge.textContent = '!';
-          badge.setAttribute('aria-label', i18n('admin_agent_badge_remote_missing'));
+          badge.setAttribute('aria-label', i18n(badgeKey));
           bt.appendChild(badge);
         }
         bt.addEventListener('click', function () { selectAdminAgent(ag.id); });
@@ -419,9 +448,9 @@
       strategyName: 'Chain of Thought',
       promptContext: '',
       promptInstructions: systemPrompt || '',
-      modelName: 'gpt-5.5',
+      modelName: 'openai/gpt-5.5',
       maxTokens: 4000,
-      timeout: 0,
+      timeout: 120,
       temperature: 0.2,
     };
   }
@@ -851,12 +880,7 @@
         }, true);
       })
       .withFailureHandler(function (e) {
-        adminHideBlocking();
-        setAdminAgentBusy(false, '\u00a0');
-        if (adminAgentStatus) {
-          adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
-          adminAgentStatus.classList.add('err');
-        }
+        adminReportAgentError(e, 'err_generic');
       })
       .adminAgentsDelete(id);
   }
@@ -1181,25 +1205,45 @@
       google.script.run
         .withSuccessHandler(function (res) {
           loadAdminAgentsList(function () {
-            var created = res && res.created != null ? parseInt(String(res.created), 10) || 0 : 0;
+            var createdRegistry =
+              res && res.createdRegistry != null
+                ? parseInt(String(res.createdRegistry), 10) || 0
+                : 0;
+            var syncedGlobant =
+              res && res.syncedGlobantAgents != null
+                ? parseInt(String(res.syncedGlobantAgents), 10) || 0
+                : 0;
+            var globantErrors = (res && res.globantSyncErrors) || [];
+            var statusMsg = i18n('admin_agent_seed_done_noop');
+            if (syncedGlobant > 0) {
+              statusMsg = i18nFmt('admin_agent_seed_done_globant', { g: syncedGlobant });
+            }
+            if (createdRegistry > 0) {
+              statusMsg = i18nFmt('admin_agent_seed_done_added', { n: createdRegistry });
+              if (syncedGlobant > 0) {
+                statusMsg +=
+                  ' ' + i18nFmt('admin_agent_seed_done_globant', { g: syncedGlobant });
+              }
+            }
             adminHideBlocking();
             setAdminSeedLoader(false, '');
-            setAdminAgentBusy(
-              false,
-              created > 0
-                ? i18nFmt('admin_agent_seed_done_added', { n: created })
-                : i18n('admin_agent_seed_done_noop'),
-            );
+            setAdminAgentBusy(false, statusMsg);
+            if (globantErrors.length) {
+              A.reportRpcError(
+                { message: globantErrors.join('\n') },
+                {
+                  scope: 'adminAgentsEnsureDefaults',
+                  fallbackKey: 'err_admin_agent_seed',
+                  modal: true,
+                  toast: true,
+                },
+              );
+            }
           });
         })
         .withFailureHandler(function (e) {
-          adminHideBlocking();
           setAdminSeedLoader(false, '');
-          setAdminAgentBusy(false, '\u00a0', { skipProgressWrap: true });
-          if (adminAgentStatus) {
-            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_agent_seed');
-            adminAgentStatus.classList.add('err');
-          }
+          adminReportAgentError(e, 'err_admin_agent_seed');
         })
         .adminAgentsEnsureDefaults();
     });
@@ -1220,7 +1264,7 @@
   bindAdminAgentDropzone();
   applyAgentsWriteAccess();
   refreshUploadLimitHint();
-  renderAdminApiCatalog('gpt-5.5', 'Chain of Thought');
+  renderAdminApiCatalog('openai/gpt-5.5', 'Chain of Thought');
   loadAdminApiCatalog();
   if (adminAgentProfile) {
     adminAgentProfile.addEventListener('input', function () {
@@ -1254,12 +1298,7 @@
           }
         })
         .withFailureHandler(function (e) {
-          adminHideBlocking();
-          setAdminAgentBusy(false, '\u00a0');
-          if (adminAgentStatus) {
-            adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
-            adminAgentStatus.classList.add('err');
-          }
+          adminReportAgentError(e, 'err_admin_agent_save');
         })
         .adminAgentsSave(JSON.stringify(collectAdminAgentPayload()));
     });
@@ -1306,12 +1345,7 @@
               refreshAdminAgentDocuments(false);
             })
             .withFailureHandler(function (e) {
-              adminHideBlocking();
-              setAdminAgentBusy(false, '\u00a0');
-              if (adminAgentStatus) {
-                adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_admin_sync');
-                adminAgentStatus.classList.add('err');
-              }
+              adminReportAgentError(e, 'err_admin_sync');
             })
             .adminAgentsSync(id);
         }
@@ -1374,11 +1408,7 @@
               refreshAdminAgentDocuments(false);
             })
             .withFailureHandler(function (e) {
-              adminHideBlocking();
-              if (adminAgentStatus) {
-                adminAgentStatus.textContent = e && e.message ? e.message : i18n('err_generic');
-                adminAgentStatus.classList.add('err');
-              }
+              adminReportAgentError(e, 'err_globant_profile_doc_required');
             })
             .adminGlobantDeleteRagDocument(pfrom, doc);
         });

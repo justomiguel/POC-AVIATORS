@@ -48,9 +48,10 @@ function GlobantRagApiClient_create(config) {
     } else if (typeof filters === 'string' && filters) {
       finalFilters = [{ key: 'id', operator: '$eq', value: filters }];
     }
+    var safeQuestion = GlobantRag_escapeLangChainFStringLiterals_(question, []);
     var payload = {
       profile: profileName,
-      question: question,
+      question: safeQuestion,
       filters: finalFilters,
     };
     console.log(
@@ -252,6 +253,28 @@ function GlobantRagApiClient_create(config) {
       }
     },
 
+    /**
+     * @param {string} profileName
+     * @return {Object}
+     */
+    getProfile: function (profileName) {
+      var path =
+        '/v1/search/profile/' + encodeURIComponent(profileName);
+      var r = request('get', path, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!BearerHttp_isSuccess(r.code)) {
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: path,
+            code: String(r.code),
+            detail: r.text.slice(0, 800),
+          }),
+        );
+      }
+      return JSON.parse(r.text || '{}');
+    },
+
     /** @param {Object} body */
     createProfile: function (body) {
       var r = request('post', '/v1/search/profile', {
@@ -262,6 +285,28 @@ function GlobantRagApiClient_create(config) {
         throw new Error(
           UiStrings_fmt_('err_globant_api_http', {
             path: '/v1/search/profile',
+            code: String(r.code),
+            detail: r.text,
+          }),
+        );
+      }
+    },
+
+    /**
+     * @param {string} profileName
+     * @param {Object} body — sin `name` ni `indexOptions` (ver RAG Assistants API PUT)
+     */
+    updateProfile: function (profileName, body) {
+      var path =
+        '/v1/search/profile/' + encodeURIComponent(profileName);
+      var r = request('put', path, {
+        contentType: 'application/json',
+        payload: JSON.stringify(body || {}),
+      });
+      if (!BearerHttp_isSuccess(r.code)) {
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: path,
             code: String(r.code),
             detail: r.text,
           }),
@@ -462,15 +507,17 @@ function GlobantRagApiClient_create(config) {
     /**
      * @param {string} profileName
      * @param {string} documentId
-     * @return {string} indexStatus
+     * @return {{id:string,name:string,extension:string,indexStatus:string,url:string,timestamp:string,raw:Object}}
      */
-    getDocumentIndexStatus: function (profileName, documentId) {
+    getDocument: function (profileName, documentId) {
       var path =
         '/v1/search/profile/' +
         encodeURIComponent(profileName) +
         '/document/' +
         encodeURIComponent(documentId);
-      var r = request('get', path, {});
+      var r = request('get', path, {
+        headers: { Accept: 'application/json' },
+      });
       if (!BearerHttp_isSuccess(r.code)) {
         throw new Error(
           UiStrings_fmt_('err_globant_api_http', {
@@ -484,8 +531,90 @@ function GlobantRagApiClient_create(config) {
           }),
         );
       }
-      var result = JSON.parse(r.text);
-      return result.indexStatus;
+      var parsed = JSON.parse(r.text || '{}');
+      return {
+        id: String(parsed.id || documentId || ''),
+        name: String(parsed.name || parsed.fileName || ''),
+        extension: String(parsed.extension || ''),
+        indexStatus: String(parsed.indexStatus || ''),
+        url: String(parsed.url || parsed.fileUrl || parsed.downloadUrl || ''),
+        timestamp: String(parsed.timestamp || ''),
+        raw: parsed,
+      };
+    },
+
+    /**
+     * @param {string} profileName
+     * @param {string} documentId
+     * @return {string} indexStatus
+     */
+    getDocumentIndexStatus: function (profileName, documentId) {
+      return this.getDocument(profileName, documentId).indexStatus;
+    },
+
+    /**
+     * RAG Document API — documento original en binario (p. ej. PDF).
+     * @param {string} documentId
+     * @return {{blob:Blob,fileName:string,mimeType:string}}
+     */
+    downloadOriginalDocument: function (documentId) {
+      var docId = String(documentId || '').trim();
+      if (!docId) {
+        throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_pdf_not_available'));
+      }
+      var path = '/v1/document/' + encodeURIComponent(docId);
+      var res = BearerHttp_fetch(baseUrl + path, {
+        method: 'get',
+        headers: authHeaders(),
+        muteHttpExceptions: true,
+        followRedirects: true,
+        validateHttpsCertificates: true,
+      });
+      var code = res.getResponseCode();
+      if (!BearerHttp_isSuccess(code)) {
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: path,
+            code: String(code),
+            detail: (res.getContentText() || '').substring(0, 400),
+          }),
+        );
+      }
+      var blob = res.getBlob();
+      var headers = res.getHeaders() || {};
+      var disp = String(headers['Content-Disposition'] || headers['content-disposition'] || '');
+      var fileName = GlobantRag_parseContentDispositionFilename_(disp) || 'document.pdf';
+      var mimeType = String(blob.getContentType() || 'application/pdf');
+      return { blob: blob, fileName: fileName, mimeType: mimeType };
+    },
+
+    /**
+     * RAG Document API — JSON procesado (pageContent + metadata).
+     * @param {string} documentId
+     * @return {string}
+     */
+    getProcessedDocumentText: function (documentId) {
+      var docId = String(documentId || '').trim();
+      if (!docId) return '';
+      var path = '/v1/document/' + encodeURIComponent(docId) + '/processed';
+      var res = BearerHttp_fetch(baseUrl + path, {
+        method: 'get',
+        headers: authHeaders(),
+        muteHttpExceptions: true,
+        followRedirects: true,
+        validateHttpsCertificates: true,
+      });
+      var code = res.getResponseCode();
+      if (!BearerHttp_isSuccess(code)) {
+        throw new Error(
+          UiStrings_fmt_('err_globant_api_http', {
+            path: path,
+            code: String(code),
+            detail: (res.getContentText() || '').substring(0, 400),
+          }),
+        );
+      }
+      return res.getContentText() || '';
     },
 
     /**
@@ -561,4 +690,23 @@ function GlobantRagApiClient_executeWithRetry(
     }
   }
   throw lastErr;
+}
+
+/**
+ * @param {string} contentDisposition
+ * @return {string}
+ */
+function GlobantRag_parseContentDispositionFilename_(contentDisposition) {
+  var s = String(contentDisposition || '');
+  if (!s) return '';
+  var star = s.match(/filename\*=UTF-8''([^;\s]+)/i);
+  if (star && star[1]) {
+    try {
+      return decodeURIComponent(star[1].replace(/\+/g, '%20'));
+    } catch (ignoreStar) {
+      return star[1];
+    }
+  }
+  var plain = s.match(/filename="([^"]+)"/i) || s.match(/filename=([^;\s]+)/i);
+  return plain && plain[1] ? String(plain[1]).trim() : '';
 }
