@@ -24,6 +24,7 @@ function ContentCatalog_headersCommon_() {
     'title',
     'summary',
     'client_name',
+    'industry',
     'tags_csv',
     'file_name',
     'mime_type',
@@ -256,8 +257,17 @@ function ContentCatalog_listSupabase_(filters) {
     var summary = String(row.summary || '');
     var tagsCsv = String(row.tags_csv || '');
     if (q) {
-      var hay = (title + ' ' + summary + ' ' + String(row.client_name || '') + ' ' + tagsCsv)
-        .toLowerCase();
+      var hay = (
+        title +
+        ' ' +
+        summary +
+        ' ' +
+        String(row.client_name || '') +
+        ' ' +
+        String(row.industry || '') +
+        ' ' +
+        tagsCsv
+      ).toLowerCase();
       if (hay.indexOf(q) < 0) continue;
     }
     if (tag && !ContentCatalog_rowHasTag_(tagsCsv, tag)) continue;
@@ -272,6 +282,11 @@ function ContentCatalog_listSupabase_(filters) {
     if (driveState === 'missing') {
       ContentCatalog_tryDeleteRemoteIndex_(globantProfile, globantDocId);
       ContentCatalogStore_delete(cid);
+      try {
+        KnowledgeGraph_removeContent_(cid);
+      } catch (eKgRecon) {
+        console.log('[KG] reconcile remove: ' + String(eKgRecon.message || eKgRecon).slice(0, 80));
+      }
       continue;
     }
     if (shouldReconcile && !repairClientReady && globantDocId && globantProfile) {
@@ -438,12 +453,19 @@ function ContentCatalog_upsert(payload) {
   var prevDb = ContentCatalogStore_getById(contentId);
   var prevCreatedAt = prevDb ? String(prevDb.created_at || '') : '';
   var tagsArrayDb = common.tags || [].concat(common.tags_controlled || [], common.tags_free || []);
+  var industryDb = String(common.industry || '').trim();
+  if (ctype === 'onboarding') {
+    industryDb = '';
+  } else if (industryDb) {
+    industryDb = ClientsMaster_resolveIndustryFromCatalog_(industryDb) || industryDb;
+  }
   var commonRowDb = {
     content_id: contentId,
     content_type: ctype,
     title: String(common.title || '').trim(),
     summary: String(common.summary || '').trim(),
     client_name: String(common.client_name || '').trim(),
+    industry: industryDb,
     tags_csv: ContentCatalog_tagsToCsv_(tagsArrayDb),
     file_name: String(common.file_name || '').trim(),
     mime_type: String(common.mime_type || '').trim(),
@@ -468,6 +490,7 @@ function ContentCatalog_upsert(payload) {
     title: commonRowDb.title,
     summary: commonRowDb.summary,
     client_name: commonRowDb.client_name,
+    industry: commonRowDb.industry,
     tags_csv: commonRowDb.tags_csv,
     content_type: commonRowDb.content_type,
     file_name: commonRowDb.file_name,
@@ -482,7 +505,169 @@ function ContentCatalog_upsert(payload) {
         String(eEmb.message || eEmb).slice(0, 200),
     );
   }
+  try {
+    KnowledgeGraph_syncContent_(contentId);
+  } catch (eKg) {
+    console.log(
+      '[KG] sync after upsert failed: ' + String(eKg.message || eKg).slice(0, 200),
+    );
+  }
   return ContentCatalog_get(contentId);
+}
+
+/**
+ * Asigna industria en lote a success cases (solo actualiza catálogo + embedding; sin re-subir PDF).
+ * @param {Array<string>} contentIds
+ * @param {string} industry
+ * @return {{ok:boolean,updated:number,skipped:number,failed:number,industry:string}}
+ */
+function ContentCatalog_batchSetIndustry(contentIds, industry) {
+  ContentCatalog_requireContributor_();
+  var ind = String(industry || '').trim();
+  if (!ind) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'contents_err_industry_required'));
+  }
+  ind = ClientsMaster_resolveIndustryFromCatalog_(ind) || ind;
+  var ids = Array.isArray(contentIds) ? contentIds : [];
+  var updated = 0;
+  var skipped = 0;
+  var failed = 0;
+  var i;
+  for (i = 0; i < ids.length; i++) {
+    var id = String(ids[i] || '').trim();
+    if (!id) {
+      skipped++;
+      continue;
+    }
+    var row = ContentCatalogStore_getById(id);
+    if (!row) {
+      skipped++;
+      continue;
+    }
+    if (String(row.content_type || '').trim() !== 'success_case') {
+      skipped++;
+      continue;
+    }
+    var apiItem = ContentCatalogStore_toApiItem_(row, ContentCatalog_csvToTags_);
+    var cm = apiItem.common || {};
+    try {
+      ContentCatalog_upsert({
+        common: {
+          content_id: cm.content_id,
+          content_type: cm.content_type,
+          title: cm.title,
+          summary: cm.summary,
+          client_name: cm.client_name,
+          industry: ind,
+          tags: cm.tags || [],
+          file_name: cm.file_name,
+          mime_type: cm.mime_type,
+          drive_file_id: cm.drive_file_id,
+          drive_file_url: cm.drive_file_url,
+          globant_profile_name: cm.globant_profile_name,
+          globant_document_id: cm.globant_document_id,
+          uploaded_by: cm.uploaded_by,
+        },
+        specific: apiItem.specific || {},
+      });
+      updated++;
+    } catch (ignoreUpsert) {
+      failed++;
+    }
+  }
+  if (!ids.length) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'contents_batch_industry_none_sc'));
+  }
+  return { ok: true, updated: updated, skipped: skipped, failed: failed, industry: ind };
+}
+
+/**
+ * Asigna cliente (e industria del maestro) en lote a success cases.
+ * @param {Array<string>} contentIds
+ * @param {string} clientName
+ * @return {{ok:boolean,updated:number,skipped:number,failed:number,client_name:string,industry:string}}
+ */
+function ContentCatalog_batchSetSuccessCaseClient(contentIds, clientName) {
+  ContentCatalog_requireContributor_();
+  var rawClient = String(clientName || '').trim();
+  if (!rawClient) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'contents_batch_client_pick'));
+  }
+  var match = ContentExtraction_matchClient_(rawClient, '');
+  var resolvedName = match.matched ? String(match.client_name || '').trim() : '';
+  var industry = match.matched
+    ? ClientsMaster_resolveIndustryFromCatalog_(match.industry || '')
+    : '';
+  if (!resolvedName) {
+    var found = ClientsMaster_findByName(rawClient);
+    if (found && found.client_name) {
+      resolvedName = String(found.client_name || '').trim();
+      industry = ClientsMaster_resolveIndustryFromCatalog_(found.industry || '');
+    }
+  }
+  if (!resolvedName) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'contents_batch_client_unknown'));
+  }
+  ClientsMaster_ensureByName(resolvedName, industry);
+
+  var ids = Array.isArray(contentIds) ? contentIds : [];
+  var updated = 0;
+  var skipped = 0;
+  var failed = 0;
+  var i;
+  for (i = 0; i < ids.length; i++) {
+    var id = String(ids[i] || '').trim();
+    if (!id) {
+      skipped++;
+      continue;
+    }
+    var row = ContentCatalogStore_getById(id);
+    if (!row) {
+      skipped++;
+      continue;
+    }
+    if (String(row.content_type || '').trim() !== 'success_case') {
+      skipped++;
+      continue;
+    }
+    var apiItem = ContentCatalogStore_toApiItem_(row, ContentCatalog_csvToTags_);
+    var cm = apiItem.common || {};
+    try {
+      ContentCatalog_upsert({
+        common: {
+          content_id: cm.content_id,
+          content_type: cm.content_type,
+          title: cm.title,
+          summary: cm.summary,
+          client_name: resolvedName,
+          industry: industry,
+          tags: cm.tags || [],
+          file_name: cm.file_name,
+          mime_type: cm.mime_type,
+          drive_file_id: cm.drive_file_id,
+          drive_file_url: cm.drive_file_url,
+          globant_profile_name: cm.globant_profile_name,
+          globant_document_id: cm.globant_document_id,
+          uploaded_by: cm.uploaded_by,
+        },
+        specific: apiItem.specific || {},
+      });
+      updated++;
+    } catch (ignoreUpsert) {
+      failed++;
+    }
+  }
+  if (!ids.length) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'contents_batch_industry_none_sc'));
+  }
+  return {
+    ok: true,
+    updated: updated,
+    skipped: skipped,
+    failed: failed,
+    client_name: resolvedName,
+    industry: industry,
+  };
 }
 
 /**
@@ -496,6 +681,13 @@ function ContentCatalog_deleteHard(contentId) {
   ContentCatalog_get(id);
 
   var deletedDb = ContentCatalogStore_delete(id);
+  try {
+    KnowledgeGraph_removeContent_(id);
+  } catch (eKgDel) {
+    console.log(
+      '[KG] remove after delete failed: ' + String(eKgDel.message || eKgDel).slice(0, 200),
+    );
+  }
   return { ok: true, deleted: deletedDb };
 }
 
@@ -534,31 +726,72 @@ function ContentCatalog_getTagsCloud() {
 }
 
 /**
- * @return {Array<{tag:string,count:number}>}
+ * Agrega apariciones de tags por clave estable (tagKey), acumulando variantes de grafía.
+ * @return {Object<string,{count:number,displays:Object<string,number>}>}
  */
-function ContentCatalog_getTagsCloud_() {
+function ContentCatalog_aggregateTagBuckets_() {
   var dbRows = ContentCatalogStore_listAll();
-  var counts = {};
-  var display = {};
-  for (var di = 0; di < dbRows.length; di++) {
+  var bucket = {};
+  var di;
+  var ti;
+  for (di = 0; di < dbRows.length; di++) {
     var tagList = ContentCatalog_csvToTags_(dbRows[di].tags_csv);
-    for (var ti = 0; ti < tagList.length; ti++) {
-      var t = tagList[ti];
-      var k = t.toLowerCase();
-      counts[k] = (counts[k] || 0) + 1;
-      if (!display[k]) display[k] = t;
+    for (ti = 0; ti < tagList.length; ti++) {
+      var raw = String(tagList[ti] || '').trim();
+      if (!raw) continue;
+      var disp = ContentExtraction_toCamelTag_(raw);
+      if (!disp) {
+        if (raw.charAt(0) !== '#') raw = '#' + raw;
+        disp = raw;
+      }
+      var k = ContentExtraction_tagKey_(disp);
+      if (!k) continue;
+      if (!bucket[k]) bucket[k] = { count: 0, displays: {} };
+      bucket[k].count++;
+      bucket[k].displays[disp] = (bucket[k].displays[disp] || 0) + 1;
     }
   }
+  return bucket;
+}
+
+/**
+ * @param {Object<string,{count:number,displays:Object<string,number>}>} bucket
+ * @return {Array<{tag:string,count:number}>}
+ */
+function ContentCatalog_tagsCloudFromBuckets_(bucket) {
   var out = [];
-  for (var key in counts) {
-    if (!counts.hasOwnProperty(key)) continue;
-    out.push({ tag: display[key] || key, count: counts[key] });
+  var k;
+  for (k in bucket) {
+    if (!bucket.hasOwnProperty(k)) continue;
+    var best = '';
+    var bestSub = -1;
+    var d;
+    for (d in bucket[k].displays) {
+      if (!bucket[k].displays.hasOwnProperty(d)) continue;
+      var sub = bucket[k].displays[d] || 0;
+      if (sub > bestSub || (sub === bestSub && best && d.localeCompare(best) < 0)) {
+        bestSub = sub;
+        best = d;
+      } else if (!best) {
+        best = d;
+        bestSub = sub;
+      }
+    }
+    if (!best) continue;
+    out.push({ tag: best, count: bucket[k].count || 0 });
   }
   out.sort(function (a, b) {
     if (b.count !== a.count) return b.count - a.count;
     return String(a.tag || '').localeCompare(String(b.tag || ''));
   });
   return out;
+}
+
+/**
+ * @return {Array<{tag:string,count:number}>}
+ */
+function ContentCatalog_getTagsCloud_() {
+  return ContentCatalog_tagsCloudFromBuckets_(ContentCatalog_aggregateTagBuckets_());
 }
 
 /**
@@ -638,6 +871,7 @@ function ContentCatalog_mapRowToCatalogDoc_(row) {
     documentId: globantDocId,
     profileName: profileName,
     clientName: String(row.client_name || '').trim(),
+    industry: String(row.industry || '').trim(),
     fileName: String(row.file_name || '').trim(),
     driveFileId: String(row.drive_file_id || '').trim(),
     title: String(row.title || '').trim(),
@@ -768,6 +1002,7 @@ function ContentCatalog_buildSearchText_(row) {
     String(row.title || '').trim(),
     String(row.summary || '').trim(),
     String(row.client_name || '').trim(),
+    String(row.industry || '').trim(),
     String(row.tags_csv || '').trim(),
     String(row.content_type || '').trim(),
     String(row.file_name || '').trim(),
@@ -1012,5 +1247,244 @@ function ContentCatalog_findRowsMatchingQuestion_(question, opts) {
       results.length,
   );
   return results;
+}
+
+/**
+ * Industrias para combos en Contenidos (contribuidores del catálogo, sin permiso Clientes).
+ * @return {{ok:boolean, industries:Array<string>}}
+ */
+function ContentCatalog_listIndustryOptions() {
+  ContentCatalog_requireContributor_();
+  var industrySet = {};
+  var i;
+  for (i = 0; i < CLIENTS_ALLOWED_INDUSTRIES.length; i++) {
+    var base = String(CLIENTS_ALLOWED_INDUSTRIES[i] || '').trim();
+    if (base) industrySet[base] = true;
+  }
+  var rows = ClientsMasterStore_listAll();
+  for (i = 0; i < rows.length; i++) {
+    var item = ClientsMasterStore_toApiItem_(rows[i]);
+    if (!item.client_id) continue;
+    var ind = String(item.industry || '').trim();
+    if (ind) industrySet[ind] = true;
+  }
+  var industries = Object.keys(industrySet).sort(function (a, b) {
+    return a.localeCompare(b);
+  });
+  return { ok: true, industries: industries };
+}
+
+/**
+ * Índice de alias (tagKey → #display canónico) para extracción y alineación.
+ * @return {Object<string,string>}
+ */
+function ContentCatalog_getTagAliasIndex_() {
+  return ContentCatalogStore_getTagAliases();
+}
+
+/**
+ * @param {Array<{tag:string,count:number}>} cloud
+ * @param {Array<string>} displays — tags #display normalizados
+ * @return {string} #tag canónico (el de mayor conteo en la nube)
+ */
+function ContentCatalog_pickCanonicalTag_(cloud, displays) {
+  var countByKey = {};
+  var ci;
+  for (ci = 0; ci < cloud.length; ci++) {
+    var ck = ContentExtraction_tagKey_(cloud[ci].tag);
+    if (!ck) continue;
+    countByKey[ck] = cloud[ci].count || 0;
+  }
+  var best = '';
+  var bestCount = -1;
+  var di;
+  for (di = 0; di < displays.length; di++) {
+    var disp = ContentExtraction_toCamelTag_(displays[di]);
+    if (!disp) continue;
+    var dk = ContentExtraction_tagKey_(disp);
+    var c = countByKey[dk] != null ? countByKey[dk] : 0;
+    if (c > bestCount) {
+      bestCount = c;
+      best = disp;
+    } else if (c === bestCount && best) {
+      if (disp.localeCompare(best) < 0) best = disp;
+    } else if (!best) {
+      best = disp;
+    }
+  }
+  return best;
+}
+
+/**
+ * Registra alias irreversibles hacia el canónico y repunta cadenas previas.
+ * @param {Object<string,string>} aliasMap
+ * @param {Object<string,boolean>} sourceKeySet
+ * @param {string} targetDisplay
+ */
+function ContentCatalog_registerTagAliases_(aliasMap, sourceKeySet, targetDisplay) {
+  var target = ContentExtraction_toCamelTag_(targetDisplay);
+  if (!target) return;
+  var targetKey = ContentExtraction_tagKey_(target);
+  var sk;
+  for (sk in sourceKeySet) {
+    if (!sourceKeySet.hasOwnProperty(sk)) continue;
+    if (sk === targetKey) continue;
+    aliasMap[sk] = target;
+  }
+  var k;
+  for (k in aliasMap) {
+    if (!aliasMap.hasOwnProperty(k)) continue;
+    var canonKey = ContentExtraction_tagKey_(aliasMap[k]);
+    if (sourceKeySet[canonKey]) aliasMap[k] = target;
+  }
+}
+
+/**
+ * @param {string} tagsCsv
+ * @param {Object<string,boolean>} sourceKeySet
+ * @param {string} targetDisplay
+ * @return {{changed:boolean,tags:Array<string>}}
+ */
+function ContentCatalog_applyTagMergeToTags_(tags, sourceKeySet, targetDisplay) {
+  var target = ContentExtraction_toCamelTag_(targetDisplay);
+  if (!target) return { changed: false, tags: tags || [] };
+  var targetKey = ContentExtraction_tagKey_(target);
+  var hadSource = false;
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < (tags || []).length; i++) {
+    var t = ContentExtraction_toCamelTag_(tags[i]);
+    if (!t) continue;
+    var k = ContentExtraction_tagKey_(t);
+    if (sourceKeySet[k]) {
+      hadSource = true;
+      continue;
+    }
+    if (k === targetKey) {
+      if (!seen[k]) {
+        seen[k] = true;
+        out.push(target);
+      }
+      continue;
+    }
+    if (seen[k]) continue;
+    seen[k] = true;
+    out.push(t);
+  }
+  if (hadSource && !seen[targetKey]) {
+    seen[targetKey] = true;
+    out.push(target);
+  }
+  return { changed: hadSource, tags: out };
+}
+
+/**
+ * Fusiona etiquetas en todos los contenidos (irreversible). El canónico es el más usado del grupo.
+ * @param {Array<string>} sources — al menos 2 #tags
+ * @return {{ok:boolean,target:string,sources:Array<string>,updated:number,aliasesAdded:number}}
+ */
+function ContentCatalog_mergeTags(sources) {
+  ContentCatalog_requireContributor_();
+  if (!Array.isArray(sources) || sources.length < 2) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_tags_merge_min'));
+  }
+  var displays = [];
+  var sourceKeySet = {};
+  var si;
+  for (si = 0; si < sources.length; si++) {
+    var disp = ContentExtraction_toCamelTag_(sources[si]);
+    if (!disp) continue;
+    var dk = ContentExtraction_tagKey_(disp);
+    if (sourceKeySet[dk]) continue;
+    sourceKeySet[dk] = true;
+    displays.push(disp);
+  }
+  if (displays.length < 2) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_tags_merge_min'));
+  }
+  var cloud = ContentCatalog_getTagsCloud_();
+  var target = ContentCatalog_pickCanonicalTag_(cloud, displays);
+  if (!target) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_tags_merge_failed'));
+  }
+  var targetKey = ContentExtraction_tagKey_(target);
+  delete sourceKeySet[targetKey];
+
+  var aliasMap = ContentCatalog_getTagAliasIndex_();
+  var aliasesBefore = 0;
+  var ak;
+  for (ak in aliasMap) {
+    if (aliasMap.hasOwnProperty(ak)) aliasesBefore++;
+  }
+  ContentCatalog_registerTagAliases_(aliasMap, sourceKeySet, target);
+  var aliasesAdded = 0;
+  for (ak in aliasMap) {
+    if (!aliasMap.hasOwnProperty(ak)) continue;
+    aliasesAdded++;
+  }
+  aliasesAdded = Math.max(0, aliasesAdded - aliasesBefore);
+  ContentCatalogStore_setTagAliases(aliasMap);
+
+  var dbRows = ContentCatalogStore_listAll();
+  var updated = 0;
+  var ri;
+  for (ri = 0; ri < dbRows.length; ri++) {
+    var row = dbRows[ri];
+    var tagList = ContentCatalog_csvToTags_(row.tags_csv);
+    var merged = ContentCatalog_applyTagMergeToTags_(tagList, sourceKeySet, target);
+    if (!merged.changed) continue;
+    var now = new Date().toISOString();
+    var commonRowDb = {
+      content_id: String(row.content_id || ''),
+      content_type: String(row.content_type || ''),
+      title: String(row.title || ''),
+      summary: String(row.summary || ''),
+      client_name: String(row.client_name || ''),
+      tags_csv: ContentCatalog_tagsToCsv_(merged.tags),
+      file_name: String(row.file_name || ''),
+      mime_type: String(row.mime_type || ''),
+      drive_file_id: String(row.drive_file_id || ''),
+      drive_file_url: String(row.drive_file_url || ''),
+      globant_profile_name: String(row.globant_profile_name || ''),
+      globant_document_id: String(row.globant_document_id || ''),
+      uploaded_by: String(row.uploaded_by || ''),
+      created_at: row.created_at || now,
+      updated_at: now,
+    };
+    var specificRowDb = ContentCatalogStore_rowToSpecific_(row);
+    commonRowDb.search_text = ContentCatalog_buildSearchText_({
+      title: commonRowDb.title,
+      summary: commonRowDb.summary,
+      client_name: commonRowDb.client_name,
+      tags_csv: commonRowDb.tags_csv,
+      content_type: commonRowDb.content_type,
+      file_name: commonRowDb.file_name,
+      specific: specificRowDb,
+    });
+    ContentCatalogStore_upsert(commonRowDb, specificRowDb);
+    updated++;
+    try {
+      ContentEmbedding_refreshForContentId_(commonRowDb.content_id);
+    } catch (ignoreEmb) {}
+    try {
+      KnowledgeGraph_syncContent_(commonRowDb.content_id);
+    } catch (ignoreKg) {}
+  }
+
+  var sourceOut = [];
+  for (si = 0; si < displays.length; si++) {
+    if (ContentExtraction_tagKey_(displays[si]) !== targetKey) {
+      sourceOut.push(displays[si]);
+    }
+  }
+
+  return {
+    ok: true,
+    target: target,
+    sources: sourceOut,
+    updated: updated,
+    aliasesAdded: aliasesAdded,
+  };
 }
 

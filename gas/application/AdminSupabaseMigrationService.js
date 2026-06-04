@@ -179,6 +179,7 @@ function AdminSupabaseMigration_migrateContents_(props) {
         title: String(commonRows[i].title || ''),
         summary: String(commonRows[i].summary || ''),
         client_name: String(commonRows[i].client_name || ''),
+        industry: String(commonRows[i].industry || ''),
         tags_csv: String(commonRows[i].tags_csv || ''),
         file_name: String(commonRows[i].file_name || ''),
         mime_type: String(commonRows[i].mime_type || ''),

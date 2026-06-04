@@ -229,6 +229,15 @@
               <button
                 type="button"
                 class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                data-app-page="knowledge-graph"
+                id="nav-page-knowledge-graph"
+              >
+                <i class="fa-solid fa-diagram-project w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                <span data-i18n="nav_knowledge_graph"></span>
+              </button>
+              <button
+                type="button"
+                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
                 data-app-page="settings"
                 id="nav-page-settings"
               >
@@ -1275,9 +1284,38 @@
                       <span data-i18n="contents_type_onboarding"></span>
                     </span>
                   </div>
-                  <div id="contents-batch-bar" class="hidden mb-2 flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                  <div
+                    id="contents-batch-bar"
+                    class="hidden mb-2 flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40"
+                  >
                     <span id="contents-batch-count" class="font-medium text-sky-800 dark:text-sky-300"></span>
-                    <button type="button" id="contents-batch-delete-btn" class="btn btn-sm btn-danger">
+                    <div id="contents-batch-sc-wrap" class="hidden flex flex-wrap items-center gap-3">
+                      <div id="contents-batch-client-wrap" class="flex flex-wrap items-center gap-2">
+                        <label class="inline-flex flex-wrap items-center gap-2 text-sky-900 dark:text-sky-100">
+                          <span class="text-xs font-semibold uppercase tracking-wide" data-i18n="contents_batch_client_label"></span>
+                          <select id="contents-batch-client" class="aviators-field min-w-[12rem] text-sm">
+                            <option value="" data-i18n="contents_client_combo_placeholder"></option>
+                          </select>
+                        </label>
+                        <button type="button" id="contents-batch-client-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-building" aria-hidden="true"></i>
+                          <span data-i18n="contents_batch_client_apply"></span>
+                        </button>
+                      </div>
+                      <div id="contents-batch-industry-wrap" class="flex flex-wrap items-center gap-2">
+                        <label class="inline-flex flex-wrap items-center gap-2 text-sky-900 dark:text-sky-100">
+                          <span class="text-xs font-semibold uppercase tracking-wide" data-i18n="contents_batch_industry_label"></span>
+                          <select id="contents-batch-industry" class="aviators-field min-w-[11rem] text-sm">
+                            <option value="" data-i18n="clients_industry_placeholder"></option>
+                          </select>
+                        </label>
+                        <button type="button" id="contents-batch-industry-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-industry" aria-hidden="true"></i>
+                          <span data-i18n="contents_batch_industry_apply"></span>
+                        </button>
+                      </div>
+                    </div>
+                    <button type="button" id="contents-batch-delete-btn" class="btn btn-sm btn-danger inline-flex items-center gap-2">
                       <i class="fa-solid fa-trash" aria-hidden="true"></i>
                       <span data-i18n="batch_delete_selected"></span>
                     </button>
@@ -1447,6 +1485,34 @@
                     <p class="text-xs text-slate-500" data-i18n="contents_type_helper"></p>
                   </section>
 
+                  <section
+                    id="contents-block-industry"
+                    class="hidden space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/40"
+                    aria-labelledby="contents-sc-industry-heading"
+                  >
+                    <div>
+                      <h3
+                        id="contents-sc-industry-heading"
+                        class="text-sm font-semibold text-slate-900 dark:text-slate-100"
+                        data-i18n="contents_sc_industry_heading"
+                      ></h3>
+                      <p
+                        class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                        data-i18n="contents_sc_industry_lead"
+                      ></p>
+                    </div>
+                    <label class="block text-sm" for="contents-entry-industry">
+                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_industry"></span>
+                      <select id="contents-entry-industry" class="aviators-field w-full text-sm">
+                        <option value="" data-i18n="clients_industry_placeholder"></option>
+                      </select>
+                    </label>
+                    <button type="button" id="contents-industry-continue-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                      <span data-i18n="contents_sc_industry_continue"></span>
+                    </button>
+                  </section>
+
                   <section id="contents-block-file" class="hidden">
                     <div
                       id="contents-dropzone"
@@ -1573,8 +1639,8 @@
                     <section id="contents-specific-proposal" class="ficha-section ficha-section--proposal space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
                       <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
                       <div class="grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm" for="contents-proposal-stage">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_stage"></span>
+                        <label class="ficha-field block text-sm" for="contents-proposal-stage">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_stage"></span>
                           <select id="contents-proposal-stage" class="aviators-field w-full text-sm">
                             <option value="">—</option>
                             <option value="PRESENTED">Presented</option>
@@ -1584,8 +1650,8 @@
                             <option value="ON_HOLD">On Hold</option>
                           </select>
                         </label>
-                        <label class="block text-sm" for="contents-proposal-pricing">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_pricing_model"></span>
+                        <label class="ficha-field block text-sm" for="contents-proposal-pricing">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_pricing_model"></span>
                           <select id="contents-proposal-pricing" class="aviators-field w-full text-sm">
                             <option value="">—</option>
                             <option value="TIME_AND_MATERIALS">Time &amp; Materials</option>
@@ -1594,8 +1660,8 @@
                             <option value="SUBSCRIPTION">Subscription</option>
                           </select>
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-proposal-effort">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_effort"></span>
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-proposal-effort">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_effort"></span>
                           <input type="text" id="contents-proposal-effort" class="aviators-field w-full text-sm" />
                         </label>
                         <label class="ficha-field block text-sm md:col-span-2" for="contents-proposal-notes">
@@ -1612,6 +1678,16 @@
                         <span data-i18n="contents_specific_success_heading"></span>
                       </h4>
                       <div class="grid gap-4 md:grid-cols-1">
+                        <label class="ficha-field block text-sm" for="contents-success-industry">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-industry ficha-field-icon ficha-field-icon--industry" aria-hidden="true"></i>
+                            <span data-i18n="contents_lbl_industry"></span>
+                          </span>
+                          <select id="contents-success-industry" class="aviators-field w-full text-sm">
+                            <option value="" data-i18n="clients_industry_placeholder"></option>
+                          </select>
+                          <p class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-i18n="contents_success_industry_field_hint"></p>
+                        </label>
                         <label class="ficha-field block text-sm" for="contents-success-challenge">
                           <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-fire ficha-field-icon ficha-field-icon--challenge" aria-hidden="true"></i>
@@ -1647,22 +1723,22 @@
                         <span data-i18n="contents_specific_client_heading"></span>
                       </h4>
                       <div class="grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm" for="contents-client-status">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm" for="contents-client-status">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-signal ficha-field-icon ficha-field-icon--status" aria-hidden="true"></i>
                             <span data-i18n="contents_lbl_account_status"></span>
                           </span>
                           <input type="text" id="contents-client-status" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm" for="contents-client-health">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm" for="contents-client-health">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-heart-pulse ficha-field-icon ficha-field-icon--health" aria-hidden="true"></i>
                             <span data-i18n="contents_lbl_health_score"></span>
                           </span>
                           <input type="text" id="contents-client-health" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-client-projects">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-client-projects">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-diagram-project ficha-field-icon ficha-field-icon--projects" aria-hidden="true"></i>
                             <span data-i18n="contents_lbl_active_projects"></span>
                           </span>
@@ -1682,22 +1758,22 @@
                         <span data-i18n="contents_specific_onboarding_heading"></span>
                       </h4>
                       <div class="grid gap-4 md:grid-cols-2">
-                        <label class="block text-sm" for="contents-onboarding-topic">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm" for="contents-onboarding-topic">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-book-open ficha-field-icon ficha-field-icon--topic" aria-hidden="true"></i>
                             <span data-i18n="contents_onboarding_topic"></span>
                           </span>
                           <input type="text" id="contents-onboarding-topic" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm" for="contents-onboarding-category">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm" for="contents-onboarding-category">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-tags ficha-field-icon ficha-field-icon--category" aria-hidden="true"></i>
                             <span data-i18n="contents_onboarding_category"></span>
                           </span>
                           <input type="text" id="contents-onboarding-category" class="aviators-field w-full text-sm" />
                         </label>
-                        <label class="block text-sm md:col-span-2" for="contents-onboarding-audience">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-onboarding-audience">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
                             <i class="fa-solid fa-users ficha-field-icon ficha-field-icon--audience" aria-hidden="true"></i>
                             <span data-i18n="contents_onboarding_audience"></span>
                           </span>
@@ -1759,20 +1835,135 @@
 
               <div id="tags-view-cloud">
                 <section
-                  class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm md:p-6 dark:border-slate-700 dark:bg-slate-900/40"
+                  class="tags-cloud-section"
                   aria-labelledby="tags-cloud-heading"
                 >
-                  <h3 id="tags-cloud-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="tags_cloud_heading"></h3>
-                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="tags_cloud_lead"></p>
+                  <div class="tags-cloud-section-head">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2.5">
+                        <span class="tags-cloud-heading-icon" aria-hidden="true">
+                          <i class="fa-solid fa-cloud"></i>
+                        </span>
+                        <h3 id="tags-cloud-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="tags_cloud_heading"></h3>
+                      </div>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="tags_cloud_lead"></p>
+                    </div>
+                    <div id="tags-cloud-stats" class="tags-cloud-stats hidden" role="group" aria-label="">
+                      <span id="tags-cloud-stat-tags" class="tags-cloud-stat"></span>
+                      <span id="tags-cloud-stat-top" class="tags-cloud-stat tags-cloud-stat--top"></span>
+                    </div>
+                  </div>
+
+                  <div id="tags-cloud-toolbar" class="tags-cloud-toolbar hidden">
+                    <div class="tags-cloud-toolbar-row">
+                      <label class="tags-cloud-search-wrap">
+                        <i class="fa-solid fa-magnifying-glass tags-cloud-search-icon" aria-hidden="true"></i>
+                        <input
+                          id="tags-cloud-search"
+                          type="search"
+                          class="tags-cloud-search-field"
+                          autocomplete="off"
+                          spellcheck="false"
+                          data-i18n-placeholder="tags_cloud_search_placeholder"
+                        />
+                      </label>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          id="tags-suggest-btn"
+                          class="btn btn-md btn-outline hidden inline-flex items-center gap-2"
+                        >
+                          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                          <span data-i18n="tags_suggest_btn"></span>
+                        </button>
+                        <button
+                          type="button"
+                          id="tags-merge-mode-btn"
+                          class="btn btn-md btn-outline hidden inline-flex items-center gap-2"
+                        >
+                          <i class="fa-solid fa-code-merge" aria-hidden="true"></i>
+                          <span data-i18n="tags_merge_mode_btn"></span>
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      id="tags-merge-bar"
+                      class="tags-merge-bar hidden"
+                      role="region"
+                      aria-labelledby="tags-merge-bar-label"
+                    >
+                      <p id="tags-merge-bar-label" class="tags-merge-bar-label"></p>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          id="tags-merge-run-btn"
+                          class="btn btn-md btn-primary inline-flex items-center gap-2"
+                        >
+                          <i class="fa-solid fa-code-merge" aria-hidden="true"></i>
+                          <span data-i18n="tags_merge_btn"></span>
+                        </button>
+                        <button
+                          type="button"
+                          id="tags-merge-clear-btn"
+                          class="btn btn-md btn-outline inline-flex items-center gap-2"
+                        >
+                          <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+                          <span data-i18n="tags_merge_clear"></span>
+                        </button>
+                      </div>
+                    </div>
+                    <p class="tags-cloud-hint" data-i18n="tags_cloud_hint"></p>
+                  </div>
+
+                  <section
+                    id="tags-suggest-panel"
+                    class="tags-suggest-panel hidden"
+                    aria-labelledby="tags-suggest-heading"
+                  >
+                    <div class="tags-suggest-panel-head">
+                      <div class="min-w-0">
+                        <h4 id="tags-suggest-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="tags_suggest_heading"></h4>
+                        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="tags_suggest_lead"></p>
+                      </div>
+                      <button
+                        type="button"
+                        id="tags-suggest-refresh-btn"
+                        class="btn btn-sm btn-outline inline-flex shrink-0 items-center gap-2"
+                      >
+                        <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                        <span data-i18n="tags_suggest_refresh"></span>
+                      </button>
+                    </div>
+                    <p
+                      id="tags-suggest-empty"
+                      class="tags-suggest-empty hidden text-sm text-slate-600 dark:text-slate-400"
+                      role="status"
+                      data-i18n="tags_suggest_empty"
+                    ></p>
+                    <ul id="tags-suggest-list" class="tags-suggest-list" role="list"></ul>
+                  </section>
+
                   <div
                     id="tags-cloud-empty"
-                    class="hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                    class="tags-cloud-empty hidden"
                     role="status"
                   >
-                    <i class="fa-solid fa-tags mb-2 text-2xl text-slate-400" aria-hidden="true"></i>
-                    <p data-i18n="tags_cloud_empty"></p>
+                    <span class="tags-cloud-empty-icon" aria-hidden="true">
+                      <i class="fa-solid fa-tags"></i>
+                    </span>
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="tags_cloud_empty"></p>
                   </div>
-                  <div id="tags-cloud" class="tags-cloud flex flex-wrap items-center justify-center gap-3 py-2" role="list"></div>
+
+                  <div id="tags-cloud-stage-wrap" class="tags-cloud-stage-wrap hidden">
+                    <div class="tags-cloud-stage" aria-hidden="true">
+                      <div class="tags-cloud-stage-orb tags-cloud-stage-orb--a"></div>
+                      <div class="tags-cloud-stage-orb tags-cloud-stage-orb--b"></div>
+                      <div class="tags-cloud-stage-grid"></div>
+                    </div>
+                    <div id="tags-cloud-spotlight" class="tags-cloud-spotlight hidden" role="presentation"></div>
+                    <p id="tags-cloud-no-match" class="tags-cloud-no-match hidden" role="status" data-i18n="tags_cloud_no_match"></p>
+                    <div id="tags-cloud" class="tags-cloud" role="list"></div>
+                  </div>
                 </section>
               </div>
 
@@ -1837,6 +2028,144 @@
                   </div>
                 </section>
               </div>
+            </div>
+
+            <div
+              id="page-knowledge-graph"
+              class="app-page app-page-knowledge-graph hidden mx-auto max-w-6xl space-y-5 pb-8"
+              data-app-page="knowledge-graph"
+            >
+              <header class="settings-page-head" aria-labelledby="kg-page-title">
+                <div class="settings-page-head-icon" aria-hidden="true">
+                  <i class="fa-solid fa-diagram-project"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <h2 id="kg-page-title" class="settings-page-title" data-i18n="page_knowledge_graph_title"></h2>
+                  <p class="settings-page-lead" data-i18n="page_knowledge_graph_lead"></p>
+                  <p
+                    id="kg-status"
+                    class="kg-status-msg mt-3 text-sm text-slate-600 dark:text-slate-400"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    &nbsp;
+                  </p>
+                </div>
+              </header>
+
+              <section class="kg-filters-card rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-filters-heading">
+                <h3 id="kg-filters-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_filters_heading"></h3>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_filters_lead"></p>
+                <div class="mt-4 flex flex-wrap items-end gap-3">
+                  <label class="block min-w-[12rem] flex-1 text-sm" for="kg-filter-search">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_search"></span>
+                    <input
+                      id="kg-filter-search"
+                      type="search"
+                      class="aviators-field w-full text-sm"
+                      autocomplete="off"
+                      data-i18n-placeholder="kg_filter_search_placeholder"
+                    />
+                  </label>
+                  <label class="block text-sm" for="kg-filter-content-type">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_content_type"></span>
+                    <select id="kg-filter-content-type" class="aviators-field min-w-[10rem] text-sm">
+                      <option value="" data-i18n="kg_filter_content_type_all"></option>
+                      <option value="proposal">proposal</option>
+                      <option value="success_case">success_case</option>
+                      <option value="client">client</option>
+                      <option value="onboarding">onboarding</option>
+                    </select>
+                  </label>
+                  <label class="block text-sm" for="kg-filter-industry">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_industry"></span>
+                    <select id="kg-filter-industry" class="aviators-field min-w-[12rem] text-sm">
+                      <option value="" data-i18n="kg_filter_industry_all"></option>
+                    </select>
+                  </label>
+                  <label class="block text-sm" for="kg-filter-client">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_client"></span>
+                    <select id="kg-filter-client" class="aviators-field min-w-[12rem] text-sm">
+                      <option value="" data-i18n="kg_filter_client_all"></option>
+                    </select>
+                  </label>
+                  <label class="block text-sm" for="kg-filter-depth">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_depth"></span>
+                    <select id="kg-filter-depth" class="aviators-field min-w-[6rem] text-sm">
+                      <option value="1">1</option>
+                      <option value="2" selected>2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </label>
+                  <button type="button" id="kg-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                    <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                    <span data-i18n="kg_btn_apply"></span>
+                  </button>
+                  <button type="button" id="kg-reset-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    <span data-i18n="kg_btn_reset"></span>
+                  </button>
+                  <button type="button" id="kg-focus-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                    <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+                    <span data-i18n="kg_btn_focus"></span>
+                  </button>
+                  <button type="button" id="kg-rebuild-btn" class="btn btn-md btn-secondary hidden inline-flex items-center gap-2">
+                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                    <span data-i18n="kg_btn_rebuild"></span>
+                  </button>
+                </div>
+                <fieldset class="kg-type-toggles mt-4 border-0 p-0" aria-labelledby="kg-type-toggles-legend">
+                  <legend id="kg-type-toggles-legend" class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_node_types"></legend>
+                  <div class="flex flex-wrap gap-3 text-sm">
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="content" checked /> <span data-i18n="kg_type_content"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="client" checked /> <span data-i18n="kg_type_client"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="client_label" checked /> <span data-i18n="kg_type_client_label"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="industry" checked /> <span data-i18n="kg_type_industry"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="tag" checked /> <span data-i18n="kg_type_tag"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="stage" checked /> <span data-i18n="kg_type_stage"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="pricing_model" checked /> <span data-i18n="kg_type_pricing_model"></span></label>
+                  </div>
+                </fieldset>
+              </section>
+
+              <div class="kg-main-grid grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(240px,280px)]">
+                <section class="kg-graph-section rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-graph-heading">
+                  <h3 id="kg-graph-heading" class="sr-only" data-i18n="page_knowledge_graph_title"></h3>
+                  <div id="kg-graph-canvas" class="kg-graph-canvas" role="img" aria-label="Knowledge graph visualization"></div>
+                  <p id="kg-graph-empty" class="kg-graph-empty hidden px-4 py-8 text-center text-sm text-slate-500" data-i18n="kg_empty"></p>
+                </section>
+                <aside class="kg-side space-y-4" aria-labelledby="kg-detail-heading">
+                  <section class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50">
+                    <h3 id="kg-detail-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_detail_heading"></h3>
+                    <div id="kg-detail-body" class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                      <p id="kg-detail-label" class="font-medium text-slate-800 dark:text-slate-200">&nbsp;</p>
+                      <p><span class="font-medium" data-i18n="kg_detail_type"></span>: <span id="kg-detail-type"></span></p>
+                      <p id="kg-detail-meta-wrap" class="hidden"><span class="font-medium" data-i18n="kg_detail_meta"></span>: <span id="kg-detail-meta"></span></p>
+                      <div id="kg-detail-edges-wrap" class="hidden space-y-2 pt-1">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_out"></p>
+                          <ul id="kg-detail-edges-out" class="kg-detail-edges-list mt-1 list-none space-y-1 pl-0 text-xs"></ul>
+                        </div>
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_in"></p>
+                          <ul id="kg-detail-edges-in" class="kg-detail-edges-list mt-1 list-none space-y-1 pl-0 text-xs"></ul>
+                        </div>
+                      </div>
+                      <button type="button" id="kg-open-content-btn" class="btn btn-sm btn-outline hidden mt-2 inline-flex items-center gap-2">
+                        <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                        <span data-i18n="kg_btn_open_content"></span>
+                      </button>
+                    </div>
+                  </section>
+                  <section class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-legend-heading">
+                    <h3 id="kg-legend-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_legend_heading"></h3>
+                    <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_legend_lead"></p>
+                    <ul id="kg-legend-list" class="kg-legend-list mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-400"></ul>
+                  </section>
+                </aside>
+              </div>
+              <div id="kg-vis-lib-host" class="hidden" aria-hidden="true"><?!= knowledgeGraphLib ?></div>
             </div>
 
             <div
@@ -3546,6 +3875,7 @@
     <?!= clientScriptContents ?>
     <?!= clientScriptTags ?>
     <?!= clientScriptClients ?>
+    <?!= clientScriptKnowledgeGraph ?>
     <?!= clientScriptDashboard ?>
     <?!= clientScriptMetrics ?>
     <?!= clientScriptSettings ?>

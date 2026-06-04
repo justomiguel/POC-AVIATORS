@@ -25,6 +25,7 @@
   var navPageTags = document.getElementById('nav-page-tags');
   var navPageClients = document.getElementById('nav-page-clients');
   var navPageMetrics = document.getElementById('nav-page-metrics');
+  var navPageKnowledgeGraph = document.getElementById('nav-page-knowledge-graph');
   var navPageSettings = document.getElementById('nav-page-settings');
   var navPageRequestAccess = document.getElementById('nav-page-request-access');
   var navPageFaq = document.getElementById('nav-page-faq');
@@ -111,6 +112,9 @@
     if (pg === 'metrics' && !S.get('canViewMetrics')) {
       pg = 'home';
     }
+    if (pg === 'knowledge-graph' && !S.get('canViewKnowledgeGraph')) {
+      pg = 'home';
+    }
     if (pg === 'settings' && !S.get('canViewSettings')) {
       pg = 'home';
     }
@@ -144,6 +148,7 @@
         (pg === 'tags' && id === 'page-tags') ||
         (pg === 'clients' && id === 'page-clients') ||
         (pg === 'metrics' && id === 'page-metrics') ||
+        (pg === 'knowledge-graph' && id === 'page-knowledge-graph') ||
         (pg === 'settings' && id === 'page-settings') ||
         (pg === 'request-access' && id === 'page-request-access') ||
         (pg === 'faq' && id === 'page-faq');
@@ -223,6 +228,11 @@
     if (pg === 'tags') {
       if (A.tags && typeof A.tags.onShow === 'function') {
         A.tags.onShow();
+      }
+    }
+    if (pg === 'knowledge-graph') {
+      if (A.knowledgeGraph && typeof A.knowledgeGraph.onShow === 'function') {
+        A.knowledgeGraph.onShow();
       }
     }
     if (pg === 'clients') {
@@ -427,6 +437,8 @@
       var canSyncSalesforceAccounts = !!perms.canSyncSalesforceAccounts;
       var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
       var canViewOnboarding = !!perms.canViewOnboarding;
+      var canViewKnowledgeGraph = !!perms.canViewKnowledgeGraph;
+      var canRebuildKnowledgeGraph = !!perms.canRebuildKnowledgeGraph;
       var canViewSettings =
         canManageAgents ||
         canResetMetrics ||
@@ -446,6 +458,8 @@
       S.set('canSyncSalesforceAccounts', canSyncSalesforceAccounts);
       S.set('canManageUnansweredQueue', canManageUnansweredQueue);
       S.set('canViewOnboarding', canViewOnboarding);
+      S.set('canViewKnowledgeGraph', canViewKnowledgeGraph);
+      S.set('canRebuildKnowledgeGraph', canRebuildKnowledgeGraph);
       S.set('canViewSettings', canViewSettings);
       S.set('webAppUrl', String(bootstrap.webAppUrl || '').trim());
       var adm = bootstrap.admin || {};
@@ -488,6 +502,9 @@
       if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canViewClients);
       if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
+      if (navPageKnowledgeGraph) {
+        navPageKnowledgeGraph.classList.toggle('hidden', !canViewKnowledgeGraph);
+      }
       if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
       setAppPage('home');
       syncMobileDrawerViewport();
@@ -616,6 +633,11 @@
   }
   if (navPageMetrics) {
     navPageMetrics.addEventListener('click', function () { setAppPage('metrics'); });
+  }
+  if (navPageKnowledgeGraph) {
+    navPageKnowledgeGraph.addEventListener('click', function () {
+      setAppPage('knowledge-graph');
+    });
   }
   if (navPageSettings) {
     navPageSettings.addEventListener('click', function () { setAppPage('settings'); });

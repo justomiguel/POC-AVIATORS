@@ -203,6 +203,37 @@ function AdminAuth_emailCanSyncSalesforce(email) {
   return AdminAuth_roleHasPermission_(k, 'sync_salesforce');
 }
 
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanViewKnowledgeGraph(email) {
+  if (AdminAuth_emailIsAdmin(email)) return true;
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'view_knowledge_graph');
+}
+
+/**
+ * @return {boolean}
+ */
+function AdminAuth_sessionCanViewKnowledgeGraph() {
+  var email = Session.getActiveUser().getEmail();
+  return AdminAuth_emailCanViewKnowledgeGraph(email);
+}
+
+function AdminAuth_requireKnowledgeGraphView() {
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) {
+    throw new Error(
+      UiStrings_t(UiStrings_activeLocale_(), 'session_email_no_capture'),
+    );
+  }
+  if (!AdminAuth_emailCanViewKnowledgeGraph(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_kg_forbidden'));
+  }
+}
+
 function AdminAuth_requireOnboardingView() {
   var email = Session.getActiveUser().getEmail();
   if (!AdminAuth_emailCanViewOnboarding(email)) {

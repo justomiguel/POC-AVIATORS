@@ -26,6 +26,10 @@ function doGet(e) {
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
   tpl.clientScriptTags = HtmlService.createHtmlOutputFromFile('app-client-tags').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
+  tpl.knowledgeGraphLib = HtmlService.createHtmlOutputFromFile('knowledge-graph-vis-include')
+    .getContent();
+  tpl.clientScriptKnowledgeGraph = HtmlService.createHtmlOutputFromFile('app-client-knowledge-graph')
+    .getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
   tpl.clientScriptSettings = HtmlService.createHtmlOutputFromFile('app-client-settings').getContent();
@@ -72,6 +76,8 @@ function getBootstrap() {
     canManageUnansweredQueue: false,
     canSyncSalesforceAccounts: false,
     canViewOnboarding: false,
+    canViewKnowledgeGraph: false,
+    canRebuildKnowledgeGraph: false,
   };
   try {
     var email = ('' + Session.getActiveUser().getEmail()).trim();
@@ -89,6 +95,8 @@ function getBootstrap() {
       perms.canManageUnansweredQueue = AdminAuth_emailCanManageUnansweredQueue(email);
       perms.canSyncSalesforceAccounts = AdminAuth_emailCanSyncSalesforce(email);
       perms.canViewOnboarding = AdminAuth_emailCanViewOnboarding(email);
+      perms.canViewKnowledgeGraph = AdminAuth_emailCanViewKnowledgeGraph(email);
+      perms.canRebuildKnowledgeGraph = AdminAuth_emailIsAdmin(email);
     }
   } catch (ePerms) {}
 
@@ -1043,6 +1051,12 @@ function contentsGet(contentId) {
  * @param {string} payloadJson {name, mimeType, dataBase64}
  * @param {string} contentType proposal|success_case|client
  */
+function contentsListIndustryOptions() {
+  return AviatorsCode_runRpc_('contentsListIndustryOptions', function () {
+    return ContentCatalog_listIndustryOptions();
+  });
+}
+
 function contentsExtractDraft(payloadJson, contentType) {
   return AviatorsCode_runRpc_('contentsExtractDraft', function () {
     return ContentExtraction_extractInline(payloadJson, contentType);
@@ -1073,12 +1087,51 @@ function contentsSaveDraft(payloadJson) {
 }
 
 /**
+ * Busca success cases existentes con metadata muy similar (evitar duplicados).
+ * @param {string} payloadJson — { common, specific, excludeContentId? }
+ * @return {{ok:boolean,matches:Array<Object>}}
+ */
+function contentsFindSimilarSuccessCases(payloadJson) {
+  return AviatorsCode_runRpc_('contentsFindSimilarSuccessCases', function () {
+    var payload = JSON.parse(String(payloadJson || '{}'));
+    return ContentDuplicateCheck_findSimilarSuccessCases_({
+      common: payload.common || {},
+      specific: payload.specific || {},
+      excludeContentId: payload.excludeContentId || '',
+    });
+  });
+}
+
+/**
  * Eliminar contenido (desindexa + borra filas).
  * @param {string} contentId
  */
 function contentsDelete(contentId) {
   return AviatorsCode_runRpc_('contentsDelete', function () {
     return ContentIngestion_delete(contentId);
+  });
+}
+
+/**
+ * Asigna industria en lote a success cases seleccionados.
+ * @param {Array<string>} contentIds
+ * @param {string} industry
+ * @return {{ok:boolean,updated:number,skipped:number,failed:number,industry:string}}
+ */
+function contentsBatchSetIndustry(contentIds, industry) {
+  return AviatorsCode_runRpc_('contentsBatchSetIndustry', function () {
+    return ContentCatalog_batchSetIndustry(contentIds, industry);
+  });
+}
+
+/**
+ * Asigna cliente en lote a success cases seleccionados.
+ * @param {Array<string>} contentIds
+ * @param {string} clientName
+ */
+function contentsBatchSetClient(contentIds, clientName) {
+  return AviatorsCode_runRpc_('contentsBatchSetClient', function () {
+    return ContentCatalog_batchSetSuccessCaseClient(contentIds, clientName);
   });
 }
 
@@ -1133,6 +1186,25 @@ function contentsGetTagsCloud() {
 }
 
 /**
+ * Fusiona etiquetas del catálogo en el tag canónico más usado del grupo (irreversible).
+ * @param {Array<string>} sources
+ */
+function contentsMergeTags(sources) {
+  return AviatorsCode_runRpc_('contentsMergeTags', function () {
+    return ContentCatalog_mergeTags(sources);
+  });
+}
+
+/**
+ * Sugerencias de fusión de tags (Globant Chat).
+ */
+function contentsSuggestTagMerges() {
+  return AviatorsCode_runRpc_('contentsSuggestTagMerges', function () {
+    return ContentTagMergeSuggest_list();
+  });
+}
+
+/**
  * Regenera embeddings vectoriales del catálogo (lote paginado).
  * @param {number} skip
  * @param {number} limit
@@ -1140,6 +1212,34 @@ function contentsGetTagsCloud() {
 function contentsRebuildEmbeddingsBatch(skip, limit) {
   return AviatorsCode_runRpc_('contentsRebuildEmbeddingsBatch', function () {
     return ContentCatalog_rebuildEmbeddingsBatch(skip, limit);
+  });
+}
+
+/** Grafo de conocimiento · snapshot (permiso view_knowledge_graph o admin). */
+function getKnowledgeGraph(filters) {
+  return AviatorsCode_runRpc_('getKnowledgeGraph', function () {
+    return KnowledgeGraph_getSnapshot(filters || {});
+  });
+}
+
+/** Opciones de filtro del grafo (industrias/clientes presentes en nodos). */
+function getKnowledgeGraphFilterOptions() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphFilterOptions', function () {
+    return KnowledgeGraph_listFilterOptions();
+  });
+}
+
+/** Alineación catálogo Supabase ↔ grafo (conteos y si hace falta sincronizar). */
+function getKnowledgeGraphSyncStatus() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphSyncStatus', function () {
+    return KnowledgeGraph_getSyncStatus();
+  });
+}
+
+/** Solo admin · backfill paginado del grafo de conocimiento. */
+function rebuildKnowledgeGraphBatch(skip, limit) {
+  return AviatorsCode_runRpc_('rebuildKnowledgeGraphBatch', function () {
+    return KnowledgeGraph_rebuildBatch(skip, limit);
   });
 }
 

@@ -388,7 +388,8 @@ function MetricsService_buildContentLeaderboards_(topN) {
     var clientName = String(cm.client_name || '').trim() || 'Sin cliente';
     var kClient = clientName;
     var lookup = clientName.toLowerCase();
-    var industry = industryByClient[lookup] || 'Sin industria';
+    var industry =
+      String(cm.industry || '').trim() || industryByClient[lookup] || 'Sin industria';
     if (type === 'proposal') {
       pClient[kClient] = (pClient[kClient] || 0) + 1;
       pIndustry[industry] = (pIndustry[industry] || 0) + 1;

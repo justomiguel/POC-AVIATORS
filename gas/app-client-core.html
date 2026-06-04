@@ -627,6 +627,21 @@ window.Aviators = window.Aviators || {};
         }
         block.classList.toggle('ficha-field--empty', !val);
       }
+      var sections = root.querySelectorAll('.ficha-section');
+      var si;
+      for (si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        var secFields = sec.querySelectorAll('.ficha-field');
+        var hasVisible = false;
+        var fi;
+        for (fi = 0; fi < secFields.length; fi++) {
+          if (!secFields[fi].classList.contains('ficha-field--empty')) {
+            hasVisible = true;
+            break;
+          }
+        }
+        sec.classList.toggle('ficha-section--empty', secFields.length > 0 && !hasVisible);
+      }
     },
 
     appendMeta: function (container, label, value, iconClass) {

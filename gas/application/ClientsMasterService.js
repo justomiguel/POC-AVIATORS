@@ -767,14 +767,27 @@ function ClientsMaster_reconcileDuplicates() {
       var loser = members[gi];
       ClientsMaster_repointClientReferences_(winner, loser, stats);
       winner = ClientsMaster_mergeClientRows_(winner, loser);
-      ClientsMasterStore_delete(loser.client_id);
+      var loserId = String(loser.client_id || '').trim();
+      ClientsMasterStore_delete(loserId);
       stats.clientsRemoved++;
+      try {
+        KnowledgeGraph_removeClient_(loserId);
+      } catch (eKgRm) {
+        console.log('[KG] dedupe remove client: ' + String(eKgRm.message || eKgRm).slice(0, 80));
+      }
     }
     winner.normalized_name = normKey;
     winner.updated_at = new Date().toISOString();
     ClientsMasterStore_upsert(winner);
     stats.clientsUpdated++;
     stats.mergedGroups++;
+    try {
+      KnowledgeGraph_syncClient_(String(winner.client_id || ''));
+    } catch (eKgDedupe) {
+      console.log(
+        '[KG] after client dedupe: ' + String(eKgDedupe.message || eKgDedupe).slice(0, 100),
+      );
+    }
   }
 
   return { ok: true, stats: stats };
@@ -834,6 +847,11 @@ function ClientsMaster_upsert(data) {
     updated_at: nowDb,
   };
   var savedDb = ClientsMasterStore_upsert(rowDb);
+  try {
+    KnowledgeGraph_syncClient_(String(savedDb.client_id || clientId));
+  } catch (eKg) {
+    console.log('[KG] sync after client upsert: ' + String(eKg.message || eKg).slice(0, 200));
+  }
   return { ok: true, item: ClientsMasterStore_toApiItem_(savedDb) };
 }
 
@@ -989,6 +1007,12 @@ function ClientsMaster_delete(clientId) {
     }
     throw new Error('Cliente no encontrado');
   }
-  ClientsMasterStore_delete(String(found.client_id || '').trim());
+  var removedId = String(found.client_id || '').trim();
+  ClientsMasterStore_delete(removedId);
+  try {
+    KnowledgeGraph_removeClient_(removedId);
+  } catch (eKg) {
+    console.log('[KG] remove after client delete: ' + String(eKg.message || eKg).slice(0, 200));
+  }
   return { ok: true };
 }

@@ -17,7 +17,8 @@ El JS del cliente está separado en archivos `gas/app-client-*.html`, cada uno u
 5. **agents** — admin agents CRUD
 6. **contents** — contents CRUD
 7. **clients** — clients CRUD
-8. **boot** — `showApp`, `setAppPage`, bootstrap final
+8. **knowledgeGraph** — grafo de conocimiento (admin)
+9. **boot** — `showApp`, `setAppPage`, bootstrap final
 
 ## Plantilla para un módulo nuevo
 

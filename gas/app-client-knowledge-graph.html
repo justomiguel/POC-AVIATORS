@@ -1,0 +1,614 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var statusEl = document.getElementById('kg-status');
+  var canvasEl = document.getElementById('kg-graph-canvas');
+  var emptyEl = document.getElementById('kg-graph-empty');
+  var filterSearch = document.getElementById('kg-filter-search');
+  var filterType = document.getElementById('kg-filter-content-type');
+  var filterIndustry = document.getElementById('kg-filter-industry');
+  var filterClient = document.getElementById('kg-filter-client');
+  var filterDepth = document.getElementById('kg-filter-depth');
+  var applyBtn = document.getElementById('kg-apply-btn');
+  var resetBtn = document.getElementById('kg-reset-btn');
+  var focusBtn = document.getElementById('kg-focus-btn');
+  var rebuildBtn = document.getElementById('kg-rebuild-btn');
+  var detailLabel = document.getElementById('kg-detail-label');
+  var detailType = document.getElementById('kg-detail-type');
+  var detailMetaWrap = document.getElementById('kg-detail-meta-wrap');
+  var detailMeta = document.getElementById('kg-detail-meta');
+  var detailEdgesWrap = document.getElementById('kg-detail-edges-wrap');
+  var detailEdgesOut = document.getElementById('kg-detail-edges-out');
+  var detailEdgesIn = document.getElementById('kg-detail-edges-in');
+  var openContentBtn = document.getElementById('kg-open-content-btn');
+  var legendList = document.getElementById('kg-legend-list');
+  var visHost = document.getElementById('kg-vis-lib-host');
+  var typeToggles = document.querySelectorAll('.kg-type-toggle');
+
+  var loading = false;
+  var rebuilding = false;
+  var visLoading = false;
+  var network = null;
+  var selectedNodeId = '';
+  var lastSnapshot = null;
+  var nodeById = {};
+
+  var NODE_COLORS = {
+    content: '#0ea5e9',
+    client: '#f59e0b',
+    client_label: '#d97706',
+    industry: '#8b5cf6',
+    tag: '#10b981',
+    stage: '#6366f1',
+    pricing_model: '#ec4899',
+  };
+
+  var REL_I18N = {
+    belongs_to: 'kg_rel_belongs_to',
+    in_industry: 'kg_rel_in_industry',
+    tagged_with: 'kg_rel_tagged_with',
+    has_stage: 'kg_rel_has_stage',
+    has_pricing_model: 'kg_rel_has_pricing_model',
+  };
+
+  var TYPE_I18N = {
+    content: 'kg_type_content',
+    client: 'kg_type_client',
+    client_label: 'kg_type_client_label',
+    industry: 'kg_type_industry',
+    tag: 'kg_type_tag',
+    stage: 'kg_type_stage',
+    pricing_model: 'kg_type_pricing_model',
+  };
+
+  function kgSetStatus(msg, isErr) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || '\u00a0';
+    statusEl.classList.toggle('text-red-600', !!isErr);
+    statusEl.classList.toggle('dark:text-red-400', !!isErr);
+    statusEl.classList.toggle('text-slate-600', !isErr);
+  }
+
+  function kgSetControlsDisabled(disabled) {
+    var d = !!disabled;
+    if (applyBtn) applyBtn.disabled = d;
+    if (resetBtn) resetBtn.disabled = d;
+    if (focusBtn) focusBtn.disabled = d;
+    if (rebuildBtn) rebuildBtn.disabled = d;
+    if (filterSearch) filterSearch.disabled = d;
+    if (filterType) filterType.disabled = d;
+    if (filterIndustry) filterIndustry.disabled = d;
+    if (filterClient) filterClient.disabled = d;
+    if (filterDepth) filterDepth.disabled = d;
+    var ti;
+    for (ti = 0; ti < typeToggles.length; ti++) {
+      typeToggles[ti].disabled = d;
+    }
+  }
+
+  function kgBuildLegend() {
+    if (!legendList) return;
+    legendList.innerHTML = '';
+    var types = ['content', 'client', 'industry', 'tag', 'stage', 'pricing_model'];
+    var i;
+    for (i = 0; i < types.length; i++) {
+      var t = types[i];
+      var li = document.createElement('li');
+      li.className = 'flex items-center gap-2';
+      var dot = document.createElement('span');
+      dot.className = 'kg-legend-dot inline-block h-2.5 w-2.5 shrink-0 rounded-full';
+      dot.style.backgroundColor = NODE_COLORS[t] || '#94a3b8';
+      var lbl = document.createElement('span');
+      lbl.textContent = i18n(TYPE_I18N[t] || t);
+      li.appendChild(dot);
+      li.appendChild(lbl);
+      legendList.appendChild(li);
+    }
+  }
+
+  function kgGetAllowedNodeTypes() {
+    /** @type {Object<string, boolean>} */
+    var out = {};
+    var i;
+    for (i = 0; i < typeToggles.length; i++) {
+      var el = typeToggles[i];
+      var t = String(el.getAttribute('data-kg-type') || '').trim();
+      if (t) out[t] = !!el.checked;
+    }
+    return out;
+  }
+
+  function kgGetFilters() {
+    return {
+      contentType: filterType ? String(filterType.value || '').trim() : '',
+      industry: filterIndustry ? String(filterIndustry.value || '').trim() : '',
+      clientId: filterClient ? String(filterClient.value || '').trim() : '',
+      searchQuery: filterSearch ? String(filterSearch.value || '').trim() : '',
+      depth: filterDepth ? parseInt(String(filterDepth.value || '2'), 10) : 2,
+      centerNodeId: selectedNodeId && S.get('kgFocusMode') ? selectedNodeId : '',
+      maxNodes: 150,
+      allowedNodeTypes: kgGetAllowedNodeTypes(),
+    };
+  }
+
+  function kgIndexSnapshot(data) {
+    nodeById = {};
+    var nodes = (data && data.nodes) || [];
+    var ni;
+    for (ni = 0; ni < nodes.length; ni++) {
+      nodeById[nodes[ni].id] = nodes[ni];
+    }
+  }
+
+  function kgDestroyNetwork() {
+    if (network) {
+      try {
+        network.destroy();
+      } catch (eDestroy) {}
+      network = null;
+    }
+    if (canvasEl) canvasEl.innerHTML = '';
+  }
+
+  function kgEnsureVis_(cb) {
+    if (typeof vis !== 'undefined' && vis.Network) {
+      cb();
+      return;
+    }
+    if (!visHost) {
+      cb();
+      return;
+    }
+    if (visLoading) {
+      var waitVis = setInterval(function () {
+        if (typeof vis !== 'undefined' && vis.Network) {
+          clearInterval(waitVis);
+          cb();
+        }
+      }, 80);
+      return;
+    }
+    visLoading = true;
+    kgSetStatus(i18n('kg_busy_vis'));
+    var scripts = visHost.querySelectorAll('script');
+    var pending = scripts.length;
+    if (!pending) {
+      visLoading = false;
+      cb();
+      return;
+    }
+    var si;
+    for (si = 0; si < scripts.length; si++) {
+      (function (srcScript) {
+        var s = document.createElement('script');
+        if (srcScript.src) {
+          s.src = srcScript.src;
+          s.async = false;
+        } else {
+          s.textContent = srcScript.textContent;
+        }
+        var doneOne = function () {
+          pending -= 1;
+          if (pending <= 0) {
+            visLoading = false;
+            cb();
+          }
+        };
+        s.onload = doneOne;
+        s.onerror = doneOne;
+        document.head.appendChild(s);
+      })(scripts[si]);
+    }
+    var styles = visHost.querySelectorAll('style');
+    for (si = 0; si < styles.length; si++) {
+      document.head.appendChild(styles[si].cloneNode(true));
+    }
+  }
+
+  function kgRenderGraph(data) {
+    kgDestroyNetwork();
+    var nodes = (data && data.nodes) || [];
+    var edges = (data && data.edges) || [];
+    if (!nodes.length) {
+      if (canvasEl) canvasEl.classList.add('hidden');
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (canvasEl) canvasEl.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    kgEnsureVis_(function () {
+      if (typeof vis === 'undefined' || !vis.Network) {
+        kgSetStatus(i18n('kg_error_load'), true);
+        return;
+      }
+
+      var visNodes = [];
+      var ni;
+      for (ni = 0; ni < nodes.length; ni++) {
+        var n = nodes[ni];
+        var nt = String(n.type || '');
+        visNodes.push({
+          id: n.id,
+          label: String(n.label || n.id).slice(0, 48),
+          title: String(n.label || ''),
+          color: {
+            background: NODE_COLORS[nt] || '#64748b',
+            border: '#334155',
+            highlight: { background: NODE_COLORS[nt] || '#64748b', border: '#0f172a' },
+          },
+          font: { color: '#0f172a', size: 12 },
+        });
+      }
+
+      var visEdges = [];
+      var ei;
+      for (ei = 0; ei < edges.length; ei++) {
+        var e = edges[ei];
+        var relKey = REL_I18N[e.relation] || e.relation;
+        visEdges.push({
+          id: e.id || e.source + '-' + e.target + '-' + e.relation,
+          from: e.source,
+          to: e.target,
+          title: i18n(relKey),
+          arrows: 'to',
+          color: { color: '#94a3b8', highlight: '#0ea5e9' },
+        });
+      }
+
+      var dark =
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.documentElement.classList.contains('dark');
+      if (dark) {
+        for (ni = 0; ni < visNodes.length; ni++) {
+          visNodes[ni].font = { color: '#e2e8f0', size: 12 };
+        }
+      }
+
+      var options = {
+        nodes: { shape: 'dot', size: 14, borderWidth: 1 },
+        edges: { width: 1, smooth: { type: 'continuous' } },
+        physics: {
+          enabled: true,
+          stabilization: { iterations: 120 },
+        },
+        interaction: { hover: true, tooltipDelay: 150 },
+      };
+
+      network = new vis.Network(
+        canvasEl,
+        { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) },
+        options,
+      );
+
+      network.on('click', function (params) {
+        if (!params.nodes || !params.nodes.length) {
+          selectedNodeId = '';
+          kgUpdateDetail(null);
+          return;
+        }
+        selectedNodeId = params.nodes[0];
+        kgUpdateDetail(nodeById[selectedNodeId] || null);
+      });
+
+      if (selectedNodeId && nodeById[selectedNodeId]) {
+        try {
+          network.selectNodes([selectedNodeId]);
+          network.focus(selectedNodeId, { scale: 1.1, animation: true });
+        } catch (eFocus) {}
+      }
+    });
+  }
+
+  function kgFormatMeta_(node) {
+    var pl = node && node.payload && typeof node.payload === 'object' ? node.payload : {};
+    var parts = [];
+    if (pl.content_type) parts.push(String(pl.content_type));
+    if (pl.industry) parts.push(String(pl.industry));
+    if (pl.client_name) parts.push(String(pl.client_name));
+    if (pl.title) parts.push(String(pl.title));
+    return parts.join(' · ');
+  }
+
+  function kgRenderEdgeList_(listEl, items, direction) {
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var item = items[i];
+      var other = nodeById[item.otherId];
+      var lbl = other ? String(other.label || other.id) : item.otherId;
+      var rel = i18n(REL_I18N[item.relation] || item.relation);
+      var li = document.createElement('li');
+      li.textContent =
+        direction === 'out'
+          ? i18nFmt('kg_edge_to', { label: lbl }) + ' (' + rel + ')'
+          : i18nFmt('kg_edge_from', { label: lbl }) + ' (' + rel + ')';
+      listEl.appendChild(li);
+    }
+  }
+
+  function kgUpdateDetail(node) {
+    if (!detailLabel || !detailType) return;
+    if (!node) {
+      detailLabel.textContent = '\u00a0';
+      detailType.textContent = '';
+      if (detailMetaWrap) detailMetaWrap.classList.add('hidden');
+      if (detailEdgesWrap) detailEdgesWrap.classList.add('hidden');
+      if (openContentBtn) openContentBtn.classList.add('hidden');
+      return;
+    }
+    detailLabel.textContent = String(node.label || node.id || '');
+    detailType.textContent = i18n(TYPE_I18N[node.type] || node.type);
+    var meta = kgFormatMeta_(node);
+    if (detailMeta && detailMetaWrap) {
+      if (meta) {
+        detailMeta.textContent = meta;
+        detailMetaWrap.classList.remove('hidden');
+      } else {
+        detailMetaWrap.classList.add('hidden');
+      }
+    }
+    var outItems = [];
+    var inItems = [];
+    var edges = (lastSnapshot && lastSnapshot.edges) || [];
+    var ei;
+    for (ei = 0; ei < edges.length; ei++) {
+      var e = edges[ei];
+      if (e.source === node.id) {
+        outItems.push({ otherId: e.target, relation: e.relation });
+      } else if (e.target === node.id) {
+        inItems.push({ otherId: e.source, relation: e.relation });
+      }
+    }
+    if (detailEdgesWrap) {
+      if (outItems.length || inItems.length) {
+        detailEdgesWrap.classList.remove('hidden');
+        kgRenderEdgeList_(detailEdgesOut, outItems, 'out');
+        kgRenderEdgeList_(detailEdgesIn, inItems, 'in');
+      } else {
+        detailEdgesWrap.classList.add('hidden');
+      }
+    }
+    var isContent =
+      String(node.type || '') === 'content' &&
+      node.payload &&
+      String(node.payload.content_id || '').trim();
+    if (openContentBtn) {
+      openContentBtn.classList.toggle('hidden', !isContent);
+    }
+  }
+
+  function kgLoad(opts) {
+    opts = opts || {};
+    if (loading) return;
+    loading = true;
+    if (opts.focus) S.set('kgFocusMode', true);
+    else S.set('kgFocusMode', false);
+    kgSetControlsDisabled(true);
+    kgSetStatus(i18n('kg_busy_loading'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loading = false;
+        kgSetControlsDisabled(false);
+        if (!res || !res.ok) {
+          kgSetStatus(i18n('kg_error_load'), true);
+          kgRenderGraph(null);
+          return;
+        }
+        lastSnapshot = res;
+        S.set('kgLastSnapshot', res);
+        kgIndexSnapshot(res);
+        kgRenderGraph(res);
+        var msg = '';
+        if (res.truncated) {
+          msg = i18nFmt('kg_truncated', {
+            shown: String((res.stats && res.stats.selectedNodes) || res.nodes.length),
+          });
+        }
+        kgSetStatus(msg);
+        if (selectedNodeId && nodeById[selectedNodeId]) {
+          kgUpdateDetail(nodeById[selectedNodeId]);
+        }
+      })
+      .withFailureHandler(function (e) {
+        loading = false;
+        kgSetControlsDisabled(false);
+        kgDestroyNetwork();
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.load',
+          fallbackKey: 'kg_error_load',
+          modal: true,
+          toast: true,
+          setStatus: function (m) {
+            kgSetStatus(m, true);
+          },
+        });
+      })
+      .getKnowledgeGraph(kgGetFilters());
+  }
+
+  function kgRebuildBatch_(skip, doneAcc, failedAcc, total) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var done = doneAcc + (res && res.done ? res.done : 0);
+        var failed = failedAcc + (res && res.failed ? res.failed : 0);
+        var tot = res && res.total != null ? res.total : total;
+        if (res && res.hasMore) {
+          A.showBlockingModal(
+            i18nFmt('kg_busy_rebuild', { done: String(done), total: String(tot) }),
+          );
+          kgRebuildBatch_(skip + (res.limit || 25), done, failed, tot);
+          return;
+        }
+        A.hideBlockingModal();
+        rebuilding = false;
+        kgSetControlsDisabled(false);
+        var finMsg = i18nFmt('kg_rebuild_done', {
+          done: String(done),
+          failed: String(failed),
+        });
+        if (res && res.staleRemoved > 0) {
+          finMsg +=
+            ' ' +
+            i18nFmt('kg_stale_removed', { n: String(res.staleRemoved) });
+        }
+        kgSetStatus(finMsg);
+        kgLoad();
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        rebuilding = false;
+        kgSetControlsDisabled(false);
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.rebuild',
+          fallbackKey: 'kg_error_load',
+          modal: true,
+          toast: true,
+        });
+      })
+      .rebuildKnowledgeGraphBatch(skip, 25);
+  }
+
+  function kgPopulateFilterOptions() {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.ok) return;
+        if (filterIndustry) {
+          var curI = filterIndustry.value;
+          while (filterIndustry.options.length > 1) filterIndustry.remove(1);
+          var items = res.industries || [];
+          var ii;
+          for (ii = 0; ii < items.length; ii++) {
+            var optI = document.createElement('option');
+            optI.value = String(items[ii] || '');
+            optI.textContent = String(items[ii] || '');
+            filterIndustry.appendChild(optI);
+          }
+          if (curI) filterIndustry.value = curI;
+        }
+        if (filterClient) {
+          var curC = filterClient.value;
+          while (filterClient.options.length > 1) filterClient.remove(1);
+          var clients = res.clients || [];
+          var ci;
+          for (ci = 0; ci < clients.length; ci++) {
+            var row = clients[ci];
+            var id = String((row && row.id) || '').trim();
+            if (!id) continue;
+            var optC = document.createElement('option');
+            optC.value = id;
+            optC.textContent = String((row && row.name) || id);
+            filterClient.appendChild(optC);
+          }
+          if (curC) filterClient.value = curC;
+        }
+      })
+      .withFailureHandler(function () {})
+      .getKnowledgeGraphFilterOptions();
+  }
+
+  function kgStartRebuildFromSupabase_(status) {
+    if (rebuilding) return;
+    rebuilding = true;
+    kgSetControlsDisabled(true);
+    var hint = '';
+    if (status && status.catalogContents != null) {
+      hint = i18nFmt('kg_sync_auto_start', {
+        graph: String(status.graphContentNodes || 0),
+        catalog: String(status.catalogContents || 0),
+      });
+      kgSetStatus(hint);
+    }
+    A.showBlockingModal(
+      hint || i18nFmt('kg_busy_rebuild', { done: '0', total: '…' }),
+    );
+    kgRebuildBatch_(0, 0, 0, 0);
+  }
+
+  function onShow() {
+    if (rebuildBtn) {
+      rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
+    }
+    kgBuildLegend();
+    kgPopulateFilterOptions();
+    if (S.get('canRebuildKnowledgeGraph')) {
+      google.script.run
+        .withSuccessHandler(function (st) {
+          if (st && st.ok && st.needsSync) {
+            kgStartRebuildFromSupabase_(st);
+            return;
+          }
+          kgLoad();
+        })
+        .withFailureHandler(function () {
+          kgLoad();
+        })
+        .getKnowledgeGraphSyncStatus();
+      return;
+    }
+    kgLoad();
+  }
+
+  if (applyBtn) {
+    applyBtn.addEventListener('click', function () {
+      kgLoad();
+    });
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function () {
+      if (filterSearch) filterSearch.value = '';
+      if (filterType) filterType.value = '';
+      if (filterIndustry) filterIndustry.value = '';
+      if (filterClient) filterClient.value = '';
+      if (filterDepth) filterDepth.value = '2';
+      selectedNodeId = '';
+      var ti;
+      for (ti = 0; ti < typeToggles.length; ti++) typeToggles[ti].checked = true;
+      kgLoad();
+    });
+  }
+  if (focusBtn) {
+    focusBtn.addEventListener('click', function () {
+      if (!selectedNodeId) {
+        kgSetStatus(i18n('kg_error_load'), true);
+        return;
+      }
+      if (filterSearch) filterSearch.value = '';
+      kgLoad({ focus: true });
+    });
+  }
+  if (rebuildBtn) {
+    rebuildBtn.addEventListener('click', function () {
+      if (rebuilding) return;
+      rebuilding = true;
+      kgSetControlsDisabled(true);
+      A.showBlockingModal(i18nFmt('kg_busy_rebuild', { done: '0', total: '…' }));
+      kgRebuildBatch_(0, 0, 0, 0);
+    });
+  }
+  if (openContentBtn) {
+    openContentBtn.addEventListener('click', function () {
+      if (!selectedNodeId || selectedNodeId.indexOf('content:') !== 0) return;
+      var cid = selectedNodeId.replace(/^content:/, '');
+      S.set('contentsPendingOpenId', cid);
+      if (typeof A.setAppPage === 'function') {
+        A.setAppPage('contents');
+      }
+    });
+  }
+  if (filterSearch) {
+    filterSearch.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') kgLoad();
+    });
+  }
+
+  A.knowledgeGraph = {
+    onShow: onShow,
+    load: kgLoad,
+  };
+})(window.Aviators);
+</script>

@@ -96,17 +96,41 @@ function ContentExtraction_normalizeTags_(tags) {
  */
 function ContentExtraction_buildCatalogTagIndex_() {
   var index = {};
+  var addDisplay = function (raw) {
+    var display = ContentExtraction_toCamelTag_(raw);
+    if (!display) return;
+    index[ContentExtraction_tagKey_(display)] = display;
+  };
   var cloud = [];
   try {
     cloud = ContentCatalog_getTagsCloud_();
   } catch (ignoreCloud) {
-    return index;
+    cloud = [];
   }
   var ci;
   for (ci = 0; ci < cloud.length; ci++) {
-    var display = ContentExtraction_toCamelTag_(cloud[ci].tag);
-    if (!display) continue;
-    index[ContentExtraction_tagKey_(display)] = display;
+    addDisplay(cloud[ci].tag);
+  }
+  var controlled = [];
+  try {
+    controlled = ContentCatalog_getControlledTags();
+  } catch (ignoreCtrl) {
+    controlled = [];
+  }
+  for (ci = 0; ci < controlled.length; ci++) {
+    addDisplay(controlled[ci]);
+  }
+  var aliases = {};
+  try {
+    aliases = ContentCatalog_getTagAliasIndex_();
+  } catch (ignoreAlias) {
+    aliases = {};
+  }
+  var ak;
+  for (ak in aliases) {
+    if (!aliases.hasOwnProperty(ak)) continue;
+    index[ak] = aliases[ak];
+    addDisplay(aliases[ak]);
   }
   return index;
 }
@@ -203,8 +227,8 @@ function ContentExtraction_buildTagPromptBlock_(contentType) {
     '- Geography or segment (only if explicit): #latam, #emea, #enterprise, #lowCostCarrier',
     'Rules:',
     '- REUSE a FREQUENT CATALOG TAG when the meaning matches (keeps the cloud cohesive).',
-    '- ALSO invent 2-5 NEW specific tags for distinctive themes in THIS document (products, regulations, methods, tools).',
-    '- No duplicate synonyms (#analytics vs #dataAnalytics — pick one). No filler (#document, #pdf, #business).',
+    '- Only add a NEW tag when no catalog/alias tag fits; prefer an existing tag over inventing a synonym.',
+    '- No duplicate synonyms (#analytics vs #dataAnalytics — pick the catalog one). No filler (#document, #pdf, #business).',
     '- Scan logos, tech stacks, chapter titles, KPI callouts, and methodology boxes for tag ideas.',
     ContentExtraction_getTagsHintForPrompt_(),
   ]
@@ -764,7 +788,34 @@ function ContentExtraction_normalizeSpecific_(contentType, specific) {
  * @param {string} fileName
  * @return {Object}
  */
-function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
+/**
+ * @param {Object} payload
+ * @param {string} contentType
+ * @return {{fileName:string, clientsHint?:string, entryIndustry?:string}}
+ */
+function ContentExtraction_buildExtractHints_(payload, contentType) {
+  var hints = {
+    fileName: String((payload && payload.name) || '').trim(),
+  };
+  if (ContentExtraction_usesClientMetadata_(contentType)) {
+    hints.clientsHint = ContentExtraction_getClientsHint_();
+  }
+  var entryIndustry = ClientsMaster_resolveIndustryFromCatalog_(
+    String((payload && payload.entryIndustry) || '').trim(),
+  );
+  if (entryIndustry) hints.entryIndustry = entryIndustry;
+  return hints;
+}
+
+/**
+ * @param {Object} parsed
+ * @param {string} contentType
+ * @param {string} fileName
+ * @param {{entryIndustry?:string}=} opts
+ * @return {Object}
+ */
+function ContentExtraction_enrichDraft_(parsed, contentType, fileName, opts) {
+  opts = opts || {};
   var locale = UiStrings_activeLocale_();
   var common = parsed.common || {};
   var warnings = Array.isArray(parsed.warnings) ? parsed.warnings.slice() : [];
@@ -827,6 +878,12 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName) {
           warnings.push(UiStrings_t(locale, 'contents_warn_client_generic_industry'));
         }
       }
+    }
+    var forcedIndustry = ClientsMaster_resolveIndustryFromCatalog_(
+      String(opts.entryIndustry || '').trim(),
+    );
+    if (contentType === 'success_case' && forcedIndustry) {
+      common.industry = forcedIndustry;
     }
   } else {
     common.client_name = '';
@@ -1091,14 +1148,21 @@ function ContentExtraction_promptSuccessCasePass_(passId, hints) {
   hints = hints || {};
   var fileName = String(hints.fileName || '').trim();
   var clientsHint = String(hints.clientsHint || '').trim();
+  var entryIndustry = String(hints.entryIndustry || '').trim();
   var fileHint = fileName
     ? 'Original file name: "' + fileName + '". Use as hint for title/client when unclear.\n'
+    : '';
+  var entryIndustryHint = entryIndustry
+    ? 'User pre-selected industry for this upload: "' +
+      entryIndustry +
+      '". Set common.industry to this exact value unless the document clearly contradicts it.\n'
     : '';
 
   if (passId === 'common') {
     return [
       'Extract COMMON catalog metadata from this success case / case study PDF.',
       fileHint,
+      entryIndustryHint,
       clientsHint,
       'Read cover, headers, footers, logos, tables, and metadata blocks.',
       'Return ONLY valid JSON. No markdown.',
@@ -1406,10 +1470,7 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
 
   var b64 = payload.dataBase64 || '';
   var mime = prepared.mimeType || 'application/pdf';
-  var hints = {
-    fileName: prepared.name,
-    clientsHint: ContentExtraction_getClientsHint_(),
-  };
+  var hints = ContentExtraction_buildExtractHints_(payload, type);
   var locale = UiStrings_activeLocale_();
   var draft = ContentExtraction_parseDraftState_(draftJson, type);
 
@@ -1421,7 +1482,9 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
       draft.common.content_type = type;
     }
     ContentExtraction_resolveSpecific_(draft, type);
-    draft = ContentExtraction_enrichDraft_(draft, type, prepared.name);
+    draft = ContentExtraction_enrichDraft_(draft, type, prepared.name, {
+      entryIndustry: hints.entryIndustry || '',
+    });
   }
 
   return {
@@ -1460,10 +1523,7 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
 
   var b64 = payload.dataBase64 || '';
   var mime = prepared.mimeType || 'application/pdf';
-  var hints = { fileName: prepared.name };
-  if (ContentExtraction_usesClientMetadata_(contentType)) {
-    hints.clientsHint = ContentExtraction_getClientsHint_();
-  }
+  var hints = ContentExtraction_buildExtractHints_(payload, contentType);
 
   var draft;
   if (contentType === 'success_case') {
@@ -1472,7 +1532,9 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
       draft.common.content_type = contentType;
     }
     ContentExtraction_resolveSpecific_(draft, contentType);
-    draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name);
+    draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name, {
+      entryIndustry: hints.entryIndustry || '',
+    });
   } else {
     var prompt = ContentExtraction_promptForType_(contentType, hints);
     var result = ContentExtraction_chatFilePass_(
@@ -1487,7 +1549,9 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
       draft.common.content_type = contentType;
     }
     ContentExtraction_resolveSpecific_(draft, contentType);
-    draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name);
+    draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name, {
+      entryIndustry: hints.entryIndustry || '',
+    });
   }
 
   return {

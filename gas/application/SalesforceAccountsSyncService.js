@@ -640,6 +640,15 @@ function SalesforceAccounts_runSyncData_(force) {
     accounts_inactivated: inactivated,
   });
 
+  try {
+    KnowledgeGraph_syncAllSalesforceAccounts_();
+    KnowledgeGraph_pruneOrphanNodes_();
+  } catch (eKgSf) {
+    console.log(
+      '[KG] after SF sync: ' + String(eKgSf.message || eKgSf).slice(0, 120),
+    );
+  }
+
   return {
     ok: true,
     skipped: false,

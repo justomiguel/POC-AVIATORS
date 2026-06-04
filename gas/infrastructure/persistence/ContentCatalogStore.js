@@ -68,6 +68,7 @@ function ContentCatalogStore_upsert(commonRow, specificRow) {
     title: String(commonRow.title || '').trim(),
     summary: String(commonRow.summary || '').trim(),
     client_name: String(commonRow.client_name || '').trim(),
+    industry: String(commonRow.industry || '').trim(),
     tags_csv: String(commonRow.tags_csv || '').trim(),
     file_name: String(commonRow.file_name || '').trim(),
     mime_type: String(commonRow.mime_type || '').trim(),
@@ -190,6 +191,58 @@ function ContentCatalogStore_getControlledTags() {
 }
 
 /**
+ * Mapa aliasKey (sin #, minúsculas alfanum) → display #tag canónico.
+ * @return {Object<string,string>}
+ */
+function ContentCatalogStore_getTagAliases() {
+  var q = SupabaseRest_query_([
+    'select=value',
+    SupabaseRest_filter_('key', 'eq', SUPABASE_SETTINGS_KEY.TAG_ALIASES),
+    'limit=1',
+  ]);
+  var rows = SupabaseRest_select(SUPABASE_TABLE.APP_SETTINGS, q);
+  if (!rows.length) return {};
+  var val = rows[0].value;
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return {};
+  var out = {};
+  var k;
+  for (k in val) {
+    if (!Object.prototype.hasOwnProperty.call(val, k)) continue;
+    var canon = ContentExtraction_toCamelTag_(val[k]);
+    if (!canon) continue;
+    var ak = ContentExtraction_tagKey_(k);
+    if (!ak) continue;
+    out[ak] = canon;
+  }
+  return out;
+}
+
+/**
+ * @param {Object<string,string>} aliasMap tagKey → #display
+ */
+function ContentCatalogStore_setTagAliases(aliasMap) {
+  var clean = {};
+  var k;
+  for (k in aliasMap || {}) {
+    if (!Object.prototype.hasOwnProperty.call(aliasMap, k)) continue;
+    var canon = ContentExtraction_toCamelTag_(aliasMap[k]);
+    if (!canon) continue;
+    var ak = ContentExtraction_tagKey_(k);
+    if (!ak) continue;
+    clean[ak] = canon;
+  }
+  SupabaseRest_upsert(
+    SUPABASE_TABLE.APP_SETTINGS,
+    {
+      key: SUPABASE_SETTINGS_KEY.TAG_ALIASES,
+      value: clean,
+      updated_at: new Date().toISOString(),
+    },
+    'key',
+  );
+}
+
+/**
  * @param {Array<string>} tags
  */
 function ContentCatalogStore_setControlledTags(tags) {
@@ -231,6 +284,7 @@ function ContentCatalogStore_toApiItem_(row, tagParser) {
       title: String(row.title || ''),
       summary: String(row.summary || ''),
       client_name: String(row.client_name || ''),
+      industry: String(row.industry || ''),
       tags: tagParser(String(row.tags_csv || '')),
       file_name: String(row.file_name || ''),
       mime_type: String(row.mime_type || ''),

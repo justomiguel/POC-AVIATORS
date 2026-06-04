@@ -397,6 +397,20 @@ function ContentIngestion_save(payloadJson) {
     var contentType = String(common.content_type || '').trim();
     if (!ContentCatalog_isValidType_(contentType)) throw new Error('content_type invalido');
 
+    if (contentType === 'success_case' && !payload.forceSave) {
+      var dupCheck = ContentDuplicateCheck_findSimilarSuccessCases_({
+        common: common,
+        specific: specific,
+      });
+      if (dupCheck.matches && dupCheck.matches.length) {
+        AviatorsError_throw_(
+          'ERR_CONTENT_DUPLICATE_SIMILAR',
+          'ContentIngestion_save',
+          JSON.stringify(dupCheck.matches),
+        );
+      }
+    }
+
     var contentId = String(common.content_id || '').trim();
     var existing = null;
     if (contentId) {

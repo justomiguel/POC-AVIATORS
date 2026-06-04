@@ -17,6 +17,7 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
   'manage_users',
   'manage_unanswered_queue',
   'sync_salesforce',
+  'view_knowledge_graph',
 ];
 
 /** Permisos añadidos en matriz v2: se heredan del default del rol sistema si no estaban guardados. */
@@ -26,6 +27,7 @@ var ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED = [
   'sync_salesforce',
   'view_tags',
   'view_clients',
+  'view_knowledge_graph',
 ];
 
 /** @type {Object<string, 'read'|'write'>} */
@@ -36,6 +38,7 @@ var ROLE_CONFIG_PERMISSION_KIND = {
   view_clients: 'read',
   view_onboarding: 'read',
   view_metrics: 'read',
+  view_knowledge_graph: 'read',
   manage_agents: 'write',
   write_catalog: 'write',
   reset_metrics: 'write',
@@ -88,6 +91,7 @@ function RoleConfig_defaultRoles_() {
         view_onboarding: true,
         view_metrics: true,
         manage_unanswered_queue: true,
+        view_knowledge_graph: true,
       },
     },
     {
@@ -107,6 +111,7 @@ function RoleConfig_defaultRoles_() {
         view_clients: true,
         view_onboarding: true,
         view_metrics: true,
+        view_knowledge_graph: true,
       },
     },
     {

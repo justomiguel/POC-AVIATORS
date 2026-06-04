@@ -10,6 +10,31 @@
   var viewBrowse = document.getElementById('tags-view-browse');
   var cloudEl = document.getElementById('tags-cloud');
   var cloudEmpty = document.getElementById('tags-cloud-empty');
+  var cloudStageWrap = document.getElementById('tags-cloud-stage-wrap');
+  var cloudSpotlight = document.getElementById('tags-cloud-spotlight');
+  var cloudStats = document.getElementById('tags-cloud-stats');
+  var cloudStatTags = document.getElementById('tags-cloud-stat-tags');
+  var cloudStatTop = document.getElementById('tags-cloud-stat-top');
+  var cloudToolbar = document.getElementById('tags-cloud-toolbar');
+  var cloudSearch = document.getElementById('tags-cloud-search');
+  var cloudNoMatch = document.getElementById('tags-cloud-no-match');
+  var cloudSearchQuery = '';
+  var mergeModeBtn = document.getElementById('tags-merge-mode-btn');
+  var mergeBar = document.getElementById('tags-merge-bar');
+  var mergeBarLabel = document.getElementById('tags-merge-bar-label');
+  var mergeRunBtn = document.getElementById('tags-merge-run-btn');
+  var mergeClearBtn = document.getElementById('tags-merge-clear-btn');
+  var suggestBtn = document.getElementById('tags-suggest-btn');
+  var suggestPanel = document.getElementById('tags-suggest-panel');
+  var suggestList = document.getElementById('tags-suggest-list');
+  var suggestEmpty = document.getElementById('tags-suggest-empty');
+  var suggestRefreshBtn = document.getElementById('tags-suggest-refresh-btn');
+  var mergeMode = false;
+  var mergeSelected = [];
+  var suggestItems = [];
+  var suggestDismissed = {};
+  var loadingSuggest = false;
+  var canWriteContents = false;
   var statusWrap = document.getElementById('tags-status');
   var statusIcon = document.getElementById('tags-status-icon');
   var statusText = document.getElementById('tags-status-text');
@@ -59,35 +84,449 @@
   }
 
   function tagsFontScale_(count, minC, maxC) {
-    if (maxC <= minC) return 1.15;
+    if (maxC <= minC) return 1.12;
     var t = (count - minC) / (maxC - minC);
-    return 0.9 + t * 0.85;
+    return 0.82 + t * 0.95;
+  }
+
+  function tagsToneIndex_(str) {
+    var h = 0;
+    var s = String(str || '');
+    for (var i = 0; i < s.length; i++) {
+      h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h) % 6;
+  }
+
+  function tagsSyncWriteChrome_() {
+    canWriteContents = !!S.get('canWriteContents');
+    if (mergeModeBtn) {
+      mergeModeBtn.classList.toggle('hidden', !canWriteContents);
+    }
+    if (suggestBtn) {
+      suggestBtn.classList.toggle('hidden', !canWriteContents);
+    }
+    if (!canWriteContents) {
+      if (suggestPanel) suggestPanel.classList.add('hidden');
+      suggestItems = [];
+      suggestDismissed = {};
+      mergeMode = false;
+      mergeSelected = [];
+      tagsUpdateMergeChrome_();
+    }
+  }
+
+  function tagsIsSelected_(tag) {
+    var t = String(tag || '').trim().toLowerCase();
+    for (var i = 0; i < mergeSelected.length; i++) {
+      if (String(mergeSelected[i] || '').trim().toLowerCase() === t) return true;
+    }
+    return false;
+  }
+
+  function tagsToggleMergeSelect_(tag) {
+    var t = String(tag || '').trim();
+    if (!t) return;
+    var key = t.toLowerCase();
+    var idx = -1;
+    var i;
+    for (i = 0; i < mergeSelected.length; i++) {
+      if (String(mergeSelected[i] || '').trim().toLowerCase() === key) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx >= 0) mergeSelected.splice(idx, 1);
+    else mergeSelected.push(t);
+    tagsUpdateMergeChrome_();
+    tagsRenderCloud();
+  }
+
+  function tagsPickCanonicalPreview_(displays) {
+    var countByKey = {};
+    var rows = cloudCache || [];
+    var ri;
+    for (ri = 0; ri < rows.length; ri++) {
+      var ck = String(rows[ri].tag || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^#+/, '')
+        .replace(/[^a-z0-9]/g, '');
+      if (!ck) continue;
+      countByKey[ck] = rows[ri].count || 0;
+    }
+    var best = '';
+    var bestCount = -1;
+    var di;
+    for (di = 0; di < displays.length; di++) {
+      var disp = String(displays[di] || '').trim();
+      var dk = disp
+        .toLowerCase()
+        .replace(/^#+/, '')
+        .replace(/[^a-z0-9]/g, '');
+      var c = countByKey[dk] != null ? countByKey[dk] : 0;
+      if (c > bestCount || (c === bestCount && !best)) {
+        bestCount = c;
+        best = disp;
+      } else if (c === bestCount && best && disp.localeCompare(best) < 0) {
+        best = disp;
+      }
+    }
+    return best;
+  }
+
+  function tagsUpdateMergeChrome_() {
+    if (mergeModeBtn) {
+      var span = mergeModeBtn.querySelector('span');
+      if (span) {
+        span.textContent = i18n(mergeMode ? 'tags_merge_mode_exit' : 'tags_merge_mode_btn');
+      }
+      mergeModeBtn.setAttribute('aria-pressed', mergeMode ? 'true' : 'false');
+    }
+    if (mergeBar) {
+      mergeBar.classList.toggle('hidden', !mergeMode);
+    }
+    if (mergeBarLabel) {
+      mergeBarLabel.textContent = i18nFmt('tags_merge_bar_label', {
+        n: mergeSelected.length,
+      });
+    }
+    if (mergeRunBtn) mergeRunBtn.disabled = mergeSelected.length < 2 || loadingCloud;
+    if (mergeClearBtn) mergeClearBtn.disabled = !mergeSelected.length || loadingCloud;
+  }
+
+  function tagsSuggestKey_(item) {
+    var tags = (item && item.tags) || [];
+    var parts = [];
+    var i;
+    for (i = 0; i < tags.length; i++) {
+      parts.push(
+        String(tags[i] || '')
+          .trim()
+          .toLowerCase(),
+      );
+    }
+    parts.sort();
+    return parts.join('|');
+  }
+
+  function tagsRenderSuggestPanel_() {
+    if (!suggestPanel || !suggestList) return;
+    suggestList.innerHTML = '';
+    var visible = [];
+    var i;
+    for (i = 0; i < suggestItems.length; i++) {
+      var key = tagsSuggestKey_(suggestItems[i]);
+      if (!suggestDismissed[key]) visible.push(suggestItems[i]);
+    }
+    if (suggestEmpty) {
+      suggestEmpty.classList.toggle('hidden', visible.length > 0);
+      if (!visible.length) suggestEmpty.textContent = i18n('tags_suggest_empty');
+    }
+    if (!visible.length) return;
+
+    for (i = 0; i < visible.length; i++) {
+      (function (item) {
+        var li = document.createElement('li');
+        li.className = 'tags-suggest-card';
+        li.setAttribute('role', 'listitem');
+        var tagsRow = document.createElement('p');
+        tagsRow.className = 'tags-suggest-card-tags';
+        var sources = (item.sources || []).join(', ');
+        tagsRow.innerHTML =
+          '<span>' +
+          sources +
+          '</span> <i class="fa-solid fa-arrow-right text-xs opacity-60" aria-hidden="true"></i> <span class="tags-suggest-card-target">' +
+          String(item.target || '') +
+          '</span>';
+        li.appendChild(tagsRow);
+        if (item.reason) {
+          var reason = document.createElement('p');
+          reason.className = 'tags-suggest-card-reason';
+          reason.textContent = item.reason;
+          li.appendChild(reason);
+        }
+        var actions = document.createElement('div');
+        actions.className = 'tags-suggest-card-actions';
+        var applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn btn-sm btn-primary inline-flex items-center gap-2';
+        applyBtn.innerHTML =
+          '<i class="fa-solid fa-code-merge" aria-hidden="true"></i><span></span>';
+        var applySpan = applyBtn.querySelector('span');
+        if (applySpan) applySpan.textContent = i18n('tags_suggest_apply');
+        applyBtn.addEventListener('click', function () {
+          tagsApplySuggestion_(item);
+        });
+        var dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+        dismissBtn.innerHTML =
+          '<i class="fa-solid fa-xmark" aria-hidden="true"></i><span></span>';
+        var dismissSpan = dismissBtn.querySelector('span');
+        if (dismissSpan) dismissSpan.textContent = i18n('tags_suggest_dismiss');
+        dismissBtn.addEventListener('click', function () {
+          suggestDismissed[tagsSuggestKey_(item)] = true;
+          tagsRenderSuggestPanel_();
+        });
+        actions.appendChild(applyBtn);
+        actions.appendChild(dismissBtn);
+        li.appendChild(actions);
+        suggestList.appendChild(li);
+      })(visible[i]);
+    }
+  }
+
+  function tagsLoadSuggestions_(showPanel) {
+    if (!canWriteContents || loadingSuggest) return;
+    loadingSuggest = true;
+    if (suggestBtn) suggestBtn.disabled = true;
+    if (suggestRefreshBtn) suggestRefreshBtn.disabled = true;
+    A.showBlockingModal(i18n('tags_suggest_busy'));
+    if (suggestPanel && showPanel) suggestPanel.classList.remove('hidden');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loadingSuggest = false;
+        A.hideBlockingModal();
+        if (suggestBtn) suggestBtn.disabled = false;
+        if (suggestRefreshBtn) suggestRefreshBtn.disabled = false;
+        suggestItems = (res && res.suggestions) || [];
+        if (showPanel && suggestPanel) suggestPanel.classList.remove('hidden');
+        tagsRenderSuggestPanel_();
+        if (showPanel && !suggestItems.length) {
+          tagsSetStatus(i18n('tags_suggest_empty'), false);
+        } else if (showPanel) {
+          tagsSetStatus('', false);
+        }
+      })
+      .withFailureHandler(function (e) {
+        loadingSuggest = false;
+        A.hideBlockingModal();
+        if (suggestBtn) suggestBtn.disabled = false;
+        if (suggestRefreshBtn) suggestRefreshBtn.disabled = false;
+        A.reportRpcError(e, {
+          scope: 'tagsSuggest',
+          fallbackKey: 'err_tags_suggest_failed',
+          modal: true,
+          setStatus: function (msg) {
+            tagsSetStatus(msg, false);
+          },
+        });
+      })
+      .contentsSuggestTagMerges();
+  }
+
+  function tagsApplySuggestion_(item) {
+    var tags = (item && item.tags) || [];
+    if (tags.length < 2) return;
+    var target = String(item.target || '').trim();
+    var sources = (item.sources || []).join(', ');
+    A.confirmDialog({
+      message: i18nFmt('tags_merge_confirm', { sources: sources, target: target }),
+      danger: true,
+    }).then(function (ok) {
+      if (!ok) return;
+      A.showBlockingModal(i18n('tags_merge_busy'));
+      google.script.run
+        .withSuccessHandler(function (res) {
+          A.hideBlockingModal();
+          suggestDismissed[tagsSuggestKey_(item)] = true;
+          tagsSetStatus(
+            i18nFmt('tags_merge_ok', {
+              target: (res && res.target) || target,
+              n: (res && res.updated) || 0,
+            }),
+            false,
+          );
+          tagsLoadCloud();
+          tagsLoadSuggestions_(true);
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          A.reportRpcError(e, {
+            scope: 'tagsMerge',
+            fallbackKey: 'err_tags_merge_failed',
+            modal: true,
+            setStatus: function (msg) {
+              tagsSetStatus(msg, false);
+            },
+          });
+        })
+        .contentsMergeTags(tags);
+    });
+  }
+
+  function tagsRunMerge_() {
+    if (mergeSelected.length < 2) {
+      tagsSetStatus(i18n('tags_merge_select_min'), false);
+      return;
+    }
+    var displays = mergeSelected.slice();
+    var target = tagsPickCanonicalPreview_(displays);
+    var sources = displays
+      .filter(function (d) {
+        return String(d || '').trim().toLowerCase() !== String(target || '').trim().toLowerCase();
+      })
+      .join(', ');
+    A.confirmDialog({
+      message: i18nFmt('tags_merge_confirm', { sources: sources, target: target }),
+      danger: true,
+    }).then(function (ok) {
+      if (!ok) return;
+      A.showBlockingModal(i18n('tags_merge_busy'));
+      if (mergeRunBtn) mergeRunBtn.disabled = true;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          A.hideBlockingModal();
+          if (mergeRunBtn) mergeRunBtn.disabled = false;
+          mergeMode = false;
+          mergeSelected = [];
+          tagsUpdateMergeChrome_();
+          tagsSetStatus(
+            i18nFmt('tags_merge_ok', {
+              target: (res && res.target) || target,
+              n: (res && res.updated) || 0,
+            }),
+            false,
+          );
+          tagsLoadCloud();
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          if (mergeRunBtn) mergeRunBtn.disabled = false;
+          A.reportRpcError(e, {
+            scope: 'tagsMerge',
+            fallbackKey: 'err_tags_merge_failed',
+            modal: true,
+            setStatus: function (msg) {
+              tagsSetStatus(msg, false);
+            },
+          });
+        })
+        .contentsMergeTags(displays);
+    });
+  }
+
+  function tagsMatchesSearch_(tag) {
+    var q = String(cloudSearchQuery || '')
+      .trim()
+      .toLowerCase();
+    if (!q) return true;
+    return String(tag || '')
+      .toLowerCase()
+      .indexOf(q) >= 0;
+  }
+
+  function tagsUpdateCloudChrome_(rows) {
+    var hasRows = rows.length > 0;
+    if (cloudEmpty) cloudEmpty.classList.toggle('hidden', hasRows);
+    if (cloudStageWrap) cloudStageWrap.classList.toggle('hidden', !hasRows);
+    if (cloudToolbar) cloudToolbar.classList.toggle('hidden', !hasRows);
+    if (cloudStats) cloudStats.classList.toggle('hidden', !hasRows);
+    if (!hasRows) {
+      if (cloudSpotlight) {
+        cloudSpotlight.classList.add('hidden');
+        cloudSpotlight.innerHTML = '';
+      }
+      if (cloudNoMatch) cloudNoMatch.classList.add('hidden');
+      return;
+    }
+    if (cloudStatTags) {
+      cloudStatTags.innerHTML =
+        '<i class="fa-solid fa-hashtag text-sky-500" aria-hidden="true"></i>' +
+        i18nFmt('tags_cloud_stat_tags', { n: rows.length });
+    }
+    var top = rows[0];
+    if (cloudStatTop && top) {
+      cloudStatTop.innerHTML =
+        '<i class="fa-solid fa-fire-flame-curved text-violet-500" aria-hidden="true"></i>' +
+        i18nFmt('tags_cloud_stat_top', { tag: top.tag });
+    }
+    tagsRenderSpotlight_(rows[0]);
+  }
+
+  function tagsRenderSpotlight_(entry) {
+    if (!cloudSpotlight) return;
+    if (!entry || !entry.tag) {
+      cloudSpotlight.classList.add('hidden');
+      cloudSpotlight.innerHTML = '';
+      return;
+    }
+    var tag = String(entry.tag || '').trim();
+    var count = entry.count || 0;
+    cloudSpotlight.classList.remove('hidden');
+    cloudSpotlight.innerHTML = '';
+    var inner = document.createElement('div');
+    inner.className = 'tags-cloud-spotlight-inner';
+    var copy = document.createElement('div');
+    copy.className = 'min-w-0';
+    var lbl = document.createElement('p');
+    lbl.className = 'tags-cloud-spotlight-label';
+    lbl.textContent = i18n('tags_cloud_spotlight_label');
+    var title = document.createElement('p');
+    title.className = 'tags-cloud-spotlight-tag';
+    title.textContent = tag;
+    var meta = document.createElement('p');
+    meta.className = 'tags-cloud-spotlight-meta';
+    meta.textContent = i18nFmt('tags_cloud_spotlight_meta', { n: count });
+    copy.appendChild(lbl);
+    copy.appendChild(title);
+    copy.appendChild(meta);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tags-cloud-spotlight-btn';
+    btn.innerHTML =
+      '<i class="fa-solid fa-arrow-right" aria-hidden="true"></i><span></span>';
+    var span = btn.querySelector('span');
+    if (span) span.textContent = i18n('tags_cloud_spotlight_btn');
+    btn.addEventListener('click', function () {
+      tagsSelectTag(tag);
+    });
+    inner.appendChild(copy);
+    inner.appendChild(btn);
+    cloudSpotlight.appendChild(inner);
   }
 
   function tagsRenderCloud() {
     if (!cloudEl) return;
     cloudEl.innerHTML = '';
     var rows = cloudCache || [];
-    var hasRows = rows.length > 0;
-    if (cloudEmpty) cloudEmpty.classList.toggle('hidden', hasRows);
-    if (!hasRows) return;
+    tagsUpdateCloudChrome_(rows);
+    if (!rows.length) return;
 
     var minC = rows[rows.length - 1].count;
     var maxC = rows[0].count;
+    var visible = 0;
+    var animIdx = 0;
     for (var i = 0; i < rows.length; i++) {
-      (function (entry) {
+      (function (entry, delayIdx) {
         var tag = String(entry.tag || '').trim();
+        if (!tagsMatchesSearch_(tag)) return;
+        visible++;
         var count = entry.count || 0;
         var btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'tags-cloud-chip';
+        var chipClass =
+          'tags-cloud-chip tags-cloud-chip--tone-' +
+          tagsToneIndex_(tag) +
+          (mergeMode && tagsIsSelected_(tag) ? ' tags-cloud-chip--selected' : '');
+        btn.className = chipClass;
         btn.setAttribute('role', 'listitem');
+        if (mergeMode) {
+          btn.setAttribute('aria-pressed', tagsIsSelected_(tag) ? 'true' : 'false');
+        }
         btn.style.fontSize = tagsFontScale_(count, minC, maxC) + 'rem';
+        btn.style.animationDelay = delayIdx * 0.028 + 's';
         btn.setAttribute(
           'aria-label',
           i18nFmt('tags_browse_title', { tag: tag }) + ' — ' + i18nFmt('tags_count_badge', { n: count }),
         );
+        var icon = document.createElement('i');
+        icon.className = 'fa-solid fa-tag tags-cloud-chip-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
         var label = document.createElement('span');
+        label.className = 'tags-cloud-chip-label';
         label.textContent = tag;
         btn.appendChild(label);
         var badge = document.createElement('span');
@@ -95,10 +534,18 @@
         badge.textContent = String(count);
         btn.appendChild(badge);
         btn.addEventListener('click', function () {
-          tagsSelectTag(tag);
+          if (mergeMode) tagsToggleMergeSelect_(tag);
+          else tagsSelectTag(tag);
         });
         cloudEl.appendChild(btn);
-      })(rows[i]);
+      })(rows[i], animIdx++);
+    }
+    if (cloudNoMatch) {
+      var showNoMatch = visible === 0 && String(cloudSearchQuery || '').trim().length > 0;
+      cloudNoMatch.classList.toggle('hidden', !showNoMatch);
+      if (showNoMatch && cloudNoMatch.getAttribute('data-i18n')) {
+        cloudNoMatch.textContent = i18n('tags_cloud_no_match');
+      }
     }
   }
 
@@ -276,11 +723,20 @@
   function tagsBackToCloud() {
     S.set('tagsActiveTag', '');
     S.set('tagsBrowseSkip', 0);
+    mergeMode = false;
+    mergeSelected = [];
+    tagsUpdateMergeChrome_();
     tagsShowView('cloud');
     tagsSetStatus('', false);
+    if (cloudSearch) {
+      cloudSearch.value = '';
+      cloudSearchQuery = '';
+    }
+    tagsRenderCloud();
   }
 
   function tagsOnShow() {
+    tagsSyncWriteChrome_();
     tagsShowView(S.get('tagsActiveTag') ? 'browse' : 'cloud');
     if (!cloudCache.length && S.get('tagsCloudCache')) {
       cloudCache = S.get('tagsCloudCache') || [];
@@ -296,6 +752,46 @@
       }
       tagsLoadBrowse(false);
     }
+  }
+
+  if (suggestBtn) {
+    suggestBtn.addEventListener('click', function () {
+      tagsLoadSuggestions_(true);
+    });
+  }
+  if (suggestRefreshBtn) {
+    suggestRefreshBtn.addEventListener('click', function () {
+      tagsLoadSuggestions_(true);
+    });
+  }
+
+  if (mergeModeBtn) {
+    mergeModeBtn.addEventListener('click', function () {
+      if (!canWriteContents) return;
+      mergeMode = !mergeMode;
+      if (!mergeMode) mergeSelected = [];
+      tagsUpdateMergeChrome_();
+      tagsRenderCloud();
+    });
+  }
+  if (mergeRunBtn) {
+    mergeRunBtn.addEventListener('click', function () {
+      tagsRunMerge_();
+    });
+  }
+  if (mergeClearBtn) {
+    mergeClearBtn.addEventListener('click', function () {
+      mergeSelected = [];
+      tagsUpdateMergeChrome_();
+      tagsRenderCloud();
+    });
+  }
+
+  if (cloudSearch) {
+    cloudSearch.addEventListener('input', function () {
+      cloudSearchQuery = String(cloudSearch.value || '');
+      tagsRenderCloud();
+    });
   }
 
   if (browseBackBtn) {
@@ -329,6 +825,7 @@
     selectTag: tagsSelectTag,
     backToCloud: tagsBackToCloud,
     reloadCloud: tagsLoadCloud,
+    syncWriteChrome: tagsSyncWriteChrome_,
   };
 })(window.Aviators);
 </script>
