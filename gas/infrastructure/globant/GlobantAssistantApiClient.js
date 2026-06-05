@@ -51,6 +51,7 @@ function GlobantAssistant_parseProviderModel_(modelSlug) {
  * @typedef {Object} GlobantAssistantApiClientConfig
  * @property {string} apiKey
  * @property {string} [baseUrl]
+ * @property {string} [projectId] — header ProjectId (GLOBANT_PROJECT_ID); obligatorio para /v1/assistant en multi-proyecto
  */
 
 /**
@@ -83,15 +84,41 @@ function GlobantAssistantApiClient_invalidateAccessCache() {
 function GlobantAssistantApiClient_create(config) {
   var apiKey = config.apiKey;
   var baseUrl = GlobantUrl_normalizeBaseUrl_(config.baseUrl);
+  var configProjectId = String(config.projectId || '').trim();
 
   /** @type {{ organizationId: string, projectId: string }|null} */
   var memAccessIds = GlobantAssistantApiClient_cacheGetAccessIds();
 
+  /**
+   * ProjectId del proyecto GEAI (misma convención que Agents API v4).
+   * @return {string}
+   */
+  function resolveProjectIdHeader_() {
+    if (configProjectId) return configProjectId;
+    var fromProp = (
+      PropertiesService.getScriptProperties().getProperty(AVIATORS_PROP.GLOBANT_PROJECT_ID) ||
+      ''
+    ).trim();
+    if (fromProp) return fromProp;
+    return getOrganizationAndProjectIds().projectId;
+  }
+
   function authHeaders(extra) {
-    return Object.assign(
-      { Authorization: 'Bearer ' + apiKey },
-      extra || {},
-    );
+    var h = Object.assign({ Authorization: 'Bearer ' + apiKey }, extra || {});
+    var pid = resolveProjectIdHeader_();
+    if (pid) h.ProjectId = pid;
+    return h;
+  }
+
+  /**
+   * @param {number} code
+   * @param {string} text
+   * @return {boolean}
+   */
+  function assistantNotInProjectHttp_(code, text) {
+    if (code !== 403) return false;
+    var body = String(text || '');
+    return body.indexOf('not in Project') >= 0 || body.indexOf('"id":2031') >= 0;
   }
 
   function fetchAccessIds() {
@@ -299,7 +326,7 @@ function GlobantAssistantApiClient_create(config) {
     );
     var code = r.getResponseCode();
     var text = r.getContentText() || '';
-    if (code === 404) return null;
+    if (code === 404 || assistantNotInProjectHttp_(code, text)) return null;
     if (!BearerHttp_isSuccess(code)) {
       throw new Error(
         UiStrings_fmt_('err_globant_api_http', {

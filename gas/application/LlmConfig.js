@@ -19,6 +19,7 @@
  *   (extracción de contenidos, chat adjunto, armado de propuestas). Si no está definido, Aviators crea
  *   «aviators-document-files» en el primer uso (POST /v1/assistant, uploadFiles: true) y guarda el nombre aquí.
  *   Los PDFs subidos a /v1/files se borran al terminar cada sesión (DELETE /v1/files/{id}); el assistant no se borra.
+ * **GLOBANT_PROJECT_ID** — GUID del proyecto GEAI (header ProjectId en Agents API y Assistant API).
  *
  * **Admin · corpus desde Drive** — perfil único cargado desde **carpetas** + **archivos** seleccionados:
  * - **ADMIN_EMAILS** — emails admin (coma). Notificaciones de solicitudes de acceso;
@@ -85,6 +86,7 @@ var AVIATORS_PROP = Object.freeze({
   CHAT_PDF_EMBED_MAX_MB: LLM_PROP.CHAT_PDF_EMBED_MAX_MB,
   SALESFORCE_ACCOUNTS_SPREADSHEET_ID: 'SALESFORCE_ACCOUNTS_SPREADSHEET_ID',
 
+  /** Mismo proyecto GEAI que Agents API; header ProjectId en /v1/assistant. */
   GLOBANT_PROJECT_ID: 'GLOBANT_PROJECT_ID',
 
   ADMIN_AGENTS_REGISTRY: 'ADMIN_AGENTS_REGISTRY',
