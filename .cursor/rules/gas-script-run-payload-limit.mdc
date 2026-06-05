@@ -1,0 +1,36 @@
+---
+description: Límite ~60 KB de google.script.run (HtmlService) — no devolver payloads grandes en un solo RPC
+alwaysApply: true
+---
+
+# Límite de payload en `google.script.run` (Aviators)
+
+## Límite práctico
+
+- **`google.script.run` (cliente HtmlService → servidor)** tiene un tope de **~60 KB** por llamada (argumentos **y** valor de retorno). Por encima, la RPC puede **fallar en silencio** o devolver datos **truncados/incompletos**.
+- No confiar en un límite documentado oficial amplio: en la práctica del proyecto, **> ~60 000 bytes** ya rompe flujos.
+
+## Qué NO hacer
+
+- **No** incluir el catálogo i18n completo (`UiStrings_getClientPackForLocale`, ~120 KB) en **`getBootstrap`** ni en un solo `getI18nPack`.
+- **No** devolver en un RPC objetos “de bootstrap” que mezclen sesión + permisos + **miles de strings** + listas largas sin medir tamaño serializado.
+- **No** asumir que si el HTML embebió i18n en `doGet`, un `applyClientI18n(bootstrap.i18n)` posterior es seguro: puede **pisar** un pack válido con uno roto.
+
+## Patrón del repo (obligatorio para i18n cliente)
+
+1. **Embed en HTML** (`doGet` → `<?!= i18nEmbed ?>` en `#aviators-i18n-initial`) como primera fuente.
+2. **Carga fragmentada por RPC** si hace falta refrescar o cambiar locale:
+   - Servidor: `getI18nPackMeta` + `getI18nPackPart` (`UiStrings_getClientPackPart_`, **3 partes**, cada una **< ~50 KB**).
+   - Cliente: `A.loadClientI18nPack`, `A.ensureClientI18n`, `A.i18nPackLooksValid` (`gas/app-client-i18n.html`).
+3. Antes de pintar textos dinámicos (p. ej. loader del grafo), llamar **`A.ensureClientI18n`**.
+4. Si `i18n(key)` devuelve la **clave cruda** (`kg_loader_step3_title`, etc.), sospechar pack incompleto por límite RPC.
+
+## Cualquier payload grande (no solo i18n)
+
+- **Partir** en varias funciones RPC, paginar, o persistir en Drive/Supabase y devolver solo IDs/resúmenes.
+- Objetivo de diseño: **cada respuesta de `google.script.run` < ~45–50 KB** (margen bajo el tope).
+- Al añadir campos a bootstrap o respuestas masivas, estimar `JSON.stringify(payload).length` en local antes de desplegar.
+
+## Síntoma típico en UI
+
+Textos como `kg_loader_step_fmt` / `KG_LOADER_STEP_FMT` (mayúsculas por CSS) en lugar de frases traducidas → revisar tamaño del pack i18n y flujo de carga, no solo claves faltantes en `UiStrings.js`.

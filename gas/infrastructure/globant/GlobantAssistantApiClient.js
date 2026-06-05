@@ -306,6 +306,7 @@ function GlobantAssistantApiClient_create(config) {
   }
 
   /**
+   * @deprecated Preferir GlobantDocumentChatService (/v1/files + /v1/assistant/chat).
    * Envía un mensaje con un archivo adjunto (base64 inline) al Chat API.
    * Usa modelos multimodales (Gemini) para analizar PDFs/archivos sin indexación.
    * @param {string} model e.g. "vertex_ai/gemini-2.0-flash-exp"

@@ -1,5 +1,5 @@
 /**
- * @fileoverview Extraccion de metadata desde un archivo (vía LLM multimodal con archivo inline).
+ * @fileoverview Extraccion de metadata desde un archivo (Globant /v1/files + /v1/assistant/chat).
  */
 
 /**
@@ -1135,8 +1135,7 @@ function ContentExtraction_parseJson_(text) {
 }
 
 /**
- * Modelo para /v1/chat/completions con PDF inline (extracción de contenidos).
- * Usa GLOBANT_CHAT_MODEL vía GlobantAssistant_resolveChatModel_ (defecto vertex_ai/gemini-2.5-flash).
+ * @deprecated Solo referencia histórica; la extracción usa /v1/assistant/chat vía GlobantDocumentChatService.
  * @return {string}
  */
 function ContentExtraction_resolveChatModel_() {
@@ -1169,18 +1168,15 @@ function ContentExtraction_parseLooseJson_(text) {
  * @param {GlobantAssistantApiClient} client
  * @param {string} systemPrompt
  * @param {string} userPrompt
- * @param {string} b64
- * @param {string} mime
- * @return {{text:string}}
+ * @param {GoogleAppsScript.Base.Blob} blob
+ * @param {{client:Object,fileId:string,folder:string}=} session sesión con archivo ya subido
+ * @return {{text:string, parsed:Object}}
  */
-function ContentExtraction_chatFilePass_(client, systemPrompt, userPrompt, b64, mime) {
-  return client.chatWithFileInline(
-    ContentExtraction_resolveChatModel_(),
-    systemPrompt,
-    userPrompt,
-    b64,
-    mime,
-  );
+function ContentExtraction_chatFilePass_(client, systemPrompt, userPrompt, blob, session) {
+  if (session) {
+    return GlobantDocumentChat_sessionChat_(session, systemPrompt, userPrompt);
+  }
+  return GlobantDocumentChat_chatWithBlob_(client, blob, systemPrompt, userPrompt);
 }
 
 /**
@@ -1418,18 +1414,18 @@ function ContentExtraction_listPassIds_(contentType) {
 /**
  * Una pasada de extracción success_case (LLM + merge en draft).
  * @param {Object} client
- * @param {string} b64
- * @param {string} mime
+ * @param {GoogleAppsScript.Base.Blob} blob
  * @param {{fileName?:string, clientsHint?:string}} hints
  * @param {string} passId
  * @param {Object} draft
  * @param {string} locale
+ * @param {{client:Object,fileId:string,folder:string}=} session
  */
-function ContentExtraction_runSuccessCasePass_(client, b64, mime, hints, passId, draft, locale) {
+function ContentExtraction_runSuccessCasePass_(client, blob, hints, passId, draft, locale, session) {
   try {
     var prompt = ContentExtraction_promptSuccessCasePass_(passId, hints);
     var systemPrompt = ContentExtraction_systemPromptForPass_(passId);
-    var result = ContentExtraction_chatFilePass_(client, systemPrompt, prompt, b64, mime);
+    var result = ContentExtraction_chatFilePass_(client, systemPrompt, prompt, blob, session);
     var parsed = ContentExtraction_parseLooseJson_(result.text || '');
     if (!parsed || !Object.keys(parsed).length) {
       draft.warnings.push(
@@ -1457,25 +1453,29 @@ function ContentExtraction_runSuccessCasePass_(client, b64, mime, hints, passId,
 /**
  * Extracción multi-pasada para success cases: common + challenge + solution + impact.
  * @param {Object} client
- * @param {string} b64
- * @param {string} mime
+ * @param {GoogleAppsScript.Base.Blob} blob
  * @param {{fileName?:string, clientsHint?:string}} hints
  * @return {Object}
  */
-function ContentExtraction_extractSuccessCaseMultiPass_(client, b64, mime, hints) {
+function ContentExtraction_extractSuccessCaseMultiPass_(client, blob, hints) {
   var locale = UiStrings_activeLocale_();
   var draft = ContentExtraction_emptyDraft_('success_case');
-  var pi;
-  for (pi = 0; pi < CONTENT_SUCCESS_CASE_PASSES.length; pi++) {
-    ContentExtraction_runSuccessCasePass_(
-      client,
-      b64,
-      mime,
-      hints,
-      CONTENT_SUCCESS_CASE_PASSES[pi],
-      draft,
-      locale,
-    );
+  var session = GlobantDocumentChat_beginSession_(client, blob);
+  try {
+    var pi;
+    for (pi = 0; pi < CONTENT_SUCCESS_CASE_PASSES.length; pi++) {
+      ContentExtraction_runSuccessCasePass_(
+        client,
+        blob,
+        hints,
+        CONTENT_SUCCESS_CASE_PASSES[pi],
+        draft,
+        locale,
+        session,
+      );
+    }
+  } finally {
+    GlobantDocumentChat_endSession_(session);
   }
   return draft;
 }
@@ -1512,13 +1512,11 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
     baseUrl: baseUrl || undefined,
   });
 
-  var b64 = payload.dataBase64 || '';
-  var mime = prepared.mimeType || 'application/pdf';
   var hints = ContentExtraction_buildExtractHints_(payload, type);
   var locale = UiStrings_activeLocale_();
   var draft = ContentExtraction_parseDraftState_(draftJson, type);
 
-  ContentExtraction_runSuccessCasePass_(client, b64, mime, hints, pid, draft, locale);
+  ContentExtraction_runSuccessCasePass_(client, prepared.blob, hints, pid, draft, locale);
 
   var isLast = passIndex === CONTENT_SUCCESS_CASE_PASSES.length - 1;
   if (isLast) {
@@ -1543,8 +1541,7 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
 }
 
 /**
- * Extrae metadata enviando el archivo inline (base64) al LLM multimodal.
- * Un solo paso: no necesita upload/indexación/borrado temporal.
+ * Extrae metadata subiendo el archivo a Globant Files y consultando /v1/assistant/chat.
  * @param {string} payloadJson {name, mimeType, dataBase64}
  * @param {string} contentType
  * @return {{ok:boolean, file:{name:string, mimeType:string}, draft:Object}}
@@ -1565,13 +1562,11 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
     baseUrl: baseUrl || undefined,
   });
 
-  var b64 = payload.dataBase64 || '';
-  var mime = prepared.mimeType || 'application/pdf';
   var hints = ContentExtraction_buildExtractHints_(payload, contentType);
 
   var draft;
   if (contentType === 'success_case') {
-    draft = ContentExtraction_extractSuccessCaseMultiPass_(client, b64, mime, hints);
+    draft = ContentExtraction_extractSuccessCaseMultiPass_(client, prepared.blob, hints);
     if (draft.common && typeof draft.common === 'object') {
       draft.common.content_type = contentType;
     }
@@ -1585,8 +1580,7 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
       client,
       ContentExtraction_systemPrompt_(),
       prompt,
-      b64,
-      mime,
+      prepared.blob,
     );
     draft = ContentExtraction_parseJson_(result.text || '');
     if (draft.common && typeof draft.common === 'object') {

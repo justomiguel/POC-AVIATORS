@@ -9,11 +9,16 @@ var APP_UI_LOCALE = 'es';
 var UI_STRINGS = {
   es: {
     app_title: 'Aviators',
-    nav_home: 'Chat general',
+    app_startup_loading: 'Preparando la aplicación…',
+    app_startup_i18n: 'Cargando textos…',
+    app_startup_session: 'Comprobando sesión…',
+    app_startup_failed: 'No se pudieron cargar los textos. Recargá la página.',
+    nav_home: 'Chat General',
     nav_chat: 'Chat',
     nav_section_consult: 'Consultar',
     nav_section_knowledge: 'Conocimiento',
     nav_section_admin: 'Administración',
+    nav_group_chat_modes: 'Modos de Chat',
     nav_explore: 'Explorar',
     chat_mode_general: 'General',
     chat_mode_onboarding: 'Onboarding',
@@ -157,7 +162,9 @@ var UI_STRINGS = {
     kg_btn_apply: 'Aplicar filtros',
     kg_btn_reset: 'Restablecer',
     kg_btn_focus: 'Centrar en selección',
-    kg_btn_rebuild: 'Sincronizar en segundo plano',
+    kg_btn_rebuild: 'Sincronizar desde Supabase',
+    kg_sync_admin_lead:
+      'Genera embeddings, vínculos semánticos y entidades de negocio para todo el catálogo. Corre en segundo plano por etapas (contenidos → embeddings → semántica → IA).',
     kg_btn_open_content: 'Ver en catálogo',
     kg_busy_loading: 'Cargando grafo…',
     kg_busy_loading_filters_fmt: 'Solicitando vista · {filters}',
@@ -576,7 +583,7 @@ var UI_STRINGS = {
     contents_step_uploading: 'Enviando a análisis',
     contents_step_analyzing: 'Analizando documento',
     contents_step_extracting: 'Extrayendo metadata',
-    contents_step_analyzing_inline: 'Extrayendo metadata del PDF con IA…',
+    contents_step_analyzing_inline: 'Subiendo y analizando el PDF con IA…',
     contents_extract_phase_common:
       'Título, resumen, cliente, industria y hashtags…',
     contents_extract_phase_challenge: 'Challenge (problema de negocio)…',
@@ -1404,6 +1411,8 @@ var UI_STRINGS = {
     last_sync_suffix: ' · Última sync: {date}',
     globant_hint_assistant:
       'Modo Assistant: aquí ves archivos de Files API, no perfiles RAG. Listado GET /v1/files/all · podés borrar cada archivo.',
+    globant_hint_document_chat:
+      'Análisis de PDFs (contenidos, chat adjunto, armado de propuestas): subida multipart /v1/files + /v1/assistant/chat. Carpeta/asistente: GLOBANT_FILES_ASSISTANT_NAME o GLOBANT_RAG_PROFILE_NAME (defecto aviators-document-analysis). El archivo temporal se borra al terminar.',
     globant_hint_rag:
       'Tras Actualizar verás cada agente (perfil RAG). Docs = archivos indexados. «Eliminar agente» borra el perfil en Globant.',
     globant_hint_no_key:
@@ -1411,9 +1420,9 @@ var UI_STRINGS = {
     llm_meta_asst: 'Globant Assistant (/v1/chat) · perfil/asistente {hint} · {loc}',
     llm_meta_rag: 'Globant RAG (/v1/search) · perfil/asistente {hint} · {loc}',
     llm_hint_asst_long:
-      'Modo Assistant (igual que AssistantProvider): GLOBANT_API_MODE=assistant + GLOBANT_AGENTS_API_KEY + GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor). Endpoints: validate, /v1/files, /v1/assistant/chat. GLOBANT_RAG_SKIP_UPLOAD=true para no re-subir PDF antes del chat. Opcional: GLOBANT_RAG_EXECUTE_MAX_RETRIES.',
+      'Modo Assistant: GLOBANT_API_MODE=assistant + GLOBANT_AGENTS_API_KEY + GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor). Chat: /v1/assistant/chat. PDFs adjuntos y extracción usan /v1/files (multipart). Opcional: GLOBANT_FILES_ASSISTANT_NAME para carpeta dedicada de análisis temporal; GLOBANT_RAG_SKIP_UPLOAD=true; GLOBANT_RAG_EXECUTE_MAX_RETRIES.',
     llm_hint_rag_long:
-      'Modo RAG: «Preguntar al agente» usa /v1/search/execute. Con documentos Drive, sube PDF por /v1/search/profile/.../document. Clave GLOBANT_AGENTS_API_KEY. Opcional: GLOBANT_RAG_PROFILE_NAME, GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD, GLOBANT_API_MODE=rag.',
+      'Modo RAG: «Preguntar al agente» usa /v1/search/execute. Indexación al guardar contenidos: /v1/search/profile/.../document. Extracción de PDFs y adjuntos del chat usan /v1/files + /v1/assistant/chat (no inline). Clave GLOBANT_AGENTS_API_KEY. Opcional: GLOBANT_FILES_ASSISTANT_NAME, GLOBANT_RAG_PROFILE_NAME, GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD.',
     llm_meta_gemini: 'Modo: Gemini API · modelo {model}',
     llm_hint_gemini: 'Consultas con GEMINI_API_KEY (Google AI Studio).',
     llm_error_gemini_http: 'Gemini API {code}: {detail}',
@@ -1498,6 +1507,10 @@ var UI_STRINGS = {
     error_dialog_detail_heading: 'Detalle técnico',
     err_globant_assistant_empty_file:
       'Archivo vacío para Globant Assistant upload.',
+    err_globant_document_upload_no_id:
+      'Globant /v1/files no devolvió identificador del archivo subido.',
+    err_globant_document_too_large:
+      'El archivo "{name}" supera el máximo de {max_mb} MB para análisis en Globant.',
     err_globant_chat_retry_unknown:
       'GlobantAssistantApiClient_sendChatWithRetry: error desconocido.',
     err_json_invalid_detail: 'JSON inválido: {message}',
@@ -1526,7 +1539,9 @@ var UI_STRINGS = {
       'No hay proveedor LLM: en este proyecto Apps Script abrí el engranaje «Configuración del proyecto» → «Propiedades del script» y agregá la propiedad GLOBANT_AGENTS_API_KEY o GEMINI_API_KEY con tu clave. El código solo lee esas propiedades (no lee valores pegados en archivos .gs). Opcional: LLM_PROVIDER=globant|gemini.',
     llm_project_hint_autocreate: '(se creará en la primera consulta)',
     llm_ui_config_hint_assistant_profile:
-      'GLOBANT_API_MODE=assistant: definí GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor).',
+      'Assistant: GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor). PDFs: GLOBANT_FILES_ASSISTANT_NAME o el mismo perfil.',
+    llm_ui_config_hint_document_chat:
+      'PDFs grandes: /v1/files + /v1/assistant/chat. Definí GLOBANT_FILES_ASSISTANT_NAME o usá GLOBANT_RAG_PROFILE_NAME.',
     llm_ui_config_no_keys:
       'Este despliegue no ve ninguna clave. En el proyecto vinculado a clasp: Editor → ⚙️ Configuración del proyecto → Propiedades del script → agregá GLOBANT_AGENTS_API_KEY (valor = tu Bearer token) y guardá; podés tener que volver a abrir la web app. Opcional: LLM_PROVIDER, GLOBANT_API_MODE.',
     drive_export_pdf_failed:
@@ -1906,7 +1921,7 @@ var UI_STRINGS = {
     admin_reset_all_error: 'No se pudo restablecer todo.',
     admin_embeddings_sec_heading: 'Embeddings semánticos',
     admin_embeddings_sec_lead:
-      'Regenera vectores del catálogo en Supabase (pgvector) para búsqueda semántica en el chat y matches de documentos. Ejecutá esto tras la migración 004 o si agregaste contenidos antes de activar embeddings.',
+      'Regenera solo los vectores del catálogo (pgvector). Para el grafo completo — embeddings, semántica y entidades — usá «Sincronizar desde Supabase» en Grafo de conocimiento.',
     admin_embeddings_rebuild_btn: 'Regenerar embeddings',
     admin_embeddings_busy: 'Regenerando embeddings… {done}/{total}',
     admin_embeddings_done: 'Embeddings actualizados: {done} filas ({failed} fallidas).',
@@ -2073,11 +2088,16 @@ var UI_STRINGS = {
   },
   en: {
     app_title: 'Aviators',
+    app_startup_loading: 'Starting the app…',
+    app_startup_i18n: 'Loading labels…',
+    app_startup_session: 'Checking session…',
+    app_startup_failed: 'Could not load labels. Please reload the page.',
     nav_home: 'General chat',
     nav_chat: 'Chat',
     nav_section_consult: 'Consult',
     nav_section_knowledge: 'Knowledge',
     nav_section_admin: 'Administration',
+    nav_group_chat_modes: 'Chat modes',
     nav_explore: 'Explore',
     chat_mode_general: 'General',
     chat_mode_onboarding: 'Onboarding',
@@ -2221,7 +2241,9 @@ var UI_STRINGS = {
     kg_btn_apply: 'Apply filters',
     kg_btn_reset: 'Reset',
     kg_btn_focus: 'Focus selection',
-    kg_btn_rebuild: 'Background sync',
+    kg_btn_rebuild: 'Sync from Supabase',
+    kg_sync_admin_lead:
+      'Builds embeddings, semantic links, and business entities for the full catalog. Runs in the background in stages (contents → embeddings → semantic → AI).',
     kg_btn_open_content: 'View in catalog',
     kg_busy_loading: 'Loading graph…',
     kg_busy_loading_filters_fmt: 'Requesting view · {filters}',
@@ -2639,7 +2661,7 @@ var UI_STRINGS = {
     contents_step_uploading: 'Sending for analysis',
     contents_step_analyzing: 'Analyzing document',
     contents_step_extracting: 'Extracting metadata',
-    contents_step_analyzing_inline: 'Extracting PDF metadata with AI…',
+    contents_step_analyzing_inline: 'Uploading and analyzing the PDF with AI…',
     contents_extract_phase_common:
       'Title, summary, client, industry, and hashtags…',
     contents_extract_phase_challenge: 'Challenge (business problem)…',
@@ -3461,6 +3483,8 @@ var UI_STRINGS = {
     last_sync_suffix: ' · Last sync: {date}',
     globant_hint_assistant:
       'Assistant mode: Files API files, not RAG profiles. List GET /v1/files/all · you can delete each file.',
+    globant_hint_document_chat:
+      'PDF analysis (contents, chat attachment, proposal building): multipart /v1/files + /v1/assistant/chat. Folder/assistant: GLOBANT_FILES_ASSISTANT_NAME or GLOBANT_RAG_PROFILE_NAME (default aviators-document-analysis). Temp files are deleted when done.',
     globant_hint_rag:
       'After Refresh you see each agent (RAG profile). Docs = indexed files. “Delete agent” removes the profile in Globant.',
     globant_hint_no_key:
@@ -3468,9 +3492,9 @@ var UI_STRINGS = {
     llm_meta_asst: 'Globant Assistant (/v1/chat) · profile/assistant {hint} · {loc}',
     llm_meta_rag: 'Globant RAG (/v1/search) · profile/assistant {hint} · {loc}',
     llm_hint_asst_long:
-      'Assistant mode: GLOBANT_API_MODE=assistant + GLOBANT_AGENTS_API_KEY + GLOBANT_RAG_PROFILE_NAME. Endpoints: validate, /v1/files, /v1/assistant/chat. GLOBANT_RAG_SKIP_UPLOAD=true to skip PDF re-upload before chat.',
+      'Assistant mode: GLOBANT_API_MODE=assistant + GLOBANT_AGENTS_API_KEY + GLOBANT_RAG_PROFILE_NAME (e.g. cv-extractor). Chat: /v1/assistant/chat. PDF attachments and extraction use /v1/files (multipart). Optional: GLOBANT_FILES_ASSISTANT_NAME for a dedicated temp-analysis folder; GLOBANT_RAG_SKIP_UPLOAD=true; GLOBANT_RAG_EXECUTE_MAX_RETRIES.',
     llm_hint_rag_long:
-      'RAG mode: “Ask the agent” uses /v1/search/execute. With Drive docs, upload PDF via /v1/search/profile/.../document. Key GLOBANT_AGENTS_API_KEY.',
+      'RAG mode: “Ask the agent” uses /v1/search/execute. Catalog save indexes via /v1/search/profile/.../document. PDF extraction and chat attachments use /v1/files + /v1/assistant/chat (not inline). Key GLOBANT_AGENTS_API_KEY. Optional: GLOBANT_FILES_ASSISTANT_NAME, GLOBANT_RAG_PROFILE_NAME, GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD.',
     llm_meta_gemini: 'Mode: Gemini API · model {model}',
     llm_hint_gemini: 'Queries use GEMINI_API_KEY (Google AI Studio).',
     llm_error_gemini_http: 'Gemini API {code}: {detail}',
@@ -3551,6 +3575,10 @@ var UI_STRINGS = {
     error_dialog_detail_heading: 'Technical detail',
     err_globant_assistant_empty_file:
       'Empty file for Globant Assistant upload.',
+    err_globant_document_upload_no_id:
+      'Globant /v1/files did not return an id for the uploaded file.',
+    err_globant_document_too_large:
+      'File "{name}" exceeds the {max_mb} MB limit for Globant document analysis.',
     err_globant_chat_retry_unknown:
       'GlobantAssistantApiClient_sendChatWithRetry: unknown error.',
     err_json_invalid_detail: 'Invalid JSON: {message}',
@@ -3579,7 +3607,9 @@ var UI_STRINGS = {
       'No LLM provider: in this Apps Script project open the gear «Project settings» → «Script properties» and add GLOBANT_AGENTS_API_KEY or GEMINI_API_KEY with your key. The code only reads those properties (not values pasted in .gs files). Optional: LLM_PROVIDER=globant|gemini.',
     llm_project_hint_autocreate: '(will be created on first query)',
     llm_ui_config_hint_assistant_profile:
-      'GLOBANT_API_MODE=assistant: set GLOBANT_RAG_PROFILE_NAME (e.g. cv-extractor).',
+      'Assistant: GLOBANT_RAG_PROFILE_NAME (e.g. cv-extractor). PDFs: GLOBANT_FILES_ASSISTANT_NAME or the same profile.',
+    llm_ui_config_hint_document_chat:
+      'Large PDFs: /v1/files + /v1/assistant/chat. Set GLOBANT_FILES_ASSISTANT_NAME or use GLOBANT_RAG_PROFILE_NAME.',
     llm_ui_config_no_keys:
       'This deployment does not see any key. In the clasp-linked project: Editor → ⚙️ Project settings → Script properties → add GLOBANT_AGENTS_API_KEY (value = your Bearer token) and save; you may need to reopen the web app. Optional: LLM_PROVIDER, GLOBANT_API_MODE.',
     drive_export_pdf_failed:
@@ -3958,7 +3988,7 @@ var UI_STRINGS = {
     admin_reset_all_error: 'Full reset failed.',
     admin_embeddings_sec_heading: 'Semantic embeddings',
     admin_embeddings_sec_lead:
-      'Rebuilds catalog vectors in Supabase (pgvector) for semantic search in chat and document matching. Run this after migration 004 or if content was added before embeddings were enabled.',
+      'Rebuilds catalog vectors only (pgvector). For the full graph — embeddings, semantic links, and entities — use «Sync from Supabase» on the Knowledge Graph page.',
     admin_embeddings_rebuild_btn: 'Rebuild embeddings',
     admin_embeddings_busy: 'Rebuilding embeddings… {done}/{total}',
     admin_embeddings_done: 'Embeddings updated: {done} rows ({failed} failed).',
@@ -4183,4 +4213,60 @@ function UiStrings_getClientPackForLocale(locale) {
  */
 function UiStrings_getClientPack_() {
   return UiStrings_getClientPackForLocale(UiStrings_activeLocale_());
+}
+
+/**
+ * Stub mínimo embebido en doGet (~60 bytes). El pack completo se carga por RPC en partes.
+ * Evita truncar ~120 KB de JSON en HtmlService (rompe labels en el cliente).
+ * @return {Object<string, string>}
+ */
+function UiStrings_getClientEmbedStub_() {
+  return {
+    _locale: UiStrings_activeLocale_(),
+    _load: 'rpc',
+  };
+}
+
+/** @type {number} Partes del pack cliente (google.script.run ~60 KB por respuesta). */
+var UI_STRINGS_CLIENT_PACK_PARTS_ = 3;
+
+/**
+ * @param {'es'|'en'} locale
+ * @return {{ok:boolean,locale:string,parts:number}}
+ */
+function UiStrings_getClientPackMeta_(locale) {
+  return {
+    ok: true,
+    locale: locale === 'en' ? 'en' : 'es',
+    parts: UI_STRINGS_CLIENT_PACK_PARTS_,
+  };
+}
+
+/**
+ * Fragmento del pack i18n para el cliente (cada parte < ~50 KB serializado).
+ * @param {'es'|'en'} locale
+ * @param {number} partIndex
+ * @return {Object<string, string>}
+ */
+function UiStrings_getClientPackPart_(locale, partIndex) {
+  var loc = locale === 'en' ? 'en' : 'es';
+  var full = UiStrings_getClientPackForLocale(loc);
+  var keys = [];
+  var k;
+  for (k in full) {
+    if (k !== '_locale' && Object.prototype.hasOwnProperty.call(full, k)) keys.push(k);
+  }
+  keys.sort();
+  var parts = UI_STRINGS_CLIENT_PACK_PARTS_;
+  var idx = Math.max(0, Math.min(parts - 1, Number(partIndex) || 0));
+  var per = Math.ceil(keys.length / parts);
+  var start = idx * per;
+  var end = Math.min(keys.length, start + per);
+  /** @type {Object<string, string>} */
+  var out = { _locale: loc };
+  var i;
+  for (i = start; i < end; i++) {
+    out[keys[i]] = full[keys[i]];
+  }
+  return out;
 }

@@ -168,6 +168,9 @@
   .app-nav-section-label {
     @apply px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500;
   }
+  .app-nav-divider {
+    @apply mx-2 my-1 border-t border-slate-200/80 dark:border-slate-600;
+  }
   .app-nav-group {
     @apply rounded-xl;
   }
@@ -177,14 +180,23 @@
   .app-nav-group-summary::-webkit-details-marker {
     display: none;
   }
+  .app-nav-group[open] > .app-nav-group-summary {
+    @apply bg-slate-50/90 dark:bg-slate-800/55;
+  }
   .app-nav-group[open] .app-nav-group-chevron {
     @apply rotate-180;
   }
+  .app-nav-group.has-active-child > .app-nav-group-summary {
+    @apply text-sky-900 dark:text-sky-100;
+  }
   .app-nav-group-items {
-    @apply ml-3 flex flex-col gap-0.5 border-l border-slate-200/80 pl-2 dark:border-slate-600;
+    @apply ml-4 flex flex-col gap-0.5 border-l-2 border-sky-100 py-0.5 pl-2 dark:border-sky-900/50;
   }
   .app-nav-item--child {
     @apply py-2 text-[13px];
+  }
+  .app-nav-item--child i {
+    @apply text-[13px];
   }
   .app-sidebar-footer-btn.is-active {
     @apply border-sky-300 bg-sky-50 text-sky-950 ring-2 ring-sky-500/30 dark:border-sky-700 dark:bg-sky-900/35 dark:text-sky-100;
@@ -199,7 +211,7 @@
     @apply flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-800 transition hover:bg-sky-50 dark:text-slate-200 dark:hover:bg-slate-700;
   }
   .chat-mode-tab-bar {
-    @apply flex-wrap gap-1;
+    @apply max-w-full flex-wrap gap-1;
   }
   .chat-mode-tab {
     @apply inline-flex items-center gap-1.5 text-xs;
@@ -446,11 +458,25 @@
     @apply hidden;
   }
 
-  @media (max-width: 767px) {
+  @media (max-width: 1023px) {
+    html,
+    body {
+      overflow-x: clip;
+      width: 100%;
+      max-width: 100%;
+    }
+    main {
+      width: 100%;
+      max-width: 100%;
+    }
     .app-shell-view {
+      display: block;
       min-height: 100dvh;
       height: 100dvh;
       position: relative;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: clip;
     }
     .app-shell-view.drawer-open {
       overflow: hidden;
@@ -461,6 +487,38 @@
       transform: translateX(-105%);
       transition: transform 0.24s ease;
       padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      max-height: 100dvh;
+    }
+    .app-content {
+      @apply flex w-full max-w-full min-w-0 flex-col overflow-hidden;
+      height: 100dvh;
+      max-height: 100dvh;
+      min-height: 100dvh;
+    }
+    .app-content-scroll {
+      @apply w-full max-w-full min-w-0;
+    }
+    .home-member {
+      @apply mx-0 w-full max-w-none;
+    }
+    .home-chat-shell {
+      @apply mx-0 w-full max-w-none;
+    }
+    .home-chat-head {
+      @apply px-3 py-3;
+    }
+    .home-chat-head-main,
+    .home-chat-toolbar,
+    .chat-mode-tab-bar,
+    .chat-thread,
+    .chat-composer {
+      @apply w-full max-w-full min-w-0;
+    }
+    .app-tab-bar-underline .app-tab-btn {
+      @apply px-2.5 py-2 text-xs;
+    }
+    .home-chat-toolbar .btn-sm {
+      @apply max-w-full;
     }
     .app-shell-view.drawer-open .app-sidebar {
       transform: translateX(0);
@@ -476,74 +534,124 @@
       pointer-events: auto;
     }
     /* pb-28 era para el compositor fijo (ya está en flujo); pb-3 previene el scroll externo */
+    .app-sidebar-profile {
+      @apply mb-3 py-2;
+    }
+    .app-sidebar-nav {
+      @apply p-1;
+    }
     .app-content-scroll {
       @apply px-3 pb-3 pt-3;
     }
-    .home-chat-shell {
-      height: calc(100dvh - 11.5rem);
-      max-height: calc(100dvh - 11.5rem);
-      min-height: min(68dvh, 31rem);
-    }
 
     /*
-     * Mobile + page=home: layout "chat full-height".
-     * El scroll externo se desactiva, la bienvenida queda compacta y fija
-     * arriba, el shell del chat ocupa todo el alto restante. Así el input
-     * (composer) queda anclado al fondo del viewport y el thread scrollea
-     * por dentro, sin requerir scroll del padre para llegar al input.
+     * Mobile + chat: layout full-height.
+     * Solo #home-chat-shell crece (flex-1); cabeceras de página quedan shrink-0.
+     * El compositor queda al fondo del viewport; el hilo scrollea adentro.
      */
-    .app-shell-view[data-active-page="home"] .app-content-scroll {
-      @apply flex flex-col px-0 pt-0 pb-0;
+    .app-shell-view[data-active-page="home"] .app-content-scroll,
+    .app-shell-view[data-active-page="onboarding"] .app-content-scroll,
+    .app-shell-view[data-active-page="proposal-building"] .app-content-scroll {
+      @apply flex min-h-0 flex-1 flex-col px-0 pt-0 pb-0;
       overflow: hidden;
     }
-    .app-shell-view[data-active-page="onboarding"] .app-content-scroll {
-      @apply flex flex-col px-0 pt-0 pb-0;
-      overflow: hidden;
+    .app-shell-view[data-active-page="home"] .session-banner,
+    .app-shell-view[data-active-page="onboarding"] .session-banner,
+    .app-shell-view[data-active-page="proposal-building"] .session-banner {
+      @apply mx-3 mb-0 mt-2 shrink-0;
     }
     .app-shell-view[data-active-page="home"] #home-member,
-    .app-shell-view[data-active-page="onboarding"] #home-member {
-      @apply flex min-h-0 flex-1 flex-col;
+    .app-shell-view[data-active-page="onboarding"] #home-member,
+    .app-shell-view[data-active-page="proposal-building"] #home-member {
+      @apply flex min-h-0 flex-1 flex-col space-y-0;
       max-width: none;
     }
     .app-shell-view[data-active-page="home"] #page-home,
     .app-shell-view[data-active-page="home"] #member-standard-home,
-    .app-shell-view[data-active-page="onboarding"] #page-onboarding {
-      @apply flex min-h-0 flex-1 flex-col;
-    }
-    .app-shell-view[data-active-page="home"] #page-home,
-    .app-shell-view[data-active-page="onboarding"] #page-onboarding {
-      @apply space-y-0;
+    .app-shell-view[data-active-page="onboarding"] #page-onboarding,
+    .app-shell-view[data-active-page="proposal-building"] #page-proposal-building {
+      @apply flex shrink-0 flex-col space-y-0;
     }
     .app-shell-view[data-active-page="home"] #home-welcome {
       @apply mb-0 shrink-0 px-3 pt-3 pb-2 text-left;
     }
-    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome {
+    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome {
       @apply mb-0 shrink-0 px-3 pt-3 pb-2 text-left;
     }
     .app-shell-view[data-active-page="home"] #home-welcome h1,
-    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome h1 {
+    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome h1,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome h1 {
       @apply text-lg font-semibold;
     }
-    .app-shell-view[data-active-page="home"] #home-welcome p,
-    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome p {
+    .app-shell-view[data-active-page="home"] #home-welcome p {
       @apply mx-0 mt-0.5 line-clamp-2 max-w-none text-xs leading-snug;
     }
+    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome p,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome p {
+      @apply hidden;
+    }
+    .app-shell-view[data-active-page="onboarding"] .home-chat-head-main,
+    .app-shell-view[data-active-page="proposal-building"] .home-chat-head-main {
+      @apply hidden;
+    }
+    .app-shell-view[data-active-page="home"] #dashboard-lead {
+      @apply hidden;
+    }
+    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome {
+      @apply border-b border-slate-200/80 bg-white/95 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/95;
+    }
+    .app-shell-view[data-active-page="onboarding"] #onboarding-welcome h1,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome h1 {
+      @apply text-base font-semibold;
+    }
+    .app-shell-view[data-active-page="home"] .chat-mode-bar,
+    .app-shell-view[data-active-page="onboarding"] .chat-mode-bar,
+    .app-shell-view[data-active-page="proposal-building"] .chat-mode-bar {
+      @apply hidden;
+    }
+    .app-shell-view[data-active-page="onboarding"] .home-chat-head,
+    .app-shell-view[data-active-page="proposal-building"] .home-chat-head {
+      @apply border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800;
+      background-image: none;
+    }
     .app-shell-view[data-active-page="home"] .home-chat-shell,
-    .app-shell-view[data-active-page="onboarding"] .home-chat-shell {
-      @apply mb-0 min-h-0 flex-1 rounded-none border-x-0 border-b-0 shadow-none;
+    .app-shell-view[data-active-page="onboarding"] .home-chat-shell,
+    .app-shell-view[data-active-page="proposal-building"] .home-chat-shell {
+      @apply mb-0 flex min-h-0 flex-1 flex-col rounded-none border-x-0 border-b-0 shadow-none;
       height: auto;
+      min-height: 0;
       max-height: none;
+      max-width: none;
+      width: 100%;
+    }
+    .app-shell-view[data-active-page="onboarding"] #proposal-building-status,
+    .app-shell-view[data-active-page="proposal-building"] #proposal-building-status {
+      @apply mx-3 mb-0 shrink-0 px-0 text-left text-xs;
     }
 
     /* Compositor en flujo: el hilo flex-1 termina justo encima del input (evita solape con barra fija). */
     .chat-thread {
-      @apply px-3 py-3;
+      @apply min-h-0 flex-1 px-3 py-2;
     }
     .chat-composer {
-      @apply shrink-0 border-t border-slate-200 px-3 py-3 dark:border-slate-700;
+      @apply shrink-0 border-t border-slate-200 px-3 py-2 dark:border-slate-700;
       background-color: rgb(248 250 252 / 0.96);
       backdrop-filter: blur(4px);
-      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .app-shell-view[data-active-page="home"] .chat-empty,
+    .app-shell-view[data-active-page="onboarding"] .chat-empty,
+    .app-shell-view[data-active-page="proposal-building"] .chat-empty {
+      @apply py-4;
+    }
+    .app-shell-view[data-active-page="onboarding"] .home-chat-toolbar,
+    .app-shell-view[data-active-page="proposal-building"] .home-chat-toolbar {
+      @apply gap-1.5;
+    }
+    #chat-quick-prompts {
+      @apply mb-2;
     }
     .dark .chat-composer {
       background-color: rgb(15 23 42 / 0.96);

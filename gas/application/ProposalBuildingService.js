@@ -30,7 +30,14 @@ var PROPOSAL_BUILDING_TEXT_MIMES_ = [
 var PROPOSAL_BUILDING_DOCX_MIME_ =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-var PROPOSAL_BUILDING_MAX_ATTACHMENT_BYTES_ = 12 * 1024 * 1024;
+/**
+ * @return {number}
+ */
+function ProposalBuilding_maxAttachmentBytes_() {
+  return typeof GLOBANT_DOCUMENT_CHAT_MAX_BYTES !== 'undefined'
+    ? GLOBANT_DOCUMENT_CHAT_MAX_BYTES
+    : 50 * 1024 * 1024;
+}
 
 /** Carpeta bajo DRIVE_ROOT_FOLDER_ID donde se guardan decks armados. */
 var PROPOSAL_BUILDING_DRIVE_FOLDER_NAME = 'Propuestas';
@@ -84,10 +91,11 @@ function ProposalBuilding_normalizeAttachment_(attachment) {
   if (!bytes || bytes.length === 0) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_empty'));
   }
-  if (bytes.length > PROPOSAL_BUILDING_MAX_ATTACHMENT_BYTES_) {
+  var maxBytes = ProposalBuilding_maxAttachmentBytes_();
+  if (bytes.length > maxBytes) {
     throw new Error(
       UiStrings_fmt_('err_ephemeral_doc_too_large', {
-        max_mb: String(Math.floor(PROPOSAL_BUILDING_MAX_ATTACHMENT_BYTES_ / (1024 * 1024))),
+        max_mb: String(Math.floor(maxBytes / (1024 * 1024))),
       }),
     );
   }
@@ -290,13 +298,9 @@ function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachme
       userText +=
         '\n\nLa imagen adjunta puede ser una foto de pizarra, slide o documento escaneado. Transcribí el contenido relevante antes de extraer el brief.';
     }
-    result = client.chatWithFileInline(
-      ContentExtraction_resolveChatModel_(),
-      systemPrompt,
-      userText,
-      attachment.dataBase64,
-      attachment.mimeType,
-    );
+    var fileBytes = Utilities.base64Decode(attachment.dataBase64);
+    var fileBlob = Utilities.newBlob(fileBytes, attachment.mimeType, attachment.name || 'attachment');
+    result = GlobantDocumentChat_chatWithBlob_(client, fileBlob, systemPrompt, userText);
   } else {
     result = client.chatSimple(systemPrompt, extractPrompt, ContentExtraction_resolveChatModel_());
   }

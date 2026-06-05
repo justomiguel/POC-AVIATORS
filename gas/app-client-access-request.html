@@ -5,6 +5,7 @@
   var i18nFmt = A.i18nFmt;
 
   var navPageRequestAccess = document.getElementById('nav-page-request-access');
+  var navVisitorDivider = document.getElementById('nav-visitor-divider');
   var homeVisitante = document.getElementById('home-visitante');
   var form = document.getElementById('access-request-form');
   var roleSelect = document.getElementById('access-request-role');
@@ -182,6 +183,7 @@
   function syncVisitorNav() {
     var isVisitor = !!S.get('isVisitor');
     if (navPageRequestAccess) navPageRequestAccess.classList.toggle('hidden', !isVisitor);
+    if (navVisitorDivider) navVisitorDivider.classList.toggle('hidden', !isVisitor);
     if (homeVisitante && S.get('activePage') === 'home') {
       homeVisitante.classList.toggle('hidden', !isVisitor);
     }

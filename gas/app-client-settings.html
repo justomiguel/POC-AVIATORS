@@ -848,6 +848,7 @@
   }
 
   function syncSectionVisibility() {
+    syncEmbeddingsSectionVisibility_();
     var tabPermMap = [
       { tabId: 'settings-tab-general', perm: 'canRebuildKnowledgeGraph' },
       { tabId: 'settings-tab-roles', perm: 'canManageRoleConfig' },
@@ -855,7 +856,11 @@
       { tabId: 'settings-tab-agents', perm: 'canViewAgents' },
       { tabId: 'settings-tab-chat', perm: 'canManageAgents' },
       { tabId: 'settings-tab-salesforce', perm: 'canSyncSalesforceAccounts' },
-      { tabId: 'settings-tab-data', perm: 'canResetMetrics' },
+      {
+        tabId: 'settings-tab-data',
+        perm: 'canResetMetrics',
+        altPerm: 'canRebuildKnowledgeGraph',
+      },
     ];
     var visibleTabs = [];
     for (var ti = 0; ti < tabPermMap.length; ti++) {
@@ -1690,9 +1695,18 @@
     kgLimitsSaveBtn.addEventListener('click', kgLimitsSave_);
   }
 
+  function settingsCanRebuildEmbeddings_() {
+    return !!(S.get('canRebuildKnowledgeGraph') || S.get('canResetMetrics'));
+  }
+
+  function syncEmbeddingsSectionVisibility_() {
+    if (!embeddingsSection) return;
+    embeddingsSection.classList.toggle('hidden', !settingsCanRebuildEmbeddings_());
+  }
+
   if (rebuildEmbeddingsBtn) {
     rebuildEmbeddingsBtn.addEventListener('click', function () {
-      if (!S.get('canResetMetrics') || embeddingsBusy) return;
+      if (!settingsCanRebuildEmbeddings_() || embeddingsBusy) return;
       embeddingsBusy = true;
       rebuildEmbeddingsBtn.disabled = true;
       setEmbeddingsStatus(i18nFmt('admin_embeddings_busy', { done: '0', total: '…' }), false);
@@ -1948,6 +1962,7 @@
       if (S.get('canRebuildKnowledgeGraph')) {
         kgLimitsLoad_();
       }
+      syncEmbeddingsSectionVisibility_();
     },
     onShow: function () {
       initSettingsTabs();
@@ -1981,6 +1996,7 @@
       if (S.get('canRebuildKnowledgeGraph')) {
         kgLimitsLoad_();
       }
+      syncEmbeddingsSectionVisibility_();
     },
     reloadQuickPrompts: reloadQuickPrompts,
     usersUpdatePager: usersUpdatePager,

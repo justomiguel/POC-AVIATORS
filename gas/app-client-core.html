@@ -104,6 +104,27 @@ window.Aviators = window.Aviators || {};
   var blockingModalStep = document.getElementById('blocking-modal-step');
   var blockingModalDetail = document.getElementById('blocking-modal-detail');
   var blockingModalFilename = document.getElementById('blocking-modal-filename');
+  var startupLoader = document.getElementById('app-startup-loader');
+  var startupLoaderMsg = document.getElementById('app-startup-loader-msg');
+
+  A.showStartupLoader = function (message) {
+    if (startupLoaderMsg && message) startupLoaderMsg.textContent = message;
+    if (startupLoader) {
+      startupLoader.classList.remove('hidden');
+      startupLoader.setAttribute('aria-busy', 'true');
+    }
+  };
+
+  A.hideStartupLoader = function () {
+    if (startupLoader) {
+      startupLoader.classList.add('hidden');
+      startupLoader.setAttribute('aria-busy', 'false');
+    }
+  };
+
+  if (startupLoaderMsg && !startupLoaderMsg.textContent.trim()) {
+    startupLoaderMsg.textContent = 'Preparando la aplicación…';
+  }
 
   /**
    * @param {string|Object} msgOrOpts mensaje plano o { message, progress, analyzed, completed, total, current, fileName, stepLabel, phase, barPercent }

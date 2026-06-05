@@ -1,9 +1,54 @@
 <script>
 (function (A) {
   var S = A.state;
+  var I18N_RELOADING = false;
+  var I18N_READY_WAITERS = [];
+  var I18N_LOAD_TIMEOUT_MS = 90000;
+  var i18nLoadTimeoutId = null;
+
+  function i18nClearLoadTimeout_() {
+    if (i18nLoadTimeoutId) {
+      clearTimeout(i18nLoadTimeoutId);
+      i18nLoadTimeoutId = null;
+    }
+  }
+
+  function i18nStartupMessage_(key, fallbackEs, fallbackEn) {
+    var ci = S.get('cachedI18n');
+    if (ci && ci[key]) return ci[key];
+    var loc = ci && ci._locale === 'en' ? 'en' : 'es';
+    return loc === 'en' ? fallbackEn : fallbackEs;
+  }
+
+  function i18nResolveLocale_(locale) {
+    return locale === 'en' ? 'en' : 'es';
+  }
+
+  function i18nFlushReadyWaiters_() {
+    var waiters = I18N_READY_WAITERS.slice();
+    I18N_READY_WAITERS.length = 0;
+    var wi;
+    for (wi = 0; wi < waiters.length; wi++) {
+      try {
+        waiters[wi]();
+      } catch (eWaiter) {}
+    }
+  }
+
+  function i18nSanitizeCachedPack_() {
+    var ci = S.get('cachedI18n');
+    if (!ci || typeof ci !== 'object' || typeof ci._locale !== 'string') {
+      S.set('cachedI18n', null);
+      return;
+    }
+    if (!A.i18nPackLooksValid(ci)) {
+      S.set('cachedI18n', null);
+    }
+  }
 
   A.applyClientI18n = function (pack) {
-    if (!pack) return;
+    if (!pack || typeof pack !== 'object' || typeof pack._locale !== 'string') return;
+    if (!A.i18nPackLooksValid(pack)) return;
     S.set('cachedI18n', pack);
     A.updateLocaleButtonHighlight();
     var elems = document.querySelectorAll('[data-i18n]');
@@ -31,6 +76,11 @@
 
   A.i18n = function (key) {
     var ci = S.get('cachedI18n');
+    if (!A.i18nPackLooksValid(ci) && !I18N_RELOADING) {
+      var loc = ci && ci._locale === 'en' ? 'en' : 'es';
+      A.loadClientI18nPack(loc);
+    }
+    ci = S.get('cachedI18n');
     return (ci && ci[key]) || key;
   };
 
@@ -41,6 +91,154 @@
     return tpl.replace(/\{(\w+)\}/g, function (_, k) {
       return params[k] !== undefined ? params[k] : '{' + k + '}';
     });
+  };
+
+  /** @param {Object<string, string>|null|undefined} pack */
+  A.i18nPackLooksValid = function (pack) {
+    if (!pack || typeof pack !== 'object') return false;
+    if (typeof pack._locale !== 'string') return false;
+    if (!pack.app_title || !pack.kg_loader_step_fmt) return false;
+    var count = 0;
+    var k;
+    for (k in pack) {
+      if (Object.prototype.hasOwnProperty.call(pack, k) && k !== '_locale') count++;
+    }
+    return count >= 400;
+  };
+
+  /**
+   * Carga el pack i18n en partes (<60 KB por RPC de google.script.run).
+   * @param {'es'|'en'} locale
+   * @param {function(Object)=} onDone
+   * @param {function(*)=} onFail
+   */
+  A.loadClientI18nPack = function (locale, onDone, onFail) {
+    var loc = i18nResolveLocale_(locale);
+    if (I18N_RELOADING) {
+      if (typeof onDone === 'function') {
+        A.whenClientI18nReady(onDone);
+      }
+      return;
+    }
+    I18N_RELOADING = true;
+    if (A.showStartupLoader) {
+      A.showStartupLoader(
+        i18nStartupMessage_('app_startup_i18n', 'Cargando textos…', 'Loading labels…')
+      );
+    }
+    i18nClearLoadTimeout_();
+    i18nLoadTimeoutId = setTimeout(function () {
+      if (!I18N_RELOADING) return;
+      finishFail(new Error('i18n_timeout'));
+    }, I18N_LOAD_TIMEOUT_MS);
+
+    function finishOk(merged) {
+      I18N_RELOADING = false;
+      i18nClearLoadTimeout_();
+      A.applyClientI18n(merged);
+      i18nFlushReadyWaiters_();
+      if (typeof onDone === 'function') onDone(merged);
+    }
+
+    function finishFail(err) {
+      I18N_RELOADING = false;
+      i18nClearLoadTimeout_();
+      if (typeof onFail === 'function') onFail(err);
+      i18nFlushReadyWaiters_();
+    }
+
+    function loadOnce_(attempt) {
+      google.script.run
+        .withSuccessHandler(function (meta) {
+          var parts = meta && meta.parts ? Number(meta.parts) : 0;
+          if (!parts || parts < 1) {
+            if (attempt < 1) {
+              loadOnce_(attempt + 1);
+              return;
+            }
+            finishFail(new Error('i18n_meta_invalid'));
+            return;
+          }
+          /** @type {Object<string, string>} */
+          var merged = { _locale: loc };
+          var nextPart = 0;
+
+          function loadPart() {
+            if (nextPart >= parts) {
+              if (!A.i18nPackLooksValid(merged)) {
+                if (attempt < 1) {
+                  loadOnce_(attempt + 1);
+                  return;
+                }
+                finishFail(new Error('i18n_merge_invalid'));
+                return;
+              }
+              finishOk(merged);
+              return;
+            }
+            var partIdx = nextPart;
+            nextPart++;
+            google.script.run
+              .withSuccessHandler(function (chunk) {
+                if (chunk && typeof chunk === 'object') {
+                  var ck;
+                  for (ck in chunk) {
+                    if (Object.prototype.hasOwnProperty.call(chunk, ck)) merged[ck] = chunk[ck];
+                  }
+                }
+                loadPart();
+              })
+              .withFailureHandler(function (err) {
+                if (attempt < 1) {
+                  loadOnce_(attempt + 1);
+                  return;
+                }
+                finishFail(err);
+              })
+              .getI18nPackPart(loc, partIdx);
+          }
+
+          loadPart();
+        })
+        .withFailureHandler(function (err) {
+          if (attempt < 1) {
+            loadOnce_(attempt + 1);
+            return;
+          }
+          finishFail(err);
+        })
+        .getI18nPackMeta(loc);
+    }
+
+    loadOnce_(0);
+  };
+
+  /**
+   * Ejecuta callback cuando el pack i18n está completo y aplicado.
+   * @param {function()=} onReady
+   * @param {'es'|'en'=} locale
+   */
+  A.whenClientI18nReady = function (onReady, locale) {
+    if (typeof onReady !== 'function') return;
+    var loc = i18nResolveLocale_(locale);
+    var ci = S.get('cachedI18n');
+    if (A.i18nPackLooksValid(ci) && ci._locale === loc) {
+      onReady();
+      return;
+    }
+    I18N_READY_WAITERS.push(onReady);
+    if (!I18N_RELOADING) {
+      A.loadClientI18nPack(loc);
+    }
+  };
+
+  /**
+   * Garantiza pack i18n válido antes de pintar textos dinámicos.
+   * @param {'es'|'en'} locale
+   * @param {function()=} onReady
+   */
+  A.ensureClientI18n = function (locale, onReady) {
+    A.whenClientI18nReady(onReady, locale);
   };
 
   /** @type {Object<string, string>} */
@@ -140,20 +338,6 @@
     return msg;
   };
 
-  (function () {
-    var want = null;
-    try {
-      var st = localStorage.getItem('aviators_locale');
-      if (st === 'es' || st === 'en') want = st;
-    } catch (eLoc) {}
-    var ci = S.get('cachedI18n');
-    if (!want || (ci && ci._locale === want)) return;
-    google.script.run
-      .withSuccessHandler(function (pack) {
-        if (pack) A.applyClientI18n(pack);
-      })
-      .withFailureHandler(function () {})
-      .getI18nPack(want);
-  })();
+  i18nSanitizeCachedPack_();
 })(window.Aviators);
 </script>

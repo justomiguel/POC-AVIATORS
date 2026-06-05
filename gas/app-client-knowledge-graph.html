@@ -18,6 +18,7 @@
   var resetBtn = document.getElementById('kg-reset-btn');
   var focusBtn = document.getElementById('kg-focus-btn');
   var rebuildBtn = document.getElementById('kg-rebuild-btn');
+  var syncToolbar = document.getElementById('kg-sync-toolbar');
   var detailLabel = document.getElementById('kg-detail-label');
   var detailType = document.getElementById('kg-detail-type');
   var detailMetaWrap = document.getElementById('kg-detail-meta-wrap');
@@ -2156,27 +2157,52 @@
     return card;
   }
 
+  function kgReapplyPageI18n_() {
+    var ci = S.get('cachedI18n');
+    if (!A.i18nPackLooksValid(ci)) return;
+    var page = document.getElementById('page-knowledge-graph');
+    if (!page) return;
+    var elems = page.querySelectorAll('[data-i18n]');
+    var i;
+    for (i = 0; i < elems.length; i++) {
+      var key = elems[i].getAttribute('data-i18n');
+      if (key && ci[key] !== undefined) elems[i].textContent = ci[key];
+    }
+    var htmlElems = page.querySelectorAll('[data-i18n-html]');
+    for (i = 0; i < htmlElems.length; i++) {
+      var hk = htmlElems[i].getAttribute('data-i18n-html');
+      if (hk && ci[hk] !== undefined) htmlElems[i].innerHTML = ci[hk];
+    }
+    var plElems = page.querySelectorAll('[data-i18n-placeholder]');
+    for (i = 0; i < plElems.length; i++) {
+      var pk = plElems[i].getAttribute('data-i18n-placeholder');
+      if (pk && ci[pk] !== undefined) plElems[i].placeholder = ci[pk];
+    }
+    var arElems = page.querySelectorAll('[data-i18n-aria-label]');
+    for (i = 0; i < arElems.length; i++) {
+      var ak = arElems[i].getAttribute('data-i18n-aria-label');
+      if (ak && ci[ak] !== undefined) arElems[i].setAttribute('aria-label', ci[ak]);
+    }
+  }
+
   function kgPopulateEntitiesFilterTypes_() {
     if (!entitiesFilterType) return;
     var prev = String(entitiesFilterType.value || '');
     entitiesFilterType.innerHTML = '';
     var allOpt = document.createElement('option');
     allOpt.value = '';
-    allOpt.setAttribute('data-i18n', 'kg_entities_filter_type_all');
+    allOpt.textContent = i18n('kg_entities_filter_type_all');
     entitiesFilterType.appendChild(allOpt);
     var ti;
     for (ti = 0; ti < ENTITY_NODE_ORDER.length; ti++) {
       var nt = ENTITY_NODE_ORDER[ti];
       var opt = document.createElement('option');
       opt.value = nt;
-      opt.setAttribute('data-i18n', TYPE_I18N[nt] || nt);
+      opt.textContent = i18n(TYPE_I18N[nt] || nt);
       entitiesFilterType.appendChild(opt);
     }
     if (prev && entitiesFilterType.querySelector('option[value="' + prev + '"]')) {
       entitiesFilterType.value = prev;
-    }
-    if (typeof A.applyClientI18n === 'function') {
-      A.applyClientI18n(entitiesFilterType.closest('label') || entitiesFilterType.parentElement);
     }
   }
 
@@ -2246,6 +2272,7 @@
         entitiesRelationsList.appendChild(relSection);
       }
     }
+    kgReapplyPageI18n_();
     entitiesCatalogLoaded = true;
   }
 
@@ -2478,21 +2505,40 @@
       .getKnowledgeGraphSyncStatus();
   }
 
-  function onShow() {
-    kgInitMainTabs_();
-    kgPopulateEntitiesFilterTypes_();
-    if (rebuildBtn) {
-      rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
+  function kgAfterI18nReady_(fn) {
+    var loc = 'es';
+    try {
+      var st = localStorage.getItem('aviators_locale');
+      if (st === 'en') loc = 'en';
+    } catch (eLocKg) {}
+    if (typeof A.ensureClientI18n === 'function') {
+      A.ensureClientI18n(loc, fn);
+      return;
     }
-    kgApplyLimitsToFilters_();
-    kgBuildLegend();
-    kgPopulateFilterOptions();
-    kgCheckPendingSyncBanner_(function () {
-      if (S.get('canRebuildKnowledgeGraph')) {
-        kgFetchSyncStatusThenLoad_();
-        return;
+    if (typeof fn === 'function') fn();
+  }
+
+  function onShow() {
+    kgAfterI18nReady_(function () {
+      kgInitMainTabs_();
+      kgPopulateEntitiesFilterTypes_();
+      kgReapplyPageI18n_();
+      if (syncToolbar) {
+        syncToolbar.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
       }
-      kgLoad();
+      if (rebuildBtn) {
+        rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
+      }
+      kgApplyLimitsToFilters_();
+      kgBuildLegend();
+      kgPopulateFilterOptions();
+      kgCheckPendingSyncBanner_(function () {
+        if (S.get('canRebuildKnowledgeGraph')) {
+          kgFetchSyncStatusThenLoad_();
+          return;
+        }
+        kgLoad();
+      });
     });
   }
 

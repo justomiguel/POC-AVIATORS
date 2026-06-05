@@ -13,8 +13,11 @@
  * `appsscript.json` → `urlFetchWhitelist`), **GLOBANT_API_MODE**, GLOBANT_RAG_PROFILE_NAME,
  * GLOBANT_RAG_DOCUMENT_ID, GLOBANT_RAG_SKIP_UPLOAD, GLOBANT_RAG_EXECUTE_MAX_RETRIES,
  * GLOBANT_RAG_SKIP_AUTO_PROFILE. Opcional Gemini: GEMINI_MODEL.
- * GLOBANT_CHAT_MODEL — modelo para /v1/chat/completions (roster, catálogo, extracción PDF, doc. efímero);
+ * GLOBANT_CHAT_MODEL — modelo para /v1/chat/completions (roster, catálogo, texto sin archivo);
  *   ej. vertex_ai/gemini-2.5-flash u openai/gpt-5.5 (Chat API directo, ver docs Globant).
+ * GLOBANT_FILES_ASSISTANT_NAME — asistente/carpeta para análisis temporal de archivos
+ *   (/v1/files + /v1/assistant/chat): extracción de contenidos, chat efímero, armado de propuestas.
+ *   Si no se define, se usa GLOBANT_RAG_PROFILE_NAME o aviators-document-analysis.
  *
  * **Admin · corpus desde Drive** — perfil único cargado desde **carpetas** + **archivos** seleccionados:
  * - **ADMIN_EMAILS** — emails admin (coma). Notificaciones de solicitudes de acceso;
@@ -59,6 +62,8 @@ var LLM_PROP = Object.freeze({
 
   GLOBANT_EMBEDDING_MODEL: 'GLOBANT_EMBEDDING_MODEL',
   GLOBANT_CHAT_MODEL: 'GLOBANT_CHAT_MODEL',
+  /** Asistente/carpeta para upload temporal /v1/files (análisis de documentos). */
+  GLOBANT_FILES_ASSISTANT_NAME: 'GLOBANT_FILES_ASSISTANT_NAME',
   /** Entero 1–20: tope MB de PDF embebido (RPC base64). Por defecto 12 si no se define. */
   CHAT_PDF_EMBED_MAX_MB: 'CHAT_PDF_EMBED_MAX_MB',
 });

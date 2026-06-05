@@ -11,3 +11,4 @@ alwaysApply: true
 - **Formato**: funciones `t(key)` o `messages[locale][key]`; errores del servidor idealmente como **código estable** (`ERR_*`) mapeado a texto en el cliente para no duplicar traducciones en GAS, salvo mensajes solo-servidor documentados.
 - **Fechas y números**: `Intl.DateTimeFormat` / `Intl.NumberFormat` con el locale activo.
 - Al tocar `index.html` o strings de usuario, **añadir o actualizar claves** en todos los idiomas soportados del catálogo del proyecto (no dejar solo un idioma).
+- **Entrega al cliente**: el pack completo no cabe en un solo `google.script.run` (~60 KB). Usar embed en `doGet` + `A.loadClientI18nPack` / `getI18nPackPart` (ver **`gas-script-run-payload-limit.mdc`**).

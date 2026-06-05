@@ -16,7 +16,7 @@ function doGet(e) {
   tpl.legacyStyles = HtmlService.createHtmlOutputFromFile(
     'app-legacy-styles',
   ).getContent();
-  tpl.i18nEmbed = JSON.stringify(UiStrings_getClientPack_());
+  tpl.i18nEmbed = JSON.stringify(UiStrings_getClientEmbedStub_());
   tpl.clientScriptCore = HtmlService.createHtmlOutputFromFile('app-client-core').getContent();
   tpl.clientScriptI18n = HtmlService.createHtmlOutputFromFile('app-client-i18n').getContent();
   tpl.clientScriptToast = HtmlService.createHtmlOutputFromFile('app-client-toast').getContent();
@@ -134,7 +134,6 @@ function getBootstrap() {
     session: getSessionInfo(),
     llm: LlmOrchestrator_getUiConfig(),
     admin: adminSlice,
-    i18n: UiStrings_getClientPack_(),
     permissions: perms,
     quickPrompts: quickPrompts,
     onboardingQuickPrompts: onboardingQuickPrompts,
@@ -153,6 +152,24 @@ function getBootstrap() {
 function getI18nPack(locale) {
   return AviatorsCode_runRpc_('getI18nPack', function () {
     return UiStrings_getClientPackForLocale(locale === 'en' ? 'en' : 'es');
+  });
+}
+
+/** Metadatos del pack i18n fragmentado (evita límite ~60 KB de google.script.run). */
+function getI18nPackMeta(locale) {
+  return AviatorsCode_runRpc_('getI18nPackMeta', function () {
+    return UiStrings_getClientPackMeta_(locale === 'en' ? 'en' : 'es');
+  });
+}
+
+/**
+ * @param {string} locale
+ * @param {number} partIndex
+ * @return {Object<string, string>}
+ */
+function getI18nPackPart(locale, partIndex) {
+  return AviatorsCode_runRpc_('getI18nPackPart', function () {
+    return UiStrings_getClientPackPart_(locale === 'en' ? 'en' : 'es', partIndex);
   });
 }
 

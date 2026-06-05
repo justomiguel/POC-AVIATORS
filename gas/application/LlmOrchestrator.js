@@ -74,9 +74,10 @@ function LlmOrchestrator_getUiConfig() {
         ? 'globant-assistant'
         : 'globant-rag',
       hint:
-        '' +
+        UiStrings_t(UiStrings_activeLocale_(), 'llm_ui_config_hint_document_chat') +
         (LlmProviderGlobant_isAssistantMode(p)
-          ? UiStrings_t(
+          ? ' ' +
+            UiStrings_t(
               UiStrings_activeLocale_(),
               'llm_ui_config_hint_assistant_profile',
             )

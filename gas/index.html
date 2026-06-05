@@ -35,6 +35,25 @@
   </head>
 
   <body class="h-full min-h-0 bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <div
+      id="app-startup-loader"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/95 dark:bg-slate-900/95"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-7 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+        <div class="loader-flight-inline" aria-hidden="true">
+          <span class="loader-flight-inline-contrail"></span>
+          <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+        </div>
+        <p
+          id="app-startup-loader-msg"
+          class="text-center text-sm font-medium text-slate-700 dark:text-slate-200"
+          data-i18n="app_startup_loading"
+        ></p>
+      </div>
+    </div>
     <main class="h-full min-h-0">
       <div id="view-login" class="login-root">
         <div class="login-card">
@@ -92,11 +111,11 @@
 
       <div
         id="view-app"
-        class="app-shell-view hidden flex h-full min-h-0 max-w-full flex-col overflow-hidden md:flex-row"
+        class="app-shell-view hidden h-full min-h-0 w-full max-w-full overflow-x-hidden max-lg:block lg:flex lg:flex-row"
       >
         <aside
           id="app-sidebar"
-          class="app-sidebar flex h-full min-h-0 w-full shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-800 md:min-h-0 md:w-72 md:border-b-0 md:border-r md:py-4 md:pl-4 md:pr-3"
+          class="app-sidebar flex h-full min-h-0 shrink-0 flex-col border-b border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-800 lg:min-h-0 lg:w-72 lg:border-b-0 lg:border-r lg:py-4 lg:pl-4 lg:pr-3"
           data-i18n-aria-label="sidebar_aria_profile"
           aria-label=""
           aria-hidden="false"
@@ -124,7 +143,7 @@
             <button
               type="button"
               id="mobile-drawer-close-btn"
-              class="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 md:hidden dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+              class="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
               data-i18n-aria-label="mobile_menu_close_aria"
               aria-label=""
             >
@@ -163,19 +182,121 @@
             </div>
 
             <nav
-              class="app-sidebar-nav mb-2 flex flex-col gap-1 rounded-2xl border border-slate-200/80 bg-white/80 p-2 shadow-sm dark:border-slate-600 dark:bg-slate-900/55 dark:shadow-md dark:shadow-black/25"
+              class="app-sidebar-nav mb-2 flex flex-col gap-0.5 rounded-2xl border border-slate-200/80 bg-white/80 p-1.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/55 dark:shadow-md dark:shadow-black/25"
               aria-label="main"
             >
-              <p class="app-nav-section-label" data-i18n="nav_section_consult"></p>
-              <button
-                type="button"
-                class="app-nav-item is-active flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-100 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="chat"
-                id="nav-btn-home"
-              >
-                <i class="fa-solid fa-comments w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_chat"></span>
-              </button>
+              <details id="nav-group-chat-modes" class="app-nav-group">
+                <summary class="app-nav-group-summary">
+                  <i class="fa-solid fa-comments w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span class="min-w-0 flex-1 truncate" data-i18n="nav_group_chat_modes"></span>
+                  <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
+                </summary>
+                <div class="app-nav-group-items">
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child is-active flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="home"
+                    id="nav-btn-home"
+                  >
+                    <i class="fa-solid fa-comments w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_home"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="onboarding"
+                    id="nav-page-onboarding"
+                  >
+                    <i class="fa-solid fa-graduation-cap w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_onboarding"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="proposal-building"
+                    id="nav-page-proposal-building"
+                  >
+                    <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_proposal_building"></span>
+                  </button>
+                </div>
+              </details>
+
+              <details id="nav-group-knowledge" class="app-nav-group hidden">
+                <summary class="app-nav-group-summary">
+                  <i class="fa-solid fa-book w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span class="min-w-0 flex-1 truncate" data-i18n="nav_section_knowledge"></span>
+                  <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
+                </summary>
+                <div class="app-nav-group-items">
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="contents"
+                    id="nav-page-contents"
+                  >
+                    <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_contents"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="clients"
+                    id="nav-page-clients"
+                  >
+                    <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_clients"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="tags"
+                    id="nav-page-tags"
+                  >
+                    <i class="fa-solid fa-tags w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_tags"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="knowledge-graph"
+                    id="nav-page-knowledge-graph"
+                  >
+                    <i class="fa-solid fa-diagram-project w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_knowledge_graph"></span>
+                  </button>
+                </div>
+              </details>
+
+              <details id="nav-group-admin" class="app-nav-group hidden">
+                <summary class="app-nav-group-summary">
+                  <i class="fa-solid fa-sliders w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span class="min-w-0 flex-1 truncate" data-i18n="nav_section_admin"></span>
+                  <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
+                </summary>
+                <div class="app-nav-group-items">
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="metrics"
+                    id="nav-page-metrics"
+                  >
+                    <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_metrics"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="settings"
+                    id="nav-page-settings"
+                  >
+                    <i class="fa-solid fa-gear w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_settings"></span>
+                  </button>
+                </div>
+              </details>
+
+              <div class="app-nav-divider hidden" id="nav-visitor-divider" aria-hidden="true"></div>
               <button
                 type="button"
                 class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
@@ -185,85 +306,6 @@
                 <i class="fa-solid fa-user-lock w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
                 <span data-i18n="nav_request_access"></span>
               </button>
-
-              <div id="nav-section-knowledge" class="app-nav-section hidden">
-                <p class="app-nav-section-label mt-2" data-i18n="nav_section_knowledge"></p>
-                <button
-                  type="button"
-                  class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                  data-app-page="contents"
-                  id="nav-page-contents"
-                >
-                  <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                  <span data-i18n="nav_contents"></span>
-                </button>
-                <button
-                  type="button"
-                  class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                  data-app-page="clients"
-                  id="nav-page-clients"
-                >
-                  <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                  <span data-i18n="nav_clients"></span>
-                </button>
-                <details id="nav-group-explore" class="app-nav-group hidden">
-                  <summary class="app-nav-group-summary">
-                    <i class="fa-solid fa-compass w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                    <span class="min-w-0 flex-1 truncate" data-i18n="nav_explore"></span>
-                    <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400" aria-hidden="true"></i>
-                  </summary>
-                  <div class="app-nav-group-items">
-                    <button
-                      type="button"
-                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                      data-app-page="tags"
-                      id="nav-page-tags"
-                    >
-                      <i class="fa-solid fa-tags w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                      <span data-i18n="nav_tags"></span>
-                    </button>
-                    <button
-                      type="button"
-                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                      data-app-page="knowledge-graph"
-                      id="nav-page-knowledge-graph"
-                    >
-                      <i class="fa-solid fa-diagram-project w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                      <span data-i18n="nav_knowledge_graph"></span>
-                    </button>
-                  </div>
-                </details>
-              </div>
-
-              <div id="nav-section-admin" class="app-nav-section hidden">
-                <details id="nav-group-admin" class="app-nav-group mt-2">
-                  <summary class="app-nav-group-summary">
-                    <i class="fa-solid fa-sliders w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                    <span class="min-w-0 flex-1 truncate" data-i18n="nav_section_admin"></span>
-                    <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400" aria-hidden="true"></i>
-                  </summary>
-                  <div class="app-nav-group-items">
-                    <button
-                      type="button"
-                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                      data-app-page="metrics"
-                      id="nav-page-metrics"
-                    >
-                      <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                      <span data-i18n="nav_metrics"></span>
-                    </button>
-                    <button
-                      type="button"
-                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                      data-app-page="settings"
-                      id="nav-page-settings"
-                    >
-                      <i class="fa-solid fa-gear w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                      <span data-i18n="nav_settings"></span>
-                    </button>
-                  </div>
-                </details>
-              </div>
             </nav>
           </div>
 
@@ -337,14 +379,14 @@
         <button
           type="button"
           id="app-drawer-backdrop"
-          class="app-drawer-backdrop md:hidden"
+          class="app-drawer-backdrop lg:hidden"
           tabindex="-1"
           aria-hidden="true"
           data-i18n-aria-label="mobile_menu_backdrop_aria"
           aria-label=""
         ></button>
-          <div class="app-content app-content-panel relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div class="app-mobile-topbar flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-3 py-2.5 md:hidden dark:border-slate-700 dark:bg-slate-800/95">
+          <div class="app-content app-content-panel relative flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
+            <div class="app-mobile-topbar flex w-full items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-3 py-2.5 lg:hidden dark:border-slate-700 dark:bg-slate-800/95">
               <button
                 type="button"
                 id="mobile-drawer-open-btn"
@@ -385,7 +427,7 @@
                 </div>
               </div>
             </section>
-            <div id="home-member" class="home-member mx-auto max-w-6xl space-y-6">
+            <div id="home-member" class="home-member w-full max-lg:mx-0 max-lg:max-w-none space-y-6 lg:mx-auto lg:max-w-6xl">
             <div id="page-home" class="app-page app-page-home space-y-6" data-app-page="home">
             <div id="member-standard-home">
         <header id="home-welcome" class="mb-6 text-center">
@@ -514,7 +556,7 @@
 
         <section
           id="home-chat-shell"
-          class="home-chat-shell"
+          class="home-chat-shell w-full max-lg:mx-0 max-lg:max-w-none"
           aria-labelledby="dashboard-title"
         >
         <div
@@ -568,7 +610,7 @@
               </button>
             </div>
           </div>
-          <div class="flex items-start justify-between gap-3">
+          <div class="home-chat-head-main flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div class="min-w-0 flex-1">
               <h1
                 class="sr-only"
@@ -579,7 +621,7 @@
                 id="dashboard-lead"
               ></p>
             </div>
-            <div class="flex shrink-0 items-center gap-2">
+            <div class="home-chat-toolbar flex w-full max-w-full shrink-0 flex-wrap items-center gap-2 md:w-auto md:justify-end">
               <div class="relative">
                 <button
                   type="button"
@@ -2209,24 +2251,36 @@
               class="app-page app-page-knowledge-graph hidden mx-auto max-w-[min(100%,92rem)] space-y-3 pb-6"
               data-app-page="knowledge-graph"
             >
-              <header class="kg-page-head flex flex-wrap items-center justify-between gap-3" aria-labelledby="kg-page-title">
-                <div class="flex min-w-0 items-center gap-3">
-                  <div class="settings-page-head-icon shrink-0" aria-hidden="true">
-                    <i class="fa-solid fa-diagram-project"></i>
+              <header class="kg-page-head space-y-3" aria-labelledby="kg-page-title">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <div class="settings-page-head-icon shrink-0" aria-hidden="true">
+                      <i class="fa-solid fa-diagram-project"></i>
+                    </div>
+                    <div class="min-w-0">
+                      <h2 id="kg-page-title" class="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100" data-i18n="page_knowledge_graph_title"></h2>
+                      <p class="mt-0.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_knowledge_graph_lead"></p>
+                    </div>
                   </div>
-                  <div class="min-w-0">
-                    <h2 id="kg-page-title" class="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100" data-i18n="page_knowledge_graph_title"></h2>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_knowledge_graph_lead"></p>
-                  </div>
+                  <p
+                    id="kg-status"
+                    class="kg-status-pill max-w-full truncate text-xs text-slate-600 dark:text-slate-400"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    &nbsp;
+                  </p>
                 </div>
-                <p
-                  id="kg-status"
-                  class="kg-status-pill max-w-full truncate text-xs text-slate-600 dark:text-slate-400"
-                  role="status"
-                  aria-live="polite"
+                <div
+                  id="kg-sync-toolbar"
+                  class="hidden flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-600 dark:bg-slate-800/40"
                 >
-                  &nbsp;
-                </p>
+                  <p class="min-w-0 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_sync_admin_lead"></p>
+                  <button type="button" id="kg-rebuild-btn" class="btn btn-md btn-secondary shrink-0 inline-flex items-center gap-2">
+                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                    <span data-i18n="kg_btn_rebuild"></span>
+                  </button>
+                </div>
               </header>
               <div
                 id="kg-pending-sync-banner"
@@ -2384,10 +2438,6 @@
                   <button type="button" id="kg-focus-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
                     <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
                     <span data-i18n="kg_btn_focus"></span>
-                  </button>
-                  <button type="button" id="kg-rebuild-btn" class="btn btn-md btn-secondary hidden inline-flex items-center gap-2">
-                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                    <span data-i18n="kg_btn_rebuild"></span>
                   </button>
                 </div>
                 <fieldset class="kg-type-toggles border-0 p-0" aria-labelledby="kg-type-toggles-legend">

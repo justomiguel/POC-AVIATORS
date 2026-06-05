@@ -2265,8 +2265,12 @@ function AgentOrchestrator_debugRagDiagnostics_(question) {
   return out;
 }
 
-/** Tope de bytes para adjuntos efímeros en el chat (evita timeouts de UrlFetch). */
-var EPHEMERAL_DOC_MAX_BYTES = 12 * 1024 * 1024;
+/** Tope de bytes para adjuntos efímeros (multipart /v1/files; alineado a contenidos). */
+function AgentOrchestrator_ephemeralMaxBytes_() {
+  return typeof GLOBANT_DOCUMENT_CHAT_MAX_BYTES !== 'undefined'
+    ? GLOBANT_DOCUMENT_CHAT_MAX_BYTES
+    : 50 * 1024 * 1024;
+}
 
 /**
  * Valida payload de documento efímero del chat (no persiste, no requiere permiso de contenidos).
@@ -2295,10 +2299,11 @@ function AgentOrchestrator_validateEphemeralPayload_(payload) {
   if (!bytes || bytes.length === 0) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_empty'));
   }
-  if (bytes.length > EPHEMERAL_DOC_MAX_BYTES) {
+  var maxBytes = AgentOrchestrator_ephemeralMaxBytes_();
+  if (bytes.length > maxBytes) {
     throw new Error(
       UiStrings_fmt_('err_ephemeral_doc_too_large', {
-        max_mb: String(Math.floor(EPHEMERAL_DOC_MAX_BYTES / (1024 * 1024))),
+        max_mb: String(Math.floor(maxBytes / (1024 * 1024))),
       }),
     );
   }
@@ -2307,12 +2312,10 @@ function AgentOrchestrator_validateEphemeralPayload_(payload) {
 
 /**
  * Extrae metadata del PDF adjunto (tema, industria, cliente) para enriquecer la búsqueda en catálogo.
- * @param {Object} client GlobantAssistantApiClient
- * @param {string} fileBase64
- * @param {string} mimeType
+ * @param {{client:Object,fileId:string,folder:string}} session
  * @return {{reason:string,docKind:string,topics:Array<string>,industry:string,clientHint:string}}
  */
-function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeType) {
+function AgentOrchestrator_classifyEphemeralDocument_(session) {
   var classifyPrompt = [
     'Analizá el documento adjunto y respondé SOLO con JSON válido (sin markdown):',
     '{',
@@ -2327,12 +2330,10 @@ function AgentOrchestrator_classifyEphemeralDocument_(client, fileBase64, mimeTy
     'Enfocate en extraer tema, industria y entidades mencionadas.',
   ].join('\n');
 
-  var result = client.chatWithFileInline(
-    ContentExtraction_resolveChatModel_(),
+  var result = GlobantDocumentChat_sessionChat_(
+    session,
     'Sos un analizador de documentos. Devolvé únicamente JSON.',
     classifyPrompt,
-    fileBase64,
-    mimeType,
   );
 
   var raw = String(result.text || '').trim();
@@ -2439,35 +2440,44 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
     baseUrl: baseUrl || undefined,
   });
 
-  var classification = AgentOrchestrator_classifyEphemeralDocument_(
-    client,
-    prepared.dataBase64,
-    prepared.mimeType,
-  );
-
-  var catalogDocs = ContentCatalog_findRowsForEphemeralDocument_(q, classification, {
-    limit: 8,
-  });
-  catalogDocs = ContentCatalog_filterDocsForSessionRole_(catalogDocs);
-
+  var bytes = Utilities.base64Decode(prepared.dataBase64);
+  var blob = Utilities.newBlob(bytes, prepared.mimeType, prepared.name);
+  var session = GlobantDocumentChat_beginSession_(client, blob);
+  /** @type {Object} */
+  var classification = {
+    reason: '',
+    docKind: 'other',
+    topics: [],
+    industry: '',
+    clientHint: '',
+  };
+  /** @type {{text:string, parsed:Object}} */
+  var answerResult = { text: '', parsed: {} };
+  /** @type {Array<Object>} */
+  var catalogDocs = [];
   var ctx = AgentOrchestrator_loadContext_();
   var orchestrator = ctx.orchestrator;
-  var systemPrompt = AgentOrchestrator_buildEphemeralDocumentSystemPrompt_(
-    q,
-    catalogDocs,
-    orchestrator,
-  );
-  var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
-  userMessage +=
-    '\n\n[DOCUMENTO ADJUNTO — analizá el PDF adjunto y respondé según las instrucciones del sistema.]';
+  try {
+    classification = AgentOrchestrator_classifyEphemeralDocument_(session);
 
-  var answerResult = client.chatWithFileInline(
-    ContentExtraction_resolveChatModel_(),
-    systemPrompt,
-    userMessage,
-    prepared.dataBase64,
-    prepared.mimeType,
-  );
+    catalogDocs = ContentCatalog_findRowsForEphemeralDocument_(q, classification, {
+      limit: 8,
+    });
+    catalogDocs = ContentCatalog_filterDocsForSessionRole_(catalogDocs);
+
+    var systemPrompt = AgentOrchestrator_buildEphemeralDocumentSystemPrompt_(
+      q,
+      catalogDocs,
+      orchestrator,
+    );
+    var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
+    userMessage +=
+      '\n\nRespondé según las instrucciones del sistema usando el documento adjunto en tu carpeta de archivos.';
+
+    answerResult = GlobantDocumentChat_sessionChat_(session, systemPrompt, userMessage);
+  } finally {
+    GlobantDocumentChat_endSession_(session);
+  }
 
   var rawA = JSON.stringify(answerResult.parsed || {}).slice(0, 4000);
   var answer = AgentOrchestrator_sanitizeAnswer_(answerResult.text || '');
@@ -2484,8 +2494,8 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
 
   return {
     answer: answer,
-    model: ContentExtraction_resolveChatModel_(),
-    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_chat'),
+    model: GlobantDocumentChat_resolveAssistantFolder_(),
+    providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_assistant'),
     rawJson: rawA,
     agentName: orchestrator.profileName,
     references: references,
