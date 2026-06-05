@@ -32,6 +32,22 @@ function GlobantAssistant_resolveChatModel_() {
 }
 
 /**
+ * @param {string=} modelSlug ej. vertex_ai/gemini-2.5-flash
+ * @return {{providerName:string, modelName:string}}
+ */
+function GlobantAssistant_parseProviderModel_(modelSlug) {
+  var m = String(modelSlug || GlobantAssistant_resolveChatModel_()).trim();
+  var slash = m.indexOf('/');
+  if (slash > 0) {
+    return {
+      providerName: m.slice(0, slash),
+      modelName: m.slice(slash + 1),
+    };
+  }
+  return { providerName: 'vertex_ai', modelName: m || 'gemini-2.5-flash' };
+}
+
+/**
  * @typedef {Object} GlobantAssistantApiClientConfig
  * @property {string} apiKey
  * @property {string} [baseUrl]
@@ -268,6 +284,99 @@ function GlobantAssistantApiClient_create(config) {
   }
 
   /**
+   * @param {string} idOrName assistantId o assistantName
+   * @return {Object|null} null si no existe (HTTP 404)
+   */
+  function getAssistant(idOrName) {
+    var target = String(idOrName || '').trim();
+    if (!target) return null;
+    var r = BearerHttp_fetch(
+      baseUrl + '/v1/assistant/' + encodeURIComponent(target),
+      {
+        method: 'get',
+        headers: authHeaders({ Accept: 'application/json' }),
+      },
+    );
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (code === 404) return null;
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/assistant/{id}',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
+    }
+    try {
+      return JSON.parse(text);
+    } catch (eParse) {
+      throw new Error(
+        UiStrings_fmt_('err_json_invalid_detail', {
+          message: (eParse && eParse.message) || '',
+        }),
+      );
+    }
+  }
+
+  /**
+   * @param {{name:string, prompt:string, description?:string, providerName?:string, modelName?:string}} spec
+   * @return {Object}
+   */
+  function createChatAssistant(spec) {
+    var parts = GlobantAssistant_parseProviderModel_(
+      spec.providerName && spec.modelName
+        ? spec.providerName + '/' + spec.modelName
+        : null,
+    );
+    var body = {
+      type: 'chat',
+      name: String(spec.name || '').trim(),
+      description: String(spec.description || '').trim(),
+      prompt: String(spec.prompt || '').trim(),
+      llmSettings: {
+        providerName: spec.providerName || parts.providerName,
+        modelName: spec.modelName || parts.modelName,
+        temperature: 0.1,
+        maxTokens: 8192,
+        uploadFiles: true,
+      },
+    };
+    if (!body.name || !body.prompt) {
+      throw new Error(
+        UiStrings_t(UiStrings_activeLocale_(), 'err_globant_files_assistant_create'),
+      );
+    }
+    var r = BearerHttp_fetch(baseUrl + '/v1/assistant', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: authHeaders({}),
+      payload: JSON.stringify(body),
+    });
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: '/v1/assistant',
+          code: String(code),
+          detail: text.slice(0, 800),
+        }),
+      );
+    }
+    try {
+      return JSON.parse(text);
+    } catch (eParseCreate) {
+      throw new Error(
+        UiStrings_fmt_('err_json_invalid_detail', {
+          message: (eParseCreate && eParseCreate.message) || '',
+        }),
+      );
+    }
+  }
+
+  /**
    * @param {string} assistantName
    * @param {string} prompt
    */
@@ -412,6 +521,8 @@ function GlobantAssistantApiClient_create(config) {
 
   return {
     getOrganizationAndProjectIds: getOrganizationAndProjectIds,
+    getAssistant: getAssistant,
+    createChatAssistant: createChatAssistant,
     uploadFile: uploadFile,
     deleteFile: deleteFile,
     listAllFiles: listAllFiles,

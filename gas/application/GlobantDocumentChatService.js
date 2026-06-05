@@ -1,11 +1,11 @@
 /**
- * @fileoverview Análisis de documentos vía Globant Files API + Assistant Chat.
- * Flujo: POST /v1/files (multipart) → breve espera → POST /v1/assistant/chat → DELETE /v1/files/{id}.
- * Usado por extracción de contenidos, chat efímero y armado de propuestas.
+ * @fileoverview Análisis de documentos vía Globant Files + Chat Assistant permanente.
+ * Flujo: asegurar assistant → POST /v1/files (folder=assistant) → POST /v1/assistant/chat
+ * → DELETE /v1/files/{id}. Usado por extracción de contenidos, chat efímero y armado de propuestas.
  */
 
-/** Asistente/carpeta por defecto si no hay Script Property (debe existir en Globant). */
-var GLOBANT_DOCUMENT_CHAT_DEFAULT_ASSISTANT = 'aviators-document-analysis';
+/** Nombre estable del Chat Assistant para archivos temporales (POST /v1/assistant si no existe). */
+var GLOBANT_DOCUMENT_FILES_ASSISTANT_DEFAULT = 'aviators-document-files';
 
 /**
  * Mismo tope que subida local de contenidos (UrlFetch POST ~50 MB).
@@ -16,7 +16,7 @@ var GLOBANT_DOCUMENT_CHAT_MAX_BYTES =
     ? CONTENT_UPLOAD_LOCAL_MAX_BYTES
     : 50 * 1024 * 1024;
 
-/** Espera tras upload antes del chat (ms). Alineado a LlmProviderGlobant_consultAssistantWithDriveApi. */
+/** Espera tras upload antes del chat assistant (ms). */
 var GLOBANT_DOCUMENT_CHAT_UPLOAD_WAIT_MS = 1500;
 
 /**
@@ -27,29 +27,71 @@ function GlobantDocumentChat_maxBytes_() {
 }
 
 /**
- * Carpeta/asistente Globant para archivos temporales de análisis.
- * Prioridad: GLOBANT_FILES_ASSISTANT_NAME → GLOBANT_RAG_PROFILE_NAME → defecto.
+ * Nombre configurado o por defecto del assistant de archivos (sin crear en Globant).
  * @return {string}
  */
-function GlobantDocumentChat_resolveAssistantFolder_() {
+function GlobantDocumentChat_getAssistantName_() {
   var p = PropertiesService.getScriptProperties();
   var dedicated = (p.getProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME) || '').trim();
-  if (dedicated) return dedicated;
-  var profile = (p.getProperty(LLM_PROP.GLOBANT_PROFILE) || '').trim();
-  if (profile) return profile;
-  return GLOBANT_DOCUMENT_CHAT_DEFAULT_ASSISTANT;
+  return dedicated || GLOBANT_DOCUMENT_FILES_ASSISTANT_DEFAULT;
+}
+
+/**
+ * Crea en Globant (si falta) el Chat Assistant permanente y persiste GLOBANT_FILES_ASSISTANT_NAME.
+ * @param {ReturnType<GlobantAssistantApiClient_create>} client
+ * @return {string} assistantName usado como carpeta en /v1/files y en /v1/assistant/chat
+ */
+function GlobantDocumentChat_ensurePermanentAssistant_(client) {
+  var p = PropertiesService.getScriptProperties();
+  var name = GlobantDocumentChat_getAssistantName_();
+  var existing = client.getAssistant(name);
+  if (existing) {
+    var resolved =
+      String(existing.assistantName || existing.name || name).trim() || name;
+    if (!p.getProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME)) {
+      p.setProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME, resolved);
+    }
+    return resolved;
+  }
+  var parts = GlobantAssistant_parseProviderModel_(GlobantAssistant_resolveChatModel_());
+  var created = client.createChatAssistant({
+    name: name,
+    description: UiStrings_t(
+      UiStrings_activeLocale_(),
+      'globant_files_assistant_description',
+    ),
+    prompt: UiStrings_t(UiStrings_activeLocale_(), 'globant_files_assistant_prompt'),
+    providerName: parts.providerName,
+    modelName: parts.modelName,
+  });
+  var assistantName =
+    String(created.assistantName || created.name || name).trim() || name;
+  p.setProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME, assistantName);
+  return assistantName;
+}
+
+/**
+ * @deprecated Usar GlobantDocumentChat_getAssistantName_ o ensurePermanentAssistant_.
+ * @param {ReturnType<GlobantAssistantApiClient_create>=} client
+ * @return {string}
+ */
+function GlobantDocumentChat_resolveAssistantFolder_(client) {
+  if (client) {
+    return GlobantDocumentChat_ensurePermanentAssistant_(client);
+  }
+  return GlobantDocumentChat_getAssistantName_();
 }
 
 /**
  * @param {string} systemPrompt
  * @param {string} userPrompt
- * @param {string} assistantFolder
+ * @param {string} assistantName
  * @return {string}
  */
-function GlobantDocumentChat_buildPrompt_(systemPrompt, userPrompt, assistantFolder) {
+function GlobantDocumentChat_buildPrompt_(systemPrompt, userPrompt, assistantName) {
   var sys = String(systemPrompt || '').trim();
   var usr = String(userPrompt || '').trim();
-  var folder = String(assistantFolder || '').trim();
+  var folder = String(assistantName || '').trim();
   var docNote = [
     '[DOCUMENTO ADJUNTO]',
     'El archivo subido está disponible en tu carpeta de archivos',
@@ -79,7 +121,7 @@ function GlobantDocumentChat_buildPrompt_(systemPrompt, userPrompt, assistantFol
 /**
  * @param {ReturnType<GlobantAssistantApiClient_create>} client
  * @param {GoogleAppsScript.Base.Blob} blob
- * @return {{client:Object, fileId:string, folder:string}}
+ * @return {{mode:string, client:Object, fileId:string, folder:string}}
  */
 function GlobantDocumentChat_beginSession_(client, blob) {
   if (!blob || !blob.getBytes().length) {
@@ -95,7 +137,7 @@ function GlobantDocumentChat_beginSession_(client, blob) {
       }),
     );
   }
-  var folder = GlobantDocumentChat_resolveAssistantFolder_();
+  var folder = GlobantDocumentChat_ensurePermanentAssistant_(client);
   var up = client.uploadFile(blob, folder);
   var fileId = String(up.fileId || '').trim();
   if (!fileId) {
@@ -104,11 +146,11 @@ function GlobantDocumentChat_beginSession_(client, blob) {
     );
   }
   Utilities.sleep(GLOBANT_DOCUMENT_CHAT_UPLOAD_WAIT_MS);
-  return { client: client, fileId: fileId, folder: folder };
+  return { mode: 'assistant', client: client, fileId: fileId, folder: folder };
 }
 
 /**
- * @param {{client:Object, fileId:string, folder:string}} session
+ * @param {{mode:string, folder:string, client:Object}} session
  * @param {string} systemPrompt
  * @param {string} userPrompt
  * @return {{text:string, parsed:Object}}
@@ -117,16 +159,30 @@ function GlobantDocumentChat_sessionChat_(session, systemPrompt, userPrompt) {
   var prompt = GlobantDocumentChat_buildPrompt_(systemPrompt, userPrompt, session.folder);
   var props = PropertiesService.getScriptProperties();
   var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(props);
-  return GlobantAssistantApiClient_sendChatWithRetry(
-    session.client,
-    session.folder,
-    prompt,
-    maxRetries,
-  );
+  try {
+    return GlobantAssistantApiClient_sendChatWithRetry(
+      session.client,
+      session.folder,
+      prompt,
+      maxRetries,
+    );
+  } catch (eChat) {
+    var raw = String(eChat && eChat.message ? eChat.message : eChat);
+    if (raw.indexOf('Assistant Not Found') >= 0) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_assistant_not_found', {
+          assistant: session.folder,
+        }),
+      );
+    }
+    throw eChat;
+  }
 }
 
 /**
- * @param {{client:Object, fileId:string, folder:string}|null|undefined} session
+ * Borra el archivo temporal en Globant Files API (el assistant permanece).
+ * Doc: DELETE /v1/files/{fileId}?organization=…&project=…
+ * @param {Object|null|undefined} session
  */
 function GlobantDocumentChat_endSession_(session) {
   if (!session || !session.fileId || !session.client) return;
@@ -143,7 +199,7 @@ function GlobantDocumentChat_endSession_(session) {
 }
 
 /**
- * Sube un archivo, consulta al asistente y borra el archivo temporal.
+ * Sube un archivo, consulta al assistant permanente y borra el archivo temporal.
  * @param {ReturnType<GlobantAssistantApiClient_create>} client
  * @param {GoogleAppsScript.Base.Blob} blob
  * @param {string} systemPrompt

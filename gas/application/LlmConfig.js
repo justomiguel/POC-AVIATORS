@@ -15,9 +15,10 @@
  * GLOBANT_RAG_SKIP_AUTO_PROFILE. Opcional Gemini: GEMINI_MODEL.
  * GLOBANT_CHAT_MODEL — modelo para /v1/chat/completions (roster, catálogo, texto sin archivo);
  *   ej. vertex_ai/gemini-2.5-flash u openai/gpt-5.5 (Chat API directo, ver docs Globant).
- * GLOBANT_FILES_ASSISTANT_NAME — asistente/carpeta para análisis temporal de archivos
- *   (/v1/files + /v1/assistant/chat): extracción de contenidos, chat efímero, armado de propuestas.
- *   Si no se define, se usa GLOBANT_RAG_PROFILE_NAME o aviators-document-analysis.
+ * GLOBANT_FILES_ASSISTANT_NAME — Chat Assistant permanente para /v1/files + /v1/assistant/chat
+ *   (extracción de contenidos, chat adjunto, armado de propuestas). Si no está definido, Aviators crea
+ *   «aviators-document-files» en el primer uso (POST /v1/assistant, uploadFiles: true) y guarda el nombre aquí.
+ *   Los PDFs subidos a /v1/files se borran al terminar cada sesión (DELETE /v1/files/{id}); el assistant no se borra.
  *
  * **Admin · corpus desde Drive** — perfil único cargado desde **carpetas** + **archivos** seleccionados:
  * - **ADMIN_EMAILS** — emails admin (coma). Notificaciones de solicitudes de acceso;

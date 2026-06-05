@@ -1412,7 +1412,7 @@ var UI_STRINGS = {
     globant_hint_assistant:
       'Modo Assistant: aquí ves archivos de Files API, no perfiles RAG. Listado GET /v1/files/all · podés borrar cada archivo.',
     globant_hint_document_chat:
-      'Análisis de PDFs (contenidos, chat adjunto, armado de propuestas): subida multipart /v1/files + /v1/assistant/chat. Carpeta/asistente: GLOBANT_FILES_ASSISTANT_NAME o GLOBANT_RAG_PROFILE_NAME (defecto aviators-document-analysis). El archivo temporal se borra al terminar.',
+      'Análisis de PDFs adjuntos: Chat Assistant permanente (defecto aviators-document-files, autocreado con POST /v1/assistant) + /v1/files + /v1/assistant/chat. Cada PDF se borra con DELETE /v1/files/{id} al terminar; el assistant queda.',
     globant_hint_rag:
       'Tras Actualizar verás cada agente (perfil RAG). Docs = archivos indexados. «Eliminar agente» borra el perfil en Globant.',
     globant_hint_no_key:
@@ -1511,6 +1511,16 @@ var UI_STRINGS = {
       'Globant /v1/files no devolvió identificador del archivo subido.',
     err_globant_document_too_large:
       'El archivo "{name}" supera el máximo de {max_mb} MB para análisis en Globant.',
+    err_globant_assistant_not_found:
+      'Globant no encontró el Chat Assistant «{assistant}». Revisá GLOBANT_FILES_ASSISTANT_NAME o borrá la propiedad para que Aviators recree aviators-document-files.',
+    err_globant_files_assistant_required:
+      'No se pudo resolver el Chat Assistant para análisis de PDFs (/v1/files + /v1/assistant/chat).',
+    err_globant_files_assistant_create:
+      'No se pudo crear el Chat Assistant permanente en Globant (POST /v1/assistant).',
+    globant_files_assistant_description:
+      'Aviators — análisis temporal de PDFs vía /v1/files (contenidos, chat adjunto, propuestas).',
+    globant_files_assistant_prompt:
+      'Sos un asistente de análisis de documentos. Leé el archivo subido a tu carpeta y respondé con precisión. Si piden JSON, devolvé solo JSON válido sin markdown.',
     err_globant_chat_retry_unknown:
       'GlobantAssistantApiClient_sendChatWithRetry: error desconocido.',
     err_json_invalid_detail: 'JSON inválido: {message}',
@@ -1539,9 +1549,9 @@ var UI_STRINGS = {
       'No hay proveedor LLM: en este proyecto Apps Script abrí el engranaje «Configuración del proyecto» → «Propiedades del script» y agregá la propiedad GLOBANT_AGENTS_API_KEY o GEMINI_API_KEY con tu clave. El código solo lee esas propiedades (no lee valores pegados en archivos .gs). Opcional: LLM_PROVIDER=globant|gemini.',
     llm_project_hint_autocreate: '(se creará en la primera consulta)',
     llm_ui_config_hint_assistant_profile:
-      'Assistant: GLOBANT_RAG_PROFILE_NAME (ej. cv-extractor). PDFs: GLOBANT_FILES_ASSISTANT_NAME o el mismo perfil.',
+      'Chat con agentes RAG: GLOBANT_RAG_PROFILE_NAME. PDFs adjuntos: assistant aviators-document-files (autocreado; override con GLOBANT_FILES_ASSISTANT_NAME).',
     llm_ui_config_hint_document_chat:
-      'PDFs grandes: /v1/files + /v1/assistant/chat. Definí GLOBANT_FILES_ASSISTANT_NAME o usá GLOBANT_RAG_PROFILE_NAME.',
+      'PDFs adjuntos: /v1/files + assistant permanente (aviators-document-files). Cada archivo se borra al terminar; el assistant queda.',
     llm_ui_config_no_keys:
       'Este despliegue no ve ninguna clave. En el proyecto vinculado a clasp: Editor → ⚙️ Configuración del proyecto → Propiedades del script → agregá GLOBANT_AGENTS_API_KEY (valor = tu Bearer token) y guardá; podés tener que volver a abrir la web app. Opcional: LLM_PROVIDER, GLOBANT_API_MODE.',
     drive_export_pdf_failed:
@@ -3484,7 +3494,7 @@ var UI_STRINGS = {
     globant_hint_assistant:
       'Assistant mode: Files API files, not RAG profiles. List GET /v1/files/all · you can delete each file.',
     globant_hint_document_chat:
-      'PDF analysis (contents, chat attachment, proposal building): multipart /v1/files + /v1/assistant/chat. Folder/assistant: GLOBANT_FILES_ASSISTANT_NAME or GLOBANT_RAG_PROFILE_NAME (default aviators-document-analysis). Temp files are deleted when done.',
+      'Attached PDF analysis: permanent Chat Assistant (default aviators-document-files, auto-created via POST /v1/assistant) + /v1/files + /v1/assistant/chat. Each PDF is deleted with DELETE /v1/files/{id} when done; the assistant remains.',
     globant_hint_rag:
       'After Refresh you see each agent (RAG profile). Docs = indexed files. “Delete agent” removes the profile in Globant.',
     globant_hint_no_key:
@@ -3579,6 +3589,16 @@ var UI_STRINGS = {
       'Globant /v1/files did not return an id for the uploaded file.',
     err_globant_document_too_large:
       'File "{name}" exceeds the {max_mb} MB limit for Globant document analysis.',
+    err_globant_assistant_not_found:
+      'Globant could not find Chat Assistant «{assistant}». Check GLOBANT_FILES_ASSISTANT_NAME or clear it so Aviators can recreate aviators-document-files.',
+    err_globant_files_assistant_required:
+      'Could not resolve the Chat Assistant for PDF analysis (/v1/files + /v1/assistant/chat).',
+    err_globant_files_assistant_create:
+      'Could not create the permanent Chat Assistant in Globant (POST /v1/assistant).',
+    globant_files_assistant_description:
+      'Aviators — temporary PDF analysis via /v1/files (contents, chat attachment, proposals).',
+    globant_files_assistant_prompt:
+      'You are a document analysis assistant. Read the file uploaded to your folder and answer accurately. When JSON is requested, return valid JSON only with no markdown.',
     err_globant_chat_retry_unknown:
       'GlobantAssistantApiClient_sendChatWithRetry: unknown error.',
     err_json_invalid_detail: 'Invalid JSON: {message}',
@@ -3607,9 +3627,9 @@ var UI_STRINGS = {
       'No LLM provider: in this Apps Script project open the gear «Project settings» → «Script properties» and add GLOBANT_AGENTS_API_KEY or GEMINI_API_KEY with your key. The code only reads those properties (not values pasted in .gs files). Optional: LLM_PROVIDER=globant|gemini.',
     llm_project_hint_autocreate: '(will be created on first query)',
     llm_ui_config_hint_assistant_profile:
-      'Assistant: GLOBANT_RAG_PROFILE_NAME (e.g. cv-extractor). PDFs: GLOBANT_FILES_ASSISTANT_NAME or the same profile.',
+      'RAG agent chat: GLOBANT_RAG_PROFILE_NAME. Attached PDFs: aviators-document-files assistant (auto-created; override with GLOBANT_FILES_ASSISTANT_NAME).',
     llm_ui_config_hint_document_chat:
-      'Large PDFs: /v1/files + /v1/assistant/chat. Set GLOBANT_FILES_ASSISTANT_NAME or use GLOBANT_RAG_PROFILE_NAME.',
+      'Attached PDFs: /v1/files + permanent assistant (aviators-document-files). Each file is deleted when done; the assistant stays.',
     llm_ui_config_no_keys:
       'This deployment does not see any key. In the clasp-linked project: Editor → ⚙️ Project settings → Script properties → add GLOBANT_AGENTS_API_KEY (value = your Bearer token) and save; you may need to reopen the web app. Optional: LLM_PROVIDER, GLOBANT_API_MODE.',
     drive_export_pdf_failed:
