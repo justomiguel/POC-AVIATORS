@@ -31,11 +31,52 @@ function GlobantRag_escapeLangChainFStringLiterals_(text, preserveKeys) {
   return t;
 }
 
+/** Tope de tokens LLM en perfiles RAG Globant (creación y actualización de prompt). */
+var GLOBANT_RAG_DEFAULT_MAX_TOKENS = 8000;
+
+/**
+ * Bloque `searchOptions.llm` completo para POST/PUT de perfil (Globant rechaza llm parcial).
+ * @return {{temperature:number,maxTokens:number,modelName:string,provider:string,type:string}}
+ */
+function GlobantRagDefaults_defaultSearchLlm_() {
+  return {
+    temperature: 0.2,
+    maxTokens: GLOBANT_RAG_DEFAULT_MAX_TOKENS,
+    modelName: 'chatgpt-4o-latest',
+    provider: 'openai',
+    type: '',
+  };
+}
+
+/**
+ * Fusiona LLM remoto con defaults; rellena modelName/provider si el PUT anterior dejó el perfil incompleto.
+ * @param {Object} [remoteLlm]
+ * @return {Object}
+ */
+function GlobantRagDefaults_mergeSearchLlm_(remoteLlm) {
+  var base = GlobantRagDefaults_defaultSearchLlm_();
+  var r = remoteLlm && typeof remoteLlm === 'object' ? remoteLlm : {};
+  var modelName = String(r.modelName || r.model || '').trim();
+  var provider = String(r.provider || '').trim();
+  return {
+    temperature:
+      typeof r.temperature === 'number' && !isNaN(r.temperature)
+        ? r.temperature
+        : base.temperature,
+    maxTokens: GLOBANT_RAG_DEFAULT_MAX_TOKENS,
+    modelName: modelName || base.modelName,
+    provider: provider || base.provider,
+    type: r.type != null ? String(r.type) : base.type,
+  };
+}
+
 /** @return {string} plantilla por defecto con marcadores RAG */
 function GlobantRagDefaults_defaultSearchPrompt_() {
   return (
-    'Sos un asistente en español. Si abajo hay contexto documental útil, basá la respuesta en él. ' +
-    'Si el contexto está vacío o la pregunta es general (fecha, saludo, etc.), respondé de forma clara y breve.\n\n' +
+    'Sos un asistente en español. Si abajo hay contexto documental útil, desarrollá la respuesta con detalle, ' +
+    'explicando y citando lo relevante del contexto (no te limites a un resumen de una línea). ' +
+    'Priorizá respuestas completas y estructuradas cuando haya material útil. ' +
+    'Si el contexto está vacío o la pregunta es solo un saludo o algo trivial (fecha, etc.), respondé de forma clara y breve; en cualquier otro caso priorizá extensión y detalle sobre brevedad.\n\n' +
     'Contexto:\n{context}\n\nPregunta: {question}\n'
   );
 }
@@ -71,13 +112,7 @@ function GlobantRagDefaults_buildCreateProfileBody(name, description) {
     description: description,
     searchOptions: {
       historyCount: 1,
-      llm: {
-        temperature: 0.2,
-        maxTokens: 3000,
-        modelName: 'chatgpt-4o-latest',
-        provider: 'openai',
-        type: '',
-      },
+      llm: GlobantRagDefaults_defaultSearchLlm_(),
       search: {
         k: 5,
         returnSourceDocuments: true,
@@ -133,21 +168,29 @@ function GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
 }
 
 /**
- * Cuerpo PUT `/v1/search/profile/{name}` para actualizar solo prompt (sin `name` ni `indexOptions`).
+ * Cuerpo PUT `/v1/search/profile/{name}` (sin `name` ni `indexOptions`).
+ * Incluye `searchOptions.llm` completo (merge con remoto) para no dejar el perfil inválido.
  * No incluye `welcomeData` para no borrar la sección existente en Globant.
  *
  * @param {string} description
  * @param {string} searchPromptTemplate
+ * @param {Object} [remoteLlm] — si se omite, se usan defaults completos
  * @return {Object}
  */
 function GlobantRagDefaults_buildUpdateSearchPromptBody(
   description,
   searchPromptTemplate,
+  remoteLlm,
 ) {
+  var llm =
+    remoteLlm != null
+      ? GlobantRagDefaults_mergeSearchLlm_(remoteLlm)
+      : GlobantRagDefaults_defaultSearchLlm_();
   return {
     description: description,
     status: 1,
     searchOptions: {
+      llm: llm,
       search: {
         prompt: GlobantRagDefaults_coerceSearchPromptTemplate(searchPromptTemplate),
       },

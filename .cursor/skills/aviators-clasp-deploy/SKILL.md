@@ -14,6 +14,7 @@ disable-model-invocation: false
 - **clasp** config lives at repo root: `.clasp.json` sets `"rootDir": "gas"` — all pushed sources are under `gas/`.
 - **Manifest**: `gas/appsscript.json` (not at repository root).
 - **Tailwind**: if you changed Tailwind classes or `gas/tailwind-input.css`, run **`npm run build:css`** at repo root so `gas/tailwind-include.html` is updated before `clasp push`. The **`./deploy`** script always runs **`npm run build:css`** first.
+- **Grafo (Cytoscape)**: fuentes en `vendor/cytoscape/` (fuera de `gas/`). **`npm run build:kg-vis`** genera `gas/kg-lib-cytoscape.html` y CSS para `?kgLib=`. **`./deploy`** también lo ejecuta antes del push. **`.claspignore`** en la raíz del repo (junto a `.clasp.json`) evita subir `gas/vendor/**` como `.js` ejecutable en GAS.
 - **HTML includes**: `Code.js` `doGet` wires `tailwind-include`, `app-legacy-styles`, and `app-client` into the `index` template — ensure new UI fragments stay listed in `doGet` if you split further files.
 
 ## Before / after `clasp push`
@@ -28,7 +29,7 @@ disable-model-invocation: false
 
 ## Commands (terminal)
 
-**Solo tras consentimiento explícito del usuario** para tocar producción: `clasp push`, `./deploy`, publicar Web App. Sin ese OK, limitarse a edición local y `npm run build:css`.
+**Solo tras consentimiento explícito del usuario** para tocar producción: `clasp push`, `./deploy`, publicar Web App. Sin ese OK, limitarse a edición local y `npm run build:css` / `npm run build:kg-vis`.
 
 ```bash
 # From repository root (where .clasp.json is)

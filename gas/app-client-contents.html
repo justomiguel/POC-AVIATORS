@@ -35,6 +35,17 @@
   var contentsEntryIndustry = document.getElementById('contents-entry-industry');
   var contentsIndustryContinueBtn = document.getElementById('contents-industry-continue-btn');
   var contentsBlockFile = document.getElementById('contents-block-file');
+  var contentsExternalUrlWrap = document.getElementById('contents-external-url-wrap');
+  var contentsExternalUrl = document.getElementById('contents-external-url');
+  var contentsMappingBrowseBtn = document.getElementById('contents-mapping-browse-btn');
+  var contentsMappingFileInput = document.getElementById('contents-mapping-file-input');
+  var contentsMappingStatus = document.getElementById('contents-mapping-status');
+  var contentsSimilarReviewModal = document.getElementById('contents-similar-review-modal');
+  var contentsSimilarReviewList = document.getElementById('contents-similar-review-list');
+  var contentsSimilarReviewKeepAll = document.getElementById('contents-similar-review-keep-all');
+  var contentsSimilarReviewDeleteSelected = document.getElementById(
+    'contents-similar-review-delete-selected',
+  );
   var contentsBlockForm = document.getElementById('contents-block-form');
   var contentsCurrentFileName = document.getElementById('contents-current-file-name');
   var contentsReplaceFileBtn = document.getElementById('contents-replace-file-btn');
@@ -76,8 +87,17 @@
   var contentsSpecificSuccess = document.getElementById('contents-specific-success');
   var contentsSpecificClient = document.getElementById('contents-specific-client');
   var contentsSpecificOnboarding = document.getElementById('contents-specific-onboarding');
+  var contentsProposalMaterialKind = document.getElementById('contents-proposal-material-kind');
+  var contentsProposalTopic = document.getElementById('contents-proposal-topic');
+  var contentsProposalStudioWrap = document.getElementById('contents-proposal-studio-wrap');
+  var contentsProposalStudio = document.getElementById('contents-proposal-studio');
+  var contentsProposalOfferingWrap = document.getElementById('contents-proposal-offering-wrap');
+  var contentsProposalOffering = document.getElementById('contents-proposal-offering');
+  var contentsProposalStageWrap = document.getElementById('contents-proposal-stage-wrap');
   var contentsProposalStage = document.getElementById('contents-proposal-stage');
+  var contentsProposalPricingWrap = document.getElementById('contents-proposal-pricing-wrap');
   var contentsProposalPricing = document.getElementById('contents-proposal-pricing');
+  var contentsProposalEffortWrap = document.getElementById('contents-proposal-effort-wrap');
   var contentsProposalEffort = document.getElementById('contents-proposal-effort');
   var contentsProposalNotes = document.getElementById('contents-proposal-notes');
   var contentsSuccessIndustry = document.getElementById('contents-success-industry');
@@ -445,9 +465,104 @@
     }
   }
 
+  function contentsGetExternalUrl_() {
+    return contentsExternalUrl ? String(contentsExternalUrl.value || '').trim() : '';
+  }
+
+  function contentsNormalizeMappingFileName_(name) {
+    return String(name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\\/g, '/')
+      .split('/')
+      .pop();
+  }
+
+  /**
+   * @param {string} text
+   * @return {Object<string,string>}
+   */
+  function contentsParseExternalUrlMappingText_(text) {
+    var map = {};
+    var data = JSON.parse(String(text || '{}'));
+    var cases = [];
+    if (data && Array.isArray(data.cases)) cases = data.cases;
+    else if (Array.isArray(data)) cases = data;
+    var ci;
+    for (ci = 0; ci < cases.length; ci++) {
+      var row = cases[ci] || {};
+      var fileName = String(row.fileName || row.file_name || '').trim();
+      var url = String(row.externalUrl || row.external_url || row.url || '').trim();
+      if (!fileName || !url) continue;
+      var key = contentsNormalizeMappingFileName_(fileName);
+      map[key] = url;
+    }
+    return map;
+  }
+
+  function contentsSetExternalUrlMapping_(map) {
+    S.set('contentsExternalUrlByFile', map || {});
+    var count = 0;
+    var k;
+    for (k in map) {
+      if (Object.prototype.hasOwnProperty.call(map, k)) count++;
+    }
+    if (contentsMappingStatus) {
+      contentsMappingStatus.textContent =
+        count > 0 ? i18nFmt('contents_external_url_mapping_loaded', { n: count }) : '';
+    }
+  }
+
+  function contentsClearExternalUrlMapping_() {
+    contentsSetExternalUrlMapping_({});
+    if (contentsMappingFileInput) contentsMappingFileInput.value = '';
+  }
+
+  function contentsResolveExternalUrlForFile_(fileName) {
+    var map = S.get('contentsExternalUrlByFile') || {};
+    var key = contentsNormalizeMappingFileName_(fileName);
+    return String(map[key] || '').trim() || contentsGetExternalUrl_();
+  }
+
+  function contentsLoadExternalUrlMappingFile_(file, done) {
+    if (!file) {
+      done(null, {});
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var map = contentsParseExternalUrlMappingText_(reader.result);
+        var count = 0;
+        var k;
+        for (k in map) {
+          if (Object.prototype.hasOwnProperty.call(map, k)) count++;
+        }
+        if (!count) {
+          done(new Error('empty'), null);
+          return;
+        }
+        done(null, map);
+      } catch (eParse) {
+        done(eParse, null);
+      }
+    };
+    reader.onerror = function () {
+      done(new Error('read'), null);
+    };
+    reader.readAsText(file);
+  }
+
+  function contentsSyncExternalUrlUi_(type) {
+    if (!contentsExternalUrlWrap) return;
+    var show = String(type || '').trim() === 'success_case';
+    contentsExternalUrlWrap.classList.toggle('hidden', !show);
+  }
+
   function contentsShowFileBlock() {
     if (contentsBlockFile) contentsBlockFile.classList.remove('hidden');
     if (contentsBlockForm) contentsBlockForm.classList.add('hidden');
+    if (contentsType) contentsSyncExternalUrlUi_(contentsType.value || '');
   }
 
   function contentsHideFileBlock() {
@@ -536,6 +651,7 @@
 
   function contentsAfterTypeSelected_(type) {
     contentsToggleSpecificSections();
+    contentsSyncExternalUrlUi_(type);
     if (type === 'success_case') {
       contentsSetIndustryValue_('');
       contentsLoadIndustryOptions_();
@@ -722,6 +838,10 @@
     var t = (contentsType && contentsType.value) || '';
     if (t === 'proposal') {
       return {
+        material_kind: (contentsProposalMaterialKind && contentsProposalMaterialKind.value) || '',
+        topic: (contentsProposalTopic && contentsProposalTopic.value) || '',
+        globant_studio: (contentsProposalStudio && contentsProposalStudio.value) || '',
+        offering: (contentsProposalOffering && contentsProposalOffering.value) || '',
         stage: (contentsProposalStage && contentsProposalStage.value) || '',
         pricing_model: (contentsProposalPricing && contentsProposalPricing.value) || '',
         effort_estimate: (contentsProposalEffort && contentsProposalEffort.value) || '',
@@ -784,11 +904,14 @@
         ? { name: curFile.name, mimeType: curFile.mimeType, dataBase64: curFile.dataBase64 }
         : null,
       specific: contentsSpecificDataFromForm(),
+      externalUrl: contentsResolveExternalUrlForFile_(
+        (curFile && curFile.name) || (S.get('contentsCurrentCommon') || {}).file_name || '',
+      ),
     };
   }
 
   /** @const Maximum PDFs per multi-upload batch (sequential RPC + quotas). */
-  var CONTENTS_BATCH_MAX_FILES = 20;
+  var CONTENTS_BATCH_MAX_FILES = 80;
 
   function contentsTagsFromDraftCommon_(common) {
     var c = common || {};
@@ -838,7 +961,7 @@
           contentType === 'onboarding'
             ? ''
             : contentType === 'success_case'
-              ? contentsGetIndustry_() || String(c.industry || '').trim()
+              ? String(c.industry || '').trim() || contentsGetIndustry_()
               : String(S.get('contentsDetectedIndustry') || '').trim() ||
                 String(c.industry || '').trim(),
         tags: contentsTagsFromDraftCommon_(c),
@@ -849,20 +972,50 @@
         ? { name: fname, mimeType: mime, dataBase64: fileWrap.dataBase64 }
         : null,
       specific: sp,
+      externalUrl: contentsResolveExternalUrlForFile_(fname),
     };
   }
 
-  function contentsFilterPdfFiles_(fileList) {
+  function contentsSplitUploadFiles_(fileList) {
     var pdfs = [];
+    var mappingFile = null;
     var badCount = 0;
     var i;
     for (i = 0; i < fileList.length; i++) {
       var f = fileList[i];
-      var okPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
-      if (okPdf) pdfs.push(f);
+      var name = String(f.name || '');
+      var isJson =
+        /\.json$/i.test(name) ||
+        f.type === 'application/json' ||
+        f.type === 'text/json';
+      var isMappingJson = isJson && /mapping\.json$/i.test(name);
+      var okPdf = f.type === 'application/pdf' || /\.pdf$/i.test(name);
+      if (isMappingJson) mappingFile = f;
+      else if (okPdf) pdfs.push(f);
       else badCount++;
     }
-    return { pdfs: pdfs, badCount: badCount };
+    return { pdfs: pdfs, mappingFile: mappingFile, badCount: badCount };
+  }
+
+  function contentsFilterPdfFiles_(fileList) {
+    return contentsSplitUploadFiles_(fileList);
+  }
+
+  function contentsMaybeApplyMappingFromDrop_(mappingFile, done) {
+    if (!mappingFile) {
+      done(null);
+      return;
+    }
+    contentsLoadExternalUrlMappingFile_(mappingFile, function (err, map) {
+      if (err || !map) {
+        contentsSetEditorStatus(i18n('contents_external_url_mapping_invalid'), true);
+        if (A.toast) A.toast.error(i18n('contents_external_url_mapping_invalid'));
+        done(err || new Error('empty'));
+        return;
+      }
+      contentsSetExternalUrlMapping_(map);
+      done(null);
+    });
   }
 
   function contentsReadFileAsBase64_(file, onOk, onErr) {
@@ -908,27 +1061,177 @@
     });
   }
 
+  function contentsCloseSimilarReviewModal_() {
+    if (!contentsSimilarReviewModal) return;
+    contentsSimilarReviewModal.classList.add('hidden');
+    contentsSimilarReviewModal.setAttribute('aria-hidden', 'true');
+  }
+
+  /**
+   * @param {Array<{fileName:string,title:string,contentId:string,matches:Array}>} pendingDuplicates
+   * @param {{okCount:number,failCount:number}} stats
+   */
+  function contentsShowSimilarBatchReview_(pendingDuplicates, stats) {
+    if (!contentsSimilarReviewModal || !contentsSimilarReviewList) {
+      contentsReturnToList_({ skipCache: true });
+      return;
+    }
+    contentsSimilarReviewList.innerHTML = '';
+    var pi;
+    for (pi = 0; pi < pendingDuplicates.length; pi++) {
+      var item = pendingDuplicates[pi];
+      var card = document.createElement('article');
+      card.className =
+        'rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/40 dark:bg-amber-950/20';
+      card.setAttribute('role', 'listitem');
+
+      var head = document.createElement('p');
+      head.className = 'text-sm font-semibold text-slate-900 dark:text-slate-100';
+      head.textContent = i18nFmt('contents_similar_review_item_heading', {
+        title: item.title || item.fileName || '',
+      });
+      card.appendChild(head);
+
+      if (item.fileName) {
+        var fileLine = document.createElement('p');
+        fileLine.className = 'mt-1 text-xs text-slate-600 dark:text-slate-400';
+        fileLine.textContent = i18nFmt('contents_similar_review_item_file', { name: item.fileName });
+        card.appendChild(fileLine);
+      }
+
+      var matches = item.matches || [];
+      var mi;
+      for (mi = 0; mi < matches.length; mi++) {
+        var m = matches[mi];
+        var line = document.createElement('p');
+        line.className = 'mt-1 text-xs text-slate-700 dark:text-slate-300';
+        line.textContent = i18nFmt('contents_similar_item', {
+          title: m.title || '',
+          client: m.client_name || '',
+          pct: Math.round(Number(m.similarity || 0) * 100),
+        });
+        card.appendChild(line);
+      }
+
+      var label = document.createElement('label');
+      label.className = 'mt-2 inline-flex items-center gap-2 text-xs font-medium text-slate-800';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'rounded border-slate-300';
+      cb.dataset.contentId = String(item.contentId || '');
+      var span = document.createElement('span');
+      span.textContent = i18n('contents_similar_review_item_delete');
+      label.appendChild(cb);
+      label.appendChild(span);
+      card.appendChild(label);
+      contentsSimilarReviewList.appendChild(card);
+    }
+
+    function finishReview_(deletedCount) {
+      contentsCloseSimilarReviewModal_();
+      contentsSetEditorBusy(false, '');
+      contentsReturnToList_({ skipCache: true });
+      var msg =
+        stats.failCount === 0
+          ? i18nFmt('contents_batch_done_all_ok', { n: stats.okCount })
+          : i18nFmt('contents_batch_done_partial', {
+              ok: stats.okCount,
+              fail: stats.failCount,
+            });
+      if (deletedCount > 0) {
+        msg += ' ' + i18nFmt('contents_similar_review_deleted', { n: deletedCount });
+      }
+      contentsSetListStatus(msg, stats.failCount > 0);
+      if (A.toast) {
+        if (stats.failCount === 0 && stats.okCount > 0) A.toast.success(msg);
+        else if (stats.okCount === 0 && stats.failCount > 0) A.toast.error(msg);
+        else A.toast.info(msg);
+      }
+    }
+
+    function onKeepAll() {
+      finishReview_(0);
+    }
+
+    function onDeleteSelected() {
+      var checks = contentsSimilarReviewList.querySelectorAll('input[type="checkbox"]:checked');
+      var ids = [];
+      var ci;
+      for (ci = 0; ci < checks.length; ci++) {
+        var id = String(checks[ci].dataset.contentId || '').trim();
+        if (id) ids.push(id);
+      }
+      if (!ids.length) {
+        onKeepAll();
+        return;
+      }
+      if (contentsSimilarReviewDeleteSelected) contentsSimilarReviewDeleteSelected.disabled = true;
+      if (contentsSimilarReviewKeepAll) contentsSimilarReviewKeepAll.disabled = true;
+      A.showBlockingModal(i18n('contents_similar_review_delete_busy'));
+      var done = 0;
+      var deleted = 0;
+      function nextDelete() {
+        if (done >= ids.length) {
+          A.hideBlockingModal();
+          contentsInvalidateListCache_();
+          finishReview_(deleted);
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res && res.deleted) deleted++;
+            done++;
+            nextDelete();
+          })
+          .withFailureHandler(function () {
+            done++;
+            nextDelete();
+          })
+          .contentsDelete(ids[done]);
+      }
+      nextDelete();
+    }
+
+    if (contentsSimilarReviewKeepAll) {
+      contentsSimilarReviewKeepAll.onclick = onKeepAll;
+      contentsSimilarReviewKeepAll.disabled = false;
+    }
+    if (contentsSimilarReviewDeleteSelected) {
+      contentsSimilarReviewDeleteSelected.onclick = onDeleteSelected;
+      contentsSimilarReviewDeleteSelected.disabled = false;
+    }
+
+    contentsSimilarReviewModal.classList.remove('hidden');
+    contentsSimilarReviewModal.setAttribute('aria-hidden', 'false');
+    var dialog = document.getElementById('contents-similar-review-dialog');
+    if (dialog) dialog.focus();
+  }
+
   function contentsProcessBatch_(pdfFiles, type) {
     var total = pdfFiles.length;
     var idx = 0;
     var okCount = 0;
     var failCount = 0;
-    var dupDeclinedCount = 0;
+    var pendingDuplicates = [];
 
     function finishBatch() {
       A.hideBlockingModal();
+      if (pendingDuplicates.length > 0) {
+        contentsShowSimilarBatchReview_(pendingDuplicates, {
+          okCount: okCount,
+          failCount: failCount,
+        });
+        return;
+      }
       contentsSetEditorBusy(false, '');
       contentsReturnToList_({ skipCache: true });
       var msg =
-        failCount === 0 && dupDeclinedCount === 0
+        failCount === 0
           ? i18nFmt('contents_batch_done_all_ok', { n: okCount })
           : i18nFmt('contents_batch_done_partial', { ok: okCount, fail: failCount });
-      if (dupDeclinedCount > 0) {
-        msg += ' ' + i18nFmt('contents_similar_batch_declined', { n: dupDeclinedCount });
-      }
-      contentsSetListStatus(msg, failCount > 0 || dupDeclinedCount > 0);
+      contentsSetListStatus(msg, failCount > 0);
       if (A.toast) {
-        if (failCount === 0 && dupDeclinedCount === 0 && okCount > 0) A.toast.success(msg);
+        if (failCount === 0 && okCount > 0) A.toast.success(msg);
         else if (okCount === 0 && failCount > 0) A.toast.error(msg);
         else A.toast.info(msg);
       }
@@ -1007,7 +1310,10 @@
                 processNext();
                 return;
               }
-              function contentsBatchSaveFile_() {
+              function contentsBatchSaveFile_(similarMatches) {
+                if (similarMatches && similarMatches.length) {
+                  savePayload.forceSave = true;
+                }
                 contentsShowBatchProgress_({
                   step: 'save',
                   analyzed: idx + 1,
@@ -1018,7 +1324,20 @@
                   fileName: batchBase.fileName,
                 });
                 google.script.run
-                  .withSuccessHandler(function () {
+                  .withSuccessHandler(function (res) {
+                    if (similarMatches && similarMatches.length) {
+                      var savedItem = res && res.item;
+                      var savedCommon = savedItem && savedItem.common;
+                      pendingDuplicates.push({
+                        fileName: f.name,
+                        title:
+                          (savedCommon && savedCommon.title) ||
+                          (savePayload.common && savePayload.common.title) ||
+                          f.name,
+                        contentId: savedCommon ? savedCommon.content_id : '',
+                        matches: similarMatches,
+                      });
+                    }
                     okCount++;
                     idx++;
                     processNext();
@@ -1031,7 +1350,7 @@
                   .contentsSaveDraft(JSON.stringify(savePayload));
               }
               if (type !== 'success_case') {
-                contentsBatchSaveFile_();
+                contentsBatchSaveFile_(null);
                 return;
               }
               contentsFindSimilarSuccessCases_(savePayload, function (dupErr, matches) {
@@ -1041,25 +1360,7 @@
                   processNext();
                   return;
                 }
-                if (matches && matches.length) {
-                  A.hideBlockingModal();
-                  contentsConfirmSimilarAction_({
-                    matches: matches,
-                    mode: 'batch',
-                    fileName: f.name,
-                    onConfirm: function () {
-                      savePayload.forceSave = true;
-                      contentsBatchSaveFile_();
-                    },
-                    onDecline: function () {
-                      dupDeclinedCount++;
-                      idx++;
-                      processNext();
-                    },
-                  });
-                  return;
-                }
-                contentsBatchSaveFile_();
+                contentsBatchSaveFile_(matches && matches.length ? matches : null);
               }, { silent: true });
             },
             onFail: function () {
@@ -1090,11 +1391,6 @@
       contentsSetEditorStatus(i18n('contents_err_pick_type'), true);
       return;
     }
-    if (type === 'success_case' && !contentsIndustryReady_()) {
-      contentsSetEditorStatus(i18n('contents_err_industry_required'), true);
-      contentsAfterTypeSelected_(type);
-      return;
-    }
     var arr = [];
     var i;
     for (i = 0; i < files.length; i++) arr.push(files[i]);
@@ -1120,17 +1416,35 @@
       return;
     }
 
-    if (filtered.pdfs.length === 1) {
-      contentsProcessPickedFile_(filtered.pdfs[0], type);
+    if (type === 'success_case' && filtered.pdfs.length === 1 && !contentsIndustryReady_()) {
+      contentsSetEditorStatus(i18n('contents_err_industry_required'), true);
+      contentsAfterTypeSelected_(type);
       return;
     }
 
-    if (filtered.pdfs.length > CONTENTS_BATCH_MAX_FILES) {
-      contentsSetEditorStatus(i18nFmt('contents_batch_too_many', { max: CONTENTS_BATCH_MAX_FILES }), true);
+    function startUpload_() {
+      if (filtered.pdfs.length === 1) {
+        contentsProcessPickedFile_(filtered.pdfs[0], type);
+        return;
+      }
+
+      if (filtered.pdfs.length > CONTENTS_BATCH_MAX_FILES) {
+        contentsSetEditorStatus(i18nFmt('contents_batch_too_many', { max: CONTENTS_BATCH_MAX_FILES }), true);
+        return;
+      }
+
+      contentsProcessBatch_(filtered.pdfs, type);
+    }
+
+    if (filtered.mappingFile) {
+      contentsMaybeApplyMappingFromDrop_(filtered.mappingFile, function (mapErr) {
+        if (mapErr) return;
+        startUpload_();
+      });
       return;
     }
 
-    contentsProcessBatch_(filtered.pdfs, type);
+    startUpload_();
   }
 
   function contentsUsesClientFields_(type) {
@@ -1142,11 +1456,26 @@
     contentsSetIndustryValue_('');
   }
 
+  function contentsToggleProposalMaterialFields_() {
+    var kind = contentsProposalMaterialKind ? contentsProposalMaterialKind.value : '';
+    var isStudio = kind === 'GLOBANT_STUDIO';
+    var isOffering = kind === 'GLOBANT_OFFERING';
+    var isCommercial = !kind || kind === 'COMMERCIAL_PROPOSAL';
+    if (contentsProposalStudioWrap) contentsProposalStudioWrap.classList.toggle('hidden', !isStudio);
+    if (contentsProposalOfferingWrap) contentsProposalOfferingWrap.classList.toggle('hidden', !isOffering);
+    if (contentsProposalStageWrap) contentsProposalStageWrap.classList.toggle('hidden', !isCommercial);
+    if (contentsProposalPricingWrap) {
+      contentsProposalPricingWrap.classList.toggle('hidden', !(isCommercial || isOffering));
+    }
+    if (contentsProposalEffortWrap) contentsProposalEffortWrap.classList.toggle('hidden', !isCommercial);
+  }
+
   function contentsToggleSpecificSections() {
     var t = (contentsType && contentsType.value) || '';
     var showClient = contentsUsesClientFields_(t);
     if (contentsCommonClient) contentsCommonClient.classList.toggle('hidden', !showClient);
     if (contentsSpecificProposal) contentsSpecificProposal.classList.toggle('hidden', t !== 'proposal');
+    if (t === 'proposal') contentsToggleProposalMaterialFields_();
     if (contentsSpecificSuccess) contentsSpecificSuccess.classList.toggle('hidden', t !== 'success_case');
     if (t === 'success_case') contentsLoadIndustryOptions_();
     if (contentsSpecificClient) contentsSpecificClient.classList.toggle('hidden', t !== 'client');
@@ -1222,6 +1551,10 @@
     contentsSetClientValue('');
     contentsRenderTagsChips();
     if (contentsTagInput) contentsTagInput.value = '';
+    if (contentsProposalMaterialKind) contentsProposalMaterialKind.value = '';
+    if (contentsProposalTopic) contentsProposalTopic.value = '';
+    if (contentsProposalStudio) contentsProposalStudio.value = '';
+    if (contentsProposalOffering) contentsProposalOffering.value = '';
     if (contentsProposalStage) contentsProposalStage.value = '';
     if (contentsProposalPricing) contentsProposalPricing.value = '';
     if (contentsProposalEffort) contentsProposalEffort.value = '';
@@ -1240,8 +1573,11 @@
     if (contentsOnboardingNotes) contentsOnboardingNotes.value = '';
     if (contentsCurrentFileName) contentsCurrentFileName.textContent = '\u00a0';
     if (contentsFileInput) contentsFileInput.value = '';
+    if (contentsExternalUrl) contentsExternalUrl.value = '';
+    contentsClearExternalUrlMapping_();
     if (contentsBlockType) contentsBlockType.classList.remove('hidden');
     contentsHideIndustryBlock();
+    contentsSyncExternalUrlUi_('');
     if (contentsBlockFile) contentsBlockFile.classList.add('hidden');
     if (contentsBlockForm) contentsBlockForm.classList.add('hidden');
     contentsShowUploading(false, '');
@@ -1276,10 +1612,17 @@
     S.set('contentsCurrentTags', (c.tags || []).slice());
     contentsRenderTagsChips();
     if (contentsCurrentFileName) contentsCurrentFileName.textContent = c.file_name || '\u00a0';
+    if (contentsProposalMaterialKind) {
+      contentsProposalMaterialKind.value = s.material_kind || 'COMMERCIAL_PROPOSAL';
+    }
+    if (contentsProposalTopic) contentsProposalTopic.value = s.topic || '';
+    if (contentsProposalStudio) contentsProposalStudio.value = s.globant_studio || '';
+    if (contentsProposalOffering) contentsProposalOffering.value = s.offering || '';
     if (contentsProposalStage) contentsProposalStage.value = s.stage || '';
     if (contentsProposalPricing) contentsProposalPricing.value = s.pricing_model || '';
     if (contentsProposalEffort) contentsProposalEffort.value = s.effort_estimate || '';
     if (contentsProposalNotes) contentsProposalNotes.value = s.notes || '';
+    contentsToggleProposalMaterialFields_();
     contentsApplySuccessSpecificToForm_(s, c);
     if (contentsClientStatus) contentsClientStatus.value = s.account_status || '';
     if (contentsClientProjects) contentsClientProjects.value = s.active_projects || '';
@@ -1350,15 +1693,16 @@
   }
 
   var CONTENTS_PAGE_SIZES = [15, 25, 50];
-  var CONTENTS_CACHE_TTL = 60000;
   var contentsFilterDebounceTimer = null;
+  var _contentsListPageCache = {};
+  var _contentsListPrefetchToken = 0;
 
   function contentsGetPageSize_() {
     var n = Number(S.get('contentsPageSize'));
     for (var i = 0; i < CONTENTS_PAGE_SIZES.length; i++) {
       if (CONTENTS_PAGE_SIZES[i] === n) return n;
     }
-    return 25;
+    return 15;
   }
 
   function contentsSyncPageSizeSelect_() {
@@ -1378,18 +1722,69 @@
     return !!(f.contentType || f.q);
   }
 
-  function contentsListFilterFingerprint_() {
+  function contentsListFilterFingerprint_(skipOverride) {
     var f = contentsGetListFilters_();
+    var skip =
+      typeof skipOverride === 'number' ? skipOverride : S.get('contentsListSkip') || 0;
     return [
       f.contentType,
       f.q,
-      String(S.get('contentsListSkip') || 0),
+      String(skip),
       String(contentsGetPageSize_()),
     ].join('\u0001');
   }
 
+  function contentsGetListPageCache_(fingerprint) {
+    return _contentsListPageCache[fingerprint] || null;
+  }
+
+  function contentsSetListPageCache_(fingerprint, payload) {
+    _contentsListPageCache[fingerprint] = payload;
+  }
+
+  function contentsApplyListPageCache_(cached) {
+    S.set('contentsItemsCache', cached.items);
+    S.set('contentsListTotal', cached.total);
+    S.set('contentsListHasMore', cached.hasMore);
+    contentsRenderTable();
+    contentsSetListStatus('\u00a0', false);
+  }
+
   function contentsInvalidateListCache_() {
+    _contentsListPageCache = {};
+    _contentsListPrefetchToken += 1;
     if (A.cache && A.cache.invalidate) A.cache.invalidate('contentsList');
+  }
+
+  function contentsPrefetchNextListPage_() {
+    if (!S.get('contentsListHasMore')) return;
+    var skip = (S.get('contentsListSkip') || 0) + contentsGetPageSize_();
+    var fingerprint = contentsListFilterFingerprint_(skip);
+    if (contentsGetListPageCache_(fingerprint)) return;
+
+    var filters = contentsGetListFilters_();
+    var token = _contentsListPrefetchToken;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (token !== _contentsListPrefetchToken) return;
+        var items = (res && res.items) || [];
+        var total = (res && res.total) || 0;
+        var hasMore = !!(res && res.hasMore);
+        contentsSetListPageCache_(fingerprint, {
+          items: items,
+          total: total,
+          hasMore: hasMore,
+        });
+      })
+      .withFailureHandler(function () {
+        /* prefetch silencioso */
+      })
+      .contentsList({
+        contentType: filters.contentType,
+        q: filters.q,
+        skip: skip,
+        limit: contentsGetPageSize_(),
+      });
   }
 
   function contentsScheduleFilterReload_() {
@@ -1634,18 +2029,15 @@
     if (resetSkip) S.set('contentsListSkip', 0);
     var skip = S.get('contentsListSkip') || 0;
     var filters = contentsGetListFilters_();
-    var fingerprint = contentsListFilterFingerprint_();
+    var fingerprint = contentsListFilterFingerprint_(skip);
     contentsSyncPageSizeSelect_();
 
     if (!skipCache) {
-      var cached = A.cache.get('contentsList');
-      if (cached && cached.fingerprint === fingerprint) {
-        S.set('contentsItemsCache', cached.items);
-        S.set('contentsListTotal', cached.total);
-        S.set('contentsListHasMore', cached.hasMore);
-        contentsRenderTable();
-        contentsSetListStatus('\u00a0', false);
+      var cached = contentsGetListPageCache_(fingerprint);
+      if (cached) {
+        contentsApplyListPageCache_(cached);
         contentsLoadAuxData();
+        contentsPrefetchNextListPage_();
         return;
       }
     }
@@ -1663,20 +2055,16 @@
         S.set('contentsItemsCache', items);
         S.set('contentsListTotal', total);
         S.set('contentsListHasMore', hasMore);
-        A.cache.set(
-          'contentsList',
-          {
-            fingerprint: fingerprint,
-            items: items,
-            total: total,
-            hasMore: hasMore,
-          },
-          CONTENTS_CACHE_TTL,
-        );
+        contentsSetListPageCache_(fingerprint, {
+          items: items,
+          total: total,
+          hasMore: hasMore,
+        });
         if (!S.get('contentsRowBusyId')) {
           contentsSetListStatus('\u00a0', false);
         }
         contentsRenderTable();
+        contentsPrefetchNextListPage_();
       })
       .withFailureHandler(function (e) {
         S.set('contentsListLoading', false);
@@ -2022,10 +2410,17 @@
     contentsRenderTagsChips();
     var sp = d.specific || {};
     if (type === 'proposal') {
+      if (contentsProposalMaterialKind) {
+        contentsProposalMaterialKind.value = sp.material_kind || 'COMMERCIAL_PROPOSAL';
+      }
+      if (contentsProposalTopic) contentsProposalTopic.value = sp.topic || '';
+      if (contentsProposalStudio) contentsProposalStudio.value = sp.globant_studio || '';
+      if (contentsProposalOffering) contentsProposalOffering.value = sp.offering || '';
       if (contentsProposalStage) contentsProposalStage.value = sp.stage || '';
       if (contentsProposalPricing) contentsProposalPricing.value = sp.pricing_model || '';
       if (contentsProposalEffort) contentsProposalEffort.value = sp.effort_estimate || '';
       if (contentsProposalNotes) contentsProposalNotes.value = sp.notes || '';
+      contentsToggleProposalMaterialFields_();
     } else if (type === 'success_case') {
       contentsApplySuccessSpecificToForm_(sp, c);
     } else if (type === 'client') {
@@ -2466,6 +2861,21 @@
       return;
     }
     if (!payload.common.title) { contentsSetEditorStatus(i18n('contents_err_title_required'), true); return; }
+    if (payload.common.content_type === 'proposal') {
+      var spSave = payload.specific || {};
+      if (!String(spSave.material_kind || '').trim()) {
+        contentsSetEditorStatus(i18n('contents_err_proposal_material_kind'), true);
+        return;
+      }
+      if (spSave.material_kind === 'GLOBANT_STUDIO' && !String(spSave.globant_studio || '').trim()) {
+        contentsSetEditorStatus(i18n('contents_err_proposal_studio_required'), true);
+        return;
+      }
+      if (spSave.material_kind === 'GLOBANT_OFFERING' && !String(spSave.offering || '').trim()) {
+        contentsSetEditorStatus(i18n('contents_err_proposal_offering_required'), true);
+        return;
+      }
+    }
     var isNew = !payload.common.content_id;
     var hasFile = payload.file && payload.file.dataBase64;
     if (isNew && !hasFile) { contentsSetEditorStatus(i18n('contents_err_extract_first'), true); return; }
@@ -2600,6 +3010,9 @@
       contentsAfterTypeSelected_(contentsType.value || '');
     });
   }
+  if (contentsProposalMaterialKind) {
+    contentsProposalMaterialKind.addEventListener('change', contentsToggleProposalMaterialFields_);
+  }
   if (contentsSuccessIndustry) {
     contentsSuccessIndustry.addEventListener('change', function () {
       contentsSetIndustryValue_(contentsSuccessIndustry.value || '');
@@ -2608,15 +3021,42 @@
   if (contentsIndustryContinueBtn) {
     contentsIndustryContinueBtn.addEventListener('click', function () {
       var ind = contentsEntryIndustry ? String(contentsEntryIndustry.value || '').trim() : '';
-      if (!ind) {
-        contentsSetEditorStatus(i18n('contents_err_industry_required'), true);
-        return;
-      }
       contentsSetIndustryValue_(ind);
       contentsHideIndustryBlock();
       contentsShowFileBlock();
       contentsSetStep(2, 1);
       contentsSetEditorStatus('\u00a0', false);
+    });
+  }
+  if (contentsMappingBrowseBtn && contentsMappingFileInput) {
+    contentsMappingBrowseBtn.addEventListener('click', function () {
+      if (!contentsMappingBrowseBtn.disabled) contentsMappingFileInput.click();
+    });
+    contentsMappingFileInput.addEventListener('change', function () {
+      var f = contentsMappingFileInput.files && contentsMappingFileInput.files[0];
+      if (!f) return;
+      contentsLoadExternalUrlMappingFile_(f, function (err, map) {
+        if (err || !map) {
+          contentsSetEditorStatus(
+            err && String(err.message) === 'read'
+              ? i18n('contents_external_url_mapping_read_err')
+              : i18n('contents_external_url_mapping_invalid'),
+            true,
+          );
+          if (A.toast) {
+            A.toast.error(
+              err && String(err.message) === 'read'
+                ? i18n('contents_external_url_mapping_read_err')
+                : i18n('contents_external_url_mapping_invalid'),
+            );
+          }
+          return;
+        }
+        contentsSetExternalUrlMapping_(map);
+        contentsSetEditorStatus(i18nFmt('contents_external_url_mapping_loaded', {
+          n: Object.keys(map).length,
+        }), false);
+      });
     });
   }
   if (contentsBrowseBtn && contentsFileInput) {
@@ -2736,16 +3176,14 @@
       var skip = S.get('contentsListSkip') || 0;
       var pageSize = contentsGetPageSize_();
       S.set('contentsListSkip', Math.max(0, skip - pageSize));
-      contentsInvalidateListCache_();
-      contentsLoadList({ skipCache: true });
+      contentsLoadList();
     });
   }
   if (contentsNextBtn) {
     contentsNextBtn.addEventListener('click', function () {
       var skip = S.get('contentsListSkip') || 0;
       S.set('contentsListSkip', skip + contentsGetPageSize_());
-      contentsInvalidateListCache_();
-      contentsLoadList({ skipCache: true });
+      contentsLoadList();
     });
   }
   if (contentsAddTagBtn) {
@@ -2776,7 +3214,13 @@
     }
   })();
   if (btnGotoAgentsTab) {
-    btnGotoAgentsTab.addEventListener('click', function () { A.setAppPage('agents'); });
+    btnGotoAgentsTab.addEventListener('click', function () {
+      if (A.settings && A.settings.openAgentsTab) {
+        A.settings.openAgentsTab();
+      } else {
+        A.setAppPage('agents');
+      }
+    });
   }
 
   // --- Batch ops ---

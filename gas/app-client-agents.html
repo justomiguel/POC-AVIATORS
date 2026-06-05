@@ -449,7 +449,7 @@
       promptContext: '',
       promptInstructions: systemPrompt || '',
       modelName: 'openai/gpt-5.5',
-      maxTokens: 4000,
+      maxTokens: 8000,
       timeout: 120,
       temperature: 0.2,
     };
@@ -533,7 +533,7 @@
     if (adminAgentApiIdOrName) adminAgentApiIdOrName.value = cfg.idOrName || '';
     if (adminAgentApiName) adminAgentApiName.value = cfg.name || '';
     renderAdminApiCatalog(cfg.modelName || '', cfg.strategyName || '');
-    if (adminAgentApiMaxTokens) adminAgentApiMaxTokens.value = String(cfg.maxTokens || 4000);
+    if (adminAgentApiMaxTokens) adminAgentApiMaxTokens.value = String(cfg.maxTokens || 8000);
     if (adminAgentApiTimeout) adminAgentApiTimeout.value = String(cfg.timeout || 0);
     if (adminAgentApiTemperature) {
       adminAgentApiTemperature.value =
@@ -735,7 +735,7 @@
         promptInstructions: systemPrompt,
         modelName: (adminAgentApiModel && adminAgentApiModel.value) || '',
         maxTokens:
-          (adminAgentApiMaxTokens && adminAgentApiMaxTokens.value) || 4000,
+          (adminAgentApiMaxTokens && adminAgentApiMaxTokens.value) || 8000,
         timeout: (adminAgentApiTimeout && adminAgentApiTimeout.value) || 0,
         temperature:
           (adminAgentApiTemperature && adminAgentApiTemperature.value) || 0.2,

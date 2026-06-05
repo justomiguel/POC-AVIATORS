@@ -12,6 +12,7 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
   'view_clients',
   'write_catalog',
   'view_onboarding',
+  'view_proposal_building',
   'view_metrics',
   'reset_metrics',
   'manage_users',
@@ -23,6 +24,7 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
 /** Permisos añadidos en matriz v2: se heredan del default del rol sistema si no estaban guardados. */
 var ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED = [
   'view_onboarding',
+  'view_proposal_building',
   'manage_unanswered_queue',
   'sync_salesforce',
   'view_tags',
@@ -37,6 +39,7 @@ var ROLE_CONFIG_PERMISSION_KIND = {
   view_tags: 'read',
   view_clients: 'read',
   view_onboarding: 'read',
+  view_proposal_building: 'read',
   view_metrics: 'read',
   view_knowledge_graph: 'read',
   manage_agents: 'write',
@@ -89,6 +92,7 @@ function RoleConfig_defaultRoles_() {
         view_clients: true,
         write_catalog: true,
         view_onboarding: true,
+        view_proposal_building: true,
         view_metrics: true,
         manage_unanswered_queue: true,
         view_knowledge_graph: true,

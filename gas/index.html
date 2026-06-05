@@ -169,7 +169,7 @@
                 data-app-page="home"
                 id="nav-btn-home"
               >
-                <i class="fa-solid fa-house w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
+                <i class="fa-solid fa-comments w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
                 <span data-i18n="nav_home"></span>
               </button>
               <button
@@ -184,11 +184,11 @@
               <button
                 type="button"
                 class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="agents"
-                id="nav-page-agents"
+                data-app-page="proposal-building"
+                id="nav-page-proposal-building"
               >
-                <i class="fa-solid fa-robot w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_agents"></span>
+                <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                <span data-i18n="nav_proposal_building"></span>
               </button>
               <button
                 type="button"
@@ -470,6 +470,30 @@
               </header>
             </div>
 
+            <div
+              id="page-proposal-building"
+              class="app-page app-page-proposal-building hidden space-y-6"
+              data-app-page="proposal-building"
+            >
+              <header id="proposal-building-welcome" class="mb-4 text-center">
+                <h1
+                  class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl dark:text-slate-100"
+                  data-i18n="page_proposal_building_title"
+                ></h1>
+                <p
+                  class="mx-auto mt-2 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-400"
+                  data-i18n-html="page_proposal_building_lead_html"
+                ></p>
+              </header>
+              <p
+                id="proposal-building-status"
+                class="mx-auto max-w-2xl text-center text-sm text-slate-500 dark:text-slate-400"
+                role="status"
+                aria-live="polite"
+                data-i18n="pb_status_intake"
+              ></p>
+            </div>
+
         <section
           id="home-chat-shell"
           class="home-chat-shell"
@@ -639,7 +663,7 @@
               type="file"
               id="chat-attach-input"
               class="sr-only"
-              accept=".pdf,application/pdf"
+              accept=".pdf,application/pdf,.txt,.md,.csv,text/plain,text/markdown,text/csv,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif"
             />
             <button
               type="button"
@@ -662,6 +686,14 @@
           ></textarea>
           <div class="chat-send-actions">
             <div id="globant-agent-row" class="btn-row flex flex-wrap gap-2 hidden">
+              <button
+                type="button"
+                id="pb-validate-brief-btn"
+                class="btn btn-md btn-outline hidden inline-flex items-center gap-2"
+              >
+                <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                <span data-i18n="pb_btn_validate_brief"></span>
+              </button>
               <button
                 type="button"
                 id="ask-agent-btn"
@@ -1362,8 +1394,8 @@
                       <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                         <span data-i18n="contents_pagination_page_size"></span>
                         <select id="contents-page-size" class="aviators-field py-1 text-sm" aria-label="Page size">
-                          <option value="15">15</option>
-                          <option value="25" selected>25</option>
+                          <option value="15" selected>15</option>
+                          <option value="25">25</option>
                           <option value="50">50</option>
                         </select>
                       </label>
@@ -1528,8 +1560,45 @@
                           <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
                           <span data-i18n="contents_btn_pick_file"></span>
                         </button>
-                        <input type="file" id="contents-file-input" class="label-sr-only" accept="application/pdf,.pdf" multiple />
+                        <input type="file" id="contents-file-input" class="label-sr-only" accept="application/pdf,.pdf,application/json,.json" multiple />
                       </div>
+                    </div>
+                    <div
+                      id="contents-external-url-wrap"
+                      class="hidden mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/40"
+                    >
+                      <div class="space-y-2">
+                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_external_url_mapping_heading"></p>
+                        <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-i18n="contents_external_url_mapping_lead"></p>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <button type="button" id="contents-mapping-browse-btn" class="btn btn-md btn-secondary inline-flex items-center gap-2">
+                            <i class="fa-solid fa-file-code" aria-hidden="true"></i>
+                            <span data-i18n="contents_external_url_mapping_pick"></span>
+                          </button>
+                          <input type="file" id="contents-mapping-file-input" class="label-sr-only" accept="application/json,.json" />
+                          <p
+                            id="contents-mapping-status"
+                            class="text-xs text-slate-600 dark:text-slate-400"
+                            role="status"
+                            aria-live="polite"
+                          ></p>
+                        </div>
+                      </div>
+                      <label class="block text-sm" for="contents-external-url">
+                        <span
+                          class="mb-1 block font-medium text-slate-800 dark:text-slate-200"
+                          data-i18n="contents_external_url_label"
+                        ></span>
+                        <input
+                          type="url"
+                          id="contents-external-url"
+                          class="aviators-field w-full text-sm"
+                          autocomplete="off"
+                          spellcheck="false"
+                          data-i18n-placeholder="contents_external_url_placeholder"
+                        />
+                      </label>
+                      <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-i18n="contents_external_url_lead"></p>
                     </div>
                     <div id="contents-uploading" class="hidden rounded-xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-6 text-center">
                       <div class="loader-flight-inline mb-3" aria-hidden="true">
@@ -1636,10 +1705,53 @@
                       </div>
                     </div>
 
-                    <section id="contents-specific-proposal" class="ficha-section ficha-section--proposal space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
-                      <h4 class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
+                    <section id="contents-specific-proposal" class="ficha-section ficha-section--proposal space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600" aria-labelledby="contents-specific-proposal-heading">
+                      <h4 id="contents-specific-proposal-heading" class="ficha-section-title text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="contents_specific_proposal_heading"></h4>
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-3" data-i18n="contents_specific_proposal_lead"></p>
                       <div class="grid gap-4 md:grid-cols-2">
-                        <label class="ficha-field block text-sm" for="contents-proposal-stage">
+                        <label class="ficha-field block text-sm md:col-span-2" for="contents-proposal-material-kind">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-layer-group ficha-field-icon" aria-hidden="true"></i>
+                            <span data-i18n="contents_proposal_material_kind"></span>
+                          </span>
+                          <select id="contents-proposal-material-kind" class="aviators-field w-full text-sm" required>
+                            <option value="">—</option>
+                            <option value="COMMERCIAL_PROPOSAL" data-i18n="contents_proposal_kind_commercial"></option>
+                            <option value="GLOBANT_STUDIO" data-i18n="contents_proposal_kind_studio"></option>
+                            <option value="GLOBANT_OFFERING" data-i18n="contents_proposal_kind_offering"></option>
+                            <option value="CORPORATE" data-i18n="contents_proposal_kind_corporate"></option>
+                            <option value="OTHER" data-i18n="contents_proposal_kind_other"></option>
+                          </select>
+                        </label>
+                        <label class="ficha-field block text-sm" for="contents-proposal-topic">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-book-open ficha-field-icon" aria-hidden="true"></i>
+                            <span data-i18n="contents_proposal_topic"></span>
+                          </span>
+                          <input type="text" id="contents-proposal-topic" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_proposal_topic_ph" />
+                        </label>
+                        <label class="ficha-field block text-sm hidden" id="contents-proposal-studio-wrap" for="contents-proposal-studio">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-building-columns ficha-field-icon" aria-hidden="true"></i>
+                            <span data-i18n="contents_proposal_studio"></span>
+                          </span>
+                          <input type="text" id="contents-proposal-studio" class="aviators-field w-full text-sm" data-i18n-placeholder="contents_proposal_studio_ph" />
+                        </label>
+                        <label class="ficha-field block text-sm hidden" id="contents-proposal-offering-wrap" for="contents-proposal-offering">
+                          <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200">
+                            <i class="fa-solid fa-cubes ficha-field-icon" aria-hidden="true"></i>
+                            <span data-i18n="contents_proposal_offering"></span>
+                          </span>
+                          <select id="contents-proposal-offering" class="aviators-field w-full text-sm">
+                            <option value="">—</option>
+                            <option value="TIME_AND_MATERIALS">Time &amp; Materials</option>
+                            <option value="STAFF_AUGMENTATION">Staff Augmentation</option>
+                            <option value="FIXED_PRICE">Fixed Price</option>
+                            <option value="SUBSCRIPTION">Subscription</option>
+                            <option value="AI_PODS">AI Pods</option>
+                          </select>
+                        </label>
+                        <label class="ficha-field block text-sm" id="contents-proposal-stage-wrap" for="contents-proposal-stage">
                           <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_stage"></span>
                           <select id="contents-proposal-stage" class="aviators-field w-full text-sm">
                             <option value="">—</option>
@@ -1650,7 +1762,7 @@
                             <option value="ON_HOLD">On Hold</option>
                           </select>
                         </label>
-                        <label class="ficha-field block text-sm" for="contents-proposal-pricing">
+                        <label class="ficha-field block text-sm" id="contents-proposal-pricing-wrap" for="contents-proposal-pricing">
                           <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_pricing_model"></span>
                           <select id="contents-proposal-pricing" class="aviators-field w-full text-sm">
                             <option value="">—</option>
@@ -1658,9 +1770,10 @@
                             <option value="STAFF_AUGMENTATION">Staff Augmentation</option>
                             <option value="FIXED_PRICE">Fixed Price</option>
                             <option value="SUBSCRIPTION">Subscription</option>
+                            <option value="AI_PODS">AI Pods</option>
                           </select>
                         </label>
-                        <label class="ficha-field block text-sm md:col-span-2" for="contents-proposal-effort">
+                        <label class="ficha-field block text-sm md:col-span-2" id="contents-proposal-effort-wrap" for="contents-proposal-effort">
                           <span class="ficha-field-label mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="contents_lbl_effort"></span>
                           <input type="text" id="contents-proposal-effort" class="aviators-field w-full text-sm" />
                         </label>
@@ -2032,31 +2145,114 @@
 
             <div
               id="page-knowledge-graph"
-              class="app-page app-page-knowledge-graph hidden mx-auto max-w-6xl space-y-5 pb-8"
+              class="app-page app-page-knowledge-graph hidden mx-auto max-w-[min(100%,92rem)] space-y-3 pb-6"
               data-app-page="knowledge-graph"
             >
-              <header class="settings-page-head" aria-labelledby="kg-page-title">
-                <div class="settings-page-head-icon" aria-hidden="true">
-                  <i class="fa-solid fa-diagram-project"></i>
+              <header class="kg-page-head flex flex-wrap items-center justify-between gap-3" aria-labelledby="kg-page-title">
+                <div class="flex min-w-0 items-center gap-3">
+                  <div class="settings-page-head-icon shrink-0" aria-hidden="true">
+                    <i class="fa-solid fa-diagram-project"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <h2 id="kg-page-title" class="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100" data-i18n="page_knowledge_graph_title"></h2>
+                    <p class="mt-0.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="page_knowledge_graph_lead"></p>
+                  </div>
                 </div>
-                <div class="min-w-0 flex-1">
-                  <h2 id="kg-page-title" class="settings-page-title" data-i18n="page_knowledge_graph_title"></h2>
-                  <p class="settings-page-lead" data-i18n="page_knowledge_graph_lead"></p>
-                  <p
-                    id="kg-status"
-                    class="kg-status-msg mt-3 text-sm text-slate-600 dark:text-slate-400"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    &nbsp;
-                  </p>
-                </div>
+                <p
+                  id="kg-status"
+                  class="kg-status-pill max-w-full truncate text-xs text-slate-600 dark:text-slate-400"
+                  role="status"
+                  aria-live="polite"
+                >
+                  &nbsp;
+                </p>
               </header>
+              <div
+                id="kg-pending-sync-banner"
+                class="kg-pending-sync-banner hidden rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+                aria-live="polite"
+              >
+                <p id="kg-pending-sync-msg" class="leading-relaxed"></p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button type="button" id="kg-pending-sync-resume-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
+                    <i class="fa-solid fa-play" aria-hidden="true"></i>
+                    <span data-i18n="kg_pending_sync_resume_btn"></span>
+                  </button>
+                  <button type="button" id="kg-pending-sync-discard-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    <span data-i18n="kg_pending_sync_discard_btn"></span>
+                  </button>
+                </div>
+              </div>
 
-              <section class="kg-filters-card rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-filters-heading">
-                <h3 id="kg-filters-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_filters_heading"></h3>
-                <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_filters_lead"></p>
-                <div class="mt-4 flex flex-wrap items-end gap-3">
+              <div id="kg-tab-root" data-app-tab-group>
+                <div
+                  id="kg-tab-list"
+                  role="tablist"
+                  class="settings-tab-bar app-tab-bar app-tab-bar-underline"
+                  data-i18n-aria-label="kg_tabs_aria"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    id="kg-tab-graph"
+                    class="app-tab-btn settings-tab-btn is-active"
+                    aria-controls="kg-panel-graph"
+                    aria-selected="true"
+                  >
+                    <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                    <span data-i18n="kg_tab_graph"></span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="kg-tab-entities"
+                    class="app-tab-btn settings-tab-btn"
+                    aria-controls="kg-panel-entities"
+                    aria-selected="false"
+                  >
+                    <i class="fa-solid fa-shapes" aria-hidden="true"></i>
+                    <span data-i18n="kg_tab_entities"></span>
+                  </button>
+                </div>
+
+                <div
+                  id="kg-panel-graph"
+                  role="tabpanel"
+                  aria-labelledby="kg-tab-graph"
+                  class="app-tab-panel mt-3 space-y-3"
+                >
+              <details id="kg-filters-details" class="kg-filters-shell group rounded-xl border border-slate-200/90 bg-white/90 dark:border-slate-600 dark:bg-slate-800/40">
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+                  <span class="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    <i class="fa-solid fa-sliders text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="kg_filters_toggle"></span>
+                  </span>
+                  <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true"></i>
+                </summary>
+                <div class="space-y-4 border-t border-slate-100 px-4 pb-4 pt-3 dark:border-slate-700">
+                  <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-i18n="kg_filters_lead"></p>
+                  <details id="kg-guide-details" class="kg-guide-card group rounded-lg border border-sky-200/70 bg-sky-50/50 dark:border-sky-900/40 dark:bg-sky-950/20">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200 select-none">
+                      <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-sky-500" aria-hidden="true"></i>
+                        <span data-i18n="kg_guide_heading"></span>
+                      </span>
+                      <i class="fa-solid fa-chevron-down text-[0.65rem] text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                    </summary>
+                    <div class="px-3 pb-3 pt-1">
+                      <p class="text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_guide_lead"></p>
+                      <ol class="kg-guide-steps mt-2 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                        <li data-i18n="kg_guide_step_1"></li>
+                        <li data-i18n="kg_guide_step_2"></li>
+                        <li data-i18n="kg_guide_step_3"></li>
+                        <li data-i18n="kg_guide_step_4"></li>
+                      </ol>
+                    </div>
+                  </details>
+                  <h3 id="kg-filters-heading" class="sr-only" data-i18n="kg_filters_heading"></h3>
+                <div class="flex flex-wrap items-end gap-3">
                   <label class="block min-w-[12rem] flex-1 text-sm" for="kg-filter-search">
                     <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_search"></span>
                     <input
@@ -2089,13 +2285,22 @@
                       <option value="" data-i18n="kg_filter_client_all"></option>
                     </select>
                   </label>
-                  <label class="block text-sm" for="kg-filter-depth">
-                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_depth"></span>
-                    <select id="kg-filter-depth" class="aviators-field min-w-[6rem] text-sm">
-                      <option value="1">1</option>
-                      <option value="2" selected>2</option>
-                      <option value="3">3</option>
-                      <option value="4">4</option>
+                  <label class="block min-w-[9rem] text-sm" for="kg-filter-depth">
+                    <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="kg_filter_depth"></span>
+                    <select id="kg-filter-depth" class="aviators-field w-full text-sm">
+                      <option value="1" data-i18n="kg_depth_opt_1"></option>
+                      <option value="2" selected data-i18n="kg_depth_opt_2"></option>
+                      <option value="3" data-i18n="kg_depth_opt_3"></option>
+                      <option value="4" data-i18n="kg_depth_opt_4"></option>
+                    </select>
+                    <p id="kg-depth-hint" class="sr-only" data-i18n="kg_depth_hint"></p>
+                  </label>
+                  <label class="block min-w-[10rem] text-sm" for="kg-filter-density">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_density"></span>
+                    <select id="kg-filter-density" class="aviators-field w-full text-sm">
+                      <option value="80" data-i18n="kg_density_opt_compact"></option>
+                      <option value="150" selected data-i18n="kg_density_opt_normal"></option>
+                      <option value="250" data-i18n="kg_density_opt_wide"></option>
                     </select>
                   </label>
                   <button type="button" id="kg-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
@@ -2115,9 +2320,9 @@
                     <span data-i18n="kg_btn_rebuild"></span>
                   </button>
                 </div>
-                <fieldset class="kg-type-toggles mt-4 border-0 p-0" aria-labelledby="kg-type-toggles-legend">
-                  <legend id="kg-type-toggles-legend" class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_node_types"></legend>
-                  <div class="flex flex-wrap gap-3 text-sm">
+                <fieldset class="kg-type-toggles border-0 p-0" aria-labelledby="kg-type-toggles-legend">
+                  <legend id="kg-type-toggles-legend" class="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="kg_filter_node_types"></legend>
+                  <div class="flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="content" checked /> <span data-i18n="kg_type_content"></span></label>
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="client" checked /> <span data-i18n="kg_type_client"></span></label>
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="client_label" checked /> <span data-i18n="kg_type_client_label"></span></label>
@@ -2127,28 +2332,135 @@
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="pricing_model" checked /> <span data-i18n="kg_type_pricing_model"></span></label>
                   </div>
                 </fieldset>
-              </section>
+                </div>
+              </details>
 
-              <div class="kg-main-grid grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(240px,280px)]">
-                <section class="kg-graph-section rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-graph-heading">
-                  <h3 id="kg-graph-heading" class="sr-only" data-i18n="page_knowledge_graph_title"></h3>
-                  <div id="kg-graph-canvas" class="kg-graph-canvas" role="img" aria-label="Knowledge graph visualization"></div>
-                  <p id="kg-graph-empty" class="kg-graph-empty hidden px-4 py-8 text-center text-sm text-slate-500" data-i18n="kg_empty"></p>
+              <div class="kg-stage flex min-h-0 flex-col gap-3 lg:flex-row">
+                <section class="kg-graph-section min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-graph-toolbar-heading">
+                  <h3 id="kg-graph-toolbar-heading" class="sr-only" data-i18n="kg_graph_toolbar_heading"></h3>
+                  <div class="kg-graph-toolbar flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5 dark:border-slate-700">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
+                      <div class="flex items-center gap-1" role="img" aria-labelledby="kg-depth-meter-aria">
+                        <span id="kg-depth-meter-aria" class="sr-only" data-i18n="kg_depth_meter_aria"></span>
+                        <div id="kg-depth-meter" class="kg-depth-meter flex items-center gap-0.5" aria-hidden="true"></div>
+                      </div>
+                      <p id="kg-scope-summary" class="text-[0.7rem] text-slate-500 dark:text-slate-400" role="status" aria-live="polite">&nbsp;</p>
+                      <p id="kg-graph-stats" class="kg-graph-stats text-[0.7rem] tabular-nums" aria-live="polite">&nbsp;</p>
+                      <p id="kg-scope-truncated" class="kg-scope-truncated hidden text-[0.7rem] font-medium text-amber-700 dark:text-amber-300" role="status">
+                        <i class="fa-solid fa-triangle-exclamation mr-0.5" aria-hidden="true"></i>
+                        <span data-i18n="kg_scope_truncated"></span>
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                      <div class="kg-graph-find flex max-w-xs items-center gap-1" role="search">
+                        <label class="sr-only" for="kg-graph-find" data-i18n="kg_graph_find_label"></label>
+                        <input
+                          id="kg-graph-find"
+                          type="search"
+                          class="aviators-field min-w-[7rem] flex-1 py-1 text-xs"
+                          autocomplete="off"
+                          data-i18n-placeholder="kg_graph_find_placeholder"
+                        />
+                        <button type="button" id="kg-graph-find-prev" class="btn btn-sm btn-outline inline-flex items-center justify-center px-1.5" data-i18n-aria-label="kg_graph_find_prev_aria">
+                          <i class="fa-solid fa-chevron-up text-xs" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="kg-graph-find-next" class="btn btn-sm btn-outline inline-flex items-center justify-center px-1.5" data-i18n-aria-label="kg_graph_find_next_aria">
+                          <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                        </button>
+                        <span id="kg-graph-find-status" class="kg-graph-find-status text-[0.65rem] tabular-nums text-slate-400" aria-live="polite"></span>
+                      </div>
+                      <select id="kg-layout-mode" class="aviators-field max-w-[6.5rem] py-1 text-xs" data-i18n-aria-label="kg_layout_label">
+                        <option value="auto" data-i18n="kg_layout_auto"></option>
+                        <option value="hierarchical" data-i18n="kg_layout_hierarchical"></option>
+                        <option value="force" data-i18n="kg_layout_force"></option>
+                      </select>
+                      <label class="inline-flex items-center gap-1 text-xs text-slate-500" title="">
+                        <input type="checkbox" id="kg-show-labels" class="rounded border-slate-300" checked />
+                        <span class="sr-only" data-i18n="kg_show_labels"></span>
+                        <i class="fa-solid fa-font text-[0.65rem]" aria-hidden="true"></i>
+                      </label>
+                      <button type="button" id="kg-fit-btn" class="btn btn-sm btn-outline inline-flex items-center justify-center px-2" data-i18n-aria-label="kg_btn_fit_aria">
+                        <i class="fa-solid fa-compress text-xs" aria-hidden="true"></i>
+                      </button>
+                      <button type="button" id="kg-zoom-in-btn" class="btn btn-sm btn-outline inline-flex items-center justify-center px-2" data-i18n-aria-label="kg_btn_zoom_in_aria">
+                        <i class="fa-solid fa-magnifying-glass-plus text-xs" aria-hidden="true"></i>
+                      </button>
+                      <button type="button" id="kg-zoom-out-btn" class="btn btn-sm btn-outline inline-flex items-center justify-center px-2" data-i18n-aria-label="kg_btn_zoom_out_aria">
+                        <i class="fa-solid fa-magnifying-glass-minus text-xs" aria-hidden="true"></i>
+                      </button>
+                      <button type="button" id="kg-side-toggle" class="btn btn-sm btn-outline inline-flex items-center gap-1.5 lg:hidden" data-i18n-aria-label="kg_side_toggle">
+                        <i class="fa-solid fa-sidebar text-xs" aria-hidden="true"></i>
+                        <span class="sr-only" data-i18n="kg_side_toggle"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="kg-graph-viewport relative">
+                    <div
+                      id="kg-graph-loader"
+                      class="kg-graph-loader hidden"
+                      role="status"
+                      aria-live="polite"
+                      aria-busy="false"
+                    >
+                      <div class="kg-graph-loader__visual" aria-hidden="true">
+                        <span class="kg-graph-loader__ring"></span>
+                        <i class="fa-solid fa-diagram-project kg-graph-loader__icon"></i>
+                      </div>
+                      <p id="kg-graph-loader-step" class="kg-graph-loader__step"></p>
+                      <p id="kg-graph-loader-title" class="kg-graph-loader__title"></p>
+                      <p id="kg-graph-loader-msg" class="kg-graph-loader__msg" data-i18n="kg_busy_loading"></p>
+                      <p id="kg-graph-loader-why" class="kg-graph-loader__why"></p>
+                      <p id="kg-graph-loader-eta" class="kg-graph-loader__eta"></p>
+                    </div>
+                    <details id="kg-legend-float" class="kg-legend-float group">
+                      <summary class="kg-legend-float__summary" data-i18n-aria-label="kg_legend_toggle">
+                        <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                        <span data-i18n="kg_legend_toggle"></span>
+                      </summary>
+                      <div class="kg-legend-float__body">
+                        <p class="sr-only" id="kg-legend-heading" data-i18n="kg_simple_legend_heading"></p>
+                        <p class="text-[0.65rem] text-slate-500 dark:text-slate-400" data-i18n="kg_simple_legend_lead"></p>
+                        <p class="mt-2 text-[0.65rem] font-semibold text-slate-600 dark:text-slate-300" data-i18n="kg_simple_types_heading"></p>
+                        <ul id="kg-legend-list" class="kg-legend-list mt-1 space-y-1 text-[0.65rem] text-slate-600 dark:text-slate-400"></ul>
+                        <p class="mt-2 text-[0.65rem] font-semibold text-slate-600 dark:text-slate-300" data-i18n="kg_simple_links_heading"></p>
+                        <ul id="kg-legend-edges" class="kg-legend-edges mt-1 space-y-1 text-[0.65rem] text-slate-600 dark:text-slate-400"></ul>
+                      </div>
+                    </details>
+                    <div id="kg-graph-canvas" class="kg-graph-canvas" role="img" aria-label="Knowledge graph visualization"></div>
+                    <p id="kg-graph-empty" class="kg-graph-empty hidden px-4 py-8 text-center text-sm text-slate-500" data-i18n="kg_empty"></p>
+                  </div>
                 </section>
-                <aside class="kg-side space-y-4" aria-labelledby="kg-detail-heading">
-                  <section class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50">
-                    <h3 id="kg-detail-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_detail_heading"></h3>
-                    <div id="kg-detail-body" class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+
+                <aside id="kg-side-panel" class="kg-side-panel kg-side-panel--collapsed" aria-label="Knowledge graph side panel">
+                  <div class="kg-side-panel__head flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+                    <div class="kg-side-tabs flex gap-1" role="tablist">
+                      <button type="button" id="kg-tab-detail" class="kg-side-tab kg-side-tab--active" role="tab" aria-selected="true" data-kg-tab="detail">
+                        <i class="fa-solid fa-circle-info text-xs" aria-hidden="true"></i>
+                        <span data-i18n="kg_side_tab_detail"></span>
+                      </button>
+                      <button type="button" id="kg-tab-nodes" class="kg-side-tab" role="tab" aria-selected="false" data-kg-tab="nodes">
+                        <i class="fa-solid fa-list text-xs" aria-hidden="true"></i>
+                        <span data-i18n="kg_side_tab_nodes"></span>
+                      </button>
+                    </div>
+                    <button type="button" id="kg-side-close" class="btn btn-sm btn-outline inline-flex items-center justify-center px-2" data-i18n-aria-label="kg_side_close">
+                      <i class="fa-solid fa-xmark text-xs" aria-hidden="true"></i>
+                      <span class="sr-only" data-i18n="kg_side_close"></span>
+                    </button>
+                  </div>
+                  <div id="kg-side-tab-detail" class="kg-side-tab-panel" role="tabpanel">
+                    <h3 id="kg-detail-heading" class="sr-only" data-i18n="kg_detail_heading"></h3>
+                    <div id="kg-detail-body" class="space-y-2 p-3 text-sm text-slate-600 dark:text-slate-400">
                       <p id="kg-detail-label" class="font-medium text-slate-800 dark:text-slate-200">&nbsp;</p>
-                      <p><span class="font-medium" data-i18n="kg_detail_type"></span>: <span id="kg-detail-type"></span></p>
-                      <p id="kg-detail-meta-wrap" class="hidden"><span class="font-medium" data-i18n="kg_detail_meta"></span>: <span id="kg-detail-meta"></span></p>
+                      <p class="text-xs"><span class="font-medium" data-i18n="kg_detail_type"></span>: <span id="kg-detail-type"></span></p>
+                      <p id="kg-detail-meta-wrap" class="hidden text-xs"><span class="font-medium" data-i18n="kg_detail_meta"></span>: <span id="kg-detail-meta"></span></p>
                       <div id="kg-detail-edges-wrap" class="hidden space-y-2 pt-1">
                         <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_out"></p>
+                          <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_out"></p>
                           <ul id="kg-detail-edges-out" class="kg-detail-edges-list mt-1 list-none space-y-1 pl-0 text-xs"></ul>
                         </div>
                         <div>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_in"></p>
+                          <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500" data-i18n="kg_detail_edges_in"></p>
                           <ul id="kg-detail-edges-in" class="kg-detail-edges-list mt-1 list-none space-y-1 pl-0 text-xs"></ul>
                         </div>
                       </div>
@@ -2157,15 +2469,143 @@
                         <span data-i18n="kg_btn_open_content"></span>
                       </button>
                     </div>
-                  </section>
-                  <section class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-800/50" aria-labelledby="kg-legend-heading">
-                    <h3 id="kg-legend-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_legend_heading"></h3>
-                    <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_legend_lead"></p>
-                    <ul id="kg-legend-list" class="kg-legend-list mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-400"></ul>
-                  </section>
+                  </div>
+                  <div id="kg-side-tab-nodes" class="kg-side-tab-panel hidden" role="tabpanel">
+                    <h3 id="kg-nodes-heading" class="sr-only" data-i18n="kg_nodes_heading"></h3>
+                    <p class="sr-only" data-i18n="kg_nodes_lead"></p>
+                    <div class="p-3">
+                      <label class="block">
+                        <span class="sr-only" data-i18n="kg_nodes_filter_label"></span>
+                        <input
+                          id="kg-node-list-filter"
+                          type="search"
+                          class="aviators-field w-full text-xs"
+                          autocomplete="off"
+                          data-i18n-placeholder="kg_nodes_filter_placeholder"
+                        />
+                      </label>
+                      <ul id="kg-node-list" class="kg-node-list mt-2 max-h-[min(28rem,50vh)] space-y-0.5 overflow-y-auto overscroll-contain" role="listbox" aria-labelledby="kg-nodes-heading"></ul>
+                      <p id="kg-node-list-empty" class="kg-node-list-empty mt-2 hidden text-xs text-slate-500 dark:text-slate-400" data-i18n="kg_nodes_empty"></p>
+                    </div>
+                  </div>
                 </aside>
+                <button type="button" id="kg-side-open" class="kg-side-open btn btn-sm btn-outline hidden items-center gap-1.5" data-i18n-aria-label="kg_side_toggle">
+                  <i class="fa-solid fa-sidebar" aria-hidden="true"></i>
+                  <span data-i18n="kg_side_toggle"></span>
+                </button>
               </div>
-              <div id="kg-vis-lib-host" class="hidden" aria-hidden="true"><?!= knowledgeGraphLib ?></div>
+                </div>
+
+                <div
+                  id="kg-panel-entities"
+                  role="tabpanel"
+                  aria-labelledby="kg-tab-entities"
+                  class="app-tab-panel mt-3 hidden space-y-5"
+                  hidden
+                >
+                  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-catalog-heading">
+                    <h3 id="kg-entities-catalog-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_catalog_heading"></h3>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_catalog_lead"></p>
+                    <p id="kg-entities-catalog-totals" class="mt-2 text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400" role="status" aria-live="polite">&nbsp;</p>
+                    <div
+                      id="kg-entities-catalog-loader"
+                      class="mt-4 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                      <span data-i18n="kg_entities_busy_catalog"></span>
+                    </div>
+                    <div id="kg-entities-types-grid" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+                  </section>
+
+                  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-relations-heading">
+                    <h3 id="kg-entities-relations-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_relations_heading"></h3>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_relations_lead"></p>
+                    <ul id="kg-entities-relations-list" class="mt-4 space-y-3"></ul>
+                  </section>
+
+                  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-browse-heading">
+                    <h3 id="kg-entities-browse-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_browse_heading"></h3>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_browse_lead"></p>
+                    <div class="mt-4 flex flex-wrap items-end gap-3">
+                      <label class="block min-w-[10rem] text-sm" for="kg-entities-filter-type">
+                        <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_type"></span>
+                        <select id="kg-entities-filter-type" class="aviators-field w-full text-sm">
+                          <option value="" data-i18n="kg_entities_filter_type_all"></option>
+                          <option value="content" data-i18n="kg_type_content"></option>
+                          <option value="client" data-i18n="kg_type_client"></option>
+                          <option value="client_label" data-i18n="kg_type_client_label"></option>
+                          <option value="industry" data-i18n="kg_type_industry"></option>
+                          <option value="tag" data-i18n="kg_type_tag"></option>
+                          <option value="stage" data-i18n="kg_type_stage"></option>
+                          <option value="pricing_model" data-i18n="kg_type_pricing_model"></option>
+                        </select>
+                      </label>
+                      <label class="block min-w-[12rem] flex-1 text-sm" for="kg-entities-filter-search">
+                        <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_search"></span>
+                        <input
+                          id="kg-entities-filter-search"
+                          type="search"
+                          class="aviators-field w-full text-sm"
+                          autocomplete="off"
+                          data-i18n-placeholder="kg_entities_filter_search_placeholder"
+                        />
+                      </label>
+                      <button type="button" id="kg-entities-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span data-i18n="kg_btn_apply"></span>
+                      </button>
+                    </div>
+                    <div
+                      id="kg-entities-list-loader"
+                      class="mt-4 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                      <span data-i18n="kg_entities_busy_list"></span>
+                    </div>
+                    <p
+                      id="kg-entities-list-error"
+                      class="mt-4 hidden rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
+                      role="alert"
+                    ></p>
+                    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                      <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-slate-600 dark:bg-slate-800/80 dark:text-slate-300">
+                          <tr>
+                            <th class="px-3 py-2" data-i18n="kg_entities_col_name"></th>
+                            <th class="px-3 py-2" data-i18n="kg_entities_col_type"></th>
+                            <th class="px-3 py-2" data-i18n="kg_entities_col_meta"></th>
+                            <th class="px-3 py-2"><span class="sr-only" data-i18n="kg_entities_col_actions"></span></th>
+                          </tr>
+                        </thead>
+                        <tbody id="kg-entities-table-body"></tbody>
+                      </table>
+                    </div>
+                    <p
+                      id="kg-entities-list-empty"
+                      class="mt-4 hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                      role="status"
+                      data-i18n="kg_entities_empty"
+                    ></p>
+                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <p id="kg-entities-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status"></p>
+                      <div class="flex gap-2">
+                        <button type="button" id="kg-entities-prev" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                          <span data-i18n="pagination_prev"></span>
+                        </button>
+                        <button type="button" id="kg-entities-next" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                          <span data-i18n="pagination_next"></span>
+                          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
             </div>
 
             <div
@@ -2275,8 +2715,8 @@
                     <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                       <span data-i18n="contents_pagination_page_size"></span>
                       <select id="clients-page-size" class="aviators-field py-1 text-sm" aria-label="Page size">
-                        <option value="15">15</option>
-                        <option value="25" selected>25</option>
+                        <option value="15" selected>15</option>
+                        <option value="25">25</option>
                         <option value="50">50</option>
                       </select>
                     </label>
@@ -2777,10 +3217,23 @@
                     <button
                       type="button"
                       role="tab"
+                      id="settings-tab-general"
+                      class="app-tab-btn settings-tab-btn"
+                      aria-controls="settings-panel-general"
+                      aria-selected="true"
+                      data-settings-perm="canRebuildKnowledgeGraph"
+                    >
+                      <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                      <span data-i18n="settings_tab_general"></span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
                       id="settings-tab-roles"
                       class="app-tab-btn settings-tab-btn"
                       aria-controls="settings-panel-roles"
-                      aria-selected="true"
+                      aria-selected="false"
+                      tabindex="-1"
                       data-settings-perm="canManageRoleConfig"
                     >
                       <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
@@ -2798,6 +3251,19 @@
                     >
                       <i class="fa-solid fa-users" aria-hidden="true"></i>
                       <span data-i18n="settings_tab_users"></span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="settings-tab-agents"
+                      class="app-tab-btn settings-tab-btn"
+                      aria-controls="settings-panel-agents"
+                      aria-selected="false"
+                      tabindex="-1"
+                      data-settings-perm="canViewAgents"
+                    >
+                      <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                      <span data-i18n="settings_tab_agents"></span>
                     </button>
                     <button
                       type="button"
@@ -2840,12 +3306,79 @@
                     </button>
                   </div>
 
+                  <!-- Panel: General -->
+                  <div
+                    role="tabpanel"
+                    id="settings-panel-general"
+                    class="app-tab-panel settings-tab-panel"
+                    aria-labelledby="settings-tab-general"
+                  >
+                    <div id="settings-kg-limits-section" class="settings-panel-inner">
+                      <div class="settings-panel-head">
+                        <h3 id="settings-kg-limits-heading" class="settings-panel-title flex items-center gap-2">
+                          <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                          <span data-i18n="settings_kg_limits_heading"></span>
+                        </h3>
+                        <p class="settings-panel-lead" data-i18n="settings_kg_limits_lead"></p>
+                      </div>
+
+                      <div id="settings-kg-limits-loader" class="settings-inline-loader hidden" role="status" aria-live="polite">
+                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        <span data-i18n="settings_kg_limits_busy_load"></span>
+                      </div>
+
+                      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="block text-sm" for="settings-kg-max-nodes-default">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_max_nodes_default"></span>
+                          <input type="number" id="settings-kg-max-nodes-default" class="aviators-field w-full text-sm" min="50" max="500" step="10" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-max-nodes-cap">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_max_nodes_cap"></span>
+                          <input type="number" id="settings-kg-max-nodes-cap" class="aviators-field w-full text-sm" min="100" max="500" step="10" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-hub-seed-limit">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_hub_seed_limit"></span>
+                          <input type="number" id="settings-kg-hub-seed-limit" class="aviators-field w-full text-sm" min="5" max="100" step="1" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-depth-default">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_depth_default"></span>
+                          <input type="number" id="settings-kg-depth-default" class="aviators-field w-full text-sm" min="1" max="6" step="1" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-depth-cap">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_depth_cap"></span>
+                          <input type="number" id="settings-kg-depth-cap" class="aviators-field w-full text-sm" min="1" max="6" step="1" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-density-compact">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_density_compact"></span>
+                          <input type="number" id="settings-kg-density-compact" class="aviators-field w-full text-sm" min="50" max="500" step="10" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-density-normal">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_density_normal"></span>
+                          <input type="number" id="settings-kg-density-normal" class="aviators-field w-full text-sm" min="50" max="500" step="10" />
+                        </label>
+                        <label class="block text-sm" for="settings-kg-density-wide">
+                          <span class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400" data-i18n="settings_kg_density_wide"></span>
+                          <input type="number" id="settings-kg-density-wide" class="aviators-field w-full text-sm" min="50" max="500" step="10" />
+                        </label>
+                      </div>
+
+                      <div class="settings-panel-footer mt-5">
+                        <button type="button" id="settings-kg-limits-save-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                          <span data-i18n="settings_kg_limits_save_btn"></span>
+                        </button>
+                        <p id="settings-kg-limits-status" class="settings-status-msg" role="status" aria-live="polite">&nbsp;</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Panel: Permisos -->
                   <div
                     role="tabpanel"
                     id="settings-panel-roles"
-                    class="app-tab-panel settings-tab-panel"
+                    class="app-tab-panel settings-tab-panel hidden"
                     aria-labelledby="settings-tab-roles"
+                    hidden
                   >
                     <div id="settings-role-config-section" class="settings-panel-inner">
                       <div class="settings-panel-head">
@@ -3213,6 +3746,15 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- Panel: Agentes -->
+                  <div
+                    role="tabpanel"
+                    id="settings-panel-agents"
+                    class="app-tab-panel settings-tab-panel hidden"
+                    aria-labelledby="settings-tab-agents"
+                    hidden
+                  ></div>
 
                   <!-- Panel: Chat -->
                   <div
@@ -3740,6 +4282,140 @@
       </div>
     </div>
     <div
+      id="contents-similar-review-modal"
+      class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
+      aria-hidden="true"
+    >
+      <div
+        id="contents-similar-review-dialog"
+        class="flex w-full max-w-2xl max-h-[min(90vh,36rem)] flex-col rounded-2xl border border-amber-200 bg-white shadow-xl outline-none dark:border-amber-900/50 dark:bg-slate-800"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="contents-similar-review-title"
+        tabindex="-1"
+      >
+        <div class="border-b border-amber-100 px-6 py-4 dark:border-amber-900/40">
+          <h2
+            id="contents-similar-review-title"
+            class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+            data-i18n="contents_similar_review_title"
+          ></h2>
+          <p
+            id="contents-similar-review-lead"
+            class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+            data-i18n="contents_similar_review_lead"
+          ></p>
+        </div>
+        <div
+          id="contents-similar-review-list"
+          class="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-3"
+          role="list"
+        ></div>
+        <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-6 py-4 dark:border-slate-700">
+          <button type="button" id="contents-similar-review-keep-all" class="btn btn-md btn-secondary inline-flex items-center gap-2">
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
+            <span data-i18n="contents_similar_review_keep_all"></span>
+          </button>
+          <button type="button" id="contents-similar-review-delete-selected" class="btn btn-md btn-danger inline-flex items-center gap-2">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+            <span data-i18n="contents_similar_review_delete_selected"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      id="pb-wizard-modal"
+      class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
+      aria-hidden="true"
+    >
+      <div
+        id="pb-wizard-dialog"
+        class="app-dialog max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-600 dark:bg-slate-800"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pb-wizard-heading"
+      >
+        <section id="pb-step-validate" class="space-y-4">
+          <div>
+            <h2 id="pb-wizard-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_validation_heading"></h2>
+            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_validation_lead"></p>
+          </div>
+          <label class="block text-sm" for="pb-field-client">
+            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_client"></span>
+            <input type="text" id="pb-field-client" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_client" />
+          </label>
+          <div>
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_scope_items"></h3>
+              <button type="button" id="pb-add-scope-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span data-i18n="pb_btn_add_scope_item"></span>
+              </button>
+            </div>
+            <div id="pb-scope-list" class="space-y-3"></div>
+          </div>
+          <label class="block text-sm" for="pb-field-commercial-model">
+            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_commercial_model"></span>
+            <select id="pb-field-commercial-model" class="aviators-field w-full text-sm">
+              <option value="">—</option>
+              <option value="TIME_AND_MATERIALS" data-i18n="pb_pricing_time_and_materials"></option>
+              <option value="STAFF_AUGMENTATION" data-i18n="pb_pricing_staff_augmentation"></option>
+              <option value="FIXED_PRICE" data-i18n="pb_pricing_fixed_price"></option>
+              <option value="SUBSCRIPTION" data-i18n="pb_pricing_subscription"></option>
+              <option value="AI_PODS" data-i18n="pb_pricing_ai_pods"></option>
+            </select>
+          </label>
+          <div>
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_milestones"></h3>
+              <button type="button" id="pb-add-milestone-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span data-i18n="pb_btn_add_milestone"></span>
+              </button>
+            </div>
+            <div id="pb-milestone-list" class="space-y-3"></div>
+          </div>
+          <label class="block text-sm" for="pb-field-language">
+            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_detected_language"></span>
+            <select id="pb-field-language" class="aviators-field w-full text-sm">
+              <option value="es" data-i18n="pb_lang_es"></option>
+              <option value="en" data-i18n="pb_lang_en"></option>
+            </select>
+          </label>
+          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+            <button type="button" id="pb-confirm-brief-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+              <span data-i18n="pb_btn_confirm_brief"></span>
+            </button>
+          </div>
+        </section>
+        <section id="pb-step-industry" class="hidden space-y-4">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_industry_heading"></h2>
+            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_industry_lead"></p>
+          </div>
+          <fieldset class="space-y-2">
+            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_industry"></legend>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" />
+              <span data-i18n="pb_industry_airlines"></span>
+            </label>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" />
+              <span data-i18n="pb_industry_logistics"></span>
+            </label>
+          </fieldset>
+          <p id="pb-deck-preview" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+            <button type="button" id="pb-start-building-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+              <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
+              <span data-i18n="pb_btn_start_building"></span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div
       id="app-error-modal"
       class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
       aria-hidden="true"
@@ -3871,11 +4547,13 @@
     <?!= clientScriptToast ?>
     <?!= clientScriptDrive ?>
     <?!= clientScriptChat ?>
+    <?!= clientScriptProposalBuilding ?>
     <?!= clientScriptAgents ?>
     <?!= clientScriptContents ?>
     <?!= clientScriptTags ?>
     <?!= clientScriptClients ?>
     <?!= clientScriptKnowledgeGraph ?>
+    <div id="kg-vis-lib-host" class="hidden" aria-hidden="true"><?!= knowledgeGraphLib ?></div>
     <?!= clientScriptDashboard ?>
     <?!= clientScriptMetrics ?>
     <?!= clientScriptSettings ?>

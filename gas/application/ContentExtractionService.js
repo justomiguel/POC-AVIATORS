@@ -423,10 +423,34 @@ function ContentExtraction_validateAndPrepareBlob_(payload) {
   };
 }
 
+/** @type {Array<string>} Clasificación del material de propuestas / conocimiento comercial Globant */
+var CONTENT_PROPOSAL_MATERIAL_KINDS = [
+  'COMMERCIAL_PROPOSAL',
+  'GLOBANT_STUDIO',
+  'GLOBANT_OFFERING',
+  'CORPORATE',
+  'OTHER',
+];
+
+/** @type {Object<string,string>} Segmento de carpeta Drive por material_kind */
+var CONTENT_PROPOSAL_MATERIAL_KIND_FOLDER_LABELS = {
+  COMMERCIAL_PROPOSAL: 'Propuesta comercial',
+  GLOBANT_STUDIO: 'Studio',
+  GLOBANT_OFFERING: 'Offering',
+  CORPORATE: 'Corporativo',
+  OTHER: 'Otro',
+};
+
 /** @type {Array<string>} Valores válidos para stage en propuestas */
 var CONTENT_PROPOSAL_STAGES = ['PRESENTED', 'NEGOTIATION', 'WIN', 'LOST', 'ON_HOLD'];
 /** @type {Array<string>} Valores válidos para pricing_model */
-var CONTENT_PRICING_MODELS = ['TIME_AND_MATERIALS', 'STAFF_AUGMENTATION', 'FIXED_PRICE', 'SUBSCRIPTION'];
+var CONTENT_PRICING_MODELS = [
+  'TIME_AND_MATERIALS',
+  'STAFF_AUGMENTATION',
+  'FIXED_PRICE',
+  'SUBSCRIPTION',
+  'AI_PODS',
+];
 /** @type {Array<string>} Valores válidos para industria del cliente */
 var CONTENT_ALLOWED_CLIENT_INDUSTRIES =
   typeof CLIENTS_ALLOWED_INDUSTRIES !== 'undefined'
@@ -440,7 +464,8 @@ var CONTENT_ALLOWED_CLIENT_INDUSTRIES =
 
 /** @type {Object<string,string>} Etiquetas legibles por content_type para el prompt */
 var CONTENT_EXTRACTION_TYPE_LABELS = {
-  proposal: 'commercial proposal / RFP response / sales deck',
+  proposal:
+    'commercial proposal / RFP response / Globant Studio profile / offering (AI Pods, etc.) / corporate sales material',
   success_case: 'success case / case study / customer story',
   client: 'client profile / account overview / CRM export',
   onboarding: 'onboarding / training / enablement material',
@@ -767,12 +792,23 @@ function ContentExtraction_normalizeSuccessCaseSpecific_(specific) {
 function ContentExtraction_normalizeSpecific_(contentType, specific) {
   var sp = specific && typeof specific === 'object' ? specific : {};
   if (contentType === 'proposal') {
+    sp.material_kind = ContentExtraction_normalizeEnum_(
+      sp.material_kind,
+      CONTENT_PROPOSAL_MATERIAL_KINDS,
+      'COMMERCIAL_PROPOSAL',
+    );
+    sp.topic = String(sp.topic || '').trim();
+    sp.globant_studio = String(sp.globant_studio || '').trim();
+    sp.offering = ContentExtraction_normalizeEnum_(sp.offering, CONTENT_PRICING_MODELS, '');
     sp.stage = ContentExtraction_normalizeEnum_(sp.stage, CONTENT_PROPOSAL_STAGES, 'PRESENTED');
     sp.pricing_model = ContentExtraction_normalizeEnum_(
       sp.pricing_model,
       CONTENT_PRICING_MODELS,
       'TIME_AND_MATERIALS',
     );
+    if (sp.material_kind === 'GLOBANT_OFFERING' && !sp.offering && sp.pricing_model) {
+      sp.offering = sp.pricing_model;
+    }
     return sp;
   }
   if (contentType === 'success_case') {
@@ -978,11 +1014,19 @@ function ContentExtraction_promptForType_(contentType, hints) {
   }
   if (contentType === 'proposal') {
     commonInstructions.push(
-      'specific for proposal: {"stage":"","pricing_model":"","effort_estimate":"","timeline":"","win_probability":"","notes":""}',
-      'stage MUST be one of: ' + CONTENT_PROPOSAL_STAGES.join(', ') + '. If unclear, use PRESENTED.',
-      'pricing_model MUST be one of: ' + CONTENT_PRICING_MODELS.join(', ') + '. If unclear, use TIME_AND_MATERIALS.',
-      'For proposal, common.industry is mandatory and MUST be one of the allowed values.',
-      'effort_estimate and timeline: extract from SOW, staffing tables or commercial sections when available.',
+      'specific for proposal: {"material_kind":"","topic":"","globant_studio":"","offering":"","stage":"","pricing_model":"","effort_estimate":"","timeline":"","win_probability":"","notes":""}',
+      'material_kind MUST be one of: ' +
+        CONTENT_PROPOSAL_MATERIAL_KINDS.join(', ') +
+        '. Use COMMERCIAL_PROPOSAL for client RFP/proposal decks; GLOBANT_STUDIO for Studio capability decks; GLOBANT_OFFERING for AI Pods and engagement models; CORPORATE for general Globant commercial material; OTHER if none fit.',
+      'topic: thematic subject (e.g. aviation, loyalty, cloud migration, AI transformation). Required when material_kind is CORPORATE or OTHER.',
+      'globant_studio: name of the Globant Studio when the document is about or from a Studio (e.g. Aviation Studio, AI Studio). Required when material_kind is GLOBANT_STUDIO.',
+      'offering MUST be one of: ' +
+        CONTENT_PRICING_MODELS.join(', ') +
+        ' when material_kind is GLOBANT_OFFERING; otherwise empty string.',
+      'stage MUST be one of: ' + CONTENT_PROPOSAL_STAGES.join(', ') + '. Use PRESENTED when not a live deal artifact.',
+      'pricing_model MUST be one of: ' + CONTENT_PRICING_MODELS.join(', ') + '. Prefer for COMMERCIAL_PROPOSAL; may mirror offering for GLOBANT_OFFERING.',
+      'For COMMERCIAL_PROPOSAL, common.industry is mandatory and MUST be one of the allowed values. For other material_kind values, industry may be empty.',
+      'effort_estimate and timeline: extract from SOW, staffing tables or commercial sections when available (mainly COMMERCIAL_PROPOSAL).',
     );
   } else if (contentType === 'success_case') {
     commonInstructions.push(

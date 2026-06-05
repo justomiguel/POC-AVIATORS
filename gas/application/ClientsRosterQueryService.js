@@ -42,7 +42,72 @@ function ClientsRosterQuery_cleanOwnerHint_(hint) {
     /^(?:account owner|vendedor(?:a)?|client partner)\s+(?:de|del|of|for)\s+/,
     '',
   );
-  return h.trim();
+  h = h.trim();
+  if (ClientsRosterQuery_isInvalidOwnerHint_(h)) return '';
+  return h;
+}
+
+/**
+ * «Globant» en «clientes de Globant» es la empresa, no un account owner.
+ * @param {string} qNorm
+ * @return {boolean}
+ */
+function ClientsRosterQuery_isGlobantPortfolioListQuestion_(qNorm) {
+  var q = ClientsRosterQuery_normalizeOwnerRoleTermsInQuestion_(qNorm);
+  if (!/\bglobant\b/.test(q)) return false;
+  if (
+    !/(clientes de globant|clientes del globant|clients (of|for) globant|globant clients|globant.*clientes|clientes.*globant|cuentas de globant|accounts (of|for) globant)/.test(
+      q,
+    )
+  ) {
+    return false;
+  }
+  return (
+    ClientsRosterQuery_questionMentionsRosterList_(q) ||
+    ClientsRosterQuery_wantsDirectList_(q) ||
+    ClientsRosterQuery_questionMentionsAviation_(q) ||
+    /(lista|list|todos|all|cuantos|how many|industria|industry|por industria|by industry)/.test(
+      q,
+    )
+  );
+}
+
+/**
+ * Listado por industria/aviación, no por persona (account owner).
+ * @param {string} qNorm
+ * @return {boolean}
+ */
+function ClientsRosterQuery_isIndustryScopedListQuestion_(qNorm) {
+  var q = ClientsRosterQuery_normalizeOwnerRoleTermsInQuestion_(qNorm);
+  if (!ClientsRosterQuery_questionMentionsAviation_(q) && !/(industria|industry)/.test(q)) {
+    return false;
+  }
+  return (
+    ClientsRosterQuery_questionMentionsRosterList_(q) ||
+    ClientsRosterQuery_wantsDirectList_(q) ||
+    /(lista|list|todos|all|cuantos|how many|nomina|roster|portfolio|cartera)/.test(q)
+  );
+}
+
+/**
+ * @param {string} hint
+ * @return {boolean}
+ */
+function ClientsRosterQuery_isInvalidOwnerHint_(hint) {
+  var h = ClientsRosterQuery_norm_(hint);
+  if (!h || h.length < 2) return true;
+  if (h === 'globant' || /\bglobant\b/.test(h)) return true;
+  if (
+    /(industria|aerolinea|aviacion|airline|aviation|passenger|aerospace|aeropuerto|airport|commercial)/.test(
+      h,
+    )
+  ) {
+    return true;
+  }
+  if (/\b(en|de|del|por|for|in|the|la|los|las)\b/.test(h) && h.split(/\s+/).length >= 3) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -83,6 +148,8 @@ function ClientsRosterQuery_hasRosterData_() {
  */
 function ClientsRosterQuery_isOwnerRosterQuestion_(qNorm) {
   var q = ClientsRosterQuery_normalizeOwnerRoleTermsInQuestion_(qNorm);
+  if (ClientsRosterQuery_isGlobantPortfolioListQuestion_(q)) return false;
+  if (ClientsRosterQuery_isIndustryScopedListQuestion_(q)) return false;
   return /(que cuentas|which accounts|cuentas tiene|accounts does|accounts for|cuentas de |cuentas del |clientes de |clientes del |accounts owned|owned by|a cargo de|account owner|dueno de cuenta|dueño de cuenta|de quien es|whose accounts|cuantas cuentas tiene|how many accounts does|cuentas a cargo)/.test(
     q,
   );
@@ -115,13 +182,29 @@ function ClientsRosterQuery_ownerMatchesHint_(owner, hint) {
  */
 function ClientsRosterQuery_extractOwnerHintFromQuestion_(qNorm) {
   var q = ClientsRosterQuery_normalizeOwnerRoleTermsInQuestion_(qNorm);
+  var ownerStop =
+    '(?=\\s+en\\s+(?:la\\s+)?(?:industria|aviacion)|\\s+in\\s+(?:the\\s+)?(?:aviation|the)|\\s+por\\s+industria|\\s+by\\s+industry|\\?|$|\\.|,)';
   var patterns = [
-    /(?:que\s+)?cuentas?\s+tiene\s+(?:el\s+)?(?:account owner\s+)?([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,| en | con | y )/,
-    /(?:cuantas|how many)\s+cuentas?\s+tiene\s+(?:el\s+)?(?:account owner\s+)?([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,)/,
-    /cuentas?\s+(?:de|del)\s+(?:el\s+)?(?:account owner\s+)?([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,)/,
-    /clientes?\s+(?:de|del)\s+(?:el\s+)?(?:account owner\s+)?([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,)/,
-    /accounts?\s+(?:for|owned by|does)\s+(?:account owner\s+)?([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,)/,
-    /account owner\s+(?:de|del|for|of)\s+([a-z][a-z\s.]{1,48}?)(?:\?|$|\.|,)/,
+    new RegExp(
+      '(?:que\\s+)?cuentas?\\s+tiene\\s+(?:el\\s+)?(?:account owner\\s+)?([a-z][a-z\\s.]{1,48}?)' +
+        ownerStop,
+    ),
+    new RegExp(
+      '(?:cuantas|how many)\\s+cuentas?\\s+tiene\\s+(?:el\\s+)?(?:account owner\\s+)?([a-z][a-z\\s.]{1,48}?)' +
+        ownerStop,
+    ),
+    new RegExp(
+      'cuentas?\\s+(?:de|del)\\s+(?:el\\s+)?(?:account owner\\s+)?([a-z][a-z\\s.]{1,48}?)' + ownerStop,
+    ),
+    new RegExp(
+      'clientes?\\s+(?:de|del)\\s+(?:el\\s+)?(?:account owner\\s+)?([a-z][a-z\\s.]{1,48}?)' + ownerStop,
+    ),
+    new RegExp(
+      'accounts?\\s+(?:for|owned by|does)\\s+(?:account owner\\s+)?([a-z][a-z\\s.]{1,48}?)' + ownerStop,
+    ),
+    new RegExp(
+      'account owner\\s+(?:de|del|for|of)\\s+([a-z][a-z\\s.]{1,48}?)' + ownerStop,
+    ),
   ];
   var pi;
   for (pi = 0; pi < patterns.length; pi++) {
@@ -162,9 +245,9 @@ function ClientsRosterQuery_resolveOwnerFromQuestion_(question) {
       bestLen = ownerNorm.length;
     }
   }
-  if (best) return best;
+  if (best && !ClientsRosterQuery_isInvalidOwnerHint_(best)) return best;
   var extracted = ClientsRosterQuery_extractOwnerHintFromQuestion_(qNorm);
-  if (extracted) return extracted;
+  if (extracted && !ClientsRosterQuery_isInvalidOwnerHint_(extracted)) return extracted;
   return '';
 }
 
@@ -180,11 +263,11 @@ function ClientsRosterQuery_isRosterQuestion_(question, clientNameDetected) {
   if (ClientsRosterQuery_isOwnerRosterQuestion_(q)) return true;
 
   var rosterCue =
-    /(que clientes|cuales clientes|which clients|que cuentas|which accounts|lista(r)? de clientes|list of clients|listado|nomina|n[oó]mina|cuentas activas|active accounts|clientes activos|active clients|cuantos clientes|how many clients|cuenta[s]? tenemos|clients do we|client roster|salesforce roster|cartera de clientes|client portfolio|por industria|by industry|en aviacion|in aviation|subindustria|sub-industry|account owner|owners de|due[n]?o de cuenta|tiene globant)/.test(
+    /(que clientes|cuales clientes|which clients|que cuentas|which accounts|lista|listado|\blist\b|list of|lista(r)? de clientes|list of clients|nomina|n[oó]mina|cuentas activas|active accounts|clientes activos|active clients|cuantos clientes|how many clients|cuenta[s]? tenemos|clients do we|client roster|salesforce roster|cartera de clientes|client portfolio|por industria|by industry|industria de aerolinea|industria aerolinea|airlines industry|en aviacion|in aviation|subindustria|sub-industry|account owner|owners de|due[n]?o de cuenta|tiene globant|clientes de globant|globant.*clientes|globant.*clients|clients.*globant)/.test(
       q,
     );
   var listCue =
-    /(todos los clientes|all clients|todas las cuentas|all accounts|mostrar clientes|show clients|tenemos activos|have active)/.test(
+    /(todos los clientes|all clients|todas las cuentas|all accounts|lista todos|list all|list all.*clients|mostrar clientes|show clients|tenemos activos|have active)/.test(
       q,
     );
   var countCue = /(cuantos|how many|total de clientes|total clients|cantidad de clientes)/.test(q);
@@ -211,9 +294,48 @@ function ClientsRosterQuery_isRosterQuestion_(question, clientNameDetected) {
  * @param {string} question
  * @return {string}
  */
+function ClientsRosterQuery_shouldUseAccountNameHint_(question, clientNameDetected) {
+  var qNorm = ClientsRosterQuery_normalizeOwnerRoleTermsInQuestion_(
+    ClientsRosterQuery_norm_(question),
+  );
+  if (!qNorm) return false;
+  if (ClientsRosterQuery_isGlobantPortfolioListQuestion_(qNorm)) return false;
+  if (ClientsRosterQuery_isIndustryScopedListQuestion_(qNorm)) return false;
+  if (
+    ClientsRosterQuery_wantsDirectList_(question) ||
+    ClientsRosterQuery_wantsDirectCount_(question)
+  ) {
+    return false;
+  }
+  var detected = String(clientNameDetected || '').trim();
+  if (detected && ClientsRosterQuery_questionMentionsAviation_(qNorm)) {
+    var detNorm = ClientsRosterQuery_norm_(detected);
+    if (
+      detNorm.indexOf('aerolinea') >= 0 ||
+      detNorm.indexOf('airline') >= 0 ||
+      detNorm.indexOf('aviation') >= 0
+    ) {
+      if (qNorm.indexOf(detNorm) < 0) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param {string} question
+ * @return {string}
+ */
 function ClientsRosterQuery_resolveAccountFromQuestion_(question) {
   var qNorm = ClientsRosterQuery_norm_(question);
   if (!qNorm) return '';
+  if (
+    ClientsRosterQuery_isGlobantPortfolioListQuestion_(qNorm) ||
+    ClientsRosterQuery_isIndustryScopedListQuestion_(qNorm) ||
+    ClientsRosterQuery_wantsDirectList_(question) ||
+    ClientsRosterQuery_wantsDirectCount_(question)
+  ) {
+    return '';
+  }
   var rows;
   try {
     rows = SalesforceAccountsStore_listAll();
@@ -288,6 +410,43 @@ function ClientsRosterQuery_norm_(text) {
 }
 
 /**
+ * Aviación / aerolíneas en lenguaje natural (no solo «passenger airlines» literal).
+ * @param {string} qNorm
+ * @return {boolean}
+ */
+function ClientsRosterQuery_questionMentionsAviation_(qNorm) {
+  return /(aviacion|aviation|aerolinea|aerolineas|airline|airlines|airlines industry|linea[s]? aerea|industria de aerolinea|airline industry|passenger airlines|aerolineas de pasajeros|commercial airlines)/.test(
+    qNorm,
+  );
+}
+
+/**
+ * @param {string} qNorm
+ * @return {boolean}
+ */
+function ClientsRosterQuery_questionMentionsRosterList_(qNorm) {
+  return /(lista|listado|\blist\b|nomina|nomin|mostrar|show|todos los clientes|all clients|list all|todas las cuentas|all accounts|que clientes|which clients|cuantas cuentas|how many accounts|globant.*clients|clients.*globant)/.test(
+    qNorm,
+  );
+}
+
+/**
+ * Aplica filtro canónico de aviación: subindustria Passenger Airlines en Salesforce (no industria «Aerolineas» suelta).
+ * @param {{subIndustry:string, industry:string, industryGroup:string}} filters
+ */
+function ClientsRosterQuery_applyAviationFilters_(filters) {
+  var paxSub = ClientsRosterQuery_resolvePassengerAirlinesSubIndustry_();
+  if (paxSub) {
+    filters.subIndustry = paxSub;
+    filters.industry = '';
+    filters.industryGroup = '';
+    return;
+  }
+  filters.industryGroup = 'aviation';
+  filters.industry = '';
+}
+
+/**
  * @param {string} question
  * @return {{activeOnly:boolean|null, industry:string, subIndustry:string, industryGroup:string, statusHint:string, q:string}}
  */
@@ -304,67 +463,79 @@ function ClientsRosterQuery_parseFilters_(question) {
     q: '',
   };
 
+  var mentionsAviation = ClientsRosterQuery_questionMentionsAviation_(qNorm);
+
   if (/(inactiv|histor|baja|inactive|historical)/.test(qNorm)) {
     filters.activeOnly = false;
   } else if (/(activ|vigent|current|active)/.test(qNorm)) {
     filters.activeOnly = true;
+  } else if (
+    ClientsRosterQuery_questionMentionsRosterList_(qNorm) ||
+    ClientsRosterQuery_wantsDirectList_(question) ||
+    ClientsRosterQuery_wantsDirectCount_(question)
+  ) {
+    filters.activeOnly = true;
   }
 
-  if (
-    /(aviacion|aviation|passenger airlines|aerolineas de pasajeros|lineas aereas comerciales|commercial airlines|airline passengers)/.test(
-      qNorm,
-    )
-  ) {
-    var paxSub = ClientsRosterQuery_resolvePassengerAirlinesSubIndustry_();
-    if (paxSub) {
-      filters.subIndustry = paxSub;
-      filters.industryGroup = '';
-    } else {
-      filters.industryGroup = 'aviation';
-    }
+  if (mentionsAviation) {
+    ClientsRosterQuery_applyAviationFilters_(filters);
   } else if (/(aeroespacial|aerospace|aeropuertos|airports)/.test(qNorm)) {
     filters.industryGroup = 'aerospace';
+    filters.industry = '';
   }
 
   var catalog = ClientsMaster_listFilterOptions();
   var industries = catalog.industries || [];
   var si;
-  for (si = 0; si < industries.length; si++) {
-    var ind = String(industries[si] || '').trim();
-    if (!ind) continue;
-    var indNorm = ClientsRosterQuery_norm_(ind);
-    if (indNorm.length >= 4 && qNorm.indexOf(indNorm) >= 0) {
-      filters.industry = ind;
-      filters.industryGroup = '';
-      break;
+  if (!mentionsAviation) {
+    for (si = 0; si < industries.length; si++) {
+      var ind = String(industries[si] || '').trim();
+      if (!ind) continue;
+      var indNorm = ClientsRosterQuery_norm_(ind);
+      if (indNorm.length >= 4 && qNorm.indexOf(indNorm) >= 0) {
+        filters.industry = ind;
+        filters.industryGroup = '';
+        break;
+      }
     }
-  }
 
-  if (!filters.industry) {
-    var resolved = ClientsMaster_resolveIndustryFromCatalog_(question);
-    if (resolved) {
-      filters.industry = resolved;
-      filters.industryGroup = '';
+    if (!filters.industry) {
+      var resolved = ClientsMaster_resolveIndustryFromCatalog_(question);
+      if (resolved) {
+        filters.industry = resolved;
+        filters.industryGroup = '';
+      }
     }
   }
 
   var subList = catalog.sub_industries || [];
-  for (si = 0; si < subList.length; si++) {
-    var sub = String(subList[si] || '').trim();
-    if (!sub) continue;
-    var subNorm = ClientsRosterQuery_norm_(sub);
-    if (subNorm.length >= 4 && qNorm.indexOf(subNorm) >= 0) {
-      filters.subIndustry = sub;
-      break;
+  if (!filters.subIndustry) {
+    for (si = 0; si < subList.length; si++) {
+      var sub = String(subList[si] || '').trim();
+      if (!sub) continue;
+      var subNorm = ClientsRosterQuery_norm_(sub);
+      if (subNorm.length >= 4 && qNorm.indexOf(subNorm) >= 0) {
+        filters.subIndustry = sub;
+        break;
+      }
     }
   }
 
-  if (!filters.subIndustry) {
+  if (!filters.subIndustry && !mentionsAviation) {
     var resolvedSub = ClientsMaster_resolveSubIndustryFromCatalog_(
       question,
       filters.industry,
     );
     if (resolvedSub) filters.subIndustry = resolvedSub;
+  }
+
+  if (
+    mentionsAviation &&
+    filters.subIndustry &&
+    ClientsRosterQuery_isPassengerAirlinesSub_(filters.subIndustry)
+  ) {
+    filters.industry = '';
+    filters.industryGroup = '';
   }
 
   var statusWords = ['prospect', 'farming', 'hunting', 'customer', 'partner'];
@@ -440,6 +611,7 @@ function ClientsRosterQuery_industriesForGroup_(industryGroup) {
   if (industryGroup !== 'aviation') return [];
   var catalog = ClientsMaster_listFilterOptions();
   var allowed = {};
+  var seen = {};
   var i;
   for (i = 0; i < CLIENTS_ROSTER_AVIATION_INDUSTRIES_FALLBACK_.length; i++) {
     allowed[CLIENTS_ROSTER_AVIATION_INDUSTRIES_FALLBACK_[i]] = true;
@@ -448,9 +620,62 @@ function ClientsRosterQuery_industriesForGroup_(industryGroup) {
   var list = catalog.industries || [];
   for (i = 0; i < list.length; i++) {
     var ind = String(list[i] || '').trim();
-    if (ind && allowed[ind]) out.push(ind);
+    if (!ind) continue;
+    var tok = ClientsMaster_normalizeIndustryToken_(ind);
+    if (
+      allowed[ind] ||
+      tok.indexOf('aerolinea') >= 0 ||
+      tok.indexOf('airline') >= 0 ||
+      tok.indexOf('aviation') >= 0
+    ) {
+      if (!seen[ind]) {
+        seen[ind] = true;
+        out.push(ind);
+      }
+    }
   }
   if (!out.length) return CLIENTS_ROSTER_AVIATION_INDUSTRIES_FALLBACK_.slice();
+  return out;
+}
+
+/**
+ * Cuenta dentro del alcance aviación / Passenger Airlines (industria o subindustria).
+ * @param {Object} row
+ * @return {boolean}
+ */
+function ClientsRosterQuery_rowMatchesPassengerAirlinesScope_(row) {
+  var sub = String(row.sub_industry || '').trim();
+  var industry = String(row.industry || '').trim();
+  if (ClientsRosterQuery_isPassengerAirlinesSub_(sub)) return true;
+  var subTok = ClientsMaster_normalizeIndustryToken_(sub);
+  if (subTok.indexOf('passenger') >= 0 && subTok.indexOf('airline') >= 0) return true;
+  if (subTok.indexOf('commercial') >= 0 && subTok.indexOf('airline') >= 0) return true;
+  var avInd = ClientsRosterQuery_industriesForGroup_('aviation');
+  if (industry && avInd.indexOf(industry) >= 0) return true;
+  var indTok = ClientsMaster_normalizeIndustryToken_(industry);
+  return indTok.indexOf('aerolinea') >= 0 || indTok.indexOf('airline') >= 0;
+}
+
+/**
+ * @param {Array<Object>} a
+ * @param {Array<Object>} b
+ * @return {Array<Object>}
+ */
+function ClientsRosterQuery_mergeSalesforceRowsByKey_(a, b) {
+  var map = {};
+  var out = [];
+  var i;
+  var lists = [a || [], b || []];
+  var li;
+  for (li = 0; li < lists.length; li++) {
+    for (i = 0; i < lists[li].length; i++) {
+      var row = lists[li][i];
+      var key = String(row.account_key || row.account_name || '').trim();
+      if (!key || map[key]) continue;
+      map[key] = true;
+      out.push(row);
+    }
+  }
   return out;
 }
 
@@ -487,14 +712,22 @@ function ClientsRosterQuery_rowMatchesFilters_(row, filters) {
   var subIndustry = String(row.sub_industry || '').trim();
   var status = ClientsRosterQuery_norm_(row.account_status || '');
 
-  if (filters.industry && industry !== filters.industry) return false;
+  if (filters.subIndustry) {
+    if (subIndustry === filters.subIndustry) {
+      /* match */
+    } else if (ClientsRosterQuery_isPassengerAirlinesSub_(filters.subIndustry)) {
+      if (!ClientsRosterQuery_rowMatchesPassengerAirlinesScope_(row)) return false;
+    } else {
+      return false;
+    }
+  } else if (filters.industry && industry !== filters.industry) {
+    return false;
+  }
 
-  if (filters.industryGroup && !filters.industry) {
+  if (filters.industryGroup && !filters.industry && !filters.subIndustry) {
     var groupIndustries = ClientsRosterQuery_industriesForGroup_(filters.industryGroup);
     if (groupIndustries.indexOf(industry) < 0) return false;
   }
-
-  if (filters.subIndustry && subIndustry !== filters.subIndustry) return false;
 
   if (filters.statusHint && status.indexOf(filters.statusHint) < 0) return false;
 
@@ -609,19 +842,33 @@ function ClientsRosterQuery_fetch_(filters, question) {
     if (useDbFilter) {
       var dbFilters = {
         activeOnly: filters.activeOnly,
-        subIndustry: filters.subIndustry,
+        subIndustry: '',
       };
-      if (filters.industry) {
-        dbFilters.industry = filters.industry;
-      } else if (
-        filters.industryGroup === 'aviation' ||
-        filters.industryGroup === 'aerospace'
-      ) {
-        dbFilters.industries = ClientsRosterQuery_industriesForGroup_(
-          filters.industryGroup,
-        );
+      var aviationScope = ClientsRosterQuery_isPassengerAirlinesSub_(
+        filters.subIndustry,
+      );
+      if (aviationScope) {
+        dbFilters.industries = ClientsRosterQuery_industriesForGroup_('aviation');
+        sfRows = SalesforceAccountsStore_listMatching_(dbFilters);
+        var subRows = SalesforceAccountsStore_listMatching_({
+          activeOnly: filters.activeOnly,
+          subIndustry: filters.subIndustry,
+        });
+        sfRows = ClientsRosterQuery_mergeSalesforceRowsByKey_(sfRows, subRows);
+      } else {
+        dbFilters.subIndustry = filters.subIndustry;
+        if (filters.industry) {
+          dbFilters.industry = filters.industry;
+        } else if (
+          filters.industryGroup === 'aviation' ||
+          filters.industryGroup === 'aerospace'
+        ) {
+          dbFilters.industries = ClientsRosterQuery_industriesForGroup_(
+            filters.industryGroup,
+          );
+        }
+        sfRows = SalesforceAccountsStore_listMatching_(dbFilters);
       }
-      sfRows = SalesforceAccountsStore_listMatching_(dbFilters);
       console.log(
         '[CLIENTS-ROSTER] salesforce filtered fetch rows=' + String(sfRows.length),
       );
@@ -782,7 +1029,7 @@ function ClientsRosterQuery_wantsDirectCount_(question) {
 function ClientsRosterQuery_wantsDirectList_(question) {
   var q = ClientsRosterQuery_norm_(question);
   if (!q) return false;
-  return /(que clientes|cuales clientes|which clients|quienes son los clientes|lista(r)? de clientes|list of clients|listado de clientes|nomina de clientes|n[oó]mina de clientes|mostrar (los )?clientes|show (the )?clients|que cuentas|which accounts|cuentas tiene|cuentas de |accounts for|accounts does|cuentas en|accounts in|cartera de clientes|client portfolio|clientes tiene globant|clients does globant|clients globant has|cuantas cuentas tiene|how many accounts does)/.test(
+  return /(que clientes|cuales clientes|which clients|quienes son los clientes|lista todos|lista(r)?\s+(todos\s+)?(los\s+)?clientes|lista(r)? de clientes|list of clients|list all(\s+\w+){0,4}\s*clients|list all clients|listado de clientes|nomina de clientes|n[oó]mina de clientes|mostrar (los )?clientes|show (the )?clients|que cuentas|which accounts|cuentas tiene|cuentas de |accounts for|accounts does|cuentas en|accounts in|cartera de clientes|client portfolio|clientes tiene globant|clientes de globant|clients does globant|clients globant has|globant clients|clients for globant|cuantas cuentas tiene|how many accounts does|industria de aerolinea|airlines industry)/.test(
     q,
   );
 }
@@ -1082,8 +1329,11 @@ function ClientsRosterQuery_tryPrepare_(question, clientNameDetected) {
     ClientsRosterQuery_norm_(question),
   );
   if (ClientsRosterQuery_isOwnerRosterQuestion_(qNorm)) {
-    filters.accountOwnerHint = ClientsRosterQuery_resolveOwnerFromQuestion_(question);
-  } else {
+    var ownerHint = ClientsRosterQuery_resolveOwnerFromQuestion_(question);
+    if (ownerHint && !ClientsRosterQuery_isInvalidOwnerHint_(ownerHint)) {
+      filters.accountOwnerHint = ownerHint;
+    }
+  } else if (ClientsRosterQuery_shouldUseAccountNameHint_(question, clientNameDetected)) {
     var accountHint = String(clientNameDetected || '').trim();
     if (!accountHint) accountHint = ClientsRosterQuery_resolveAccountFromQuestion_(question);
     if (accountHint) filters.accountNameHint = accountHint;

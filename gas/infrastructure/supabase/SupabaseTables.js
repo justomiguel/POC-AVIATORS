@@ -26,4 +26,5 @@ var SUPABASE_SETTINGS_KEY = Object.freeze({
   TAG_ALIASES: 'catalog_tag_aliases',
   ROLE_DEFINITIONS: 'role_definitions',
   SALESFORCE_ACCOUNTS_SYNC: 'salesforce_accounts_sync',
+  KNOWLEDGE_GRAPH_LIMITS: 'knowledge_graph_limits',
 });

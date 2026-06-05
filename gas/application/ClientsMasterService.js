@@ -144,15 +144,84 @@ var CLIENTS_LIST_MAX_LIMIT_ = 100;
 function ClientsMaster_list(filters) {
   AdminAuth_requireClientsView();
   var f = filters || {};
-  var q = String(f.q || '').toLowerCase().trim();
-  var industryFilter = String(f.industry || '').trim();
-  var subIndustryFilter = String(f.sub_industry || '').toLowerCase().trim();
+  var storeFilters = {
+    q: String(f.q || '').trim(),
+    industry: String(f.industry || '').trim(),
+    sub_industry: String(f.sub_industry || '').trim(),
+  };
+  var skip = f.skip != null ? Math.max(0, Number(f.skip)) : 0;
+  var limitRaw = f.limit != null ? Number(f.limit) : 0;
+  var limit =
+    limitRaw > 0 ? Math.min(CLIENTS_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
+  var usePagedQuery = limit > 0;
 
-  var dbRows = ClientsMasterStore_listAll();
+  var dbRows;
+  var total;
+  if (usePagedQuery) {
+    total = ClientsMasterStore_countFiltered(storeFilters);
+    dbRows = ClientsMasterStore_listFiltered(storeFilters, skip, limit);
+  } else {
+    dbRows = ClientsMasterStore_listAll();
+    total = dbRows.length;
+  }
+
+  var items = ClientsMaster_mapRowsToApiItems_(dbRows);
+
+  if (!usePagedQuery && ClientsMaster_storeFiltersActive_(storeFilters)) {
+    items = ClientsMaster_filterApiItems_(items, storeFilters);
+    items.sort(function (a, b) {
+      return a.client_name.localeCompare(b.client_name);
+    });
+    total = items.length;
+  }
+
+  var hasMore = usePagedQuery && skip + items.length < total;
+  return {
+    ok: true,
+    items: items,
+    total: total,
+    skip: skip,
+    limit: usePagedQuery ? limit : total,
+    hasMore: hasMore,
+  };
+}
+
+/**
+ * @param {{q?:string,industry?:string,sub_industry?:string}} storeFilters
+ * @return {boolean}
+ */
+function ClientsMaster_storeFiltersActive_(storeFilters) {
+  return !!(storeFilters.q || storeFilters.industry || storeFilters.sub_industry);
+}
+
+/**
+ * @param {Array<Object>} dbRows
+ * @return {Array<Object>}
+ */
+function ClientsMaster_mapRowsToApiItems_(dbRows) {
   var items = [];
-  for (var si = 0; si < dbRows.length; si++) {
+  var si;
+  for (si = 0; si < dbRows.length; si++) {
     var apiItem = ClientsMasterStore_toApiItem_(dbRows[si]);
-    if (!apiItem.client_id) continue;
+    if (apiItem.client_id) items.push(apiItem);
+  }
+  return items;
+}
+
+/**
+ * Filtro en memoria (solo limit=0 con filtros; compat interna).
+ * @param {Array<Object>} items
+ * @param {{q?:string,industry?:string,sub_industry?:string}} storeFilters
+ * @return {Array<Object>}
+ */
+function ClientsMaster_filterApiItems_(items, storeFilters) {
+  var q = String(storeFilters.q || '').toLowerCase().trim();
+  var industryFilter = String(storeFilters.industry || '').trim();
+  var subIndustryFilter = String(storeFilters.sub_industry || '').toLowerCase().trim();
+  var out = [];
+  var i;
+  for (i = 0; i < items.length; i++) {
+    var apiItem = items[i];
     if (industryFilter && String(apiItem.industry || '').trim() !== industryFilter) {
       continue;
     }
@@ -176,33 +245,9 @@ function ClientsMaster_list(filters) {
         ).toLowerCase();
       if (hayDb.indexOf(q) < 0) continue;
     }
-    items.push(apiItem);
+    out.push(apiItem);
   }
-  items.sort(function (a, b) {
-    return a.client_name.localeCompare(b.client_name);
-  });
-  var totalDb = items.length;
-  var skipDb = f.skip != null ? Math.max(0, Number(f.skip)) : 0;
-  var limitRaw = f.limit != null ? Number(f.limit) : 0;
-  var limitDb =
-    limitRaw > 0 ? Math.min(CLIENTS_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
-  var pagedDb = items;
-  var hasMoreDb = false;
-  if (limitDb > 0) {
-    pagedDb = items.slice(skipDb, skipDb + limitDb);
-    hasMoreDb = skipDb + pagedDb.length < totalDb;
-  } else {
-    limitDb = totalDb;
-    skipDb = 0;
-  }
-  return {
-    ok: true,
-    items: pagedDb,
-    total: totalDb,
-    skip: skipDb,
-    limit: limitDb,
-    hasMore: hasMoreDb,
-  };
+  return out;
 }
 
 /**
@@ -282,13 +327,9 @@ function ClientsMaster_get(clientId) {
   AdminAuth_requireClientsView();
   var id = String(clientId || '').trim();
   if (!id) throw new Error('client_id requerido');
-  var res = ClientsMaster_list({});
-  for (var i = 0; i < res.items.length; i++) {
-    if (res.items[i].client_id === id) {
-      return { ok: true, item: res.items[i] };
-    }
-  }
-  throw new Error('Cliente no encontrado');
+  var row = ClientsMasterStore_getById(id);
+  if (!row) throw new Error('Cliente no encontrado');
+  return { ok: true, item: ClientsMasterStore_toApiItem_(row) };
 }
 
 /**

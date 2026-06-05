@@ -8,6 +8,8 @@ var _ORCH_PROFILE_DOC_CACHE = {};
 var _ORCH_HISTORY_MAX_PAIRS = 3;
 /** Tope por mensaje en historial para no inflar /v1/search/execute. */
 var _ORCH_HISTORY_MAX_CHARS = 2000;
+/** Resumen del grafo de conocimiento para el turno actual de chat. */
+var _ORCH_TURN_GRAPH_SUMMARY_ = '';
 
 /**
  * Recorta historial: quita duplicado de la pregunta actual y deja hasta N pares previos.
@@ -45,6 +47,206 @@ function AgentOrchestrator_prepareHistoryEntries_(history, currentQuestion) {
     out.push({ role: entry.role, content: content });
   }
   return out;
+}
+
+/**
+ * Instrucción compartida de longitud de respuesta (RAG, roster, catálogo).
+ * @return {string}
+ */
+function AgentOrchestrator_buildResponseLengthInstruction_() {
+  return (
+    'RESPONSE LENGTH: For substantive questions (not trivial greetings), write a thorough, well-developed answer. ' +
+    'Use full paragraphs and include all relevant facts from the provided context; do not shorten into bare bullets or one-line summaries unless you are listing many items. ' +
+    'When several records apply, give each one meaningful detail (not only a title) before offering to deep-dive on one.'
+  );
+}
+
+/**
+ * Texto suplementario para /v1/search/execute: restricciones del turno (idioma, rol).
+ * El orquestador en modo respuesta incluye además su prompt conversacional (no está en el perfil RAG de routing).
+ * @param {Object} chosen
+ * @param {string} question
+ * @return {string}
+ */
+function AgentOrchestrator_buildRagSupplementalPrompt_(chosen, question) {
+  var turnExtras =
+    AgentOrchestrator_languageInstruction_(question) +
+    '\n' +
+    AgentOrchestrator_buildRoleRestriction_() +
+    '\n' +
+    AgentOrchestrator_buildResponseLengthInstruction_();
+  if (_ORCH_TURN_GRAPH_SUMMARY_) {
+    turnExtras +=
+      '\n\n[RELACIONES DEL CATÁLOGO — GRAFO DE CONOCIMIENTO]\n' +
+      _ORCH_TURN_GRAPH_SUMMARY_ +
+      '\n[/GRAFO]\n' +
+      'Usá estas relaciones para priorizar documentos del RAG y explicar conexiones cliente–industria–tags cuando aporten valor.\n';
+  }
+  if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
+    return (
+      AgentOrchestrator_buildSelfAnswerPrompt_() +
+      '\n\n[RECORDATORIO DE LONGITUD] Para preguntas sustantivas, mínimo varios párrafos desarrollados con todo el contexto RAG relevante.\n' +
+      turnExtras
+    );
+  }
+  return turnExtras;
+}
+
+/**
+ * @return {void}
+ */
+function AgentOrchestrator_resetTurnGraphContext_() {
+  _ORCH_TURN_GRAPH_SUMMARY_ = '';
+}
+
+/**
+ * @param {Array<Object>} graphDocs
+ * @param {Array<Object>} catalogDocs
+ * @return {Array<Object>}
+ */
+function AgentOrchestrator_mergeGraphAndCatalogDocs_(graphDocs, catalogDocs) {
+  /** @type {Object<string, Object>} */
+  var byKey = {};
+  var out = [];
+  var i;
+  var push = function (doc, fromGraph) {
+    if (!doc) return;
+    var key =
+      String(doc.contentId || '').trim() ||
+      ContentCatalog_docMergeKey_(doc);
+    if (!key) return;
+    if (byKey[key]) {
+      if (fromGraph && doc.graphPath && !byKey[key].graphPath) {
+        byKey[key].graphPath = doc.graphPath;
+        byKey[key].graphTags = doc.graphTags;
+        byKey[key].graphSource = doc.graphSource;
+      }
+      return;
+    }
+    byKey[key] = doc;
+    out.push(doc);
+  };
+  for (i = 0; i < (graphDocs || []).length; i++) push(graphDocs[i], true);
+  for (i = 0; i < (catalogDocs || []).length; i++) push(catalogDocs[i], false);
+  return out.slice(0, 15);
+}
+
+/**
+ * Catálogo + grafo para un turno de chat.
+ * @param {string} question
+ * @param {Array<Object>=} existingPrefetch
+ * @return {{catalogPrefetch:Array<Object>,graphClientName:string,graphDocCount:number}}
+ */
+function AgentOrchestrator_prepareTurnCatalog_(question, existingPrefetch) {
+  AgentOrchestrator_resetTurnGraphContext_();
+  var catalog =
+    existingPrefetch && existingPrefetch.length
+      ? existingPrefetch.slice()
+      : AgentOrchestrator_prefetchCatalogMatches_(question, { limit: 10 });
+
+  var graphDocs = [];
+  var graphClientName = '';
+  try {
+    var kg = KnowledgeGraph_resolveContextForQuestion_(question, {
+      limit: 12,
+      maxNodes: 32,
+      depth: 2,
+    });
+    if (kg && kg.ok) {
+      graphDocs = kg.docs || [];
+      graphClientName = String(kg.clientName || '').trim();
+      if (kg.graphSummary) _ORCH_TURN_GRAPH_SUMMARY_ = kg.graphSummary;
+    }
+  } catch (eKg) {
+    console.log('[KG-CHAT] prefetch: ' + String(eKg.message || eKg).slice(0, 120));
+  }
+
+  var merged = AgentOrchestrator_mergeGraphAndCatalogDocs_(graphDocs, catalog);
+  return {
+    catalogPrefetch: merged,
+    graphClientName: graphClientName,
+    graphDocCount: graphDocs.length,
+  };
+}
+
+/**
+ * @param {string} filterLabel
+ * @param {number} graphDocCount
+ * @return {string}
+ */
+function AgentOrchestrator_appendGraphFilterLabel_(filterLabel, graphDocCount) {
+  if (!graphDocCount || !_ORCH_TURN_GRAPH_SUMMARY_) return filterLabel;
+  return (
+    String(filterLabel || '') +
+    ' | ' +
+    UiStrings_fmt_('meta_filter_knowledge_graph', { count: graphDocCount })
+  );
+}
+
+/**
+ * @param {*} err
+ * @return {boolean}
+ */
+function AgentOrchestrator_isRagExecuteHttp400_(err) {
+  var msg = err && err.message ? String(err.message) : String(err || '');
+  return msg.indexOf('/v1/search/execute') >= 0 && msg.indexOf('HTTP 400') >= 0;
+}
+
+/**
+ * Si RAG execute falla para clients, intenta roster Supabase o catálogo (sin Globant RAG).
+ * @param {string} question
+ * @param {Object} agent
+ * @param {Array=} history
+ * @param {string} clientLabel
+ * @param {Array<Object>} agentDocs
+ * @return {Object|null}
+ */
+function AgentOrchestrator_tryClientsNonRagFallback_(
+  question,
+  agent,
+  history,
+  clientLabel,
+  agentDocs,
+) {
+  if (!agent || agent.id !== _ADMIN_AGENT_ID_CLIENTS) return null;
+
+  if (ClientsRosterQuery_hasRosterData_()) {
+    var filters = ClientsRosterQuery_parseFilters_(question);
+    var hint = String(clientLabel || '').trim();
+    if (
+      hint &&
+      !filters.accountNameHint &&
+      !filters.accountOwnerHint &&
+      ClientsRosterQuery_shouldUseAccountNameHint_(question, hint)
+    ) {
+      filters.accountNameHint = hint;
+    }
+    var rosterResult = ClientsRosterQuery_fetch_(filters, question);
+    if (rosterResult) {
+      console.log(
+        '[ORCH] clients non-RAG fallback via roster total=' + String(rosterResult.total),
+      );
+      return AgentOrchestrator_answerWithClientsRoster_(
+        question,
+        agent,
+        rosterResult,
+        history,
+      );
+    }
+  }
+
+  if (agentDocs && agentDocs.length) {
+    console.log('[ORCH] clients non-RAG fallback via catalog docs=' + agentDocs.length);
+    return AgentOrchestrator_answerWithDocContext_(
+      question,
+      agent,
+      agentDocs,
+      clientLabel,
+      history,
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -120,6 +322,15 @@ function AgentOrchestrator_detectClientDocs_(question, catalogPrefetch) {
   var q = String(question || '').toLowerCase();
   if (!q) return { docs: [], clientName: '', docCount: 0 };
 
+  if (
+    typeof ClientsRosterQuery_isIndustryScopedListQuestion_ === 'function' &&
+    (ClientsRosterQuery_isIndustryScopedListQuestion_(q) ||
+      ClientsRosterQuery_isGlobantPortfolioListQuestion_(q))
+  ) {
+    console.log('[CLIENT-DETECT] skip: roster industry/portfolio list question');
+    return { docs: [], clientName: '', docCount: 0 };
+  }
+
   try {
     var clients = ClientsMaster_listForCombo();
     if (!clients || !clients.clients || !clients.clients.length) {
@@ -139,10 +350,17 @@ function AgentOrchestrator_detectClientDocs_(question, catalogPrefetch) {
       }
       var words = nameLower.split(/\s+/);
       for (var w = 0; w < words.length; w++) {
-        if (words[w].length >= 4 && q.indexOf(words[w]) >= 0) {
-          detectedClient = name;
-          break;
+        if (words[w].length < 4 || q.indexOf(words[w]) < 0) continue;
+        if (
+          /^(aerolinea|aerolineas|airline|airlines|aviation|aviacion|industria|industry)$/.test(
+            words[w],
+          ) &&
+          /(industria|industry|aerolinea|airline|aviacion|aviation)/.test(q)
+        ) {
+          continue;
         }
+        detectedClient = name;
+        break;
       }
       if (detectedClient) break;
     }
@@ -229,6 +447,9 @@ function AgentOrchestrator_buildDocsContext_(docs) {
     if (d.driveUrl) {
       docInfo += 'Link: ' + d.driveUrl + '\n';
     }
+    if (d.graphPath) {
+      docInfo += 'Relaciones (grafo): ' + d.graphPath + '\n';
+    }
     if (d.summary) {
       docInfo += 'Resumen:\n' + d.summary + '\n';
     }
@@ -256,8 +477,55 @@ function AgentOrchestrator_docsHaveUsableCatalogContext_(docs) {
  * @return {boolean}
  */
 function AgentOrchestrator_canUseDirectCatalogContext_(docs) {
-  if (!docs || !docs.length || docs.length > _ORCH_DIRECT_CONTEXT_MAX_DOCS) return false;
+  var maxDocs = _ORCH_TURN_GRAPH_SUMMARY_
+    ? Math.max(_ORCH_DIRECT_CONTEXT_MAX_DOCS, 8)
+    : _ORCH_DIRECT_CONTEXT_MAX_DOCS;
+  if (!docs || !docs.length || docs.length > maxDocs) return false;
   return AgentOrchestrator_docsHaveUsableCatalogContext_(docs);
+}
+
+/**
+ * @param {Array<Object>} catalogPrefetch
+ * @param {number} graphDocCount
+ * @return {boolean}
+ */
+function AgentOrchestrator_shouldPreferGraphDirectContext_(catalogPrefetch, graphDocCount) {
+  if (!graphDocCount || !_ORCH_TURN_GRAPH_SUMMARY_) return false;
+  var graphDocs = [];
+  var i;
+  for (i = 0; i < (catalogPrefetch || []).length; i++) {
+    if (catalogPrefetch[i] && catalogPrefetch[i].graphSource === 'knowledge_graph') {
+      graphDocs.push(catalogPrefetch[i]);
+    }
+  }
+  return (
+    graphDocs.length >= 2 &&
+    graphDocs.length <= 8 &&
+    AgentOrchestrator_docsHaveUsableCatalogContext_(graphDocs)
+  );
+}
+
+/**
+ * @param {Object} clientDetection
+ * @param {Array<Object>} catalogPrefetch
+ * @param {number} graphDocCount
+ * @param {string} agentId
+ * @return {Array<Object>}
+ */
+function AgentOrchestrator_resolveAgentDocs_(clientDetection, catalogPrefetch, graphDocCount, agentId) {
+  var detected = AgentOrchestrator_filterDocsForAgent_(clientDetection.docs, agentId);
+  if (AgentOrchestrator_canUseDirectCatalogContext_(detected)) return detected;
+
+  if (AgentOrchestrator_shouldPreferGraphDirectContext_(catalogPrefetch, graphDocCount)) {
+    var fromGraph = AgentOrchestrator_filterDocsForAgent_(catalogPrefetch, agentId);
+    if (AgentOrchestrator_canUseDirectCatalogContext_(fromGraph)) {
+      console.log('[ORCH] Graph-prioritized direct context, docs=' + fromGraph.length);
+      return fromGraph;
+    }
+  }
+
+  if (detected.length) return detected;
+  return AgentOrchestrator_filterDocsForAgent_(catalogPrefetch, agentId);
 }
 
 /**
@@ -304,6 +572,7 @@ function AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, question) {
     'Respondé usando EXCLUSIVAMENTE los extractos del catálogo incluidos abajo.',
     'No inventes clientes, métricas ni nombres de proyecto.',
     'Nunca respondas con [[NO_RELEVANT_CONTENT]] si el contexto contiene datos pertinentes.',
+    AgentOrchestrator_buildResponseLengthInstruction_(),
     AgentOrchestrator_languageInstruction_(question),
     AgentOrchestrator_buildRoleRestriction_(),
   ].join('\n');
@@ -335,6 +604,7 @@ function AgentOrchestrator_buildOrchestratorCatalogSystemPrompt_(question, orche
     'Si ninguna fila es realmente pertinente, decilo con claridad; no inventes coincidencias ni datos fuera del listado.',
   );
   lines.push('No uses [[NO_RELEVANT_CONTENT]] si hay filas útiles para orientar al usuario.');
+  lines.push(AgentOrchestrator_buildResponseLengthInstruction_());
   lines.push('');
   lines.push(AgentOrchestrator_languageInstruction_(question));
   lines.push(AgentOrchestrator_buildRoleRestriction_());
@@ -370,6 +640,12 @@ function AgentOrchestrator_answerOrchestratorCatalogFallback_(
     '\n\n[FILAS DEL CATÁLOGO AVIATORS — CONTENIDOS]\n' +
     docsContext +
     '\n[/FILAS DEL CATÁLOGO]\n';
+  if (_ORCH_TURN_GRAPH_SUMMARY_) {
+    systemPrompt +=
+      '\n[GRAFO DE CONOCIMIENTO — RELACIONES]\n' +
+      _ORCH_TURN_GRAPH_SUMMARY_ +
+      '\n[/GRAFO]\n';
+  }
 
   var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
@@ -403,6 +679,12 @@ function AgentOrchestrator_answerOrchestratorCatalogFallback_(
     }) +
     ' | ' +
     UiStrings_fmt_('meta_filter_orchestrator_catalog', { count: docs.length });
+  var graphCountFb = 0;
+  var gf;
+  for (gf = 0; gf < docs.length; gf++) {
+    if (docs[gf] && docs[gf].graphSource === 'knowledge_graph') graphCountFb++;
+  }
+  filterLabel = AgentOrchestrator_appendGraphFilterLabel_(filterLabel, graphCountFb);
 
   var references = [];
   for (var i = 0; i < docs.length; i++) {
@@ -552,11 +834,18 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
     systemPrompt +=
       '\nNota: el contexto proviene del catálogo Aviators (resumen curado) y puede no estar en el índice RAG.';
   }
+  if (_ORCH_TURN_GRAPH_SUMMARY_) {
+    systemPrompt +=
+      '\n\n[GRAFO DE CONOCIMIENTO — RELACIONES]\n' +
+      _ORCH_TURN_GRAPH_SUMMARY_ +
+      '\n[/GRAFO]\n';
+  }
   systemPrompt += '\nINSTRUCCIONES DE RESPUESTA:';
   systemPrompt += '\n1. Usa ÚNICAMENTE la información de los documentos proporcionados arriba.';
-  systemPrompt += '\n2. Formula una respuesta clara y bien estructurada.';
+  systemPrompt += '\n2. Formula una respuesta clara, bien estructurada y desarrollada (no un resumen mínimo).';
   systemPrompt += '\n3. Si la información no está en el contexto, indica que no tienes datos disponibles.';
   systemPrompt += '\n4. NO respondas con [[NO_RELEVANT_CONTENT]] si el contexto anterior contiene datos pertinentes.';
+  systemPrompt += '\n5. ' + AgentOrchestrator_buildResponseLengthInstruction_();
 
   var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
@@ -594,6 +883,12 @@ function AgentOrchestrator_answerWithDocContext_(question, agent, docs, clientNa
     client: clientName,
     count: docs.length,
   });
+  var graphDocCount = 0;
+  var gdi;
+  for (gdi = 0; gdi < docs.length; gdi++) {
+    if (docs[gdi] && docs[gdi].graphSource === 'knowledge_graph') graphDocCount++;
+  }
+  filterLabel = AgentOrchestrator_appendGraphFilterLabel_(filterLabel, graphDocCount);
 
   var references = [];
   for (var i = 0; i < docs.length; i++) {
@@ -627,6 +922,7 @@ function AgentOrchestrator_answerWithClientsRoster_(question, agent, rosterResul
 
   if (
     ClientsRosterQuery_shouldAnswerDirectly_(q) ||
+    ClientsRosterQuery_wantsDirectList_(q) ||
     (rosterResult.total === 1 &&
       rosterResult.items &&
       rosterResult.items.length === 1 &&
@@ -666,7 +962,20 @@ function AgentOrchestrator_answerWithClientsRoster_(question, agent, rosterResul
 
   var rosterContext = ClientsRosterQuery_buildContext_(rosterResult);
 
-  var systemPrompt = AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, q);
+  var baseAgentPrompt = String(agent.systemPrompt || '').trim();
+  var systemPrompt;
+  if (baseAgentPrompt) {
+    systemPrompt =
+      baseAgentPrompt +
+      '\n' +
+      AgentOrchestrator_languageInstruction_(q) +
+      '\n' +
+      AgentOrchestrator_buildRoleRestriction_() +
+      '\n' +
+      AgentOrchestrator_buildResponseLengthInstruction_();
+  } else {
+    systemPrompt = AgentOrchestrator_buildCatalogOnlySystemPrompt_(agent, q);
+  }
   systemPrompt += '\n\n[CONTEXTO ROSTER CLIENTES — BASE DE DATOS AVIATORS]\n';
   systemPrompt += rosterContext;
   systemPrompt += '\n[/CONTEXTO ROSTER CLIENTES]\n';
@@ -676,13 +985,14 @@ function AgentOrchestrator_answerWithClientsRoster_(question, agent, rosterResul
     '\nNota: vendedor, client partner y account owner son sinónimos (mismo campo account_owner en Salesforce).';
   systemPrompt += '\nINSTRUCCIONES DE RESPUESTA:';
   systemPrompt += '\n1. Usa ÚNICAMENTE las cuentas listadas arriba.';
-  systemPrompt += '\n2. Para listados, organizá por industria o estado si aplica.';
+  systemPrompt += '\n2. Para listados, organizá por industria o estado si aplica y desarrollá cada ítem con detalle útil (owner, status, oportunidades, industria).';
   systemPrompt += '\n3. Indicá el total cuando la pregunta lo pida.';
   systemPrompt +=
     '\n4. NO respondas con [[NO_RELEVANT_CONTENT]] si hay cuentas pertinentes en el contexto.';
+  systemPrompt += '\n5. ' + AgentOrchestrator_buildResponseLengthInstruction_();
   if (!rosterResult.items || !rosterResult.items.length) {
     systemPrompt +=
-      '\n5. Si no hay cuentas que coincidan, decilo claramente según los filtros inferidos.';
+      '\n6. Si no hay cuentas que coincidan, decilo claramente según los filtros inferidos.';
   }
 
   var userMessage = AgentOrchestrator_buildPromptWithHistory_(q, history);
@@ -811,20 +1121,30 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
   var q = AgentOrchestrator_requireQuestion_(question);
 
   var ctx = AgentOrchestrator_loadContext_();
-  if (!catalogPrefetch || !catalogPrefetch.length) {
-    var skipCatalogPrefetch =
-      agentId === _ADMIN_AGENT_ID_CLIENTS &&
-      ClientsRosterQuery_isRosterQuestion_(q, '');
-    catalogPrefetch = skipCatalogPrefetch
-      ? []
-      : AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
+  var graphDocCount = 0;
+  var turnPrep = null;
+  if (agentId !== _ADMIN_AGENT_ID_CLIENTS || !ClientsRosterQuery_isRosterQuestion_(q, '')) {
+    turnPrep = AgentOrchestrator_prepareTurnCatalog_(q, catalogPrefetch);
+    catalogPrefetch = turnPrep.catalogPrefetch;
+    graphDocCount = turnPrep.graphDocCount;
+  } else {
+    AgentOrchestrator_resetTurnGraphContext_();
   }
   var chosen = ctx.byId[agentId] || ctx.orchestrator;
   var clientDetection = AgentOrchestrator_detectClientDocs_(q, catalogPrefetch);
-  var agentDocs = AgentOrchestrator_filterDocsForAgent_(clientDetection.docs, chosen.id);
+  if (!clientDetection.clientName && turnPrep && turnPrep.graphClientName) {
+    clientDetection.clientName = turnPrep.graphClientName;
+  }
+  var agentDocs = AgentOrchestrator_resolveAgentDocs_(
+    clientDetection,
+    catalogPrefetch,
+    graphDocCount,
+    chosen.id,
+  );
   var clientLabel =
     clientDetection.clientName ||
     (agentDocs.length && agentDocs[0].clientName) ||
+    (turnPrep && turnPrep.graphClientName) ||
     '';
 
   var rosterAnswer = AgentOrchestrator_tryClientsRosterAnswer_(
@@ -834,6 +1154,21 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
     clientLabel,
   );
   if (rosterAnswer) return rosterAnswer;
+
+  if (
+    chosen.id === _ADMIN_AGENT_ID_CLIENTS &&
+    ClientsRosterQuery_hasRosterData_() &&
+    !AgentOrchestrator_profileHasDocuments_(chosen.profileName)
+  ) {
+    var clientsNoRagIndex = AgentOrchestrator_tryClientsNonRagFallback_(
+      q,
+      chosen,
+      history,
+      clientLabel,
+      agentDocs,
+    );
+    if (clientsNoRagIndex) return clientsNoRagIndex;
+  }
 
   if (
     chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR &&
@@ -881,35 +1216,55 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
     );
   }
 
-  var systemPrompt = chosen.systemPrompt;
-  if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
-    systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
-  }
-  systemPrompt += '\n' + AgentOrchestrator_languageInstruction_(q);
-  systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
-
   var promptWithHistory = AgentOrchestrator_buildPromptWithHistory_(q, history);
+  var ragSupplemental = AgentOrchestrator_buildRagSupplementalPrompt_(chosen, q);
 
-  var answer = LlmProviderGlobant_consultPromptWithAgent(
-    chosen.profileName,
-    promptWithHistory,
-    systemPrompt,
-    [],
-  );
-
-  if (
-    AgentOrchestrator_isEmptyResponse_(answer.answer) &&
-    AgentOrchestrator_canUseDirectCatalogContext_(agentDocs) &&
-    chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR
-  ) {
-    console.log('[ORCH] RAG empty; falling back to catalog context for "' + chosen.id + '"');
-    return AgentOrchestrator_answerWithDocContext_(
-      q,
-      chosen,
-      agentDocs,
-      clientLabel,
-      history,
+  /** @type {Object} */
+  var answer;
+  try {
+    answer = LlmProviderGlobant_consultPromptWithAgent(
+      chosen.profileName,
+      promptWithHistory,
+      ragSupplemental,
+      [],
     );
+  } catch (ragErr) {
+    if (
+      chosen.id === _ADMIN_AGENT_ID_CLIENTS &&
+      AgentOrchestrator_isRagExecuteHttp400_(ragErr)
+    ) {
+      var clientsFb = AgentOrchestrator_tryClientsNonRagFallback_(
+        q,
+        chosen,
+        history,
+        clientLabel,
+        agentDocs,
+      );
+      if (clientsFb) return clientsFb;
+    }
+    throw ragErr;
+  }
+
+  if (AgentOrchestrator_isEmptyResponse_(answer.answer) && chosen.id !== _ADMIN_AGENT_ID_ORCHESTRATOR) {
+    var fbDocs = agentDocs;
+    if (!AgentOrchestrator_canUseDirectCatalogContext_(fbDocs)) {
+      fbDocs = AgentOrchestrator_resolveAgentDocs_(
+        clientDetection,
+        catalogPrefetch,
+        graphDocCount,
+        chosen.id,
+      );
+    }
+    if (AgentOrchestrator_canUseDirectCatalogContext_(fbDocs)) {
+      console.log('[ORCH] RAG empty; falling back to catalog context for "' + chosen.id + '"');
+      return AgentOrchestrator_answerWithDocContext_(
+        q,
+        chosen,
+        fbDocs,
+        clientLabel,
+        history,
+      );
+    }
   }
 
   var isUnanswered = AgentOrchestrator_isEmptyResponse_(answer.answer);
@@ -941,7 +1296,7 @@ function AgentOrchestrator_answerWith(question, agentId, history, catalogPrefetc
     agent: chosen.profileName,
     confidence: 'routed',
   });
-  answer.filterLabel = filterLabel;
+  answer.filterLabel = AgentOrchestrator_appendGraphFilterLabel_(filterLabel, graphDocCount);
   answer.agentName = chosen.profileName;
   answer.references = AgentOrchestrator_matchCatalogReferences_(
     answer.answer,
@@ -963,24 +1318,33 @@ function AgentOrchestrator_answerMulti(question, agentIds, history, catalogPrefe
   AgentOrchestrator_requireGlobant_();
   var q = AgentOrchestrator_requireQuestion_(question);
   var ctx = AgentOrchestrator_loadContext_();
-  if (!catalogPrefetch || !catalogPrefetch.length) {
-    catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
-  }
+  var turnPrepMulti = AgentOrchestrator_prepareTurnCatalog_(q, catalogPrefetch);
+  catalogPrefetch = turnPrepMulti.catalogPrefetch;
+  var graphDocCountMulti = turnPrepMulti.graphDocCount;
   var langInstr = AgentOrchestrator_languageInstruction_(q);
 
   var promptWithHistory = AgentOrchestrator_buildPromptWithHistory_(q, history);
 
   var clientDetection = AgentOrchestrator_detectClientDocs_(q, catalogPrefetch);
+  if (!clientDetection.clientName && turnPrepMulti.graphClientName) {
+    clientDetection.clientName = turnPrepMulti.graphClientName;
+  }
 
   var results = [];
   for (var i = 0; i < agentIds.length; i++) {
     var chosen = ctx.byId[agentIds[i]];
     if (!chosen) continue;
 
-    var agentDocs = AgentOrchestrator_filterDocsForAgent_(clientDetection.docs, chosen.id);
+    var agentDocs = AgentOrchestrator_resolveAgentDocs_(
+      clientDetection,
+      catalogPrefetch,
+      graphDocCountMulti,
+      chosen.id,
+    );
     var clientLabel =
       clientDetection.clientName ||
       (agentDocs.length && agentDocs[0].clientName) ||
+      turnPrepMulti.graphClientName ||
       '';
 
     var rosterMulti = AgentOrchestrator_tryClientsRosterAnswer_(
@@ -1018,25 +1382,45 @@ function AgentOrchestrator_answerMulti(question, agentIds, history, catalogPrefe
           history,
         );
       } else {
-        var systemPrompt = chosen.systemPrompt;
-        if (chosen.id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
-          systemPrompt = AgentOrchestrator_buildSelfAnswerPrompt_();
-        }
-        systemPrompt += '\n' + langInstr;
-        systemPrompt += '\n' + AgentOrchestrator_buildRoleRestriction_();
+        var ragSupplementalMulti = AgentOrchestrator_buildRagSupplementalPrompt_(chosen, q);
 
-        answer = LlmProviderGlobant_consultPromptWithAgent(
-          chosen.profileName,
-          promptWithHistory,
-          systemPrompt,
-          [],
-        );
+        try {
+          answer = LlmProviderGlobant_consultPromptWithAgent(
+            chosen.profileName,
+            promptWithHistory,
+            ragSupplementalMulti,
+            [],
+          );
+        } catch (ragErrMulti) {
+          if (
+            chosen.id === _ADMIN_AGENT_ID_CLIENTS &&
+            AgentOrchestrator_isRagExecuteHttp400_(ragErrMulti)
+          ) {
+            var clientsFbMulti = AgentOrchestrator_tryClientsNonRagFallback_(
+              q,
+              chosen,
+              history,
+              clientLabel,
+              agentDocs,
+            );
+            if (clientsFbMulti) {
+              answer = clientsFbMulti;
+            } else {
+              throw ragErrMulti;
+            }
+          } else {
+            throw ragErrMulti;
+          }
+        }
         answer.agentName = chosen.profileName;
         var filterLabel = UiStrings_fmt_('meta_orchestrator_selected_agent', {
           agent: chosen.profileName,
           confidence: 'routed',
         });
-        answer.filterLabel = filterLabel;
+        answer.filterLabel = AgentOrchestrator_appendGraphFilterLabel_(
+          filterLabel,
+          graphDocCountMulti,
+        );
 
         if (
           AgentOrchestrator_isEmptyResponse_(answer.answer) &&
@@ -1273,7 +1657,8 @@ function AgentOrchestrator_matchCatalogReferences_(answerText, preferredTypes) {
 function AgentOrchestrator_answer(question) {
   AgentOrchestrator_requireGlobant_();
   var q = AgentOrchestrator_requireQuestion_(question);
-  var catalogPrefetch = AgentOrchestrator_prefetchCatalogMatches_(q, { limit: 10 });
+  var turnPrepLegacy = AgentOrchestrator_prepareTurnCatalog_(q, null);
+  var catalogPrefetch = turnPrepLegacy.catalogPrefetch;
   var route = AgentOrchestrator_routeOnly(question);
   var ids = [];
   for (var i = 0; i < route.agents.length; i++) ids.push(route.agents[i].id);
@@ -1543,7 +1928,13 @@ function AgentOrchestrator_buildRoutingPrompt_(question, orchestrator, candidate
   lines.push('- Si la consulta podria ser respondida por varios agentes, incluye TODOS los relevantes.');
   lines.push('- Si es un pedido explicito para un solo agente, incluye solo ese.');
   lines.push(
-    '- "orchestrator" para saludos o charla breve, o cuando la consulta sea sobre generalidades del studio Aviators / Aviation Studio que correspondan al corpus del orquestador (sin pedir success cases, propuestas comerciales ni nómina de clientes).',
+    '- "proposals" para propuestas comerciales, RFP, pricing/cronograma Y para Globant como empresa: Studios (áreas de expertise), offerings (AI Pods, modelos comerciales, engagement models), posicionamiento comercial documentado.',
+  );
+  lines.push(
+    '- "onboarding" solo para dominio aviación/aerolíneas (PSS, NDC, loyalty, etc.) y onboarding interno del Aviation Studio para nuevos integrantes — NO studios/offerings corporativos de Globant.',
+  );
+  lines.push(
+    '- "orchestrator" para saludos, charla breve, uso de la plataforma Aviators y mensajes institucionales del corpus del orquestador (sin pedir propuestas, studios Globant, offerings, success cases ni nómina de clientes).',
   );
   lines.push('');
   lines.push('Consulta del usuario:');
@@ -1596,8 +1987,9 @@ function AgentOrchestrator_buildSelfAnswerPrompt_() {
   lines.push('');
 
   lines.push('## Alcance temático');
-  lines.push('Solo respondés preguntas relacionadas con Globant, el Aviation Studio, aerolíneas, y los contenidos de la plataforma Aviators (success cases, propuestas, clientes, FAQ).');
-  lines.push('Si la pregunta está completamente fuera de ese alcance, decliná amablemente y sugerí reformular.');
+  lines.push('Respondés sobre la plataforma Aviators, mensajes institucionales del corpus del orquestador, FAQ y charla general.');
+  lines.push('NO sos el especialista en propuestas comerciales, Studios u offerings de Globant (AI Pods, modelos de engagement): esas consultas las atiende el agente de propuestas cuando el chat las enruta.');
+  lines.push('Si la pregunta está completamente fuera de alcance, decliná amablemente y sugerí reformular o preguntar en el chat principal para que se enrute al agente correcto.');
   lines.push('');
 
   lines.push('## Base de conocimiento del Orquestador');
@@ -1614,15 +2006,42 @@ function AgentOrchestrator_buildSelfAnswerPrompt_() {
   lines.push('Si el visitante pregunta por clientes o propuestas, respondé amablemente que esa información requiere un rol asignado y que puede pedir acceso a su administrador de Aviators.');
   lines.push('');
 
-  lines.push('## Estilo');
-  lines.push('Si el usuario saluda o hace charla breve, respondé cordialmente y en pocas líneas.');
-  lines.push('Si la consulta es general/ambigua, respondé con claridad.');
+  lines.push('## Estilo y longitud');
+  lines.push(
+    'Solo si el mensaje es un saludo puro sin pregunta («hola», «buen día»): respondé cordialmente en 2–4 líneas.',
+  );
+  lines.push(
+    'Para cualquier pregunta sustantiva sobre Aviators, Aviation Studio o el material recuperado: escribí una respuesta DESARROLLADA en varios párrafos completos, con hechos y ejemplos tomados del contexto; evitá respuestas de una sola frase o listas telegráficas cuando haya información útil.',
+  );
+  lines.push(
+    'Si el contexto RAG trae varios fragmentos pertinentes, integrálos todos; no te quedes con el primer párrafo del documento.',
+  );
+  lines.push('Si la consulta es general/ambigua, orientá con detalle concreto (qué puede preguntar, qué agentes usar).');
   lines.push('No inventes datos no verificados.');
+  lines.push(AgentOrchestrator_buildResponseLengthInstruction_());
   lines.push('');
 
   lines.push(AgentOrchestrator_buildMetricsContext_());
 
   return lines.join('\n');
+}
+
+/**
+ * Plantilla para `searchOptions.search.prompt` del perfil RAG aviators-orquestador (respuestas al usuario).
+ * No incluye reglas de ruteo JSON (eso va en runtime vía buildRoutingPrompt_ + systemPrompt del registro).
+ * @return {string}
+ */
+function AgentOrchestrator_buildOrchestratorRagProfilePrompt_() {
+  return [
+    'Sos el Orquestador de Aviators (Aviation Studio / Globant). Respondés al usuario final.',
+    'Usá el contexto documental recuperado abajo cuando sea útil; citá hechos concretos del material indexado sobre el studio, la plataforma y FAQs.',
+    'Para preguntas sustantivas: respuesta desarrollada en varios párrafos completos; no acortes a una frase ni listas telegráficas si el contexto permite más detalle.',
+    'Si varios fragmentos del contexto son pertinentes, integrálos; no te quedes solo con el primero.',
+    'Si el contexto no alcanza, decilo con claridad; no inventes datos del studio.',
+    AgentOrchestrator_buildResponseLengthInstruction_(),
+    '',
+    'Contexto recuperado:\n{context}\n\nPregunta del usuario: {question}\n',
+  ].join('\n');
 }
 
 /**
@@ -1683,9 +2102,13 @@ function AgentOrchestrator_keywordFallback_(question, candidates) {
   var matchSC = exists(_ADMIN_AGENT_ID_SUCCESS_CASES) &&
     /(success case|caso de exito|caso de éxito|referencia|impacto|resultado)/.test(q);
   var matchPR = exists(_ADMIN_AGENT_ID_PROPOSALS) &&
-    /(propuesta|proposal|alcance|rfp|estimaci[oó]n|pricing|entregable|cronograma)/.test(q);
+    /(propuesta|proposal|alcance|rfp|estimaci[oó]n|pricing|entregable|cronograma|ai[\s-]*pods?|offering|engagement model|time\s*&\s*materials|fixed\s*price|staff\s*augmentation|globant\s+studio|studio(s)?\s+(de\s+)?globant|modelo\s+comercial)/.test(
+      q,
+    );
   var matchCL = exists(_ADMIN_AGENT_ID_CLIENTS) &&
-    /(cliente|cuenta|account|proyecto activo|mantenimiento|n[oó]mina|aviacion|aviation|aerolineas|airlines|cartera|roster)/.test(q);
+    /(cliente|cuenta|account|proyecto activo|mantenimiento|n[oó]mina|lista todos|lista de clientes|list all|list all clients|globant clients|aviacion|aviation|aerolinea|aerolineas|airlines|airlines industry|industria de aerolinea|cartera|roster|globant.*cliente|globant.*client)/.test(
+      q,
+    );
   var matchWork = /(que hicimos|experiencia|hemos hecho|trabajamos|trabajos|proyectos?)/.test(q);
 
   var agents = [];

@@ -75,13 +75,15 @@
     return !!(f.q || f.industry || f.sub_industry);
   }
 
-  function clientsListFilterFingerprint_() {
+  function clientsListFilterFingerprint_(skipOverride) {
     var f = clientsGetListFilters_();
+    var skip =
+      typeof skipOverride === 'number' ? skipOverride : S.get('clientsListSkip') || 0;
     return [
       f.q,
       f.industry,
       f.sub_industry,
-      String(S.get('clientsListSkip') || 0),
+      String(skip),
       String(clientsGetPageSize_()),
     ].join('\u0001');
   }
@@ -160,7 +162,7 @@
     google.script.run
       .withSuccessHandler(function (res) {
         if (!res || !res.ok) return;
-        A.cache.set('clientsFilterOptions', res, CLIENTS_CACHE_TTL);
+        A.cache.set('clientsFilterOptions', res, CLIENTS_FILTER_OPTIONS_CACHE_TTL);
         clientsApplyFilterOptions_(res);
       })
       .withFailureHandler(function () {})
@@ -653,21 +655,78 @@
   }
 
   var CLIENTS_PAGE_SIZES = [15, 25, 50];
-  var CLIENTS_CACHE_TTL = 60000;
+  var CLIENTS_FILTER_OPTIONS_CACHE_TTL = 60000;
+  var clientsFilterDebounceTimer = null;
+  var _clientsListPageCache = {};
+  var _clientsListPrefetchToken = 0;
 
   function clientsGetPageSize_() {
     var n = Number(S.get('clientsPageSize'));
     for (var i = 0; i < CLIENTS_PAGE_SIZES.length; i++) {
       if (CLIENTS_PAGE_SIZES[i] === n) return n;
     }
-    return 25;
+    return 15;
   }
 
   function clientsSyncPageSizeSelect_() {
     if (!clientsPageSizeSelect) return;
     clientsPageSizeSelect.value = String(clientsGetPageSize_());
   }
-  var clientsFilterDebounceTimer = null;
+
+  function clientsGetListPageCache_(fingerprint) {
+    return _clientsListPageCache[fingerprint] || null;
+  }
+
+  function clientsSetListPageCache_(fingerprint, payload) {
+    _clientsListPageCache[fingerprint] = payload;
+  }
+
+  function clientsApplyListPageCache_(cached) {
+    S.set('clientsItemsCache', cached.items);
+    S.set('clientsListTotal', cached.total);
+    S.set('clientsListHasMore', cached.hasMore);
+    clientsRenderTable();
+    clientsSetListStatus('\u00a0', false);
+    clientsTryOpenPendingName_();
+  }
+
+  function clientsInvalidateListCache_() {
+    _clientsListPageCache = {};
+    _clientsListPrefetchToken += 1;
+    if (A.cache && A.cache.invalidate) A.cache.invalidate('clientsList');
+  }
+
+  function clientsPrefetchNextListPage_() {
+    if (!S.get('clientsListHasMore')) return;
+    var skip = (S.get('clientsListSkip') || 0) + clientsGetPageSize_();
+    var fingerprint = clientsListFilterFingerprint_(skip);
+    if (clientsGetListPageCache_(fingerprint)) return;
+
+    var filters = clientsGetListFilters_();
+    var token = _clientsListPrefetchToken;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (token !== _clientsListPrefetchToken) return;
+        var items = (res && res.items) || [];
+        var total = (res && res.total) || 0;
+        var hasMore = !!(res && res.hasMore);
+        clientsSetListPageCache_(fingerprint, {
+          items: items,
+          total: total,
+          hasMore: hasMore,
+        });
+      })
+      .withFailureHandler(function () {
+        /* prefetch silencioso */
+      })
+      .clientsList({
+        q: filters.q,
+        industry: filters.industry,
+        sub_industry: filters.sub_industry,
+        skip: skip,
+        limit: clientsGetPageSize_(),
+      });
+  }
 
   function clientsLoadList(opts) {
     var o = opts || {};
@@ -678,17 +737,13 @@
     if (resetSkip) S.set('clientsListSkip', 0);
     var skip = S.get('clientsListSkip') || 0;
     var filters = clientsGetListFilters_();
-    var fingerprint = clientsListFilterFingerprint_();
+    var fingerprint = clientsListFilterFingerprint_(skip);
 
     if (!skipCache) {
-      var cached = A.cache.get('clientsList');
-      if (cached && cached.fingerprint === fingerprint) {
-        S.set('clientsItemsCache', cached.items);
-        S.set('clientsListTotal', cached.total);
-        S.set('clientsListHasMore', cached.hasMore);
-        clientsRenderTable();
-        clientsSetListStatus('\u00a0', false);
-        clientsTryOpenPendingName_();
+      var cached = clientsGetListPageCache_(fingerprint);
+      if (cached) {
+        clientsApplyListPageCache_(cached);
+        clientsPrefetchNextListPage_();
         return;
       }
     }
@@ -708,19 +763,15 @@
         S.set('clientsItemsCache', items);
         S.set('clientsListTotal', total);
         S.set('clientsListHasMore', hasMore);
-        A.cache.set(
-          'clientsList',
-          {
-            fingerprint: fingerprint,
-            items: items,
-            total: total,
-            hasMore: hasMore,
-          },
-          CLIENTS_CACHE_TTL,
-        );
+        clientsSetListPageCache_(fingerprint, {
+          items: items,
+          total: total,
+          hasMore: hasMore,
+        });
         clientsRenderTable();
         clientsSetListStatus('\u00a0', false);
         clientsTryOpenPendingName_();
+        clientsPrefetchNextListPage_();
       })
       .withFailureHandler(function (e) {
         S.set('clientsListLoading', false);
@@ -744,10 +795,6 @@
         skip: skip,
         limit: clientsGetPageSize_(),
       });
-  }
-
-  function clientsInvalidateListCache_() {
-    if (A.cache && A.cache.invalidate) A.cache.invalidate('clientsList');
   }
 
   function clientsScheduleFilterReload_() {
@@ -1042,16 +1089,14 @@
       var pageSize = clientsGetPageSize_();
       if (skip <= 0) return;
       S.set('clientsListSkip', Math.max(0, skip - pageSize));
-      clientsInvalidateListCache_();
-      clientsLoadList({ skipCache: true });
+      clientsLoadList();
     });
   }
   if (clientsNextBtn) {
     clientsNextBtn.addEventListener('click', function () {
       if (S.get('clientsListLoading') || !S.get('clientsListHasMore')) return;
       S.set('clientsListSkip', (S.get('clientsListSkip') || 0) + clientsGetPageSize_());
-      clientsInvalidateListCache_();
-      clientsLoadList({ skipCache: true });
+      clientsLoadList();
     });
   }
 

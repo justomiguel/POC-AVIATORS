@@ -98,6 +98,19 @@ function GlobantHttp_formatApiError_(path, httpCode, responseText, ctx) {
     }
   }
 
+  if (code === '400' && p.indexOf('/v1/search/execute') >= 0) {
+    hints.push(
+      UiStrings_t(UiStrings_activeLocale_(), 'err_globant_rag_execute_400_hint'),
+    );
+    if (ctx && ctx.idOrName) {
+      hints.push(
+        UiStrings_fmt_('err_globant_rag_execute_profile', {
+          profile: String(ctx.idOrName),
+        }),
+      );
+    }
+  }
+
   if (code === '401' || code === '403') {
     hints.push(UiStrings_t(UiStrings_activeLocale_(), 'err_globant_api_auth_hint'));
   }

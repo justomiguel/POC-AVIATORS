@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Deploy Apps Script:
-#   0) build:css (siempre: el workspace puede tener cambios sin commit)
+#   0) build:gas-artifacts (Tailwind + Cytoscape kg-lib-*.html; siempre, aunque no esté commiteado)
 #   1) Embebe logo.png en gas/index.html (data URL).
-#   2) clasp push + nueva versión.
+#   2) clasp push + nueva versión (vendor/ ignorado vía .claspignore en raíz del repo).
 #   3) clasp redeploy del webAppDeploymentId en gas/deploy.json (misma URL /exec).
 #      Si no hay ID o redeploy falla, clasp deploy crea una implementación nueva y actualiza deploy.json.
 #
@@ -11,8 +11,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "→ build:css"
-npm run build:css
+echo "→ build:gas-artifacts (css + kg-vis)"
+npm run build:gas-artifacts
 
 CONFIG="$(node <<'NODE'
 const fs = require('fs');
@@ -44,7 +44,19 @@ echo "→ clasp version \"${VERSION_NOTE}\""
 VERS_LINE="$(clasp version "${VERSION_NOTE}" 2>&1)"
 VERS="$(echo "$VERS_LINE" | sed -n 's/^Created version //p')"
 if [[ -z "$VERS" ]]; then
-  echo "No se pudo interpretar la versión. Salida: $VERS_LINE" >&2
+  echo "" >&2
+  echo "Deploy detenido: no se creó una versión nueva." >&2
+  echo "$VERS_LINE" >&2
+  if echo "$VERS_LINE" | grep -qi 'limit of 200 versions'; then
+    echo "" >&2
+    echo "El proyecto de Apps Script ya tiene 200 versiones (máximo de Google)." >&2
+    echo "clasp push sí subió el código, pero la Web App sigue en la última versión publicada" >&2
+    echo "hasta que borres versiones viejas y vuelvas a correr ./deploy." >&2
+    echo "" >&2
+    echo "En el editor: Implementar → Administrar implementaciones → icono de reloj / historial" >&2
+    echo "→ eliminar versiones antiguas (dejar las más recientes y las que usan implementaciones activas)." >&2
+    echo "Gestionar: https://script.google.com/home/projects/${SCRIPT_ID}/deployments" >&2
+  fi
   exit 1
 fi
 

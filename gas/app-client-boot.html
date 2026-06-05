@@ -20,7 +20,7 @@
   var backLogin = document.getElementById('logout-toolbar');
   var navBtnHome = document.getElementById('nav-btn-home');
   var navPageOnboarding = document.getElementById('nav-page-onboarding');
-  var navPageAgents = document.getElementById('nav-page-agents');
+  var navPageProposalBuilding = document.getElementById('nav-page-proposal-building');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageTags = document.getElementById('nav-page-tags');
   var navPageClients = document.getElementById('nav-page-clients');
@@ -97,8 +97,13 @@
     var pg = page;
     var prevPage = S.get('activePage') || '';
     var canManageAgents = !!S.get('canManageAgents');
-    if (pg === 'agents' && !S.get('canViewAgents')) {
-      pg = 'home';
+    if (pg === 'agents') {
+      if (!S.get('canViewAgents')) {
+        pg = 'home';
+      } else {
+        S.set('settingsPendingTab', 'settings-tab-agents');
+        pg = 'settings';
+      }
     }
     if (pg === 'contents' && !S.get('canViewCatalog')) {
       pg = 'home';
@@ -121,11 +126,14 @@
     if (pg === 'onboarding' && !S.get('canViewOnboarding')) {
       pg = 'home';
     }
+    if (pg === 'proposal-building' && !S.get('canViewProposalBuilding')) {
+      pg = 'home';
+    }
     if (pg === 'request-access' && !S.get('isVisitor')) {
       pg = 'home';
     }
     if (
-      (prevPage === 'home' || prevPage === 'onboarding') &&
+      (prevPage === 'home' || prevPage === 'onboarding' || prevPage === 'proposal-building') &&
       pg !== prevPage &&
       A.chat &&
       typeof A.chat.saveCurrentConversation === 'function'
@@ -137,13 +145,10 @@
     for (i = 0; i < nodes.length; i++) {
       var p = nodes[i];
       var id = p.id || '';
-      var showAgentsWrite = pg === 'agents' && canManageAgents && id === 'page-agents';
-      var showAgentsReadOnly = pg === 'agents' && !canManageAgents && id === 'page-agents-readonly';
       var show =
         (pg === 'home' && id === 'page-home') ||
         (pg === 'onboarding' && id === 'page-onboarding') ||
-        showAgentsWrite ||
-        showAgentsReadOnly ||
+        (pg === 'proposal-building' && id === 'page-proposal-building') ||
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'tags' && id === 'page-tags') ||
         (pg === 'clients' && id === 'page-clients') ||
@@ -156,7 +161,7 @@
     }
     var chatShell = document.getElementById('home-chat-shell');
     if (chatShell) {
-      chatShell.classList.toggle('hidden', pg !== 'home' && pg !== 'onboarding');
+      chatShell.classList.toggle('hidden', pg !== 'home' && pg !== 'onboarding' && pg !== 'proposal-building');
     }
     if (homeMember) {
       homeMember.classList.toggle('hidden', pg === 'faq' || pg === 'request-access');
@@ -165,7 +170,11 @@
       homeVisitante.classList.toggle('hidden', !(S.get('isVisitor') && pg === 'home'));
     }
     S.set('activePage', pg || '');
-    if ((pg === 'home' || pg === 'onboarding') && A.chat && typeof A.chat.onEnterChatPage === 'function') {
+    if (
+      (pg === 'home' || pg === 'onboarding' || pg === 'proposal-building') &&
+      A.chat &&
+      typeof A.chat.onEnterChatPage === 'function'
+    ) {
       A.chat.onEnterChatPage(pg);
     }
     var viewApp = document.getElementById('view-app');
@@ -246,9 +255,6 @@
         if (A.clients && A.clients.loadFilterOptions) A.clients.loadFilterOptions();
         if (A.clients && A.clients.loadList) A.clients.loadList();
       }
-    }
-    if (pg === 'agents' && S.get('canViewAgents') && A.agents && A.agents.loadList) {
-      A.agents.loadList(null, true);
     }
     closeMobileDrawer({ restoreFocus: false });
   }
@@ -437,14 +443,17 @@
       var canSyncSalesforceAccounts = !!perms.canSyncSalesforceAccounts;
       var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
       var canViewOnboarding = !!perms.canViewOnboarding;
+      var canViewProposalBuilding = !!perms.canViewProposalBuilding;
       var canViewKnowledgeGraph = !!perms.canViewKnowledgeGraph;
       var canRebuildKnowledgeGraph = !!perms.canRebuildKnowledgeGraph;
       var canViewSettings =
+        canViewAgents ||
         canManageAgents ||
         canResetMetrics ||
         canManageUsers ||
         canManageRoleConfig ||
-        canSyncSalesforceAccounts;
+        canSyncSalesforceAccounts ||
+        canRebuildKnowledgeGraph;
       S.set('canManageAgents', canManageAgents);
       S.set('canWriteContents', canWriteCatalog);
       S.set('canViewAgents', canViewAgents);
@@ -458,9 +467,13 @@
       S.set('canSyncSalesforceAccounts', canSyncSalesforceAccounts);
       S.set('canManageUnansweredQueue', canManageUnansweredQueue);
       S.set('canViewOnboarding', canViewOnboarding);
+      S.set('canViewProposalBuilding', canViewProposalBuilding);
       S.set('canViewKnowledgeGraph', canViewKnowledgeGraph);
       S.set('canRebuildKnowledgeGraph', canRebuildKnowledgeGraph);
       S.set('canViewSettings', canViewSettings);
+      if (bootstrap.kgLimits && typeof bootstrap.kgLimits === 'object') {
+        S.set('kgLimits', bootstrap.kgLimits);
+      }
       S.set('webAppUrl', String(bootstrap.webAppUrl || '').trim());
       var adm = bootstrap.admin || {};
       var maxUp =
@@ -497,7 +510,9 @@
       if (navPageOnboarding) {
         navPageOnboarding.classList.toggle('hidden', !canViewOnboarding);
       }
-      if (navPageAgents) navPageAgents.classList.toggle('hidden', !canViewAgents);
+      if (navPageProposalBuilding) {
+        navPageProposalBuilding.classList.toggle('hidden', !canViewProposalBuilding);
+      }
       if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
       if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
       if (navPageClients) navPageClients.classList.toggle('hidden', !canViewClients);
@@ -616,8 +631,8 @@
   if (navPageOnboarding) {
     navPageOnboarding.addEventListener('click', function () { setAppPage('onboarding'); });
   }
-  if (navPageAgents) {
-    navPageAgents.addEventListener('click', function () { setAppPage('agents'); });
+  if (navPageProposalBuilding) {
+    navPageProposalBuilding.addEventListener('click', function () { setAppPage('proposal-building'); });
   }
   if (navPageContents) {
     navPageContents.addEventListener('click', function () { setAppPage('contents'); });

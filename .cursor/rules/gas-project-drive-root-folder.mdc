@@ -3,10 +3,11 @@ description: Carpeta raíz de Drive para PDFs de casos de éxito y onboarding
 alwaysApply: true
 ---
 
-# Carpeta raíz de Drive (casos de éxito y onboarding)
+# Carpeta raíz de Drive (casos de éxito, onboarding y propuestas)
 
-- **Regla**: la Script Property **`DRIVE_ROOT_FOLDER_ID`** es el destino para PDFs de **casos de éxito** (`content_type: success_case`) y **onboarding** (`content_type: onboarding`). Propuestas y clientes se indexan en Globant RAG y pueden usar archivo en `Aviators/Catalog/{tipo}/` del Drive del desplegador (`ContentIngestion_storeCatalogPdfArchiveInDrive_`).
+- **Regla**: la Script Property **`DRIVE_ROOT_FOLDER_ID`** es el destino para PDFs de **casos de éxito** (`success_case`), **onboarding** (`onboarding`) y **propuestas / material comercial** (`proposal`). Clientes se indexan en Globant RAG y pueden usar archivo en `Aviators/Catalog/client/` del Drive del desplegador (`ContentIngestion_storeCatalogPdfArchiveInDrive_`).
 - **Onboarding — carpeta grande**: todo PDF vive bajo **`Onboarding/`** en `DRIVE_ROOT_FOLDER_ID` (`ContentIngestion_getOnboardingDriveRootFolder_()`). Dentro: `{tópico}/{título}/` (`specific.topic` o `General`). Al guardar, si el archivo estaba fuera de esa raíz, se mueve adentro.
-- **Código**: casos de éxito en `ContentIngestion_storeSuccessCasePdfInDrive_()` (cliente/título en raíz del proyecto); onboarding en `ContentIngestion_storeOnboardingPdfInDrive_()`; guard `ContentIngestion_usesProjectDriveStorage_(contentType)`.
+- **Propuestas — catálogo**: material subido en Contenidos (`proposal`) vive bajo **`Propuestas/Catalogo/`** (`ContentIngestion_getProposalsCatalogDriveRootFolder_()`). Estructura: `{material_kind}/{segmento}/{título}/` — segmento = cliente (propuesta comercial), Studio (`specific.globant_studio`), offering (`specific.offering`) o temática (`specific.topic`). Los decks armados en Armado de propuestas siguen en **`Propuestas/`** (raíz, copias de presentación).
+- **Código**: casos de éxito en `ContentIngestion_storeSuccessCasePdfInDrive_()`; onboarding en `ContentIngestion_storeOnboardingPdfInDrive_()`; propuestas en `ContentIngestion_storeProposalPdfInDrive_()`; guard `ContentIngestion_usesProjectDriveStorage_(contentType)` incluye `proposal`.
 - **Formato canónico**: `AviatorsConfig_requireDriveRootFolderId_()` en flujos de success case y onboarding; no hardcodear IDs de carpeta.
 - **Excepción**: otro destino en Drive solo si el usuario lo pide explícitamente para un flujo puntual.

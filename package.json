@@ -3,7 +3,11 @@
   "private": true,
   "scripts": {
     "build:css": "tailwindcss -i ./gas/tailwind-input.css -o ./gas/tailwind-built.css --minify && node ./scripts/wrap-css-include.mjs",
-    "watch:css": "node ./scripts/watch-css.mjs"
+    "watch:css": "node ./scripts/watch-css.mjs",
+    "build:kg-vis": "node ./scripts/build-kg-vis-include.mjs",
+    "build:kg-sigma": "npm run build:kg-vis",
+    "build:gas-artifacts": "npm run build:css && npm run build:kg-vis",
+    "generate:ai-credentials-pdfs": "node scripts/generate-ai-credentials-pdfs.mjs"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",

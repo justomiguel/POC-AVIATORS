@@ -31,6 +31,71 @@ function ContentCatalogStore_listAll() {
 }
 
 /**
+ * Página del catálogo (evita listAll en rebuild por lotes).
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function ContentCatalogStore_listPage(skip, limit) {
+  return ContentCatalogStore_listFiltered({}, skip, limit);
+}
+
+/**
+ * @param {{contentType?:string,q?:string,tag?:string}} filters
+ * @return {Array<string>}
+ */
+function ContentCatalogStore_buildFilterParts_(filters) {
+  var f = filters || {};
+  var parts = [];
+  var type = String(f.contentType || '').trim();
+  if (type) {
+    parts.push(SupabaseRest_filter_('content_type', 'eq', type));
+  }
+  var q = String(f.q || '').trim();
+  if (q) {
+    var escapedQ = SupabaseRest_escapeFilterValue_(q);
+    parts.push(SupabaseRest_filter_('search_text', 'ilike', '*' + escapedQ + '*'));
+  }
+  var tag = String(f.tag || '').trim().toLowerCase();
+  if (tag) {
+    if (tag.charAt(0) !== '#') tag = '#' + tag;
+    var escapedTag = SupabaseRest_escapeFilterValue_(tag);
+    parts.push(SupabaseRest_filter_('tags_csv', 'ilike', '*' + escapedTag + '*'));
+  }
+  return parts;
+}
+
+/**
+ * @param {{contentType?:string,q?:string,tag?:string}} filters
+ * @return {number}
+ */
+function ContentCatalogStore_countFiltered(filters) {
+  var filterParts = ContentCatalogStore_buildFilterParts_(filters);
+  var q = SupabaseRest_query_(['select=content_id'].concat(filterParts).concat(['limit=0']));
+  return SupabaseRest_count(SUPABASE_TABLE.CONTENTS, q);
+}
+
+/**
+ * Página filtrada del catálogo (paginación real en Supabase).
+ * @param {{contentType?:string,q?:string,tag?:string}} filters
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function ContentCatalogStore_listFiltered(filters, skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(100, Math.max(1, Number(limit) || 25));
+  var filterParts = ContentCatalogStore_buildFilterParts_(filters);
+  var q = SupabaseRest_query_(
+    ['select=*', 'order=updated_at.desc'].concat(filterParts).concat([
+      'offset=' + s,
+      'limit=' + lim,
+    ]),
+  );
+  return SupabaseRest_select(SUPABASE_TABLE.CONTENTS, q);
+}
+
+/**
  * @param {string} contentId
  * @return {Object|null}
  */

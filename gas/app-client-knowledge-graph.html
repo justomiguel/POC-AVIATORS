@@ -12,6 +12,7 @@
   var filterIndustry = document.getElementById('kg-filter-industry');
   var filterClient = document.getElementById('kg-filter-client');
   var filterDepth = document.getElementById('kg-filter-depth');
+  var filterDensity = document.getElementById('kg-filter-density');
   var applyBtn = document.getElementById('kg-apply-btn');
   var resetBtn = document.getElementById('kg-reset-btn');
   var focusBtn = document.getElementById('kg-focus-btn');
@@ -25,8 +26,208 @@
   var detailEdgesIn = document.getElementById('kg-detail-edges-in');
   var openContentBtn = document.getElementById('kg-open-content-btn');
   var legendList = document.getElementById('kg-legend-list');
+  var legendEdges = document.getElementById('kg-legend-edges');
+  var graphStatsEl = document.getElementById('kg-graph-stats');
+  var layoutModeEl = document.getElementById('kg-layout-mode');
+  var showLabelsEl = document.getElementById('kg-show-labels');
+  var fitBtn = document.getElementById('kg-fit-btn');
+  var zoomInBtn = document.getElementById('kg-zoom-in-btn');
+  var zoomOutBtn = document.getElementById('kg-zoom-out-btn');
+  var graphFindInput = document.getElementById('kg-graph-find');
+  var graphFindPrev = document.getElementById('kg-graph-find-prev');
+  var graphFindNext = document.getElementById('kg-graph-find-next');
+  var graphFindStatus = document.getElementById('kg-graph-find-status');
+  var nodeListEl = document.getElementById('kg-node-list');
+  var nodeListFilter = document.getElementById('kg-node-list-filter');
+  var nodeListEmpty = document.getElementById('kg-node-list-empty');
+  var depthMeterEl = document.getElementById('kg-depth-meter');
+  var depthMeterAria = document.getElementById('kg-depth-meter-aria');
+  var scopeSummary = document.getElementById('kg-scope-summary');
+  var scopeTruncated = document.getElementById('kg-scope-truncated');
+  var guideDetails = document.getElementById('kg-guide-details');
+  var filtersDetails = document.getElementById('kg-filters-details');
   var visHost = document.getElementById('kg-vis-lib-host');
+  var graphLoaderEl = document.getElementById('kg-graph-loader');
+  var graphLoaderStep = document.getElementById('kg-graph-loader-step');
+  var graphLoaderTitle = document.getElementById('kg-graph-loader-title');
+  var graphLoaderMsg = document.getElementById('kg-graph-loader-msg');
+  var graphLoaderWhy = document.getElementById('kg-graph-loader-why');
+  var graphLoaderEta = document.getElementById('kg-graph-loader-eta');
+  var pendingSyncBanner = document.getElementById('kg-pending-sync-banner');
+  var pendingSyncMsg = document.getElementById('kg-pending-sync-msg');
+  var pendingSyncResumeBtn = document.getElementById('kg-pending-sync-resume-btn');
+  var pendingSyncDiscardBtn = document.getElementById('kg-pending-sync-discard-btn');
+  var sidePanel = document.getElementById('kg-side-panel');
+  var sideToggle = document.getElementById('kg-side-toggle');
+  var sideOpen = document.getElementById('kg-side-open');
+  var sideClose = document.getElementById('kg-side-close');
+  var tabDetail = document.getElementById('kg-tab-detail');
+  var tabNodes = document.getElementById('kg-tab-nodes');
+  var panelDetail = document.getElementById('kg-side-tab-detail');
+  var panelNodes = document.getElementById('kg-side-tab-nodes');
+  var kgTabRoot = document.getElementById('kg-tab-root');
+  var kgTabEntities = document.getElementById('kg-tab-entities');
+  var kgMainTabs = null;
+  var entitiesCatalogTotals = document.getElementById('kg-entities-catalog-totals');
+  var entitiesCatalogLoader = document.getElementById('kg-entities-catalog-loader');
+  var entitiesTypesGrid = document.getElementById('kg-entities-types-grid');
+  var entitiesRelationsList = document.getElementById('kg-entities-relations-list');
+  var entitiesFilterType = document.getElementById('kg-entities-filter-type');
+  var entitiesFilterSearch = document.getElementById('kg-entities-filter-search');
+  var entitiesApplyBtn = document.getElementById('kg-entities-apply-btn');
+  var entitiesListLoader = document.getElementById('kg-entities-list-loader');
+  var entitiesListError = document.getElementById('kg-entities-list-error');
+  var entitiesTableBody = document.getElementById('kg-entities-table-body');
+  var entitiesListEmpty = document.getElementById('kg-entities-list-empty');
+  var entitiesPageInfo = document.getElementById('kg-entities-page-info');
+  var entitiesPrev = document.getElementById('kg-entities-prev');
+  var entitiesNext = document.getElementById('kg-entities-next');
+  var graphLoaderHideTimer = null;
+  var entitiesCatalogLoaded = false;
+  var entitiesCatalogBusy = false;
+  var entitiesListBusy = false;
+  var entitiesSkip = 0;
+  var entitiesTotal = 0;
+  var entitiesPageSize = 25;
+  var entitiesSearchTimer = null;
+
+  function kgResolveLimits_() {
+    var lim = S.get('kgLimits');
+    if (lim && typeof lim === 'object') return lim;
+    return {
+      maxNodesDefault: 150,
+      maxNodesCap: 300,
+      bfsDepthDefault: 2,
+      bfsDepthCap: 4,
+      densityCompact: 80,
+      densityNormal: 150,
+      densityWide: 250,
+      hubSeedLimit: 30,
+    };
+  }
+
+  function kgApplyLimitsToFilters_() {
+    var lim = kgResolveLimits_();
+    if (filterDensity) {
+      var densityOpts = [
+        { value: lim.densityCompact, key: 'kg_density_opt_compact_fmt' },
+        { value: lim.densityNormal, key: 'kg_density_opt_normal_fmt' },
+        { value: lim.densityWide, key: 'kg_density_opt_wide_fmt' },
+      ];
+      var prevDensity = filterDensity.value;
+      filterDensity.innerHTML = '';
+      var di;
+      for (di = 0; di < densityOpts.length; di++) {
+        var dOpt = densityOpts[di];
+        var dEl = document.createElement('option');
+        dEl.value = String(dOpt.value);
+        dEl.textContent = i18nFmt(dOpt.key, { count: String(dOpt.value) });
+        if (String(dOpt.value) === String(lim.densityNormal)) {
+          dEl.selected = true;
+        }
+        filterDensity.appendChild(dEl);
+      }
+      if (prevDensity) filterDensity.value = prevDensity;
+      if (!filterDensity.value) filterDensity.value = String(lim.densityNormal);
+    }
+    if (filterDepth) {
+      var prevDepth = filterDepth.value;
+      var depthCap = Math.max(1, parseInt(String(lim.bfsDepthCap || 4), 10) || 4);
+      filterDepth.innerHTML = '';
+      var d;
+      for (d = 1; d <= depthCap; d++) {
+        var depthEl = document.createElement('option');
+        depthEl.value = String(d);
+        depthEl.textContent = i18nFmt('kg_depth_opt_n_fmt', { n: String(d) });
+        if (d === lim.bfsDepthDefault) depthEl.selected = true;
+        filterDepth.appendChild(depthEl);
+      }
+      if (prevDepth && parseInt(prevDepth, 10) <= depthCap) {
+        filterDepth.value = prevDepth;
+      } else if (!filterDepth.value) {
+        filterDepth.value = String(lim.bfsDepthDefault);
+      }
+    }
+  }
+
+  function kgSyncSidePanelChrome_() {
+    var open = sidePanel && !sidePanel.classList.contains('kg-side-panel--collapsed');
+    if (sideOpen) sideOpen.classList.toggle('hidden', !!open);
+    if (sideToggle) sideToggle.classList.toggle('hidden', !!open);
+  }
+
+  function kgOpenSidePanel_(tab) {
+    if (!sidePanel) return;
+    sidePanel.classList.remove('kg-side-panel--collapsed');
+    kgSyncSidePanelChrome_();
+    if (tab) kgSwitchSideTab_(tab);
+    try {
+      localStorage.setItem('kg_side_open', 'true');
+    } catch (e) {}
+  }
+
+  function kgCloseSidePanel_() {
+    if (!sidePanel) return;
+    sidePanel.classList.add('kg-side-panel--collapsed');
+    kgSyncSidePanelChrome_();
+    try {
+      localStorage.setItem('kg_side_open', 'false');
+    } catch (e) {}
+  }
+
+  function kgSwitchSideTab_(which) {
+    var isDetail = which !== 'nodes';
+    if (tabDetail) {
+      tabDetail.classList.toggle('kg-side-tab--active', isDetail);
+      tabDetail.setAttribute('aria-selected', isDetail ? 'true' : 'false');
+    }
+    if (tabNodes) {
+      tabNodes.classList.toggle('kg-side-tab--active', !isDetail);
+      tabNodes.setAttribute('aria-selected', !isDetail ? 'true' : 'false');
+    }
+    if (panelDetail) panelDetail.classList.toggle('hidden', !isDetail);
+    if (panelNodes) panelNodes.classList.toggle('hidden', isDetail);
+  }
+
+  (function () {
+    if (guideDetails) {
+      var guideStored = localStorage.getItem('kg_guide_open');
+      if (guideStored === 'true') guideDetails.open = true;
+      guideDetails.addEventListener('toggle', function () {
+        try {
+          localStorage.setItem('kg_guide_open', guideDetails.open ? 'true' : 'false');
+        } catch (e) {}
+      });
+    }
+    if (filtersDetails) {
+      var filtersStored = localStorage.getItem('kg_filters_open');
+      filtersDetails.open = filtersStored === 'true';
+      filtersDetails.addEventListener('toggle', function () {
+        try {
+          localStorage.setItem('kg_filters_open', filtersDetails.open ? 'true' : 'false');
+        } catch (e) {}
+      });
+    }
+    if (sidePanel) {
+      if (localStorage.getItem('kg_side_open') === 'true') kgOpenSidePanel_('detail');
+      else kgCloseSidePanel_();
+    }
+  }());
   var typeToggles = document.querySelectorAll('.kg-type-toggle');
+
+  var findMatchIds = [];
+  var findMatchIndex = -1;
+  var findQuery = '';
+
+  var TYPE_SORT_ORDER = {
+    content: 0,
+    client: 1,
+    client_label: 2,
+    industry: 3,
+    tag: 4,
+    stage: 5,
+    pricing_model: 6,
+  };
 
   var loading = false;
   var rebuilding = false;
@@ -35,6 +236,46 @@
   var selectedNodeId = '';
   var lastSnapshot = null;
   var nodeById = {};
+
+  var KG_SS_PREFIX = 'kg_snap_v2_';
+
+  function kgSnapshotKey_(filters) {
+    try {
+      return KG_SS_PREFIX + JSON.stringify(filters);
+    } catch (e) {
+      return KG_SS_PREFIX + 'default';
+    }
+  }
+
+  function kgSaveSnapshot_(filters, data) {
+    try {
+      var key = kgSnapshotKey_(filters);
+      sessionStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {}
+  }
+
+  function kgLoadSnapshot_(filters) {
+    try {
+      var key = kgSnapshotKey_(filters);
+      var raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function kgInvalidateSnapshots_() {
+    try {
+      var toRemove = [];
+      var i;
+      for (i = 0; i < sessionStorage.length; i++) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf(KG_SS_PREFIX) === 0) toRemove.push(k);
+      }
+      for (i = 0; i < toRemove.length; i++) sessionStorage.removeItem(toRemove[i]);
+    } catch (e) {}
+  }
 
   var NODE_COLORS = {
     content: '#0ea5e9',
@@ -46,12 +287,32 @@
     pricing_model: '#ec4899',
   };
 
+  var NODE_SHAPES = {
+    content: { shape: 'dot', size: 22 },
+    client: { shape: 'box', size: 24 },
+    client_label: { shape: 'box', size: 18 },
+    industry: { shape: 'diamond', size: 20 },
+    tag: { shape: 'ellipse', size: 16 },
+    stage: { shape: 'triangle', size: 14 },
+    pricing_model: { shape: 'star', size: 14 },
+  };
+
+  var EDGE_COLORS = {
+    belongs_to: '#d97706',
+    in_industry: '#7c3aed',
+    tagged_with: '#059669',
+    has_stage: '#4f46e5',
+    has_pricing_model: '#db2777',
+    related_content: '#0284c7',
+  };
+
   var REL_I18N = {
     belongs_to: 'kg_rel_belongs_to',
     in_industry: 'kg_rel_in_industry',
     tagged_with: 'kg_rel_tagged_with',
     has_stage: 'kg_rel_has_stage',
     has_pricing_model: 'kg_rel_has_pricing_model',
+    related_content: 'kg_rel_related_content',
   };
 
   var TYPE_I18N = {
@@ -64,12 +325,292 @@
     pricing_model: 'kg_type_pricing_model',
   };
 
+  var SIMPLE_TYPE_I18N = {
+    content: 'kg_simple_type_content',
+    client: 'kg_simple_type_client',
+    client_label: 'kg_simple_type_client_label',
+    industry: 'kg_simple_type_industry',
+    tag: 'kg_simple_type_tag',
+    stage: 'kg_simple_type_stage',
+    pricing_model: 'kg_simple_type_pricing_model',
+  };
+
+  var SIMPLE_REL_I18N = {
+    belongs_to: 'kg_simple_rel_belongs_to',
+    in_industry: 'kg_simple_rel_in_industry',
+    tagged_with: 'kg_simple_rel_tagged_with',
+    has_stage: 'kg_simple_rel_has_stage',
+    has_pricing_model: 'kg_simple_rel_has_pricing_model',
+    related_content: 'kg_simple_rel_related_content',
+  };
+
+  var ENTITY_DESC_I18N = {
+    content: 'kg_entity_desc_content',
+    client: 'kg_entity_desc_client',
+    client_label: 'kg_entity_desc_client_label',
+    industry: 'kg_entity_desc_industry',
+    tag: 'kg_entity_desc_tag',
+    stage: 'kg_entity_desc_stage',
+    pricing_model: 'kg_entity_desc_pricing_model',
+  };
+
+  var ENTITY_REL_DESC_I18N = {
+    belongs_to: 'kg_entity_rel_desc_belongs_to',
+    in_industry: 'kg_entity_rel_desc_in_industry',
+    tagged_with: 'kg_entity_rel_desc_tagged_with',
+    has_stage: 'kg_entity_rel_desc_has_stage',
+    has_pricing_model: 'kg_entity_rel_desc_has_pricing_model',
+    related_content: 'kg_entity_rel_desc_related_content',
+  };
+
+  var ENTITY_NODE_ORDER = [
+    'content',
+    'client',
+    'client_label',
+    'industry',
+    'tag',
+    'stage',
+    'pricing_model',
+  ];
+
+  var ENTITY_REL_ORDER = [
+    'belongs_to',
+    'tagged_with',
+    'in_industry',
+    'related_content',
+    'has_stage',
+    'has_pricing_model',
+  ];
+
+  var ENTITY_ICON = {
+    content: 'fa-file-lines',
+    client: 'fa-building',
+    client_label: 'fa-user-tag',
+    industry: 'fa-industry',
+    tag: 'fa-hashtag',
+    stage: 'fa-layer-group',
+    pricing_model: 'fa-coins',
+  };
+
+  var KG_DEFAULT_MAX_NODES = 150;
+  var KG_DEFAULT_MAX_DEPTH = 4;
+  var kgLoadingPulseTimer = null;
+  var kgLoaderStartedAt = 0;
+  var kgPendingSyncProgress = null;
+  var KG_LOAD_STEPS = [
+    {
+      step: 1,
+      total: 4,
+      titleKey: 'kg_loader_step1_title',
+      msgKey: 'kg_busy_step_server',
+      whyKey: 'kg_loader_step1_why',
+      etaKey: 'kg_loader_step1_eta',
+    },
+    {
+      step: 2,
+      total: 4,
+      titleKey: 'kg_loader_step2_title',
+      msgKey: 'kg_busy_step_nodes_db',
+      whyKey: 'kg_loader_step2_why',
+      etaKey: 'kg_loader_step2_eta',
+    },
+    {
+      step: 3,
+      total: 4,
+      titleKey: 'kg_loader_step3_title',
+      msgKey: 'kg_busy_step_edges_db',
+      whyKey: 'kg_loader_step3_why',
+      etaKey: 'kg_loader_step3_eta',
+    },
+    {
+      step: 4,
+      total: 4,
+      titleKey: 'kg_loader_step4_title',
+      msgKey: 'kg_busy_step_bfs',
+      whyKey: 'kg_loader_step4_why',
+      etaKey: 'kg_loader_step4_eta',
+    },
+  ];
+  var KG_REBUILD_PHASES_ORDER = [
+    'contents',
+    'clients',
+    'salesforce',
+    'stale',
+    'prune',
+  ];
+
   function kgSetStatus(msg, isErr) {
     if (!statusEl) return;
     statusEl.textContent = msg || '\u00a0';
     statusEl.classList.toggle('text-red-600', !!isErr);
     statusEl.classList.toggle('dark:text-red-400', !!isErr);
     statusEl.classList.toggle('text-slate-600', !isErr);
+  }
+
+  function kgSetGraphLoader_(opts) {
+    opts = opts || {};
+    if (graphLoaderStep) {
+      graphLoaderStep.textContent =
+        opts.step != null && opts.stepTotal != null
+          ? i18nFmt('kg_loader_step_fmt', {
+              step: String(opts.step),
+              total: String(opts.stepTotal),
+            })
+          : opts.stepText || '';
+    }
+    if (graphLoaderTitle) {
+      graphLoaderTitle.textContent = opts.titleKey
+        ? i18n(opts.titleKey)
+        : opts.title || '';
+    }
+    if (graphLoaderMsg) {
+      if (opts.msgKey) {
+        graphLoaderMsg.textContent = opts.fmtArgs
+          ? i18nFmt(opts.msgKey, opts.fmtArgs)
+          : i18n(opts.msgKey);
+      } else {
+        graphLoaderMsg.textContent = opts.message || '';
+      }
+    }
+    if (graphLoaderWhy) {
+      graphLoaderWhy.textContent = opts.whyKey
+        ? i18n(opts.whyKey)
+        : opts.why || '';
+    }
+    if (graphLoaderEta) {
+      graphLoaderEta.textContent = opts.etaKey
+        ? i18n(opts.etaKey)
+        : opts.eta || '';
+    }
+  }
+
+  function kgShowGraphLoader(msgKey, fmtArgs) {
+    kgSetGraphLoader_({ msgKey: msgKey, fmtArgs: fmtArgs });
+    if (graphLoaderHideTimer) {
+      clearTimeout(graphLoaderHideTimer);
+      graphLoaderHideTimer = null;
+    }
+    if (!graphLoaderEl) return;
+    graphLoaderEl.classList.remove('hidden');
+    graphLoaderEl.setAttribute('aria-busy', 'true');
+    requestAnimationFrame(function () {
+      graphLoaderEl.classList.add('is-visible');
+    });
+  }
+
+  function kgHideGraphLoader() {
+    if (!graphLoaderEl) return;
+    graphLoaderEl.classList.remove('is-visible');
+    graphLoaderEl.setAttribute('aria-busy', 'false');
+    graphLoaderHideTimer = setTimeout(function () {
+      graphLoaderEl.classList.add('hidden');
+      kgSetGraphLoader_({});
+      graphLoaderHideTimer = null;
+    }, 520);
+  }
+
+  function kgShowGraphLoaderComplete_() {
+    kgSetGraphLoader_({
+      step: 4,
+      stepTotal: 4,
+      titleKey: 'kg_loader_done_title',
+      msgKey: 'kg_loader_done_msg',
+      whyKey: 'kg_loader_done_why',
+      etaKey: 'kg_loader_done_eta',
+    });
+    kgSetStatus(i18n('kg_loader_done_status'));
+  }
+
+  function kgStopLoadingPulse_() {
+    if (kgLoadingPulseTimer) {
+      clearInterval(kgLoadingPulseTimer);
+      kgLoadingPulseTimer = null;
+    }
+  }
+
+  function kgDescribeFiltersBrief_() {
+    var parts = [];
+    if (filterClient && filterClient.value) {
+      var cLabel = filterClient.options[filterClient.selectedIndex];
+      parts.push(
+        i18nFmt('kg_loading_filter_client', {
+          name: String((cLabel && cLabel.textContent) || filterClient.value),
+        }),
+      );
+    }
+    if (filterIndustry && filterIndustry.value) {
+      parts.push(
+        i18nFmt('kg_loading_filter_industry', {
+          name: String(filterIndustry.value),
+        }),
+      );
+    }
+    if (filterType && filterType.value) {
+      parts.push(
+        i18nFmt('kg_loading_filter_type', {
+          name: String(filterType.value),
+        }),
+      );
+    }
+    if (filterSearch && String(filterSearch.value || '').trim()) {
+      parts.push(
+        i18nFmt('kg_loading_filter_search', {
+          q: String(filterSearch.value || '').trim(),
+        }),
+      );
+    }
+    var lim = kgResolveLimits_();
+    var depthVal = filterDepth
+      ? String(filterDepth.value || lim.bfsDepthDefault)
+      : String(lim.bfsDepthDefault);
+    var densityVal = filterDensity
+      ? String(filterDensity.value || lim.densityNormal)
+      : String(lim.densityNormal);
+    parts.push(
+      i18nFmt('kg_loading_filter_depth', { depth: depthVal, max: String(lim.bfsDepthCap) }),
+    );
+    parts.push(i18nFmt('kg_loading_filter_nodes', { max: densityVal }));
+    if (S.get('kgFocusMode') && selectedNodeId) {
+      parts.push(i18n('kg_loading_filter_focus'));
+    }
+    return parts.length ? parts.join(' · ') : i18n('kg_loading_filter_all');
+  }
+
+  function kgApplyLoadStep_(stepDef, extraFmt) {
+    if (!stepDef) return;
+    var fmt = extraFmt || {};
+    kgSetGraphLoader_({
+      step: stepDef.step,
+      stepTotal: stepDef.total,
+      titleKey: stepDef.titleKey,
+      msgKey: stepDef.msgKey,
+      whyKey: stepDef.whyKey,
+      etaKey: stepDef.etaKey,
+      fmtArgs: fmt,
+    });
+    if (!graphLoaderEl) return;
+    graphLoaderEl.classList.remove('hidden');
+    graphLoaderEl.setAttribute('aria-busy', 'true');
+    graphLoaderEl.classList.add('is-visible');
+  }
+
+  function kgStartLoadingPulse_(filterSummary) {
+    kgStopLoadingPulse_();
+    kgLoaderStartedAt = Date.now();
+    var pulseIdx = 0;
+    var fmt = { filters: filterSummary };
+    kgApplyLoadStep_(KG_LOAD_STEPS[0], fmt);
+    if (graphLoaderMsg && filterSummary) {
+      graphLoaderMsg.textContent = i18nFmt('kg_busy_loading_filters_fmt', fmt);
+    }
+    kgLoadingPulseTimer = setInterval(function () {
+      if (!loading) {
+        kgStopLoadingPulse_();
+        return;
+      }
+      pulseIdx = (pulseIdx + 1) % KG_LOAD_STEPS.length;
+      kgApplyLoadStep_(KG_LOAD_STEPS[pulseIdx], fmt);
+    }, 2400);
   }
 
   function kgSetControlsDisabled(disabled) {
@@ -83,30 +624,499 @@
     if (filterIndustry) filterIndustry.disabled = d;
     if (filterClient) filterClient.disabled = d;
     if (filterDepth) filterDepth.disabled = d;
+    if (filterDensity) filterDensity.disabled = d;
+    if (layoutModeEl) layoutModeEl.disabled = d;
+    if (showLabelsEl) showLabelsEl.disabled = d;
+    if (fitBtn) fitBtn.disabled = d;
+    if (zoomInBtn) zoomInBtn.disabled = d;
+    if (zoomOutBtn) zoomOutBtn.disabled = d;
+    if (graphFindInput) graphFindInput.disabled = d;
+    if (graphFindPrev) graphFindPrev.disabled = d;
+    if (graphFindNext) graphFindNext.disabled = d;
+    if (nodeListFilter) nodeListFilter.disabled = d;
     var ti;
     for (ti = 0; ti < typeToggles.length; ti++) {
       typeToggles[ti].disabled = d;
     }
   }
 
-  function kgBuildLegend() {
-    if (!legendList) return;
-    legendList.innerHTML = '';
-    var types = ['content', 'client', 'industry', 'tag', 'stage', 'pricing_model'];
+  function kgReapplyGraphView_() {
+    if (lastSnapshot) kgRenderGraph(lastSnapshot);
+  }
+
+  function kgNormalizeText_(s) {
+    return String(s || '')
+      .trim()
+      .toLowerCase();
+  }
+
+  function kgSyncNodeListSelection_() {
+    if (!nodeListEl) return;
+    var items = nodeListEl.querySelectorAll('.kg-node-list-item');
     var i;
-    for (i = 0; i < types.length; i++) {
-      var t = types[i];
-      var li = document.createElement('li');
-      li.className = 'flex items-center gap-2';
-      var dot = document.createElement('span');
-      dot.className = 'kg-legend-dot inline-block h-2.5 w-2.5 shrink-0 rounded-full';
-      dot.style.backgroundColor = NODE_COLORS[t] || '#94a3b8';
-      var lbl = document.createElement('span');
-      lbl.textContent = i18n(TYPE_I18N[t] || t);
-      li.appendChild(dot);
-      li.appendChild(lbl);
-      legendList.appendChild(li);
+    for (i = 0; i < items.length; i++) {
+      var el = items[i];
+      var nid = String(el.getAttribute('data-kg-node-id') || '');
+      var sel = nid === selectedNodeId;
+      el.setAttribute('aria-selected', sel ? 'true' : 'false');
+      if (sel) {
+        try {
+          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } catch (eScroll) {}
+      }
     }
+  }
+
+  function kgFocusNode_(nodeId, opts) {
+    opts = opts || {};
+    if (!nodeId || !nodeById[nodeId]) return false;
+    selectedNodeId = nodeId;
+    kgUpdateDetail(nodeById[nodeId]);
+    kgSyncNodeListSelection_();
+    if (!network) return true;
+    try {
+      network.selectNodes([nodeId]);
+      network.focus(nodeId, {
+        scale: opts.zoom != null ? opts.zoom : 1.22,
+        animation: { duration: 350, easingFunction: 'easeInOutQuad' },
+      });
+      kgHighlightNeighborhood_(nodeId);
+    } catch (eFocusNode) {}
+    return true;
+  }
+
+  function kgUpdateFindStatus_() {
+    if (!graphFindStatus) return;
+    if (!findMatchIds.length) {
+      graphFindStatus.textContent = findQuery
+        ? i18n('kg_graph_find_no_match')
+        : '';
+      return;
+    }
+    if (findMatchIndex < 0) {
+      graphFindStatus.textContent = i18nFmt('kg_graph_find_total', {
+        total: String(findMatchIds.length),
+      });
+      return;
+    }
+    graphFindStatus.textContent = i18nFmt('kg_graph_find_match', {
+      current: String(findMatchIndex + 1),
+      total: String(findMatchIds.length),
+    });
+  }
+
+  function kgRefreshFindMatches_() {
+    findMatchIds = [];
+    findQuery = graphFindInput ? kgNormalizeText_(graphFindInput.value) : '';
+    if (!findQuery || !lastSnapshot) {
+      findMatchIndex = -1;
+      kgUpdateFindStatus_();
+      return;
+    }
+    var nodes = lastSnapshot.nodes || [];
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var label = kgNormalizeText_(n.label);
+      var id = kgNormalizeText_(n.id);
+      if (label.indexOf(findQuery) >= 0 || id.indexOf(findQuery) >= 0) {
+        findMatchIds.push(n.id);
+      }
+    }
+    findMatchIds.sort(function (a, b) {
+      var na = nodeById[a];
+      var nb = nodeById[b];
+      var ta = TYPE_SORT_ORDER[String((na && na.type) || '')] != null
+        ? TYPE_SORT_ORDER[String(na.type)]
+        : 99;
+      var tb = TYPE_SORT_ORDER[String((nb && nb.type) || '')] != null
+        ? TYPE_SORT_ORDER[String(nb.type)]
+        : 99;
+      if (ta !== tb) return ta - tb;
+      var la = String((na && na.label) || a);
+      var lb = String((nb && nb.label) || b);
+      return la.localeCompare(lb);
+    });
+    if (findMatchIndex >= findMatchIds.length) findMatchIndex = -1;
+    kgUpdateFindStatus_();
+  }
+
+  function kgFindGo_(delta) {
+    kgRefreshFindMatches_();
+    if (!findMatchIds.length) return;
+    if (findMatchIndex < 0) findMatchIndex = delta >= 0 ? 0 : findMatchIds.length - 1;
+    else findMatchIndex = (findMatchIndex + delta + findMatchIds.length) % findMatchIds.length;
+    kgFocusNode_(findMatchIds[findMatchIndex], { zoom: 1.35 });
+    kgUpdateFindStatus_();
+  }
+
+  function kgBuildNodeList_() {
+    if (!nodeListEl) return;
+    nodeListEl.innerHTML = '';
+    var nodes = (lastSnapshot && lastSnapshot.nodes) || [];
+    var listQ = nodeListFilter ? kgNormalizeText_(nodeListFilter.value) : '';
+    var sorted = nodes.slice();
+    sorted.sort(function (a, b) {
+      var ta = TYPE_SORT_ORDER[String(a.type || '')];
+      var tb = TYPE_SORT_ORDER[String(b.type || '')];
+      ta = ta != null ? ta : 99;
+      tb = tb != null ? tb : 99;
+      if (ta !== tb) return ta - tb;
+      return String(a.label || a.id || '').localeCompare(String(b.label || b.id || ''));
+    });
+    var shown = 0;
+    var i;
+    for (i = 0; i < sorted.length; i++) {
+      var n = sorted[i];
+      var label = String(n.label || n.id || '');
+      if (listQ && kgNormalizeText_(label).indexOf(listQ) < 0 && kgNormalizeText_(n.id).indexOf(listQ) < 0) {
+        continue;
+      }
+      shown += 1;
+      var nt = String(n.type || '');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'kg-node-list-item';
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('data-kg-node-id', n.id);
+      btn.setAttribute('aria-selected', n.id === selectedNodeId ? 'true' : 'false');
+      var dot = document.createElement('span');
+      dot.className = 'kg-node-list-dot';
+      dot.style.backgroundColor = NODE_COLORS[nt] || '#94a3b8';
+      dot.setAttribute('aria-hidden', 'true');
+      var lbl = document.createElement('span');
+      lbl.className = 'min-w-0 flex-1 truncate';
+      lbl.textContent = label;
+      var typ = document.createElement('span');
+      typ.className = 'kg-node-list-type';
+      typ.textContent = i18n(TYPE_I18N[nt] || nt);
+      btn.appendChild(dot);
+      btn.appendChild(lbl);
+      btn.appendChild(typ);
+      btn.addEventListener('click', function () {
+        var nid = String(btn.getAttribute('data-kg-node-id') || '');
+        selectedNodeId = nid;
+        kgUpdateDetail(nodeById[nid] || null);
+        kgSyncNodeListSelection_();
+        kgFocusNode_(nid, { zoom: 1.3 });
+        kgOpenSidePanel_('detail');
+      });
+      nodeListEl.appendChild(btn);
+    }
+    if (nodeListEmpty) {
+      nodeListEmpty.classList.toggle('hidden', shown > 0 || !nodes.length);
+    }
+    if (!shown && nodes.length && nodeListEmpty) {
+      nodeListEmpty.classList.remove('hidden');
+    }
+    kgSyncNodeListSelection_();
+  }
+
+  function kgResetFind_() {
+    findMatchIds = [];
+    findMatchIndex = -1;
+    findQuery = '';
+    if (graphFindInput) graphFindInput.value = '';
+    kgUpdateFindStatus_();
+  }
+
+  function kgIsDarkTheme_() {
+    return (
+      document.documentElement.getAttribute('data-theme') === 'dark' ||
+      document.documentElement.classList.contains('dark')
+    );
+  }
+
+  function kgLegendShapeClass_(type) {
+    var shapeCfg = NODE_SHAPES[type] || { shape: 'dot' };
+    if (shapeCfg.shape === 'box') return 'kg-legend-shape kg-legend-shape--box';
+    if (shapeCfg.shape === 'diamond') return 'kg-legend-shape kg-legend-shape--diamond';
+    if (shapeCfg.shape === 'ellipse') return 'kg-legend-shape kg-legend-shape--ellipse';
+    return 'kg-legend-shape kg-legend-shape--dot';
+  }
+
+  function kgGetDepth_() {
+    return filterDepth ? parseInt(String(filterDepth.value || '2'), 10) : 2;
+  }
+
+  function kgUpdateScopeIndicator_(res) {
+    var depth = kgGetDepth_();
+    var stats = (res && res.stats) || {};
+    var shown = stats.selectedNodes || (res && res.nodes && res.nodes.length) || 0;
+    var edgeCount = stats.selectedEdges || (res && res.edges && res.edges.length) || 0;
+    var maxNodes = stats.maxNodes || KG_DEFAULT_MAX_NODES;
+    var maxDepth = stats.maxDepth || KG_DEFAULT_MAX_DEPTH;
+    var truncated = !!(res && res.truncated);
+
+    if (depthMeterEl) {
+      depthMeterEl.innerHTML = '';
+      if (depthMeterAria) {
+        depthMeterAria.textContent = i18nFmt('kg_depth_meter_live', {
+          depth: String(depth),
+          max: String(maxDepth),
+        });
+        depthMeterEl.appendChild(depthMeterAria);
+      }
+      var d;
+      for (d = 1; d <= maxDepth; d++) {
+        var dot = document.createElement('span');
+        dot.className = 'kg-depth-dot' + (d <= depth ? ' kg-depth-dot--on' : '');
+        dot.setAttribute('aria-hidden', 'true');
+        depthMeterEl.appendChild(dot);
+      }
+    }
+
+    if (scopeSummary) {
+      scopeSummary.textContent = i18nFmt('kg_scope_summary', {
+        depth: String(depth),
+        maxDepth: String(maxDepth),
+        shown: String(shown),
+        maxNodes: String(maxNodes),
+      });
+    }
+    if (scopeTruncated) {
+      scopeTruncated.classList.toggle('hidden', !truncated);
+    }
+  }
+
+  function kgBuildLegend() {
+    if (legendList) {
+      legendList.innerHTML = '';
+      var types = [
+        'content',
+        'client',
+        'industry',
+        'tag',
+        'stage',
+        'pricing_model',
+      ];
+      var i;
+      for (i = 0; i < types.length; i++) {
+        var t = types[i];
+        var li = document.createElement('li');
+        li.className = 'kg-legend-item flex items-start gap-2';
+        var mark = document.createElement('span');
+        mark.className = kgLegendShapeClass_(t);
+        mark.style.backgroundColor = NODE_COLORS[t] || '#94a3b8';
+        mark.setAttribute('aria-hidden', 'true');
+        var lbl = document.createElement('span');
+        lbl.textContent = i18n(SIMPLE_TYPE_I18N[t] || SIMPLE_TYPE_I18N.content);
+        li.appendChild(mark);
+        li.appendChild(lbl);
+        legendList.appendChild(li);
+      }
+    }
+    if (!legendEdges) return;
+    legendEdges.innerHTML = '';
+    var relKeys = [
+      'belongs_to',
+      'tagged_with',
+      'in_industry',
+      'related_content',
+      'has_stage',
+      'has_pricing_model',
+    ];
+    var ri;
+    for (ri = 0; ri < relKeys.length; ri++) {
+      var rk = relKeys[ri];
+      var liE = document.createElement('li');
+      liE.className = 'kg-legend-item flex items-start gap-2';
+      var line = document.createElement('span');
+      line.className = 'kg-legend-edge mt-1.5';
+      line.style.backgroundColor = EDGE_COLORS[rk] || '#94a3b8';
+      if (rk === 'related_content') {
+        line.style.background =
+          'repeating-linear-gradient(90deg,' +
+          (EDGE_COLORS[rk] || '#0284c7') +
+          ' 0 4px, transparent 4px 8px)';
+      }
+      var lblE = document.createElement('span');
+      lblE.textContent = i18n(SIMPLE_REL_I18N[rk] || rk);
+      liE.appendChild(line);
+      liE.appendChild(lblE);
+      legendEdges.appendChild(liE);
+    }
+  }
+
+  function kgUpdateGraphStats_(nodeCount, edgeCount) {
+    if (!graphStatsEl) return;
+    graphStatsEl.textContent = i18nFmt('kg_graph_stats', {
+      nodes: String(nodeCount || 0),
+      edges: String(edgeCount || 0),
+    });
+  }
+
+  function kgShowLabels_() {
+    return !showLabelsEl || !!showLabelsEl.checked;
+  }
+
+  function kgResolveLayoutMode_() {
+    var mode = layoutModeEl ? String(layoutModeEl.value || 'auto') : 'auto';
+    if (mode !== 'auto') return mode;
+    if (filterClient && String(filterClient.value || '').trim()) return 'hierarchical';
+    return 'force';
+  }
+
+  function kgBuildVisOptions_(layoutMode, dark) {
+    var showLabels = kgShowLabels_();
+    var base = {
+      nodes: {
+        borderWidth: 2,
+        shadow: dark
+          ? false
+          : { enabled: true, size: 6, x: 1, y: 2, color: 'rgba(15,23,42,0.12)' },
+        font: {
+          size: showLabels ? 11 : 0,
+          face: 'Inter, system-ui, sans-serif',
+          color: dark ? '#e2e8f0' : '#0f172a',
+          strokeWidth: dark ? 0 : 2,
+          strokeColor: dark ? 'transparent' : '#f8fafc',
+        },
+        scaling: { min: 10, max: 28 },
+      },
+      edges: {
+        width: 1.5,
+        smooth: { type: 'dynamic', roundness: 0.35 },
+        shadow: dark ? false : { enabled: true, size: 3, x: 0, y: 1, color: 'rgba(15,23,42,0.08)' },
+      },
+      interaction: {
+        hover: true,
+        tooltipDelay: 120,
+        hideEdgesOnDrag: true,
+        hideEdgesOnZoom: true,
+        navigationButtons: true,
+        keyboard: { enabled: true, bindToWindow: false },
+        zoomView: true,
+      },
+      layout: { improvedLayout: true },
+    };
+
+    if (layoutMode === 'hierarchical') {
+      base.layout = {
+        hierarchical: {
+          enabled: true,
+          direction: 'UD',
+          sortMethod: 'hubsize',
+          levelSeparation: 110,
+          nodeSpacing: 140,
+          treeSpacing: 180,
+        },
+      };
+      base.physics = { enabled: false };
+      return base;
+    }
+
+    var nodeCount =
+      lastSnapshot && lastSnapshot.nodes ? lastSnapshot.nodes.length : 150;
+    var stabIter = nodeCount > 100 ? 80 : nodeCount > 60 ? 120 : 180;
+    base.physics = {
+      enabled: true,
+      stabilization: { iterations: stabIter, fit: true },
+      barnesHut: {
+        gravitationalConstant: -5200,
+        centralGravity: 0.22,
+        springLength: 140,
+        springConstant: 0.045,
+        damping: 0.12,
+      },
+    };
+    return base;
+  }
+
+  // Tracking de nodos/aristas que fueron dimmed para reset selectivo
+  var highlightedNodeIds = null;
+  var highlightedEdgeIds = null;
+
+  function kgResetHighlight_() {
+    if (!network) return;
+    try {
+      // Reset parcial: solo los ids que se modificaron en el último highlight
+      var updN = [];
+      var updE = [];
+      var i;
+      if (highlightedNodeIds) {
+        for (i = 0; i < highlightedNodeIds.length; i++) {
+          updN.push({ id: highlightedNodeIds[i], opacity: 1 });
+        }
+      } else {
+        // Fallback completo (primera vez o tras kgDestroyNetwork)
+        var allIds = network.body.data.nodes.getIds();
+        for (i = 0; i < allIds.length; i++) updN.push({ id: allIds[i], opacity: 1 });
+      }
+      if (updN.length) network.body.data.nodes.update(updN);
+
+      if (highlightedEdgeIds) {
+        for (i = 0; i < highlightedEdgeIds.length; i++) {
+          updE.push({ id: highlightedEdgeIds[i], opacity: 1 });
+        }
+      } else {
+        var allEids = network.body.data.edges.getIds();
+        for (i = 0; i < allEids.length; i++) updE.push({ id: allEids[i], opacity: 1 });
+      }
+      if (updE.length) network.body.data.edges.update(updE);
+    } catch (eReset) {}
+    highlightedNodeIds = null;
+    highlightedEdgeIds = null;
+  }
+
+  function kgHighlightNeighborhood_(nodeId) {
+    if (!network || !nodeId) return;
+    var connected = network.getConnectedNodes(nodeId);
+    var connSet = {};
+    var ci;
+    for (ci = 0; ci < connected.length; ci++) connSet[connected[ci]] = true;
+    connSet[nodeId] = true;
+
+    var ids = network.body.data.nodes.getIds();
+    var updN = [];
+    var dimmedNodes = [];
+    for (ci = 0; ci < ids.length; ci++) {
+      if (connSet[ids[ci]]) {
+        updN.push({ id: ids[ci], opacity: 1 });
+      } else {
+        updN.push({ id: ids[ci], opacity: 0.15 });
+        dimmedNodes.push(ids[ci]);
+      }
+    }
+    network.body.data.nodes.update(updN);
+    // Guardar solo los dimmed para reset eficiente
+    highlightedNodeIds = dimmedNodes;
+
+    var eids = network.body.data.edges.getIds();
+    var updE = [];
+    var dimmedEdges = [];
+    for (ci = 0; ci < eids.length; ci++) {
+      var e = network.body.data.edges.get(eids[ci]);
+      var onPath = e && connSet[String(e.from)] && connSet[String(e.to)];
+      if (onPath) {
+        updE.push({ id: eids[ci], opacity: 1 });
+      } else {
+        updE.push({ id: eids[ci], opacity: 0.08 });
+        dimmedEdges.push(eids[ci]);
+      }
+    }
+    network.body.data.edges.update(updE);
+    highlightedEdgeIds = dimmedEdges;
+  }
+
+  function kgFitView_() {
+    if (!network) return;
+    try {
+      network.fit({
+        animation: { duration: 450, easingFunction: 'easeInOutQuad' },
+      });
+    } catch (eFit) {}
+  }
+
+  function kgZoomBy_(factor) {
+    if (!network) return;
+    try {
+      var scale = network.getScale() * factor;
+      network.moveTo({
+        scale: Math.max(0.12, Math.min(2.8, scale)),
+        animation: { duration: 200, easingFunction: 'easeInOutQuad' },
+      });
+    } catch (eZoom) {}
   }
 
   function kgGetAllowedNodeTypes() {
@@ -129,7 +1139,9 @@
       searchQuery: filterSearch ? String(filterSearch.value || '').trim() : '',
       depth: filterDepth ? parseInt(String(filterDepth.value || '2'), 10) : 2,
       centerNodeId: selectedNodeId && S.get('kgFocusMode') ? selectedNodeId : '',
-      maxNodes: 150,
+      maxNodes: filterDensity
+        ? parseInt(String(filterDensity.value || String(kgResolveLimits_().densityNormal)), 10)
+        : kgResolveLimits_().densityNormal,
       allowedNodeTypes: kgGetAllowedNodeTypes(),
     };
   }
@@ -150,6 +1162,8 @@
       } catch (eDestroy) {}
       network = null;
     }
+    highlightedNodeIds = null;
+    highlightedEdgeIds = null;
     if (canvasEl) canvasEl.innerHTML = '';
   }
 
@@ -159,7 +1173,8 @@
       return;
     }
     if (!visHost) {
-      cb();
+      kgHideGraphLoader();
+      kgSetStatus(i18n('kg_error_vis_lib'), true);
       return;
     }
     if (visLoading) {
@@ -172,12 +1187,17 @@
       return;
     }
     visLoading = true;
+    kgShowGraphLoader('kg_busy_vis');
     kgSetStatus(i18n('kg_busy_vis'));
     var scripts = visHost.querySelectorAll('script');
     var pending = scripts.length;
     if (!pending) {
       visLoading = false;
-      cb();
+      if (typeof vis !== 'undefined' && vis.Network) cb();
+      else {
+        kgHideGraphLoader();
+        kgSetStatus(i18n('kg_error_vis_lib'), true);
+      }
       return;
     }
     var si;
@@ -194,7 +1214,11 @@
           pending -= 1;
           if (pending <= 0) {
             visLoading = false;
-            cb();
+            if (typeof vis !== 'undefined' && vis.Network) cb();
+            else {
+              kgHideGraphLoader();
+              kgSetStatus(i18n('kg_error_vis_lib'), true);
+            }
           }
         };
         s.onload = doneOne;
@@ -210,37 +1234,67 @@
 
   function kgRenderGraph(data) {
     kgDestroyNetwork();
+    kgResetHighlight_();
     var nodes = (data && data.nodes) || [];
     var edges = (data && data.edges) || [];
+    kgUpdateGraphStats_(nodes.length, edges.length);
     if (!nodes.length) {
+      kgHideGraphLoader();
       if (canvasEl) canvasEl.classList.add('hidden');
       if (emptyEl) emptyEl.classList.remove('hidden');
+      kgBuildNodeList_();
       return;
     }
     if (canvasEl) canvasEl.classList.remove('hidden');
     if (emptyEl) emptyEl.classList.add('hidden');
+    kgSetGraphLoader_({
+      step: 1,
+      stepTotal: 1,
+      titleKey: 'kg_loader_render_title',
+      msgKey: 'kg_busy_render',
+      whyKey: 'kg_loader_render_why',
+      etaKey: 'kg_loader_render_eta',
+    });
+    if (graphLoaderEl) {
+      graphLoaderEl.classList.remove('hidden');
+      graphLoaderEl.classList.add('is-visible');
+      graphLoaderEl.setAttribute('aria-busy', 'true');
+    }
+    kgSetStatus(i18n('kg_busy_render'));
 
     kgEnsureVis_(function () {
       if (typeof vis === 'undefined' || !vis.Network) {
+        kgHideGraphLoader();
         kgSetStatus(i18n('kg_error_load'), true);
         return;
       }
+
+      var dark = kgIsDarkTheme_();
+      var showLabels = kgShowLabels_();
+      var layoutMode = kgResolveLayoutMode_();
+      var borderDefault = dark ? '#475569' : '#334155';
+      var borderHighlight = dark ? '#f8fafc' : '#0f172a';
 
       var visNodes = [];
       var ni;
       for (ni = 0; ni < nodes.length; ni++) {
         var n = nodes[ni];
         var nt = String(n.type || '');
+        var fill = NODE_COLORS[nt] || '#64748b';
+        var shapeCfg = NODE_SHAPES[nt] || { shape: 'dot', size: 16 };
+        var fullLabel = String(n.label || n.id || '');
         visNodes.push({
           id: n.id,
-          label: String(n.label || n.id).slice(0, 48),
-          title: String(n.label || ''),
+          label: showLabels ? fullLabel.slice(0, 42) : '',
+          title: fullLabel,
+          shape: shapeCfg.shape,
+          size: shapeCfg.size,
           color: {
-            background: NODE_COLORS[nt] || '#64748b',
-            border: '#334155',
-            highlight: { background: NODE_COLORS[nt] || '#64748b', border: '#0f172a' },
+            background: fill,
+            border: borderDefault,
+            highlight: { background: fill, border: borderHighlight },
+            hover: { background: fill, border: borderHighlight },
           },
-          font: { color: '#0f172a', size: 12 },
         });
       }
 
@@ -248,35 +1302,28 @@
       var ei;
       for (ei = 0; ei < edges.length; ei++) {
         var e = edges[ei];
-        var relKey = REL_I18N[e.relation] || e.relation;
+        var rel = String(e.relation || '');
+        var relI18nKey = REL_I18N[rel] || rel;
+        var edgeColor = EDGE_COLORS[rel] || '#94a3b8';
         visEdges.push({
-          id: e.id || e.source + '-' + e.target + '-' + e.relation,
+          id: e.id || e.source + '-' + e.target + '-' + rel,
           from: e.source,
           to: e.target,
-          title: i18n(relKey),
-          arrows: 'to',
-          color: { color: '#94a3b8', highlight: '#0ea5e9' },
+          title: i18n(relI18nKey),
+          arrows: { to: { enabled: true, scaleFactor: 0.65 } },
+          color: {
+            color: edgeColor,
+            highlight: edgeColor,
+            hover: edgeColor,
+            opacity: 0.88,
+          },
+          dashes: rel === 'related_content',
+          width: rel === 'belongs_to' || rel === 'related_content' ? 2 : 1.5,
         });
       }
 
-      var dark =
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.documentElement.classList.contains('dark');
-      if (dark) {
-        for (ni = 0; ni < visNodes.length; ni++) {
-          visNodes[ni].font = { color: '#e2e8f0', size: 12 };
-        }
-      }
-
-      var options = {
-        nodes: { shape: 'dot', size: 14, borderWidth: 1 },
-        edges: { width: 1, smooth: { type: 'continuous' } },
-        physics: {
-          enabled: true,
-          stabilization: { iterations: 120 },
-        },
-        interaction: { hover: true, tooltipDelay: 150 },
-      };
+      var options = kgBuildVisOptions_(layoutMode, dark);
+      var stabilized = false;
 
       network = new vis.Network(
         canvasEl,
@@ -285,6 +1332,7 @@
       );
 
       network.on('click', function (params) {
+        kgResetHighlight_();
         if (!params.nodes || !params.nodes.length) {
           selectedNodeId = '';
           kgUpdateDetail(null);
@@ -292,12 +1340,64 @@
         }
         selectedNodeId = params.nodes[0];
         kgUpdateDetail(nodeById[selectedNodeId] || null);
+        kgSyncNodeListSelection_();
+        kgOpenSidePanel_('detail');
       });
+
+      network.on('hoverNode', function (params) {
+        kgHighlightNeighborhood_(params.node);
+      });
+      network.on('blurNode', function () {
+        kgResetHighlight_();
+      });
+
+      network.on('doubleClick', function (params) {
+        if (!params.nodes || !params.nodes.length) return;
+        var nid = params.nodes[0];
+        kgFocusNode_(nid, { zoom: 1.28 });
+      });
+
+      network.on('stabilizationIterationsDone', function () {
+        if (stabilized) return;
+        stabilized = true;
+        try {
+          network.setOptions({ physics: false });
+        } catch (ePhysOff) {}
+        kgFitView_();
+        kgShowGraphLoaderComplete_();
+        setTimeout(function () {
+          kgHideGraphLoader();
+        }, 900);
+      });
+
+      if (layoutMode === 'hierarchical') {
+        setTimeout(function () {
+          if (!stabilized) {
+            stabilized = true;
+            kgFitView_();
+            kgShowGraphLoaderComplete_();
+            setTimeout(function () {
+              kgHideGraphLoader();
+            }, 900);
+          }
+        }, 120);
+      }
+
+      // Fallback: si la estabilización no dispara (grafo chico o layout sin física)
+      setTimeout(function () {
+        if (!stabilized) {
+          stabilized = true;
+          kgShowGraphLoaderComplete_();
+          setTimeout(function () {
+            kgHideGraphLoader();
+          }, 900);
+        }
+      }, 6000);
 
       if (selectedNodeId && nodeById[selectedNodeId]) {
         try {
           network.selectNodes([selectedNodeId]);
-          network.focus(selectedNodeId, { scale: 1.1, animation: true });
+          network.focus(selectedNodeId, { scale: 1.15, animation: true });
         } catch (eFocus) {}
       }
     });
@@ -382,41 +1482,113 @@
     }
   }
 
+  function kgApplySnapshot_(res) {
+    lastSnapshot = res;
+    S.set('kgLastSnapshot', res);
+    kgIndexSnapshot(res);
+    kgRenderGraph(res);
+    kgBuildNodeList_();
+    kgRefreshFindMatches_();
+    kgUpdateScopeIndicator_(res);
+    var msg = '';
+    if (res.truncated) {
+      msg = i18nFmt('kg_truncated', {
+        shown: String((res.stats && res.stats.selectedNodes) || res.nodes.length),
+        max: String((res.stats && res.stats.maxNodes) || KG_DEFAULT_MAX_NODES),
+      });
+    }
+    kgSetStatus(msg);
+    if (selectedNodeId && nodeById[selectedNodeId]) {
+      kgUpdateDetail(nodeById[selectedNodeId]);
+    }
+  }
+
   function kgLoad(opts) {
     opts = opts || {};
     if (loading) return;
-    loading = true;
     if (opts.focus) S.set('kgFocusMode', true);
     else S.set('kgFocusMode', false);
+
+    var filters = kgGetFilters();
+
+    // Intentar desde cache de sesión (solo si no es rebuild forzado)
+    if (!opts.skipCache) {
+      var cached = kgLoadSnapshot_(filters);
+      if (cached && cached.ok) {
+        kgShowGraphLoader('kg_busy_loading');
+        kgApplySnapshot_(cached);
+        kgSetStatus(i18n('kg_status_cached'));
+        return;
+      }
+    }
+
+    loading = true;
     kgSetControlsDisabled(true);
-    kgSetStatus(i18n('kg_busy_loading'));
+    var filterSummary = kgDescribeFiltersBrief_();
+    kgStartLoadingPulse_(filterSummary);
+    kgSetStatus(i18nFmt('kg_loader_status_loading', { filters: filterSummary }));
     google.script.run
       .withSuccessHandler(function (res) {
         loading = false;
+        kgStopLoadingPulse_();
         kgSetControlsDisabled(false);
         if (!res || !res.ok) {
+          kgHideGraphLoader();
           kgSetStatus(i18n('kg_error_load'), true);
           kgRenderGraph(null);
+          kgUpdateScopeIndicator_(null);
           return;
         }
-        lastSnapshot = res;
-        S.set('kgLastSnapshot', res);
-        kgIndexSnapshot(res);
-        kgRenderGraph(res);
-        var msg = '';
-        if (res.truncated) {
-          msg = i18nFmt('kg_truncated', {
-            shown: String((res.stats && res.stats.selectedNodes) || res.nodes.length),
-          });
+        var stats = res.stats || {};
+        var statsMsg = i18nFmt('kg_busy_loading_stats_fmt', {
+          loadedNodes: String(stats.loadedNodes != null ? stats.loadedNodes : '—'),
+          loadedEdges: String(stats.loadedEdges != null ? stats.loadedEdges : '—'),
+          selectedNodes: String(
+            stats.selectedNodes != null ? stats.selectedNodes : (res.nodes || []).length,
+          ),
+          selectedEdges: String(
+            stats.selectedEdges != null ? stats.selectedEdges : (res.edges || []).length,
+          ),
+          depth: String(stats.depth != null ? stats.depth : filters.depth || ''),
+          seeds: String(stats.seedCount != null ? stats.seedCount : '—'),
+        });
+        var statsFmt = {
+          loadedNodes: String(stats.loadedNodes != null ? stats.loadedNodes : '—'),
+          loadedEdges: String(stats.loadedEdges != null ? stats.loadedEdges : '—'),
+          selectedNodes: String(
+            stats.selectedNodes != null ? stats.selectedNodes : (res.nodes || []).length,
+          ),
+          selectedEdges: String(
+            stats.selectedEdges != null ? stats.selectedEdges : (res.edges || []).length,
+          ),
+          depth: String(stats.depth != null ? stats.depth : filters.depth || ''),
+          seeds: String(stats.seedCount != null ? stats.seedCount : '—'),
+        };
+        kgSetGraphLoader_({
+          step: 4,
+          stepTotal: 4,
+          titleKey: 'kg_loader_step5_title',
+          msgKey: 'kg_busy_loading_stats_fmt',
+          fmtArgs: statsFmt,
+          whyKey: 'kg_loader_step5_why',
+          etaKey: 'kg_loader_step5_eta',
+        });
+        if (
+          graphLoaderEl &&
+          !graphLoaderEl.classList.contains('is-visible')
+        ) {
+          graphLoaderEl.classList.remove('hidden');
+          graphLoaderEl.classList.add('is-visible');
         }
-        kgSetStatus(msg);
-        if (selectedNodeId && nodeById[selectedNodeId]) {
-          kgUpdateDetail(nodeById[selectedNodeId]);
-        }
+        kgSetStatus(statsMsg);
+        kgSaveSnapshot_(filters, res);
+        kgApplySnapshot_(res);
       })
       .withFailureHandler(function (e) {
         loading = false;
+        kgStopLoadingPulse_();
         kgSetControlsDisabled(false);
+        kgHideGraphLoader();
         kgDestroyNetwork();
         A.reportRpcError(e, {
           scope: 'knowledgeGraph.load',
@@ -428,39 +1600,108 @@
           },
         });
       })
-      .getKnowledgeGraph(kgGetFilters());
+      .getKnowledgeGraph(filters);
   }
 
-  function kgRebuildBatch_(skip, doneAcc, failedAcc, total) {
+  var KG_REBUILD_BATCH_SIZE = 10;
+
+  function kgAccFromProgressTotals_(totals) {
+    totals = totals || {};
+    return {
+      doneTotal:
+        (Number(totals.contents_done) || 0) +
+        (Number(totals.clients_done) || 0) +
+        (Number(totals.salesforce_done) || 0),
+      failedTotal:
+        (Number(totals.contents_failed) || 0) +
+        (Number(totals.clients_failed) || 0) +
+        (Number(totals.salesforce_failed) || 0),
+      removedTotal:
+        (Number(totals.stale_removed) || 0) + (Number(totals.prune_removed) || 0),
+    };
+  }
+
+  function kgRebuildPhaseMeta_(phase) {
+    var ph = String(phase || 'contents');
+    var idx = KG_REBUILD_PHASES_ORDER.indexOf(ph);
+    return {
+      num: idx >= 0 ? idx + 1 : 1,
+      total: KG_REBUILD_PHASES_ORDER.length,
+      phase: ph,
+    };
+  }
+
+  function kgRebuildModalText_(res, acc) {
+    var meta = kgRebuildPhaseMeta_((res && res.phase) || 'contents');
+    var phaseKey = 'kg_phase_' + meta.phase;
+    var batchDone = res && res.done != null ? Number(res.done) : 0;
+    return i18nFmt('kg_busy_rebuild_verbose', {
+      phaseNum: String(meta.num),
+      phaseTotal: String(meta.total),
+      phase: i18n(phaseKey),
+      batchDone: String(batchDone),
+      totalDone: String(acc.doneTotal),
+      failed: String(acc.failedTotal),
+      hint:
+        meta.num < meta.total
+          ? i18n('kg_rebuild_hint_more_phases')
+          : i18n('kg_rebuild_hint_finishing'),
+    });
+  }
+
+  function kgRebuildStep_(phase, skip, acc, reset) {
     google.script.run
       .withSuccessHandler(function (res) {
-        var done = doneAcc + (res && res.done ? res.done : 0);
-        var failed = failedAcc + (res && res.failed ? res.failed : 0);
-        var tot = res && res.total != null ? res.total : total;
-        if (res && res.hasMore) {
-          A.showBlockingModal(
-            i18nFmt('kg_busy_rebuild', { done: String(done), total: String(tot) }),
-          );
-          kgRebuildBatch_(skip + (res.limit || 25), done, failed, tot);
+        if (!res || !res.ok) {
+          A.hideBlockingModal();
+          rebuilding = false;
+          kgSetControlsDisabled(false);
+          kgSetStatus(i18n('kg_error_load'), true);
           return;
         }
+        acc.doneTotal += res.done || 0;
+        acc.failedTotal += res.failed || 0;
+        acc.removedTotal += res.removed || 0;
+
+        if (res.hasMore) {
+          var modalMsg = kgRebuildModalText_(res, acc);
+          A.showBlockingModal(modalMsg);
+          kgSetStatus(modalMsg);
+          kgRebuildStep_(res.phase, res.nextSkip, acc, false);
+          return;
+        }
+
+        if (res.nextPhase && res.nextPhase !== 'done') {
+          A.showBlockingModal(
+            i18nFmt('kg_busy_rebuild_next_phase', {
+              phase: i18n('kg_phase_' + res.nextPhase),
+            }),
+          );
+          kgRebuildStep_(res.nextPhase, 0, acc, false);
+          return;
+        }
+
         A.hideBlockingModal();
         rebuilding = false;
+        kgHidePendingSyncBanner_();
         kgSetControlsDisabled(false);
+        var totals = res.progress && res.progress.totals;
+        var contentDone =
+          totals && totals.contents_done != null
+            ? Number(totals.contents_done)
+            : acc.doneTotal;
         var finMsg = i18nFmt('kg_rebuild_done', {
-          done: String(done),
-          failed: String(failed),
+          done: String(contentDone),
+          failed: String(acc.failedTotal),
         });
-        if (res && res.staleRemoved > 0) {
+        if (acc.removedTotal > 0) {
           finMsg +=
-            ' ' +
-            i18nFmt('kg_stale_removed', { n: String(res.staleRemoved) });
+            ' ' + i18nFmt('kg_stale_removed', { n: String(acc.removedTotal) });
         }
         kgSetStatus(finMsg);
         kgLoad();
       })
       .withFailureHandler(function (e) {
-        A.hideBlockingModal();
         rebuilding = false;
         kgSetControlsDisabled(false);
         A.reportRpcError(e, {
@@ -468,9 +1709,151 @@
           fallbackKey: 'kg_error_load',
           modal: true,
           toast: true,
+          setStatus: function (m) {
+            kgSetStatus(i18n('kg_rebuild_timeout_hint') + ' ' + m, true);
+          },
         });
       })
-      .rebuildKnowledgeGraphBatch(skip, 25);
+      .rebuildKnowledgeGraphStep(phase, skip, KG_REBUILD_BATCH_SIZE, !!reset);
+  }
+
+  function kgRebuildStart_(reset) {
+    kgInvalidateSnapshots_();
+    var acc = { doneTotal: 0, failedTotal: 0, removedTotal: 0 };
+    kgRebuildStep_('contents', 0, acc, !!reset);
+  }
+
+  function kgHidePendingSyncBanner_() {
+    kgPendingSyncProgress = null;
+    if (pendingSyncBanner) pendingSyncBanner.classList.add('hidden');
+  }
+
+  function kgShowPendingSyncBanner_(prog) {
+    if (!pendingSyncBanner || !pendingSyncMsg || !prog || !prog.progress) {
+      kgHidePendingSyncBanner_();
+      return;
+    }
+    var p = prog.progress;
+    var meta = kgRebuildPhaseMeta_(p.phase);
+    var acc = kgAccFromProgressTotals_(p.totals);
+    pendingSyncMsg.textContent = i18nFmt('kg_pending_sync_bg_msg', {
+      phaseNum: String(meta.num),
+      phaseTotal: String(meta.total),
+      phase: i18n('kg_phase_' + meta.phase),
+      done: String(acc.doneTotal),
+      failed: String(acc.failedTotal),
+      trigger: prog.triggerScheduled
+        ? i18n('kg_bg_sync_trigger_yes')
+        : i18n('kg_bg_sync_trigger_no'),
+    });
+    kgPendingSyncProgress = p;
+    pendingSyncBanner.classList.remove('hidden');
+  }
+
+  function kgCheckPendingSyncBanner_(onDone) {
+    if (!S.get('canRebuildKnowledgeGraph')) {
+      kgHidePendingSyncBanner_();
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (prog) {
+        if (
+          prog &&
+          prog.inProgress &&
+          prog.progress &&
+          prog.progress.phase &&
+          prog.progress.phase !== 'done'
+        ) {
+          kgShowPendingSyncBanner_(prog);
+        } else {
+          kgHidePendingSyncBanner_();
+        }
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function () {
+        kgHidePendingSyncBanner_();
+        if (typeof onDone === 'function') onDone();
+      })
+      .getKnowledgeGraphBackgroundSyncStatus();
+  }
+
+  function kgEnqueueBackgroundSync_(reset, onDone) {
+    if (rebuilding) return;
+    rebuilding = true;
+    kgSetControlsDisabled(true);
+    A.showBlockingModal(i18n('kg_bg_sync_starting'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        rebuilding = false;
+        kgSetControlsDisabled(false);
+        if (!res || !res.ok) {
+          kgSetStatus(i18n('kg_error_load'), true);
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
+        if (res.aligned) {
+          kgHidePendingSyncBanner_();
+          kgSetStatus(i18n('kg_bg_sync_aligned'));
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
+        if (reset) kgInvalidateSnapshots_();
+        var phaseKey = 'kg_phase_' + String(res.phase || 'contents');
+        kgSetStatus(
+          i18nFmt('kg_bg_sync_enqueued', {
+            phase: i18n(phaseKey),
+            processed: String(res.processed || 0),
+          }),
+        );
+        kgCheckPendingSyncBanner_(function () {
+          if (typeof onDone === 'function') onDone();
+        });
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        rebuilding = false;
+        kgSetControlsDisabled(false);
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.backgroundSync',
+          fallbackKey: 'kg_bg_sync_error',
+          modal: true,
+          setStatus: function (m) {
+            kgSetStatus(m, true);
+          },
+        });
+        if (typeof onDone === 'function') onDone();
+      })
+      .adminKnowledgeGraphEnqueueBackgroundSync(!!reset);
+  }
+
+  function kgResumePendingRebuild_() {
+    kgEnqueueBackgroundSync_(false);
+  }
+
+  function kgDiscardPendingRebuild_(onDone) {
+    if (!S.get('canRebuildKnowledgeGraph')) {
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    A.showBlockingModal(i18n('kg_pending_sync_discard_busy'));
+    google.script.run
+      .withSuccessHandler(function () {
+        A.hideBlockingModal();
+        kgHidePendingSyncBanner_();
+        kgPendingSyncProgress = null;
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.discardBackgroundSync',
+          fallbackKey: 'kg_pending_sync_discard_error',
+          modal: true,
+        });
+      })
+      .adminKnowledgeGraphDiscardBackgroundSync();
   }
 
   function kgPopulateFilterOptions() {
@@ -511,51 +1894,386 @@
       .getKnowledgeGraphFilterOptions();
   }
 
-  function kgStartRebuildFromSupabase_(status) {
-    if (rebuilding) return;
-    rebuilding = true;
-    kgSetControlsDisabled(true);
-    var hint = '';
-    if (status && status.catalogContents != null) {
-      hint = i18nFmt('kg_sync_auto_start', {
-        graph: String(status.graphContentNodes || 0),
-        catalog: String(status.catalogContents || 0),
+  function kgInitMainTabs_() {
+    if (!kgTabRoot || kgMainTabs) return;
+    kgMainTabs = A.initTabGroup(kgTabRoot);
+    if (kgTabEntities) {
+      kgTabEntities.addEventListener('click', function () {
+        kgEnsureEntitiesLoaded_();
       });
-      kgSetStatus(hint);
     }
-    A.showBlockingModal(
-      hint || i18nFmt('kg_busy_rebuild', { done: '0', total: '…' }),
-    );
-    kgRebuildBatch_(0, 0, 0, 0);
+  }
+
+  function kgSetEntitiesListBusy_(on) {
+    entitiesListBusy = !!on;
+    if (entitiesListLoader) entitiesListLoader.classList.toggle('hidden', !on);
+    if (entitiesApplyBtn) entitiesApplyBtn.disabled = on;
+    if (entitiesFilterType) entitiesFilterType.disabled = on;
+    if (entitiesFilterSearch) entitiesFilterSearch.disabled = on;
+    if (entitiesPrev) entitiesPrev.disabled = on || entitiesSkip <= 0;
+    if (entitiesNext) {
+      entitiesNext.disabled = on || entitiesSkip + entitiesPageSize >= entitiesTotal;
+    }
+  }
+
+  function kgSetEntitiesCatalogBusy_(on) {
+    entitiesCatalogBusy = !!on;
+    if (entitiesCatalogLoader) entitiesCatalogLoader.classList.toggle('hidden', !on);
+  }
+
+  function kgEntitiesMetaForNode_(node) {
+    if (!node || !node.payload) return '';
+    var pl = node.payload;
+    if (node.type === 'content' && pl.content_type) {
+      return i18nFmt('kg_entities_meta_content_type', {
+        type: String(pl.content_type || ''),
+      });
+    }
+    return '';
+  }
+
+  function kgRenderEntityTypeCard_(type, count) {
+    var card = document.createElement('article');
+    card.className =
+      'rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-slate-900/40';
+    var head = document.createElement('div');
+    head.className = 'flex items-start gap-2.5';
+    var swatch = document.createElement('span');
+    swatch.className = 'mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white';
+    swatch.style.backgroundColor = NODE_COLORS[type] || '#64748b';
+    var icon = document.createElement('i');
+    icon.className = 'fa-solid ' + (ENTITY_ICON[type] || 'fa-circle') + ' text-sm';
+    icon.setAttribute('aria-hidden', 'true');
+    swatch.appendChild(icon);
+    var body = document.createElement('div');
+    body.className = 'min-w-0 flex-1';
+    var title = document.createElement('h4');
+    title.className = 'text-sm font-semibold text-slate-900 dark:text-slate-100';
+    title.textContent = i18n(TYPE_I18N[type] || type);
+    var countEl = document.createElement('p');
+    countEl.className = 'mt-0.5 text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400';
+    countEl.textContent = i18nFmt('kg_entities_count_fmt', { count: String(count || 0) });
+    var desc = document.createElement('p');
+    desc.className = 'mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
+    desc.textContent = i18n(ENTITY_DESC_I18N[type] || '');
+    body.appendChild(title);
+    body.appendChild(countEl);
+    body.appendChild(desc);
+    head.appendChild(swatch);
+    head.appendChild(body);
+    card.appendChild(head);
+    return card;
+  }
+
+  function kgRenderEntityCatalog_(catalog) {
+    if (!catalog || !catalog.ok) return;
+    if (entitiesCatalogTotals) {
+      entitiesCatalogTotals.textContent = i18nFmt('kg_entities_catalog_totals', {
+        nodes: String(catalog.totalNodes || 0),
+        edges: String(catalog.totalEdges || 0),
+      });
+    }
+    if (entitiesTypesGrid) {
+      entitiesTypesGrid.innerHTML = '';
+      var countByType = {};
+      var rows = catalog.nodeTypes || [];
+      var ri;
+      for (ri = 0; ri < rows.length; ri++) {
+        countByType[String(rows[ri].type || '')] = Number(rows[ri].count) || 0;
+      }
+      var ti;
+      for (ti = 0; ti < ENTITY_NODE_ORDER.length; ti++) {
+        var nt = ENTITY_NODE_ORDER[ti];
+        entitiesTypesGrid.appendChild(
+          kgRenderEntityTypeCard_(nt, countByType[nt] || 0),
+        );
+      }
+    }
+    if (entitiesRelationsList) {
+      entitiesRelationsList.innerHTML = '';
+      var relCount = {};
+      var relRows = catalog.relationTypes || [];
+      var rj;
+      for (rj = 0; rj < relRows.length; rj++) {
+        relCount[String(relRows[rj].relation || '')] = Number(relRows[rj].count) || 0;
+      }
+      var rk;
+      for (rk = 0; rk < ENTITY_REL_ORDER.length; rk++) {
+        var rel = ENTITY_REL_ORDER[rk];
+        var li = document.createElement('li');
+        li.className =
+          'rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/30';
+        var row = document.createElement('div');
+        row.className = 'flex flex-wrap items-start gap-2';
+        var line = document.createElement('span');
+        line.className = 'mt-1 inline-block h-1 w-8 shrink-0 rounded-full';
+        line.style.backgroundColor = EDGE_COLORS[rel] || '#94a3b8';
+        var textWrap = document.createElement('div');
+        textWrap.className = 'min-w-0 flex-1';
+        var relTitle = document.createElement('p');
+        relTitle.className = 'text-sm font-medium text-slate-800 dark:text-slate-200';
+        relTitle.textContent = i18n(REL_I18N[rel] || rel);
+        var relCountEl = document.createElement('p');
+        relCountEl.className = 'text-xs tabular-nums text-slate-500 dark:text-slate-400';
+        relCountEl.textContent = i18nFmt('kg_entities_count_fmt', {
+          count: String(relCount[rel] || 0),
+        });
+        var relDesc = document.createElement('p');
+        relDesc.className = 'mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
+        relDesc.textContent = i18n(ENTITY_REL_DESC_I18N[rel] || '');
+        textWrap.appendChild(relTitle);
+        textWrap.appendChild(relCountEl);
+        textWrap.appendChild(relDesc);
+        row.appendChild(line);
+        row.appendChild(textWrap);
+        li.appendChild(row);
+        entitiesRelationsList.appendChild(li);
+      }
+    }
+    entitiesCatalogLoaded = true;
+  }
+
+  function kgLoadEntityCatalog_(onDone) {
+    if (entitiesCatalogBusy) return;
+    kgSetEntitiesCatalogBusy_(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        kgSetEntitiesCatalogBusy_(false);
+        if (!res || !res.ok) {
+          A.reportRpcError(res || new Error('catalog'), {
+            scope: 'knowledgeGraph.entityCatalog',
+            fallbackKey: 'kg_entities_error_catalog',
+            modal: true,
+          });
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
+        kgRenderEntityCatalog_(res);
+        if (typeof onDone === 'function') onDone();
+      })
+      .withFailureHandler(function (e) {
+        kgSetEntitiesCatalogBusy_(false);
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.entityCatalog',
+          fallbackKey: 'kg_entities_error_catalog',
+          modal: true,
+        });
+        if (typeof onDone === 'function') onDone();
+      })
+      .getKnowledgeGraphEntityCatalog();
+  }
+
+  function kgUpdateEntitiesPager_() {
+    if (entitiesPageInfo) {
+      if (!entitiesTotal) {
+        entitiesPageInfo.textContent = i18n('metrics_pagination_empty');
+      } else {
+        var from = entitiesSkip + 1;
+        var to = Math.min(entitiesSkip + entitiesPageSize, entitiesTotal);
+        entitiesPageInfo.textContent = i18nFmt('metrics_pagination_info', {
+          from: String(from),
+          to: String(to),
+          total: String(entitiesTotal),
+        });
+      }
+    }
+    if (entitiesPrev) entitiesPrev.disabled = entitiesListBusy || entitiesSkip <= 0;
+    if (entitiesNext) {
+      entitiesNext.disabled =
+        entitiesListBusy || entitiesSkip + entitiesPageSize >= entitiesTotal;
+    }
+  }
+
+  function kgRenderEntitiesTable_(items) {
+    if (!entitiesTableBody) return;
+    entitiesTableBody.innerHTML = '';
+    var hasRows = items && items.length;
+    if (entitiesListEmpty) entitiesListEmpty.classList.toggle('hidden', !!hasRows);
+    if (!hasRows) return;
+    var i;
+    for (i = 0; i < items.length; i++) {
+      (function (node) {
+        var tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100 dark:border-slate-700';
+        var tdName = document.createElement('td');
+        tdName.className = 'px-3 py-2 font-medium text-slate-800 dark:text-slate-200';
+        tdName.textContent = String(node.label || node.id || '');
+        var tdType = document.createElement('td');
+        tdType.className = 'px-3 py-2 text-slate-600 dark:text-slate-400';
+        tdType.textContent = i18n(TYPE_I18N[node.type] || node.type || '');
+        var tdMeta = document.createElement('td');
+        tdMeta.className = 'px-3 py-2 text-xs text-slate-500 dark:text-slate-400';
+        tdMeta.textContent = kgEntitiesMetaForNode_(node);
+        var tdAct = document.createElement('td');
+        tdAct.className = 'px-3 py-2 text-right';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+        var btnIcon = document.createElement('i');
+        btnIcon.className = 'fa-solid fa-diagram-project';
+        btnIcon.setAttribute('aria-hidden', 'true');
+        var btnLabel = document.createElement('span');
+        btnLabel.setAttribute('data-i18n', 'kg_entities_btn_view_graph');
+        btnLabel.textContent = i18n('kg_entities_btn_view_graph');
+        btn.appendChild(btnIcon);
+        btn.appendChild(btnLabel);
+        btn.addEventListener('click', function () {
+          kgOpenNodeInGraph_(node);
+        });
+        tdAct.appendChild(btn);
+        tr.appendChild(tdName);
+        tr.appendChild(tdType);
+        tr.appendChild(tdMeta);
+        tr.appendChild(tdAct);
+        entitiesTableBody.appendChild(tr);
+      })(items[i]);
+    }
+  }
+
+  function kgLoadEntitiesList_() {
+    if (entitiesListBusy) return;
+    if (entitiesListError) {
+      entitiesListError.classList.add('hidden');
+      entitiesListError.textContent = '';
+    }
+    kgSetEntitiesListBusy_(true);
+    var params = {
+      skip: entitiesSkip,
+      limit: entitiesPageSize,
+      nodeType: entitiesFilterType ? String(entitiesFilterType.value || '').trim() : '',
+      searchQuery: entitiesFilterSearch
+        ? String(entitiesFilterSearch.value || '').trim()
+        : '',
+    };
+    google.script.run
+      .withSuccessHandler(function (res) {
+        kgSetEntitiesListBusy_(false);
+        if (!res || !res.ok) {
+          if (entitiesListError) {
+            entitiesListError.textContent = i18n('kg_entities_error_list');
+            entitiesListError.classList.remove('hidden');
+          }
+          return;
+        }
+        entitiesTotal = Number(res.total) || 0;
+        entitiesSkip = Number(res.skip) || 0;
+        kgRenderEntitiesTable_(res.items || []);
+        kgUpdateEntitiesPager_();
+      })
+      .withFailureHandler(function (e) {
+        kgSetEntitiesListBusy_(false);
+        kgUpdateEntitiesPager_();
+        A.reportRpcError(e, {
+          scope: 'knowledgeGraph.entityList',
+          fallbackKey: 'kg_entities_error_list',
+          modal: true,
+        });
+      })
+      .listKnowledgeGraphEntities(params);
+  }
+
+  function kgEnsureEntitiesLoaded_() {
+    kgInitMainTabs_();
+    if (!entitiesCatalogLoaded) {
+      kgLoadEntityCatalog_(function () {
+        kgLoadEntitiesList_();
+      });
+      return;
+    }
+    if (!entitiesTableBody || !entitiesTableBody.children.length) {
+      kgLoadEntitiesList_();
+    }
+  }
+
+  function kgEntitiesApplyFilters_() {
+    entitiesSkip = 0;
+    kgLoadEntitiesList_();
+  }
+
+  function kgOpenNodeInGraph_(node) {
+    if (!node || !node.id) return;
+    selectedNodeId = String(node.id);
+    if (filterSearch) filterSearch.value = String(node.label || '').trim();
+    if (kgMainTabs) kgMainTabs.activate('kg-tab-graph');
+    kgLoad({ focus: true, skipCache: true });
+  }
+
+  function kgApplySyncStatus_(st) {
+    if (!st || !st.ok) return;
+    if (st.staleGraphNodes > 0) {
+      kgSetStatus(
+        i18nFmt('kg_status_stale', { stale: String(st.staleGraphNodes) }),
+      );
+      return;
+    }
+    if (st.graphContentNodes === 0 && (st.catalogContents || 0) > 0) {
+      kgSetStatus(i18n('kg_status_empty'));
+      return;
+    }
+    if (st.needsCatchUp) {
+      kgSetStatus(
+        i18nFmt('kg_status_behind', {
+          graph: String(st.graphContentNodes || 0),
+          catalog: String(st.catalogContents || 0),
+          missing: String(st.missingContents || 0),
+        }),
+      );
+      return;
+    }
+    if ((st.graphContentNodes || 0) > 0) {
+      kgSetStatus(
+        i18nFmt('kg_status_ready', {
+          graph: String(st.graphContentNodes || 0),
+        }),
+      );
+    }
+  }
+
+  function kgFetchSyncStatusThenLoad_() {
+    google.script.run
+      .withSuccessHandler(function (st) {
+        kgApplySyncStatus_(st);
+        kgLoad();
+      })
+      .withFailureHandler(function () {
+        kgLoad();
+      })
+      .getKnowledgeGraphSyncStatus();
   }
 
   function onShow() {
+    kgInitMainTabs_();
     if (rebuildBtn) {
       rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
     }
+    kgApplyLimitsToFilters_();
     kgBuildLegend();
     kgPopulateFilterOptions();
-    if (S.get('canRebuildKnowledgeGraph')) {
-      google.script.run
-        .withSuccessHandler(function (st) {
-          if (st && st.ok && st.needsSync) {
-            kgStartRebuildFromSupabase_(st);
-            return;
-          }
-          kgLoad();
-        })
-        .withFailureHandler(function () {
-          kgLoad();
-        })
-        .getKnowledgeGraphSyncStatus();
-      return;
-    }
-    kgLoad();
+    kgCheckPendingSyncBanner_(function () {
+      if (S.get('canRebuildKnowledgeGraph')) {
+        kgFetchSyncStatusThenLoad_();
+        return;
+      }
+      kgLoad();
+    });
+  }
+
+  if (pendingSyncResumeBtn) {
+    pendingSyncResumeBtn.addEventListener('click', function () {
+      kgResumePendingRebuild_();
+    });
+  }
+  if (pendingSyncDiscardBtn) {
+    pendingSyncDiscardBtn.addEventListener('click', function () {
+      kgDiscardPendingRebuild_(function () {
+        kgLoad({ skipCache: true });
+      });
+    });
   }
 
   if (applyBtn) {
     applyBtn.addEventListener('click', function () {
-      kgLoad();
+      kgLoad({ skipCache: true });
     });
   }
   if (resetBtn) {
@@ -564,8 +2282,12 @@
       if (filterType) filterType.value = '';
       if (filterIndustry) filterIndustry.value = '';
       if (filterClient) filterClient.value = '';
-      if (filterDepth) filterDepth.value = '2';
+      var limReset = kgResolveLimits_();
+      if (filterDepth) filterDepth.value = String(limReset.bfsDepthDefault);
+      if (filterDensity) filterDensity.value = String(limReset.densityNormal);
+      if (nodeListFilter) nodeListFilter.value = '';
       selectedNodeId = '';
+      kgResetFind_();
       var ti;
       for (ti = 0; ti < typeToggles.length; ti++) typeToggles[ti].checked = true;
       kgLoad();
@@ -574,7 +2296,7 @@
   if (focusBtn) {
     focusBtn.addEventListener('click', function () {
       if (!selectedNodeId) {
-        kgSetStatus(i18n('kg_error_load'), true);
+        kgSetStatus(i18n('kg_focus_no_selection'), true);
         return;
       }
       if (filterSearch) filterSearch.value = '';
@@ -583,11 +2305,9 @@
   }
   if (rebuildBtn) {
     rebuildBtn.addEventListener('click', function () {
-      if (rebuilding) return;
-      rebuilding = true;
-      kgSetControlsDisabled(true);
-      A.showBlockingModal(i18nFmt('kg_busy_rebuild', { done: '0', total: '…' }));
-      kgRebuildBatch_(0, 0, 0, 0);
+      kgEnqueueBackgroundSync_(true, function () {
+        kgLoad({ skipCache: true });
+      });
     });
   }
   if (openContentBtn) {
@@ -603,6 +2323,105 @@
   if (filterSearch) {
     filterSearch.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') kgLoad();
+    });
+  }
+  if (filterDepth) {
+    filterDepth.addEventListener('change', function () {
+      kgUpdateScopeIndicator_(lastSnapshot);
+    });
+  }
+  if (filterDensity) {
+    filterDensity.addEventListener('change', function () {
+      kgUpdateScopeIndicator_(lastSnapshot);
+    });
+  }
+  if (layoutModeEl) {
+    layoutModeEl.addEventListener('change', kgReapplyGraphView_);
+  }
+  if (showLabelsEl) {
+    showLabelsEl.addEventListener('change', kgReapplyGraphView_);
+  }
+  if (fitBtn) {
+    fitBtn.addEventListener('click', kgFitView_);
+  }
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', function () {
+      kgZoomBy_(1.22);
+    });
+  }
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', function () {
+      kgZoomBy_(0.82);
+    });
+  }
+  if (graphFindInput) {
+    graphFindInput.addEventListener('input', function () {
+      findMatchIndex = -1;
+      kgRefreshFindMatches_();
+    });
+    graphFindInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        kgFindGo_(ev.shiftKey ? -1 : 1);
+      }
+    });
+  }
+  if (graphFindNext) {
+    graphFindNext.addEventListener('click', function () {
+      kgFindGo_(1);
+    });
+  }
+  if (graphFindPrev) {
+    graphFindPrev.addEventListener('click', function () {
+      kgFindGo_(-1);
+    });
+  }
+  if (nodeListFilter) {
+    nodeListFilter.addEventListener('input', kgBuildNodeList_);
+  }
+  if (sideToggle) {
+    sideToggle.addEventListener('click', function () {
+      kgOpenSidePanel_('detail');
+    });
+  }
+  if (sideOpen) {
+    sideOpen.addEventListener('click', function () {
+      kgOpenSidePanel_('detail');
+    });
+  }
+  if (sideClose) {
+    sideClose.addEventListener('click', kgCloseSidePanel_);
+  }
+  if (tabDetail) {
+    tabDetail.addEventListener('click', function () {
+      kgSwitchSideTab_('detail');
+    });
+  }
+  if (tabNodes) {
+    tabNodes.addEventListener('click', function () {
+      kgSwitchSideTab_('nodes');
+    });
+  }
+  if (entitiesApplyBtn) {
+    entitiesApplyBtn.addEventListener('click', kgEntitiesApplyFilters_);
+  }
+  if (entitiesFilterSearch) {
+    entitiesFilterSearch.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') kgEntitiesApplyFilters_();
+    });
+  }
+  if (entitiesPrev) {
+    entitiesPrev.addEventListener('click', function () {
+      if (entitiesSkip <= 0 || entitiesListBusy) return;
+      entitiesSkip = Math.max(0, entitiesSkip - entitiesPageSize);
+      kgLoadEntitiesList_();
+    });
+  }
+  if (entitiesNext) {
+    entitiesNext.addEventListener('click', function () {
+      if (entitiesListBusy || entitiesSkip + entitiesPageSize >= entitiesTotal) return;
+      entitiesSkip += entitiesPageSize;
+      kgLoadEntitiesList_();
     });
   }
 

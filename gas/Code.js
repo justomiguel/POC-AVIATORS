@@ -22,13 +22,15 @@ function doGet(e) {
   tpl.clientScriptToast = HtmlService.createHtmlOutputFromFile('app-client-toast').getContent();
   tpl.clientScriptDrive = HtmlService.createHtmlOutputFromFile('app-client-drive').getContent();
   tpl.clientScriptChat = HtmlService.createHtmlOutputFromFile('app-client-chat').getContent();
+  tpl.clientScriptProposalBuilding = HtmlService.createHtmlOutputFromFile('app-client-proposal-building')
+    .getContent();
   tpl.clientScriptAgents = HtmlService.createHtmlOutputFromFile('app-client-agents').getContent();
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
   tpl.clientScriptTags = HtmlService.createHtmlOutputFromFile('app-client-tags').getContent();
   tpl.clientScriptClients = HtmlService.createHtmlOutputFromFile('app-client-clients').getContent();
-  tpl.knowledgeGraphLib = HtmlService.createHtmlOutputFromFile('knowledge-graph-vis-include')
-    .getContent();
   tpl.clientScriptKnowledgeGraph = HtmlService.createHtmlOutputFromFile('app-client-knowledge-graph')
+    .getContent();
+  tpl.knowledgeGraphLib = HtmlService.createHtmlOutputFromFile('knowledge-graph-vis-include')
     .getContent();
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
@@ -76,6 +78,7 @@ function getBootstrap() {
     canManageUnansweredQueue: false,
     canSyncSalesforceAccounts: false,
     canViewOnboarding: false,
+    canViewProposalBuilding: false,
     canViewKnowledgeGraph: false,
     canRebuildKnowledgeGraph: false,
   };
@@ -95,6 +98,7 @@ function getBootstrap() {
       perms.canManageUnansweredQueue = AdminAuth_emailCanManageUnansweredQueue(email);
       perms.canSyncSalesforceAccounts = AdminAuth_emailCanSyncSalesforce(email);
       perms.canViewOnboarding = AdminAuth_emailCanViewOnboarding(email);
+      perms.canViewProposalBuilding = AdminAuth_emailCanViewProposalBuilding(email);
       perms.canViewKnowledgeGraph = AdminAuth_emailCanViewKnowledgeGraph(email);
       perms.canRebuildKnowledgeGraph = AdminAuth_emailIsAdmin(email);
     }
@@ -119,6 +123,13 @@ function getBootstrap() {
     if (svc) webAppUrl = String(svc.getUrl() || '').trim();
   } catch (ignoreSvc) {}
 
+  var kgLimits = null;
+  if (perms.canViewKnowledgeGraph) {
+    try {
+      kgLimits = KnowledgeGraphLimits_get();
+    } catch (ignoreKgLimits) {}
+  }
+
   return {
     session: getSessionInfo(),
     llm: LlmOrchestrator_getUiConfig(),
@@ -129,6 +140,7 @@ function getBootstrap() {
     onboardingQuickPrompts: onboardingQuickPrompts,
     dataBackend: AviatorsDataBackend_mode_(),
     webAppUrl: webAppUrl,
+    kgLimits: kgLimits,
   };
 });
 }
@@ -1229,6 +1241,20 @@ function getKnowledgeGraphFilterOptions() {
   });
 }
 
+/** Catálogo de tipos de entidad y relación del grafo (conteos en Supabase). */
+function getKnowledgeGraphEntityCatalog() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphEntityCatalog', function () {
+    return KnowledgeGraph_getEntityCatalog();
+  });
+}
+
+/** Listado paginado de entidades (nodos) del grafo. */
+function listKnowledgeGraphEntities(params) {
+  return AviatorsCode_runRpc_('listKnowledgeGraphEntities', function () {
+    return KnowledgeGraph_listEntities(params || {});
+  });
+}
+
 /** Alineación catálogo Supabase ↔ grafo (conteos y si hace falta sincronizar). */
 function getKnowledgeGraphSyncStatus() {
   return AviatorsCode_runRpc_('getKnowledgeGraphSyncStatus', function () {
@@ -1240,6 +1266,62 @@ function getKnowledgeGraphSyncStatus() {
 function rebuildKnowledgeGraphBatch(skip, limit) {
   return AviatorsCode_runRpc_('rebuildKnowledgeGraphBatch', function () {
     return KnowledgeGraph_rebuildBatch(skip, limit);
+  });
+}
+
+/** Solo admin · un lote por etapa (contents → clients → salesforce → stale → prune). */
+function rebuildKnowledgeGraphStep(phase, skip, limit, reset) {
+  return AviatorsCode_runRpc_('rebuildKnowledgeGraphStep', function () {
+    return KnowledgeGraph_rebuildStep(phase, skip, limit, !!reset);
+  });
+}
+
+/** Solo admin · progreso persistido del rebuild (reanudar tras timeout). */
+function getKnowledgeGraphRebuildProgress() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphRebuildProgress', function () {
+    return KnowledgeGraph_getRebuildProgress();
+  });
+}
+
+/** Solo admin · descartar progreso de rebuild interrumpido. */
+function adminKnowledgeGraphDiscardRebuildProgress() {
+  return AviatorsCode_runRpc_('adminKnowledgeGraphDiscardRebuildProgress', function () {
+    return AdminKnowledgeGraph_discardRebuildProgress();
+  });
+}
+
+/** Estado de sincronización del grafo en segundo plano (triggers). */
+function getKnowledgeGraphBackgroundSyncStatus() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphBackgroundSyncStatus', function () {
+    return KnowledgeGraph_getBackgroundCatchupStatus();
+  });
+}
+
+/** Solo admin · encolar sync del grafo en segundo plano (no bloquea la UI). */
+function adminKnowledgeGraphEnqueueBackgroundSync(reset) {
+  return AviatorsCode_runRpc_('adminKnowledgeGraphEnqueueBackgroundSync', function () {
+    return AdminKnowledgeGraph_enqueueBackgroundSync(!!reset);
+  });
+}
+
+/** Solo admin · cancelar sync en segundo plano. */
+function adminKnowledgeGraphDiscardBackgroundSync() {
+  return AviatorsCode_runRpc_('adminKnowledgeGraphDiscardBackgroundSync', function () {
+    return AdminKnowledgeGraph_discardBackgroundSync();
+  });
+}
+
+/** Límites del grafo (lectura · permiso view_knowledge_graph). */
+function getKnowledgeGraphLimits() {
+  return AviatorsCode_runRpc_('getKnowledgeGraphLimits', function () {
+    return KnowledgeGraph_getLimitsConfig();
+  });
+}
+
+/** Solo admin · guardar límites del grafo en app_settings. */
+function adminKnowledgeGraphLimitsSave(configJson) {
+  return AviatorsCode_runRpc_('adminKnowledgeGraphLimitsSave', function () {
+    return AdminKnowledgeGraphLimits_save(configJson);
   });
 }
 
@@ -1713,6 +1795,53 @@ function onboardingQuickPromptsSave(promptsJson) {
       throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
     }
     return MetricsService_onboardingQuickPromptsSave_(prompts);
+  });
+}
+
+/**
+ * Extrae brief comercial desde chat/adjuntos (Armado de propuestas).
+ * @param {string} payloadJson
+ * @return {{ok:boolean, brief:Object}}
+ */
+function proposalBuildingExtractBrief(payloadJson) {
+  return AviatorsCode_runRpc_('proposalBuildingExtractBrief', function () {
+    return ProposalBuilding_extractBrief(payloadJson);
+  });
+}
+
+/**
+ * Responde con agente proposals inyectando brief validado + industria/deck.
+ * @param {string} question
+ * @param {string} historyJson
+ * @param {string} contextJson
+ */
+function proposalBuildingAnswer(question, historyJson, contextJson) {
+  return AviatorsCode_runRpc_('proposalBuildingAnswer', function () {
+    var r = ProposalBuilding_answerWithContext(question, historyJson, contextJson);
+    var tracked = MetricsService_trackQuestionEvent({
+      mode: 'globant_agent',
+      agentId: 'proposals',
+      agentName: r.agentName || 'proposals',
+      questionText: question,
+      isUnanswered: !!r.isUnanswered,
+      unansweredCode: r.unansweredCode || '',
+    });
+    return {
+      answer: r.answer,
+      agentName: r.agentName || '',
+      eventId: (tracked && tracked.eventId) || '',
+      meta: r.meta || {},
+    };
+  });
+}
+
+/**
+ * Resuelve deck base según industria (airlines / logistics).
+ * @param {string} industryKey
+ */
+function proposalBuildingResolveDeck(industryKey, briefJson) {
+  return AviatorsCode_runRpc_('proposalBuildingResolveDeck', function () {
+    return ProposalBuilding_resolveDeck(industryKey, briefJson);
   });
 }
 

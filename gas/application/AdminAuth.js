@@ -187,6 +187,23 @@ function AdminAuth_emailCanViewOnboarding(email) {
  * @param {string} email
  * @return {boolean}
  */
+function AdminAuth_emailCanViewProposalBuilding(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'view_proposal_building');
+}
+
+function AdminAuth_requireProposalBuildingView() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanViewProposalBuilding(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_forbidden'));
+  }
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
 function AdminAuth_emailCanManageUnansweredQueue(email) {
   var k = AdminAuth_roleKeyForEmail_(email);
   if (!k) return false;

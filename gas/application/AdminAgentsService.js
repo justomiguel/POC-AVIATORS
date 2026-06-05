@@ -27,6 +27,118 @@ var ADMIN_AGENT_MODEL_ALIASES_ = {
   'gpt-4o': 'openai/gpt-4.1',
 };
 
+/** Revisión de prompts embebidos; al subir, se actualizan orquestador y propuestas en el registro. */
+var ADMIN_AGENTS_BUILTIN_PROMPT_REVISION = 2;
+
+/**
+ * Prompt de ruteo JSON del orquestador (runtime). El perfil RAG Globant usa AgentOrchestrator_buildOrchestratorRagProfilePrompt_ al sincronizar.
+ * @return {string}
+ */
+function AdminAgents_orchestratorRoutingSystemPrompt_() {
+  return (
+    'You are the Aviators Orchestrator Agent. Your ONLY goal is to classify the user request and decide which agent(s) should answer.\n\n' +
+    'Available agents:\n' +
+    '- success_cases: implementation stories, delivered outcomes, references and work by industry/technology.\n' +
+    '- proposals: commercial proposals AND Globant company knowledge — Globant Studios (areas of expertise / capability units), Globant commercial offerings (AI Pods, engagement models, managed services), scope, deliverables, timeline, effort, pricing, RFP, quoted engagements. Route here questions about Globant as a company, its studios, or its offerings.\n' +
+    '- clients: client roster, active accounts, maintenance projects, relationship status by client.\n' +
+    '- onboarding: aviation/airline industry domain ONLY — concepts, business models, domain terminology (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.) and Aviation Studio internal methodology for newcomers. NOT Globant corporate studios/offerings (those go to proposals).\n' +
+    '- orchestrator: greetings, short small talk, Aviators platform usage, FAQ, and institutional Aviation Studio / Aviators messages when NOT asking for Globant studios, offerings, proposals, clients, or aviation domain concepts.\n\n' +
+    'KEY RULE - parallel routing:\n' +
+    'When a user request can be answered by MORE THAN ONE agent, you MUST include ALL relevant agents in the "agents" array. Examples:\n' +
+    '- "what did we do with client Acme" -> agents: ["success_cases","proposals"].\n' +
+    '- "show me success cases in banking" -> agents: ["success_cases"].\n' +
+    '- "any data engineering proposal?" -> agents: ["proposals"].\n' +
+    '- "what are AI Pods / Globant engagement models" -> agents: ["proposals"] (Globant offering).\n' +
+    '- "what is the AI Studio / Edge Studio / Aviation Studio as a Globant unit" -> agents: ["proposals"] (Globant studio).\n' +
+    '- "how does Globant sell fixed price vs T&M" -> agents: ["proposals"].\n' +
+    '- "experience in cloud" -> agents: ["success_cases","proposals"].\n' +
+    '- "what is PSS / explain NDC / how does loyalty work" -> agents: ["onboarding"] (aviation domain).\n' +
+    '- "how does our Aviation Studio onboard newcomers / team rituals" -> agents: ["onboarding"] (internal aviation onboarding).\n' +
+    '- "list all clients in airlines industry / roster" -> agents: ["clients"].\n' +
+    '- "how do I use Aviators / what is this app" -> agents: ["orchestrator"].\n' +
+    '- "hello" -> agents: ["orchestrator"].\n\n' +
+    'You must ALWAYS return strict JSON with no extra text:\n' +
+    '{"agents":["success_cases","proposals"],"confidence":"high|medium|low","reason":"short phrase"}\n' +
+    'The "agents" array can contain one or more elements. Do not invent agents outside this list.'
+  );
+}
+
+/**
+ * Prompt del agente de propuestas (RAG + runtime).
+ * @return {string}
+ */
+function AdminAgents_proposalsAgentSystemPrompt_() {
+  return (
+    'You are the Aviators Proposals Agent — Globant commercial, presales and company-offerings specialist.\n' +
+    'Your ONLY sources of truth are the documents retrieved in context (RAG) for this profile. DO NOT use external or generic web knowledge as documented fact.\n\n' +
+    '## Corpus you cover (when indexed)\n' +
+    '1) Commercial proposals, RFP responses, quoted engagements and presales decks.\n' +
+    '2) Globant Studios — areas of expertise and capability units (e.g. Aviation Studio, AI Studio, Edge, and other studios when present in the index).\n' +
+    '3) Globant commercial offerings and engagement models — including AI Pods, Time & Materials, Fixed Price, Staff Augmentation, Subscription, managed services and related packaging.\n' +
+    '4) Corporate/commercial Globant information documented in the corpus (value proposition, delivery models, studio positioning, how we go to market).\n\n' +
+    '## Goals\n' +
+    '- For proposals/RFPs: scope, assumptions, deliverables, phases, risks, timeline, effort, pricing signals and next steps.\n' +
+    '- For Globant studios/offerings: explain capabilities, positioning, when to use each model, and how they relate to client needs — always grounded in retrieved documents.\n' +
+    '- Style: thorough, structured, sales/delivery-oriented. Develop each topic with enough detail; do not shrink documented facts into bare bullets unless listing several items.\n\n' +
+    '## Scope boundaries (not your job — do not pretend to be these agents)\n' +
+    '- Aviation/airline domain concepts (PSS, NDC, loyalty, etc.) unless explicitly tied to commercial/proposal material in context.\n' +
+    '- Aviators platform usage, FAQ, internal Aviators culture → orchestrator.\n' +
+    '- Aviation Studio newcomer onboarding and internal team rituals → onboarding agent.\n' +
+    '- Client roster, account status, Salesforce data → clients agent.\n' +
+    '- Delivered success stories and outcomes → success_cases agent.\n\n' +
+    '## Rules\n' +
+    '1) Prioritize commercial and technical consistency with retrieved documents.\n' +
+    '2) Clearly separate documented facts from assumptions or inference.\n' +
+    '3) If key information is missing, ask only for the minimum necessary data.\n' +
+    '4) Do not invent prices, dates, commitments, clients, studio capabilities or offering details not supported by context.\n' +
+    '5) If multiple proposals or offerings apply, summarize each with salient points, then offer to deep dive into one.\n' +
+    '6) Commercial model labels you may encounter: TIME_AND_MATERIALS, STAFF_AUGMENTATION, FIXED_PRICE, SUBSCRIPTION, AI_PODS — use indexed definitions when available.\n\n' +
+    'CRITICAL RULE - no content:\n' +
+    'If the retrieved corpus has NO relevant material for the request (proposal, studio, offering or Globant commercial topic), reply EXACTLY with this text and nothing else:\n' +
+    '[[NO_RELEVANT_CONTENT]]\n' +
+    'Do not invent or suggest content when there is no real match in the index.'
+  );
+}
+
+/**
+ * @param {{ agents: Array<Object> }} reg
+ * @return {boolean}
+ */
+function AdminAgents_applyPromptRevisions_(reg) {
+  if (!reg || !Array.isArray(reg.agents)) return false;
+  var changed = false;
+  var i;
+  for (i = 0; i < reg.agents.length; i++) {
+    var ag = reg.agents[i];
+    if (!ag || typeof ag !== 'object') continue;
+    var rev = typeof ag.promptRevision === 'number' ? ag.promptRevision : 0;
+    if (rev >= ADMIN_AGENTS_BUILTIN_PROMPT_REVISION) continue;
+    var id = String(ag.id || '').trim();
+    if (id === _ADMIN_AGENT_ID_ORCHESTRATOR) {
+      ag.systemPrompt = AdminAgents_orchestratorRoutingSystemPrompt_();
+      ag.promptRevision = ADMIN_AGENTS_BUILTIN_PROMPT_REVISION;
+      changed = true;
+    } else if (id === _ADMIN_AGENT_ID_PROPOSALS) {
+      ag.systemPrompt = AdminAgents_proposalsAgentSystemPrompt_();
+      ag.promptRevision = ADMIN_AGENTS_BUILTIN_PROMPT_REVISION;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/**
+ * @param {GoogleAppsScript.Properties.Properties} props
+ * @param {{ agents: Array<Object> }} reg
+ * @return {{ agents: Array<Object> }}
+ */
+function AdminAgents_finalizeRegistryLoad_(props, reg) {
+  var changed = AdminAgents_ensureDefaultAgentsInRegistry_(reg);
+  changed = AdminAgents_applyPromptRevisions_(reg) || changed;
+  if (changed) AdminAgents_saveRegistry_(props, reg);
+  return reg;
+}
+
 /**
  * @return {Array<{id:string,profileName:string,systemPrompt:string,sources:{folders:Array<{id:string,name:string}>,files:Array<{id:string,name:string}>},lastSync:string}>}
  */
@@ -35,26 +147,7 @@ function AdminAgents_defaultRegistryEntries_() {
     {
       id: _ADMIN_AGENT_ID_ORCHESTRATOR,
       profileName: 'aviators-orquestador',
-      systemPrompt:
-        'You are the Aviators Orchestrator Agent. Your ONLY goal is to classify the user request and decide which agent(s) should answer.\n\n' +
-        'Available agents:\n' +
-        '- success_cases: implementation stories, delivered outcomes, studio references, work by industry/technology.\n' +
-        '- proposals: commercial proposals, scope, deliverables, timeline, effort, pricing, RFP, quoted engagements.\n' +
-        '- clients: client roster, active accounts, maintenance projects, relationship status by client.\n' +
-        '- onboarding: aviation concepts, airline business fundamentals, domain terminology (PSS, DCS, NDC, GDS, loyalty, ancillary, etc.), Aviation Studio methodology, team processes, newcomer guides.\n' +
-        '- orchestrator: greetings, short small talk, and general Aviators questions that do NOT fit the other specialized agents.\n\n' +
-        'KEY RULE - parallel routing:\n' +
-        'When a user request can be answered by MORE THAN ONE agent (for example: "what did we do with X", "experience in Y", "projects in Z"), you MUST include ALL relevant agents in the "agents" array. Examples:\n' +
-        '- "what did we do with client Acme" -> agents: ["success_cases","proposals"] (there may be both success cases and proposals).\n' +
-        '- "show me success cases in banking" -> agents: ["success_cases"] (explicit single-agent request).\n' +
-        '- "any data engineering proposal?" -> agents: ["proposals"] (explicit request).\n' +
-        '- "experience in cloud" -> agents: ["success_cases","proposals"] (experience may exist in both).\n' +
-        '- "what is PSS / explain NDC / how does loyalty work" -> agents: ["onboarding"] (aviation domain concepts).\n' +
-        '- "how does Aviation Studio work / team structure / methodology" -> agents: ["onboarding"] (studio methodology).\n' +
-        '- "hello" -> agents: ["orchestrator"].\n\n' +
-        'You must ALWAYS return strict JSON with no extra text:\n' +
-        '{"agents":["success_cases","proposals"],"confidence":"high|medium|low","reason":"short phrase"}\n' +
-        'The "agents" array can contain one or more elements. Do not invent agents outside this list.',
+      systemPrompt: AdminAgents_orchestratorRoutingSystemPrompt_(),
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -65,12 +158,12 @@ function AdminAgents_defaultRegistryEntries_() {
         'You are the Aviators Success Cases Agent.\n' +
         'Your ONLY source of truth is the indexed success-cases repository. DO NOT use external knowledge.\n\n' +
         'Goal: answer with relevant cases, context, problem, implemented solution, outcomes, and learnings.\n' +
-        'Style: clear, executive, and actionable.\n\n' +
+        'Style: clear, executive, and actionable. Prefer thorough, well-developed answers: expand each section with concrete detail from the indexed material rather than one-line summaries.\n\n' +
         'Rules:\n' +
         '1) Prioritize concrete examples comparable to the user request.\n' +
         '2) Do not invent logos, clients, metrics, outcomes, or project names.\n' +
         '3) When applicable, use this structure: Case, Context, Solution, Impact, Risks.\n' +
-        '4) If multiple cases apply, list them briefly and ask whether to deep dive into one.\n\n' +
+        '4) If multiple cases apply, summarize each with key points (context, solution, impact), then offer to deep dive into one.\n\n' +
         'CRITICAL RULE - no content:\n' +
         'If your indexed corpus has NO relevant success case for the request, reply EXACTLY with this text and nothing else:\n' +
         '[[NO_RELEVANT_CONTENT]]\n' +
@@ -81,21 +174,7 @@ function AdminAgents_defaultRegistryEntries_() {
     {
       id: _ADMIN_AGENT_ID_PROPOSALS,
       profileName: 'aviators-proposals',
-      systemPrompt:
-        'You are the Aviators Proposals Agent.\n' +
-        'Your ONLY source of truth is the indexed commercial-proposals repository. DO NOT use external knowledge.\n\n' +
-        'Goal: answer with sales/delivery-oriented data: scope, assumptions, deliverables, phases, risks, and next steps.\n' +
-        'Style: brief, structured, and aligned with documented content.\n\n' +
-        'Rules:\n' +
-        '1) Prioritize commercial and technical consistency with the indexed repository.\n' +
-        '2) Clearly separate documented facts from assumptions.\n' +
-        '3) If key information is missing, ask only for the minimum necessary data.\n' +
-        '4) Do not invent prices, dates, commitments, or undocumented clients.\n' +
-        '5) If multiple proposals apply, list them briefly and ask whether to deep dive.\n\n' +
-        'CRITICAL RULE - no content:\n' +
-        'If your indexed corpus has NO relevant proposal for the request, reply EXACTLY with this text and nothing else:\n' +
-        '[[NO_RELEVANT_CONTENT]]\n' +
-        'Do not invent or suggest content when there is no real match in the index.',
+      systemPrompt: AdminAgents_proposalsAgentSystemPrompt_(),
       sources: { folders: [], files: [] },
       lastSync: '',
     },
@@ -119,6 +198,7 @@ function AdminAgents_defaultRegistryEntries_() {
         '- Airline operations (flight ops, ground handling, crew management)\n' +
         '- Aviation Studio methodology, processes, and best practices\n' +
         '- Team structure, roles, and ways of working\n\n' +
+        'Style: explain thoroughly and didactically; prefer complete paragraphs and examples from the index over terse one-line definitions.\n\n' +
         'Rules:\n' +
         '1) Explain concepts clearly and didactically, suitable for newcomers.\n' +
         '2) Use examples from the indexed material when available.\n' +
@@ -162,6 +242,7 @@ function AdminAgents_ensureDefaultAgentsInRegistry_(reg) {
       sources: AdminAgents_normalizeSources_(df.sources),
       globantAgent: AdminAgents_defaultGlobantAgentConfig_(df),
       lastSync: '',
+      promptRevision: ADMIN_AGENTS_BUILTIN_PROMPT_REVISION,
     });
     changed = true;
   }
@@ -270,7 +351,7 @@ function AdminAgents_defaultGlobantAgentConfig_(agentLike) {
     promptContext: '',
     promptInstructions: prompt,
     modelName: ADMIN_AGENT_DEFAULT_MODEL,
-    maxTokens: 4000,
+    maxTokens: 8000,
     timeout: 120,
     temperature: 0.2,
   };
@@ -520,13 +601,12 @@ function AdminAgents_normalizeSources_(blob) {
 function AdminAgents_loadRegistry_(props) {
   var fromFile = AdminAgents_loadRegistryFromFile_(props);
   if (fromFile) {
-    return fromFile;
+    return AdminAgents_finalizeRegistryLoad_(props, fromFile);
   }
 
   var legacy = AdminAgents_loadLegacyRegistryFromProperties_(props);
   if (legacy) {
-    AdminAgents_saveRegistry_(props, legacy);
-    return legacy;
+    return AdminAgents_finalizeRegistryLoad_(props, legacy);
   }
 
   /** Migración suave: un agente desde el corpus global legacy si existía. */
@@ -538,9 +618,7 @@ function AdminAgents_loadRegistry_(props) {
     (props.getProperty(_AK_PROP_PROFILE) || '').trim() || ADMIN_KNOWLEDGE_DEFAULT_PROFILE;
   if (!hasLegacy) {
     var seeded = { agents: [] };
-    AdminAgents_ensureDefaultAgentsInRegistry_(seeded);
-    AdminAgents_saveRegistry_(props, seeded);
-    return seeded;
+    return AdminAgents_finalizeRegistryLoad_(props, seeded);
   }
   var migrated = [
     {
@@ -556,9 +634,7 @@ function AdminAgents_loadRegistry_(props) {
     },
   ];
   var migratedReg = { agents: migrated };
-  AdminAgents_ensureDefaultAgentsInRegistry_(migratedReg);
-  AdminAgents_saveRegistry_(props, migratedReg);
-  return migratedReg;
+  return AdminAgents_finalizeRegistryLoad_(props, migratedReg);
 }
 
 /**
@@ -665,6 +741,20 @@ function AdminAgents_maybeCreateRagClient_(props) {
 }
 
 /**
+ * Prompt persistido en Globant (`searchOptions.search.prompt`). El orquestador usa plantilla de respuesta;
+ * el systemPrompt del registro local es para ruteo JSON en runtime.
+ * @param {string} agentId
+ * @param {string} systemPrompt
+ * @return {string}
+ */
+function AdminAgents_resolveRagSearchPromptForSync_(agentId, systemPrompt) {
+  if (String(agentId || '').trim() === _ADMIN_AGENT_ID_ORCHESTRATOR) {
+    return AgentOrchestrator_buildOrchestratorRagProfilePrompt_();
+  }
+  return systemPrompt;
+}
+
+/**
  * Crea o actualiza el asistente RAG en Globant (`searchOptions.search.prompt`).
  * Asistente RAG (/v1/search/profile): prompt en searchOptions.search.prompt vía GlobantRagDefaults.
  * No usar Agents API v4 ni AdminAgents_buildGlobantAgentDefinition_ aquí.
@@ -672,29 +762,55 @@ function AdminAgents_maybeCreateRagClient_(props) {
  * @param {Object} client — GlobantRagApiClient_create
  * @param {string} profileName
  * @param {string} systemPrompt · instrucciones / plantilla de búsqueda Aviators
+ * @param {string} [agentId]
  * @return {'created'|'updated'|'unchanged'}
  */
-function AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt) {
+function AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt, agentId) {
   var name = String(profileName || '').trim();
   if (!name) return 'unchanged';
+
+  var promptForProfile = AdminAgents_resolveRagSearchPromptForSync_(agentId, systemPrompt);
 
   var defaultDesc = UiStrings_t(
     UiStrings_activeLocale_(),
     'admin_rag_default_profile_description',
   );
   var exists = AdminAgents_listRemoteProfilesSet_(client);
-  var searchPrompt = GlobantRagDefaults_coerceSearchPromptTemplate(systemPrompt);
+  var searchPrompt = GlobantRagDefaults_coerceSearchPromptTemplate(promptForProfile);
 
   if (exists[name]) {
-    client.updateProfile(
-      name,
-      GlobantRagDefaults_buildUpdateSearchPromptBody(defaultDesc, systemPrompt),
+    var remoteLlm = null;
+    try {
+      var remoteProfile = client.getProfile(name);
+      remoteLlm =
+        remoteProfile &&
+        remoteProfile.searchOptions &&
+        remoteProfile.searchOptions.llm;
+    } catch (getProfErr) {
+      console.log(
+        '[AdminAgents] getProfile before update failed name=' +
+          name +
+          ' err=' +
+          (getProfErr && getProfErr.message ? getProfErr.message : getProfErr),
+      );
+    }
+    var updateBody = GlobantRagDefaults_buildUpdateSearchPromptBody(
+      defaultDesc,
+      promptForProfile,
+      remoteLlm,
     );
+    client.updateProfile(name, updateBody);
     console.log(
       '[AdminAgents] RAG profile prompt updated name=' +
         name +
         ' promptLen=' +
-        searchPrompt.length,
+        searchPrompt.length +
+        ' llmModel=' +
+        String(
+          updateBody.searchOptions &&
+            updateBody.searchOptions.llm &&
+            updateBody.searchOptions.llm.modelName,
+        ),
     );
     return 'updated';
   }
@@ -703,7 +819,7 @@ function AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt) {
     GlobantRagDefaults_buildCreateProfileWithSearchPrompt(
       name,
       defaultDesc,
-      systemPrompt,
+      promptForProfile,
     ),
   );
   console.log(
@@ -721,7 +837,7 @@ function AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt) {
  * @param {string} systemPrompt
  */
 function AdminAgents_ensureRagProfileExists_(client, profileName, systemPrompt) {
-  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt);
+  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt, '');
 }
 
 /**
@@ -742,7 +858,7 @@ function AdminAgents_maybeSyncRagProfilePrompt_(
   if (LlmProviderGlobant_isAssistantMode(props)) return;
   var client = AdminAgents_maybeCreateRagClient_(props);
   if (!client) return;
-  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt);
+  AdminAgents_syncRagProfilePrompt_(client, profileName, systemPrompt, agentId);
 }
 
 /**
@@ -1081,6 +1197,7 @@ function AdminAgents_ensureRemoteProfilesForDefaults_(
       ragClient,
       name,
       String(ag.systemPrompt || ''),
+      String(ag.id || ''),
     );
     if (outcome === 'created') created++;
     else if (outcome === 'updated') updated++;
@@ -1445,6 +1562,8 @@ function AdminAgents_sync(agentId) {
   var profileName = String(agent.profileName || '').trim();
   var sources = AdminAgents_normalizeSources_(agent.sources);
   var systemPrompt = String(agent.systemPrompt || '');
+
+  AdminAgents_maybeSyncRagProfilePrompt_(props, profileName, systemPrompt, aid);
 
   var fi;
   var ragFileCount = 0;

@@ -388,21 +388,34 @@ function LlmProviderGlobant_consultPromptWithAgent(
   }
 
   var sp = ('' + (systemPrompt || '')).trim();
+  var useRagExecute =
+    LlmProviderGlobant_useRagExecuteForProfile_(pn, p) &&
+    !LlmProviderGlobant_isAssistantMode(p);
   var finalPrompt = q;
   if (sp) {
-    finalPrompt =
-      '[QUERY]\n' +
-      q +
-      '\n[/QUERY]\n\n' +
-      '[INSTRUCTIONS]\n' +
-      sp +
-      '\n[/INSTRUCTIONS]';
+    if (useRagExecute) {
+      // Instrucciones base del agente viven en searchOptions.search.prompt del perfil (sync Admin).
+      // En execute solo va la pregunta del turno + restricciones efímeras (idioma, rol, orquestador).
+      finalPrompt =
+        q +
+        '\n\n[CONSTRAINTS FOR THIS TURN]\n' +
+        sp +
+        '\n[/CONSTRAINTS FOR THIS TURN]';
+    } else {
+      finalPrompt =
+        '[QUERY]\n' +
+        q +
+        '\n[/QUERY]\n\n' +
+        '[INSTRUCTIONS]\n' +
+        sp +
+        '\n[/INSTRUCTIONS]';
+    }
   }
 
   var baseUrl = (p.getProperty(LLM_PROP.GLOBANT_BASE_URL) || '').trim();
   var maxRetries = LlmProviderGlobant_readExecuteMaxRetries(p);
 
-  if (!LlmProviderGlobant_useRagExecuteForProfile_(pn, p)) {
+  if (!useRagExecute) {
     if (LlmProviderGlobant_isAssistantMode(p)) {
       var ast = GlobantAssistantApiClient_create({
         apiKey: apiKey,

@@ -92,6 +92,44 @@ function SupabaseRest_select(table, query) {
 }
 
 /**
+ * Cuenta filas que coinciden con el query (PostgREST Prefer: count=exact).
+ * @param {string} table
+ * @param {string} [query]
+ * @return {number}
+ */
+function SupabaseRest_count(table, query) {
+  var cfg = SupabaseRest_config_();
+  var q = query || SupabaseRest_query_(['select=content_id', 'limit=0']);
+  var url = SupabaseRest_tableUrl_(table, q);
+  var headers = {
+    apikey: cfg.key,
+    Authorization: 'Bearer ' + cfg.key,
+    Accept: 'application/json',
+    'Accept-Profile': cfg.schema,
+    Prefer: 'count=exact',
+  };
+  var res = BearerHttp_fetch(url, {
+    method: 'get',
+    headers: headers,
+    muteHttpExceptions: true,
+  });
+  var code = res.getResponseCode();
+  if (!BearerHttp_isSuccess(code)) {
+    var text = res.getContentText() || '';
+    var snippet = text.length > 400 ? text.slice(0, 400) + '…' : text;
+    throw new Error('ERR_SUPABASE_HTTP_' + code + ': count ' + table + ' ' + snippet);
+  }
+  var allHeaders = res.getHeaders() || {};
+  var range =
+    allHeaders['Content-Range'] ||
+    allHeaders['content-range'] ||
+    '';
+  var m = String(range).match(/\/(\d+)\s*$/);
+  if (m) return Number(m[1]) || 0;
+  return 0;
+}
+
+/**
  * @param {string} table
  * @param {Object|Array<Object>} rowOrRows
  * @param {Object} [opts]

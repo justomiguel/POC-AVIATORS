@@ -104,6 +104,18 @@ function ContentIngestion_buildMetadata_(common, contentType, specific) {
   if (String(contentType || '').trim() === 'onboarding') {
     meta.topic = ContentIngestion_resolveOnboardingTopic_(specific, null);
   }
+  if (String(contentType || '').trim() === 'proposal') {
+    var proposalSp = specific && typeof specific === 'object' ? specific : {};
+    meta.material_kind = ContentIngestion_resolveProposalMaterialKind_(proposalSp, null);
+    meta.topic = String(proposalSp.topic || '').trim();
+    meta.globant_studio = String(proposalSp.globant_studio || '').trim();
+    meta.offering = String(proposalSp.offering || '').trim();
+    if (!meta.offering && proposalSp.pricing_model) {
+      meta.offering = String(proposalSp.pricing_model || '').trim();
+    }
+    meta.stage = String(proposalSp.stage || '').trim();
+    meta.pricing_model = String(proposalSp.pricing_model || '').trim();
+  }
   console.log('[RAG-META] Building metadata: ' + JSON.stringify(meta));
   return meta;
 }
@@ -113,6 +125,15 @@ var CONTENT_INGESTION_ONBOARDING_DRIVE_ROOT_NAME = 'Onboarding';
 
 /** @type {string} Carpeta Drive cuando el onboarding no define tópico. */
 var CONTENT_INGESTION_ONBOARDING_TOPIC_FALLBACK = 'General';
+
+/** @type {string} Raíz de propuestas en DRIVE_ROOT_FOLDER_ID (decks armados + catálogo). */
+var CONTENT_INGESTION_PROPOSALS_DRIVE_ROOT_NAME = 'Propuestas';
+
+/** @type {string} Subcarpeta del material indexado (catálogo Contenidos). */
+var CONTENT_INGESTION_PROPOSALS_CATALOG_SEGMENT = 'Catalogo';
+
+/** @type {string} Fallback de segmento secundario en Drive para propuestas. */
+var CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK = 'General';
 
 /**
  * @param {Object|null|undefined} specific
@@ -207,7 +228,247 @@ function ContentIngestion_onboardingFileUnderDriveRoot_(driveFileId) {
  */
 function ContentIngestion_usesProjectDriveStorage_(contentType) {
   var t = String(contentType || '').trim();
-  return t === 'success_case' || t === 'onboarding';
+  return t === 'success_case' || t === 'onboarding' || t === 'proposal';
+}
+
+/**
+ * @param {Object|null|undefined} specific
+ * @param {Object|null|undefined} existingSpecific
+ * @return {string}
+ */
+function ContentIngestion_resolveProposalMaterialKind_(specific, existingSpecific) {
+  var kind = String((specific && specific.material_kind) || '').trim();
+  if (!kind && existingSpecific) {
+    kind = String(existingSpecific.material_kind || '').trim();
+  }
+  if (!kind) kind = 'COMMERCIAL_PROPOSAL';
+  kind = ContentExtraction_normalizeEnum_(kind, CONTENT_PROPOSAL_MATERIAL_KINDS, 'COMMERCIAL_PROPOSAL');
+  return kind;
+}
+
+/**
+ * @param {string} materialKind
+ * @return {string}
+ */
+function ContentIngestion_proposalMaterialKindFolderLabel_(materialKind) {
+  var kind = ContentIngestion_resolveProposalMaterialKind_({ material_kind: materialKind }, null);
+  return (
+    CONTENT_PROPOSAL_MATERIAL_KIND_FOLDER_LABELS[kind] ||
+    CONTENT_PROPOSAL_MATERIAL_KIND_FOLDER_LABELS.OTHER
+  );
+}
+
+/**
+ * @param {string} materialKind
+ * @param {Object} specific
+ * @param {Object} common
+ * @param {Object|null|undefined} existingSpecific
+ * @param {Object|null|undefined} existingCommon
+ * @return {string}
+ */
+function ContentIngestion_resolveProposalDriveSecondarySegment_(
+  materialKind,
+  specific,
+  common,
+  existingSpecific,
+  existingCommon,
+) {
+  var sp = specific && typeof specific === 'object' ? specific : {};
+  var kind = ContentIngestion_resolveProposalMaterialKind_(
+    { material_kind: materialKind || sp.material_kind },
+    existingSpecific,
+  );
+  if (kind === 'COMMERCIAL_PROPOSAL') {
+    var clientName = String((common && common.client_name) || '').trim();
+    if (!clientName && existingCommon) {
+      clientName = String(existingCommon.client_name || '').trim();
+    }
+    return ContentIngestion_safeDriveFolderName_(clientName, CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK);
+  }
+  if (kind === 'GLOBANT_STUDIO') {
+    var studio = String(sp.globant_studio || '').trim();
+    if (!studio && existingSpecific) studio = String(existingSpecific.globant_studio || '').trim();
+    return ContentIngestion_safeDriveFolderName_(studio, CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK);
+  }
+  if (kind === 'GLOBANT_OFFERING') {
+    var offering = String(sp.offering || sp.pricing_model || '').trim();
+    if (!offering && existingSpecific) {
+      offering = String(existingSpecific.offering || existingSpecific.pricing_model || '').trim();
+    }
+    offering = ContentExtraction_normalizeEnum_(offering, CONTENT_PRICING_MODELS, '');
+    if (!offering) offering = CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK;
+    return ContentIngestion_safeDriveFolderName_(offering, CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK);
+  }
+  var topic = String(sp.topic || '').trim();
+  if (!topic && existingSpecific) topic = String(existingSpecific.topic || '').trim();
+  return ContentIngestion_safeDriveFolderName_(topic, CONTENT_INGESTION_PROPOSALS_SEGMENT_FALLBACK);
+}
+
+/**
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ContentIngestion_getProposalsCatalogDriveRootFolder_() {
+  function getOrCreateChildFolder_(parent, name) {
+    var it = parent.getFoldersByName(name);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(name);
+  }
+
+  var projectRoot = DriveApp.getFolderById(AviatorsConfig_requireDriveRootFolderId_());
+  var proposalsRoot = getOrCreateChildFolder_(projectRoot, CONTENT_INGESTION_PROPOSALS_DRIVE_ROOT_NAME);
+  return getOrCreateChildFolder_(proposalsRoot, CONTENT_INGESTION_PROPOSALS_CATALOG_SEGMENT);
+}
+
+/**
+ * @param {Object} specific
+ * @param {Object} common
+ * @param {Object|null|undefined} existingSpecific
+ * @param {Object|null|undefined} existingCommon
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ContentIngestion_getProposalsDriveTargetFolder_(
+  specific,
+  common,
+  existingSpecific,
+  existingCommon,
+) {
+  function getOrCreateChildFolder_(parent, name) {
+    var it = parent.getFoldersByName(name);
+    if (it.hasNext()) return it.next();
+    return parent.createFolder(name);
+  }
+
+  var materialKind = ContentIngestion_resolveProposalMaterialKind_(specific, existingSpecific);
+  var catalogRoot = ContentIngestion_getProposalsCatalogDriveRootFolder_();
+  var kindFolder = getOrCreateChildFolder_(
+    catalogRoot,
+    ContentIngestion_safeDriveFolderName_(
+      ContentIngestion_proposalMaterialKindFolderLabel_(materialKind),
+      CONTENT_PROPOSAL_MATERIAL_KIND_FOLDER_LABELS.OTHER,
+    ),
+  );
+  var secondaryFolder = getOrCreateChildFolder_(
+    kindFolder,
+    ContentIngestion_resolveProposalDriveSecondarySegment_(
+      materialKind,
+      specific,
+      common,
+      existingSpecific,
+      existingCommon,
+    ),
+  );
+  var title =
+    String((common && common.title) || '').trim() ||
+    (existingCommon ? String(existingCommon.title || '').trim() : '') ||
+    '';
+  return getOrCreateChildFolder_(
+    secondaryFolder,
+    ContentIngestion_safeDriveFolderName_(title, 'Sin título'),
+  );
+}
+
+/**
+ * @param {string} driveFileId
+ * @return {boolean}
+ */
+function ContentIngestion_proposalFileUnderDriveRoot_(driveFileId) {
+  var file = ContentIngestion_getLiveDriveFile_(driveFileId);
+  if (!file) return false;
+  var rootId = String(ContentIngestion_getProposalsCatalogDriveRootFolder_().getId() || '');
+  if (!rootId) return false;
+  var parents = file.getParents();
+  while (parents.hasNext()) {
+    if (String(parents.next().getId() || '') === rootId) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {GoogleAppsScript.Base.Blob} pdfBlob
+ * @param {string} fileName
+ * @param {Object} specific
+ * @param {Object} common
+ * @return {{id:string,url:string,name:string}}
+ */
+function ContentIngestion_storeProposalPdfInDrive_(pdfBlob, fileName, specific, common) {
+  var name = String(fileName || 'content.pdf').trim() || 'content.pdf';
+  var targetFolder = ContentIngestion_getProposalsDriveTargetFolder_(specific, common, null, null);
+  var file = targetFolder.createFile(pdfBlob.setName(name));
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || name),
+  };
+}
+
+/**
+ * @param {string} driveFileId
+ * @param {Object} specific
+ * @param {Object} common
+ * @param {Object|null|undefined} existingSpecific
+ * @param {Object|null|undefined} existingCommon
+ * @return {{id:string,url:string,name:string}|null}
+ */
+function ContentIngestion_relocateProposalDriveFile_(
+  driveFileId,
+  specific,
+  common,
+  existingSpecific,
+  existingCommon,
+) {
+  var file = ContentIngestion_getLiveDriveFile_(driveFileId);
+  if (!file) return null;
+  var targetFolder = ContentIngestion_getProposalsDriveTargetFolder_(
+    specific,
+    common,
+    existingSpecific,
+    existingCommon,
+  );
+  var parents = file.getParents();
+  if (parents.hasNext()) {
+    var parent = parents.next();
+    if (String(parent.getId() || '') === String(targetFolder.getId() || '')) {
+      return {
+        id: String(file.getId() || ''),
+        url: String(file.getUrl() || ''),
+        name: String(file.getName() || ''),
+      };
+    }
+  }
+  file.moveTo(targetFolder);
+  return {
+    id: String(file.getId() || ''),
+    url: String(file.getUrl() || ''),
+    name: String(file.getName() || ''),
+  };
+}
+
+/**
+ * @param {Object} specific
+ * @param {Object} common
+ * @param {Object|null|undefined} existingSpecific
+ * @param {Object|null|undefined} existingCommon
+ * @return {string}
+ */
+function ContentIngestion_proposalDriveLayoutKey_(
+  specific,
+  common,
+  existingSpecific,
+  existingCommon,
+) {
+  var materialKind = ContentIngestion_resolveProposalMaterialKind_(specific, existingSpecific);
+  var secondary = ContentIngestion_resolveProposalDriveSecondarySegment_(
+    materialKind,
+    specific,
+    common,
+    existingSpecific,
+    existingCommon,
+  );
+  var title =
+    String((common && common.title) || '').trim() ||
+    (existingCommon ? String(existingCommon.title || '').trim() : '') ||
+    '';
+  return [materialKind, secondary, title].join('\u0001');
 }
 
 /**
@@ -453,21 +714,32 @@ function ContentIngestion_save(payloadJson) {
       throw new Error('Se requiere archivo para contenido nuevo');
     }
 
+    var externalUrl = String(
+      payload.externalUrl || common.external_url || common.drive_file_url || '',
+    ).trim();
+    var skipDriveArchive =
+      !!externalUrl &&
+      contentType === 'success_case' &&
+      (hasNewFile || !String(existing.common.drive_file_id || '').trim());
+
     var pdfBlob = null;
     var newDriveFile = null;
     var oldDriveFileId = existing ? String(existing.common.drive_file_id || '').trim() : '';
     var oldDriveFileUrl = existing ? String(existing.common.drive_file_url || '').trim() : '';
+    if (skipDriveArchive) {
+      oldDriveFileId = '';
+      if (!oldDriveFileUrl) oldDriveFileUrl = externalUrl;
+    }
     var usesDrive = ContentIngestion_usesProjectDriveStorage_(contentType);
     var onboardingTopic = '';
     var onboardingTitle = '';
+    var existingSpecific = existing && existing.specific ? existing.specific : null;
+    var existingCommon = existing && existing.common ? existing.common : null;
     if (contentType === 'onboarding') {
-      onboardingTopic = ContentIngestion_resolveOnboardingTopic_(
-        specific,
-        existing && existing.specific ? existing.specific : null,
-      );
+      onboardingTopic = ContentIngestion_resolveOnboardingTopic_(specific, existingSpecific);
       onboardingTitle =
         String(common.title || '').trim() ||
-        (existing && existing.common ? String(existing.common.title || '').trim() : '') ||
+        (existingCommon ? String(existingCommon.title || '').trim() : '') ||
         '';
     }
     if (hasNewFile) {
@@ -475,9 +747,9 @@ function ContentIngestion_save(payloadJson) {
       pdfBlob = prepared.blob;
       common.file_name = prepared.name;
       common.mime_type = prepared.mimeType;
-      if (usesDrive) {
+      if (usesDrive && !skipDriveArchive) {
         var contentTitle =
-          common.title || (existing && existing.common && existing.common.title) || '';
+          common.title || (existingCommon && existingCommon.title) || '';
         if (contentType === 'onboarding') {
           newDriveFile = ContentIngestion_storeOnboardingPdfInDrive_(
             pdfBlob,
@@ -485,17 +757,24 @@ function ContentIngestion_save(payloadJson) {
             onboardingTopic,
             onboardingTitle || contentTitle,
           );
+        } else if (contentType === 'proposal') {
+          newDriveFile = ContentIngestion_storeProposalPdfInDrive_(
+            pdfBlob,
+            prepared.name,
+            specific,
+            common,
+          );
         } else {
           newDriveFile = ContentIngestion_storeSuccessCasePdfInDrive_(
             pdfBlob,
             prepared.name,
             common.client_name ||
-              (existing && existing.common && existing.common.client_name) ||
+              (existingCommon && existingCommon.client_name) ||
               '',
             contentTitle,
           );
         }
-      } else {
+      } else if (!skipDriveArchive) {
         if (oldDriveFileId) {
           ContentIngestion_trashDriveFile_(oldDriveFileId);
         }
@@ -512,10 +791,10 @@ function ContentIngestion_save(payloadJson) {
     var onboardingDriveLayoutChanged = false;
     if (contentType === 'onboarding' && usesDrive && oldDriveFileId && existing) {
       var prevTopicForLayout = ContentIngestion_resolveOnboardingTopic_(
-        existing.specific || {},
+        existingSpecific || {},
         null,
       );
-      var prevTitleForLayout = String(existing.common.title || '').trim();
+      var prevTitleForLayout = String(existingCommon.title || '').trim();
       var needsOnboardingFolder =
         !ContentIngestion_onboardingFileUnderDriveRoot_(oldDriveFileId);
       onboardingDriveLayoutChanged =
@@ -527,6 +806,34 @@ function ContentIngestion_save(payloadJson) {
           oldDriveFileId,
           onboardingTopic,
           onboardingTitle || prevTitleForLayout,
+        );
+      }
+    }
+
+    var proposalDriveLayoutChanged = false;
+    if (contentType === 'proposal' && usesDrive && oldDriveFileId && existing) {
+      var prevProposalLayoutKey = ContentIngestion_proposalDriveLayoutKey_(
+        existingSpecific || {},
+        existingCommon || {},
+        null,
+        null,
+      );
+      var nextProposalLayoutKey = ContentIngestion_proposalDriveLayoutKey_(
+        specific,
+        common,
+        existingSpecific,
+        existingCommon,
+      );
+      var needsProposalFolder = !ContentIngestion_proposalFileUnderDriveRoot_(oldDriveFileId);
+      proposalDriveLayoutChanged =
+        needsProposalFolder || prevProposalLayoutKey !== nextProposalLayoutKey;
+      if (!hasNewFile && proposalDriveLayoutChanged) {
+        newDriveFile = ContentIngestion_relocateProposalDriveFile_(
+          oldDriveFileId,
+          specific,
+          common,
+          existingSpecific,
+          existingCommon,
         );
       }
     }
@@ -543,12 +850,17 @@ function ContentIngestion_save(payloadJson) {
       hasNewFile ||
       oldProfile !== targetProfile ||
       String(existing.common.content_type || '').trim() !== contentType ||
-      onboardingDriveLayoutChanged;
+      onboardingDriveLayoutChanged ||
+      proposalDriveLayoutChanged;
 
     var client = ContentIngestion_createRagClient_();
     var newDocId = '';
     if (needReindex) {
-      if (!pdfBlob && contentType === 'onboarding' && oldDriveFileId) {
+      if (
+        !pdfBlob &&
+        (contentType === 'onboarding' || contentType === 'proposal') &&
+        oldDriveFileId
+      ) {
         pdfBlob = DriveDocuments_getPdfBlobForGlobant(oldDriveFileId);
       }
       if (!pdfBlob) {
@@ -570,6 +882,7 @@ function ContentIngestion_save(payloadJson) {
         docMetadata.drive_file_id = driveIdForMeta;
       }
       var driveUrlForMeta =
+        (skipDriveArchive && externalUrl) ||
         (newDriveFile && newDriveFile.url) ||
         oldDriveFileUrl ||
         '';
@@ -577,6 +890,13 @@ function ContentIngestion_save(payloadJson) {
         docMetadata.drive_file_url = driveUrlForMeta;
       }
       newDocId = ContentIngestion_indexBlob_(client, targetProfile, pdfBlob, docMetadata);
+    }
+
+    var savedDriveFileId = newDriveFile ? newDriveFile.id : oldDriveFileId;
+    var savedDriveFileUrl = newDriveFile ? newDriveFile.url : oldDriveFileUrl;
+    if (skipDriveArchive && externalUrl) {
+      savedDriveFileId = '';
+      savedDriveFileUrl = externalUrl;
     }
 
     var toSave = {
@@ -594,8 +914,8 @@ function ContentIngestion_save(payloadJson) {
           ('content-' + contentType),
         mime_type:
           common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
-        drive_file_id: newDriveFile ? newDriveFile.id : oldDriveFileId,
-        drive_file_url: newDriveFile ? newDriveFile.url : oldDriveFileUrl,
+        drive_file_id: savedDriveFileId,
+        drive_file_url: savedDriveFileUrl,
         globant_profile_name: targetProfile,
         globant_document_id: needReindex
           ? newDocId

@@ -1,0 +1,502 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var modal = document.getElementById('pb-wizard-modal');
+  var dialog = document.getElementById('pb-wizard-dialog');
+  var stepValidate = document.getElementById('pb-step-validate');
+  var stepIndustry = document.getElementById('pb-step-industry');
+  var fieldClient = document.getElementById('pb-field-client');
+  var fieldCommercial = document.getElementById('pb-field-commercial-model');
+  var fieldLanguage = document.getElementById('pb-field-language');
+  var scopeList = document.getElementById('pb-scope-list');
+  var milestoneList = document.getElementById('pb-milestone-list');
+  var addScopeBtn = document.getElementById('pb-add-scope-btn');
+  var addMilestoneBtn = document.getElementById('pb-add-milestone-btn');
+  var confirmBriefBtn = document.getElementById('pb-confirm-brief-btn');
+  var startBuildingBtn = document.getElementById('pb-start-building-btn');
+  var deckPreview = document.getElementById('pb-deck-preview');
+  var pageStatus = document.getElementById('proposal-building-status');
+  var validateBriefBtn = document.getElementById('pb-validate-brief-btn');
+
+  var PB_IMAGE_RE = /^image\/(png|jpe?g|webp|gif)$/i;
+  var PB_TEXT_RE = /^(text\/|application\/json)/i;
+
+  function pbIsActivePage_() {
+    return S.get('activePage') === 'proposal-building';
+  }
+
+  function pbUpdateChrome_() {
+    if (!pbIsActivePage_()) return;
+    var phase = S.get('proposalBuildingPhase') || 'intake';
+    if (validateBriefBtn) {
+      validateBriefBtn.classList.toggle('hidden', phase === 'building');
+    }
+    if (pageStatus) {
+      if (phase === 'building') {
+        var ctx = S.get('proposalBuildingContext') || {};
+        pageStatus.textContent = i18nFmt('pb_status_building_ready', {
+          industry: ctx.industryLabel || ctx.industry || '',
+          deck: ctx.deckLabel || '',
+        });
+      } else {
+        pageStatus.textContent = i18n('pb_status_intake');
+      }
+    }
+  }
+
+  function pbShowModal_(step) {
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    if (stepValidate) stepValidate.classList.toggle('hidden', step !== 'validate');
+    if (stepIndustry) stepIndustry.classList.toggle('hidden', step !== 'industry');
+    if (dialog && dialog.focus) {
+      try { dialog.focus(); } catch (eFocus) {}
+    }
+  }
+
+  function pbHideModal_() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function pbEmptyScopeRow_() {
+    return { title: '', description: '' };
+  }
+
+  function pbEmptyMilestoneRow_() {
+    return { label: '', date: '', notes: '' };
+  }
+
+  function pbBuildScopeRowEl_(row, idx) {
+    var wrap = document.createElement('div');
+    wrap.className = 'rounded-xl border border-slate-200 p-3 dark:border-slate-600';
+    wrap.setAttribute('data-scope-idx', String(idx));
+
+    var titleLbl = document.createElement('label');
+    titleLbl.className = 'mb-2 block text-sm';
+    var titleSpan = document.createElement('span');
+    titleSpan.className = 'mb-1 block font-medium text-slate-700 dark:text-slate-300';
+    titleSpan.textContent = i18n('pb_lbl_scope_title');
+    var titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'aviators-field w-full text-sm pb-scope-title';
+    titleInput.placeholder = i18n('pb_ph_scope_title');
+    titleInput.value = row.title || '';
+    titleLbl.appendChild(titleSpan);
+    titleLbl.appendChild(titleInput);
+
+    var descLbl = document.createElement('label');
+    descLbl.className = 'mb-2 block text-sm';
+    var descInput = document.createElement('textarea');
+    descInput.rows = 2;
+    descInput.className = 'aviators-field w-full text-sm pb-scope-desc';
+    descInput.placeholder = i18n('pb_ph_scope_desc');
+    descInput.value = row.description || '';
+    descLbl.appendChild(descInput);
+
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+    rmBtn.innerHTML =
+      '<i class="fa-solid fa-trash" aria-hidden="true"></i><span></span>';
+    rmBtn.querySelector('span').textContent = i18n('pb_btn_remove_scope_item');
+    rmBtn.addEventListener('click', function () {
+      wrap.remove();
+    });
+
+    wrap.appendChild(titleLbl);
+    wrap.appendChild(descLbl);
+    wrap.appendChild(rmBtn);
+    return wrap;
+  }
+
+  function pbBuildMilestoneRowEl_(row, idx) {
+    var wrap = document.createElement('div');
+    wrap.className = 'grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-2 dark:border-slate-600';
+    wrap.setAttribute('data-milestone-idx', String(idx));
+
+    var labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'aviators-field w-full text-sm pb-ms-label';
+    labelInput.placeholder = i18n('pb_ph_milestone_label');
+    labelInput.value = row.label || '';
+
+    var dateInput = document.createElement('input');
+    dateInput.type = 'text';
+    dateInput.className = 'aviators-field w-full text-sm pb-ms-date';
+    dateInput.placeholder = i18n('pb_ph_milestone_date');
+    dateInput.value = row.date || '';
+
+    var notesInput = document.createElement('textarea');
+    notesInput.rows = 2;
+    notesInput.className = 'aviators-field w-full text-sm pb-ms-notes md:col-span-2';
+    notesInput.value = row.notes || '';
+
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2 md:col-span-2';
+    rmBtn.innerHTML =
+      '<i class="fa-solid fa-trash" aria-hidden="true"></i><span></span>';
+    rmBtn.querySelector('span').textContent = i18n('pb_btn_remove_scope_item');
+    rmBtn.addEventListener('click', function () {
+      wrap.remove();
+    });
+
+    wrap.appendChild(labelInput);
+    wrap.appendChild(dateInput);
+    wrap.appendChild(notesInput);
+    wrap.appendChild(rmBtn);
+    return wrap;
+  }
+
+  function pbRenderScopeList_(items) {
+    if (!scopeList) return;
+    scopeList.innerHTML = '';
+    var rows = items && items.length ? items : [pbEmptyScopeRow_()];
+    for (var i = 0; i < rows.length; i++) {
+      scopeList.appendChild(pbBuildScopeRowEl_(rows[i], i));
+    }
+  }
+
+  function pbRenderMilestoneList_(items) {
+    if (!milestoneList) return;
+    milestoneList.innerHTML = '';
+    var rows = items && items.length ? items : [pbEmptyMilestoneRow_()];
+    for (var j = 0; j < rows.length; j++) {
+      milestoneList.appendChild(pbBuildMilestoneRowEl_(rows[j], j));
+    }
+  }
+
+  function pbReadBriefFromForm_() {
+    var scopeItems = [];
+    if (scopeList) {
+      var scopeNodes = scopeList.querySelectorAll('[data-scope-idx]');
+      for (var i = 0; i < scopeNodes.length; i++) {
+        var node = scopeNodes[i];
+        var title = (node.querySelector('.pb-scope-title') || {}).value || '';
+        var desc = (node.querySelector('.pb-scope-desc') || {}).value || '';
+        title = String(title).trim();
+        desc = String(desc).trim();
+        if (!title && !desc) continue;
+        scopeItems.push({ title: title, description: desc });
+      }
+    }
+    var milestones = [];
+    if (milestoneList) {
+      var msNodes = milestoneList.querySelectorAll('[data-milestone-idx]');
+      for (var j = 0; j < msNodes.length; j++) {
+        var ms = msNodes[j];
+        milestones.push({
+          label: String((ms.querySelector('.pb-ms-label') || {}).value || '').trim(),
+          date: String((ms.querySelector('.pb-ms-date') || {}).value || '').trim(),
+          notes: String((ms.querySelector('.pb-ms-notes') || {}).value || '').trim(),
+        });
+      }
+    }
+    return {
+      clientName: fieldClient ? String(fieldClient.value || '').trim() : '',
+      scopeItems: scopeItems,
+      commercialModel: fieldCommercial ? String(fieldCommercial.value || '').trim() : '',
+      milestones: milestones,
+      detectedLanguage: fieldLanguage ? String(fieldLanguage.value || 'es').trim() : 'es',
+    };
+  }
+
+  function pbOpenValidation_(brief) {
+    var b = brief || {};
+    if (fieldClient) fieldClient.value = b.clientName || '';
+    if (fieldCommercial) fieldCommercial.value = b.commercialModel || '';
+    if (fieldLanguage) fieldLanguage.value = b.detectedLanguage === 'en' ? 'en' : 'es';
+    pbRenderScopeList_(b.scopeItems || []);
+    pbRenderMilestoneList_(b.milestones || []);
+    pbShowModal_('validate');
+  }
+
+  function pbOpenIndustryStep_() {
+    var radios = document.querySelectorAll('input[name="pb-industry"]');
+    for (var i = 0; i < radios.length; i++) radios[i].checked = false;
+    if (deckPreview) deckPreview.textContent = '';
+    pbShowModal_('industry');
+  }
+
+  function pbSelectedIndustry_() {
+    var picked = document.querySelector('input[name="pb-industry"]:checked');
+    return picked ? String(picked.value || '').trim() : '';
+  }
+
+  function pbIndustryLabel_(key) {
+    if (key === 'Logistica') return i18n('pb_industry_logistics');
+    return i18n('pb_industry_airlines');
+  }
+
+  function pbReadAttachmentFile_(file, onOk, onErr) {
+    if (!file) {
+      onErr(new Error(i18n('err_ephemeral_doc_empty')));
+      return;
+    }
+    var mime = (file.type || '').trim();
+    var name = file.name || 'attachment';
+    if (!mime && /\.pdf$/i.test(name)) mime = 'application/pdf';
+    if (!mime && /\.(txt|md|csv)$/i.test(name)) mime = 'text/plain';
+    if (!mime && /\.docx$/i.test(name)) {
+      mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (!mime && /\.(png|jpe?g|webp|gif)$/i.test(name)) {
+      mime = 'image/jpeg';
+    }
+
+    if (PB_TEXT_RE.test(mime) || /\.(txt|md|csv)$/i.test(name)) {
+      var textReader = new FileReader();
+      textReader.onload = function () {
+        var text = String(textReader.result || '').trim();
+        if (!text) {
+          onErr(new Error(i18n('err_ephemeral_doc_empty')));
+          return;
+        }
+        onOk({ name: name, mimeType: 'text/plain', textContent: text });
+      };
+      textReader.onerror = function () {
+        onErr(new Error(i18n('err_ephemeral_doc_payload')));
+      };
+      textReader.readAsText(file, 'UTF-8');
+      return;
+    }
+
+    if (
+      mime === 'application/pdf' ||
+      PB_IMAGE_RE.test(mime) ||
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      var binReader = new FileReader();
+      binReader.onload = function () {
+        var dataUrl = String(binReader.result || '');
+        var comma = dataUrl.indexOf(',');
+        var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : '';
+        if (!b64) {
+          onErr(new Error(i18n('err_ephemeral_doc_empty')));
+          return;
+        }
+        onOk({ name: name, mimeType: mime, dataBase64: b64 });
+      };
+      binReader.onerror = function () {
+        onErr(new Error(i18n('err_ephemeral_doc_payload')));
+      };
+      binReader.readAsDataURL(file);
+      return;
+    }
+
+    onErr(new Error(i18nFmt('pb_err_attachment_mime', { name: name, mime: mime || '—' })));
+  }
+
+  function pbCollectExtractPayload_(userPrompt, attachment) {
+    var hist = S.get('proposalBuildingChatHistory') || [];
+    return JSON.stringify({
+      userPrompt: userPrompt || '',
+      chatHistory: hist,
+      attachment: attachment || null,
+    });
+  }
+
+  function pbRunExtract_(userPrompt, options) {
+    var opts = options || {};
+    A.showBlockingModal(i18n('pb_busy_extracting'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        if (opts.appendUser && A.chat && typeof A.chat.appendUserForProposalBuilding === 'function') {
+          A.chat.appendUserForProposalBuilding(userPrompt, opts.attachmentName || '');
+        }
+        S.set('proposalBuildingDraftBrief', (res && res.brief) || {});
+        pbOpenValidation_((res && res.brief) || {});
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        A.reportRpcError(e, {
+          scope: 'proposalBuildingExtract',
+          fallbackKey: 'pb_err_extract',
+          modal: true,
+        });
+      })
+      .proposalBuildingExtractBrief(pbCollectExtractPayload_(userPrompt, opts.attachment || null));
+  }
+
+  function pbWantsValidatePhrase_(text) {
+    return /(extraer|validar)\s+(el\s+)?brief|extract|validate\s+(the\s+)?brief/i.test(
+      String(text || ''),
+    );
+  }
+
+  function pbOnSend_(userPrompt, attachmentName, attachment) {
+    var phase = S.get('proposalBuildingPhase') || 'intake';
+    var gp = String(userPrompt || '').trim();
+    if (!gp && !attachmentName) {
+      return { ok: false, key: 'ask_empty_question' };
+    }
+    if (phase === 'building') {
+      if (A.chat && typeof A.chat.runProposalBuildingAgent_ === 'function') {
+        A.chat.runProposalBuildingAgent_(gp, false);
+      }
+      return { ok: true, handled: true };
+    }
+    pbRunExtract_(gp || i18n('pb_btn_validate_brief'), {
+      appendUser: true,
+      attachmentName: attachmentName || '',
+      attachment: attachment || null,
+    });
+    return { ok: true, handled: true };
+  }
+
+  function pbOnValidateButton_() {
+    var questionEl = document.getElementById('question');
+    var gp = questionEl ? String(questionEl.value || '').trim() : '';
+    var attachment = A.chat && typeof A.chat.getAttachment === 'function' ? A.chat.getAttachment() : null;
+    if (!gp && !attachment) {
+      return { ok: false, key: 'pb_err_extract_empty' };
+    }
+    if (questionEl) questionEl.value = '';
+    var attachName = attachment ? attachment.name || '' : '';
+    if (A.chat && typeof A.chat.clearAttachment === 'function' && attachment) {
+      A.chat.clearAttachment();
+    }
+    pbRunExtract_(gp || i18n('pb_btn_validate_brief'), {
+      appendUser: !!gp,
+      attachmentName: attachName,
+      attachment: attachment,
+    });
+    return { ok: true, handled: true };
+  }
+
+  if (addScopeBtn) {
+    addScopeBtn.addEventListener('click', function () {
+      if (scopeList) scopeList.appendChild(pbBuildScopeRowEl_(pbEmptyScopeRow_(), scopeList.children.length));
+    });
+  }
+  if (addMilestoneBtn) {
+    addMilestoneBtn.addEventListener('click', function () {
+      if (milestoneList) {
+        milestoneList.appendChild(pbBuildMilestoneRowEl_(pbEmptyMilestoneRow_(), milestoneList.children.length));
+      }
+    });
+  }
+
+  if (confirmBriefBtn) {
+    confirmBriefBtn.addEventListener('click', function () {
+      var validated = pbReadBriefFromForm_();
+      S.set('proposalBuildingValidatedBrief', validated);
+      pbOpenIndustryStep_();
+    });
+  }
+
+  if (startBuildingBtn) {
+    startBuildingBtn.addEventListener('click', function () {
+      var industry = pbSelectedIndustry_();
+      if (!industry) {
+        A.showErrorDialog({
+          title: i18n('pb_industry_heading'),
+          message: i18n('pb_err_industry_required'),
+        });
+        return;
+      }
+      startBuildingBtn.disabled = true;
+      A.showBlockingModal(i18n('pb_busy_creating_deck'));
+      google.script.run
+        .withSuccessHandler(function (res) {
+          A.hideBlockingModal();
+          startBuildingBtn.disabled = false;
+          var brief = S.get('proposalBuildingValidatedBrief') || {};
+          S.set('proposalBuildingPhase', 'building');
+          S.set('proposalBuildingContext', {
+            validatedBrief: brief,
+            industry: res.industry,
+            industryLabel: pbIndustryLabel_(res.industry),
+            deckKey: res.deckKey,
+            deckLabel: res.deckLabel,
+            deckDriveId: res.deckDriveId || '',
+            proposalDeckFileId: res.proposalDeckFileId || '',
+            proposalDeckFileUrl: res.proposalDeckFileUrl || '',
+            proposalDeckFileName: res.proposalDeckFileName || '',
+            language: brief.detectedLanguage || 'es',
+          });
+          pbHideModal_();
+          pbUpdateChrome_();
+          if (A.chat && typeof A.chat.onProposalBuildingReady_ === 'function') {
+            A.chat.onProposalBuildingReady_();
+          }
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          startBuildingBtn.disabled = false;
+          A.reportRpcError(e, {
+            scope: 'proposalBuildingDeck',
+            fallbackKey: 'pb_err_deck_template_missing',
+            modal: true,
+          });
+        })
+        .proposalBuildingResolveDeck(
+          industry,
+          JSON.stringify(S.get('proposalBuildingValidatedBrief') || {}),
+        );
+    });
+  }
+
+  var industryRadios = document.querySelectorAll('input[name="pb-industry"]');
+  for (var r = 0; r < industryRadios.length; r++) {
+    industryRadios[r].addEventListener('change', function () {
+      var ind = pbSelectedIndustry_();
+      if (!deckPreview || !ind) return;
+      var deckLabel =
+        ind === 'Logistica' ? i18n('pb_deck_logistics') : i18n('pb_deck_airlines');
+      deckPreview.textContent = i18nFmt('pb_deck_selected', { deck: deckLabel });
+    });
+  }
+
+  if (validateBriefBtn) {
+    validateBriefBtn.addEventListener('click', function () {
+      var result = pbOnValidateButton_();
+      if (!result.ok && result.key) {
+        var askStatus = document.getElementById('ask-status');
+        if (askStatus) {
+          askStatus.textContent = i18n(result.key);
+          askStatus.classList.add('err');
+        }
+      }
+    });
+  }
+
+  if (modal) {
+    modal.addEventListener('click', function (ev) {
+      if (ev.target === modal) return;
+    });
+  }
+
+  S.on('activePage', function (pg) {
+    if (pg === 'proposal-building') pbUpdateChrome_();
+  });
+
+  A.proposalBuilding = {
+    isActivePage: pbIsActivePage_,
+    onEnterPage: pbUpdateChrome_,
+    onSend: pbOnSend_,
+    wantsValidatePhrase: pbWantsValidatePhrase_,
+    readAttachmentFile: pbReadAttachmentFile_,
+    getContext: function () {
+      return S.get('proposalBuildingContext') || null;
+    },
+    getPhase: function () {
+      return S.get('proposalBuildingPhase') || 'intake';
+    },
+    resetSession: function () {
+      S.set('proposalBuildingPhase', 'intake');
+      S.set('proposalBuildingDraftBrief', null);
+      S.set('proposalBuildingValidatedBrief', null);
+      S.set('proposalBuildingContext', null);
+      pbUpdateChrome_();
+    },
+  };
+})(window.Aviators);
+</script>

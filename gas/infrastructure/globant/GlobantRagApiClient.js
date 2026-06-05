@@ -48,12 +48,12 @@ function GlobantRagApiClient_create(config) {
     } else if (typeof filters === 'string' && filters) {
       finalFilters = [{ key: 'id', operator: '$eq', value: filters }];
     }
-    var safeQuestion = GlobantRag_escapeLangChainFStringLiterals_(question, []);
+    // La pregunta de execute no es plantilla LangChain; no escapar llaves (historial/JSON rompe el payload).
     var payload = {
       profile: profileName,
-      question: safeQuestion,
-      filters: finalFilters,
+      question: String(question || ''),
     };
+    if (finalFilters.length) payload.filters = finalFilters;
     console.log(
       '[RAG] POST /v1/search/execute profile=' +
         profileName +
@@ -68,10 +68,8 @@ function GlobantRagApiClient_create(config) {
     });
     if (!BearerHttp_isSuccess(r.code)) {
       throw new Error(
-        UiStrings_fmt_('err_globant_api_http', {
-          path: '/v1/search/execute',
-          code: String(r.code),
-          detail: r.text,
+        GlobantHttp_formatApiError_('/v1/search/execute', r.code, r.text, {
+          idOrName: profileName,
         }),
       );
     }

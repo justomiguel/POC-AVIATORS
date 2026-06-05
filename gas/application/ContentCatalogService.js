@@ -43,6 +43,10 @@ function ContentCatalog_headersByType_(contentType) {
   if (contentType === 'proposal') {
     return [
       'content_id',
+      'material_kind',
+      'topic',
+      'globant_studio',
+      'offering',
       'stage',
       'pricing_model',
       'effort_estimate',
@@ -238,11 +242,48 @@ function ContentCatalog_list(filters) {
  * @return {{ok:boolean,items:Array<Object>,total:number,hasMore:boolean,controlledTags:Array<string>}}
  */
 function ContentCatalog_listSupabase_(filters) {
-  var dbRows = ContentCatalogStore_listAll();
-  var q = filters && filters.q ? String(filters.q).trim().toLowerCase() : '';
+  var q = filters && filters.q ? String(filters.q).trim() : '';
   var type = filters && filters.contentType ? String(filters.contentType).trim() : '';
   var tag = filters && filters.tag ? String(filters.tag).trim().toLowerCase() : '';
   var shouldReconcile = !(filters && filters.skipReconcile);
+  var skip = filters && typeof filters.skip === 'number' ? Math.max(0, filters.skip) : 0;
+  var limitRaw =
+    filters && typeof filters.limit === 'number' && filters.limit > 0 ? filters.limit : 0;
+  var limit =
+    limitRaw > 0 ? Math.min(ContentCatalog_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
+  var storeFilters = { contentType: type, q: q, tag: tag };
+  var usePagedQuery = limit > 0;
+
+  var dbRows;
+  var total;
+  if (usePagedQuery) {
+    total = ContentCatalogStore_countFiltered(storeFilters);
+    dbRows = ContentCatalogStore_listFiltered(storeFilters, skip, limit);
+  } else {
+    dbRows = ContentCatalogStore_listAll();
+    total = dbRows.length;
+  }
+
+  var items = ContentCatalog_mapRowsToApiItems_(dbRows, shouldReconcile);
+  var hasMore = usePagedQuery && skip + items.length < total;
+
+  return {
+    ok: true,
+    items: items,
+    total: total,
+    skip: skip,
+    limit: limit,
+    hasMore: hasMore,
+    controlledTags: ContentCatalog_getControlledTags(),
+  };
+}
+
+/**
+ * @param {Array<Object>} dbRows
+ * @param {boolean} shouldReconcile
+ * @return {Array<Object>}
+ */
+function ContentCatalog_mapRowsToApiItems_(dbRows, shouldReconcile) {
   var items = [];
   var repairClient = null;
   var repairClientReady = false;
@@ -252,26 +293,6 @@ function ContentCatalog_listSupabase_(filters) {
     var cid = String(row.content_id || '').trim();
     if (!cid) continue;
     var ctype = String(row.content_type || '').trim();
-    if (type && ctype !== type) continue;
-    var title = String(row.title || '');
-    var summary = String(row.summary || '');
-    var tagsCsv = String(row.tags_csv || '');
-    if (q) {
-      var hay = (
-        title +
-        ' ' +
-        summary +
-        ' ' +
-        String(row.client_name || '') +
-        ' ' +
-        String(row.industry || '') +
-        ' ' +
-        tagsCsv
-      ).toLowerCase();
-      if (hay.indexOf(q) < 0) continue;
-    }
-    if (tag && !ContentCatalog_rowHasTag_(tagsCsv, tag)) continue;
-
     var driveFileId = String(row.drive_file_id || '').trim();
     var globantProfile = String(row.globant_profile_name || '').trim();
     var globantDocId = String(row.globant_document_id || '').trim();
@@ -313,34 +334,7 @@ function ContentCatalog_listSupabase_(filters) {
     apiItem.common.index_repair_needed = needsIndexRepair;
     items.push(apiItem);
   }
-
-  items.sort(function (a, b) {
-    return String(b.common.updated_at || '').localeCompare(String(a.common.updated_at || ''));
-  });
-
-  var total = items.length;
-  var skip = filters && typeof filters.skip === 'number' ? Math.max(0, filters.skip) : 0;
-  var limitRaw =
-    filters && typeof filters.limit === 'number' && filters.limit > 0
-      ? filters.limit
-      : 0;
-  var limit =
-    limitRaw > 0 ? Math.min(ContentCatalog_LIST_MAX_LIMIT_, Math.max(1, limitRaw)) : 0;
-  var paged = items;
-  var hasMore = false;
-  if (limit > 0) {
-    paged = items.slice(skip, skip + limit);
-    hasMore = skip + limit < total;
-  }
-  return {
-    ok: true,
-    items: paged,
-    total: total,
-    skip: skip,
-    limit: limit,
-    hasMore: hasMore,
-    controlledTags: ContentCatalog_getControlledTags(),
-  };
+  return items;
 }
 
 /** @type {number} */
@@ -424,12 +418,15 @@ function ContentCatalog_tryDeleteRemoteIndex_(profileName, documentId) {
  */
 function ContentCatalog_get(contentId) {
   var id = String(contentId || '').trim();
-  var list = ContentCatalog_list({ skipReconcile: true });
-  var i;
-  for (i = 0; i < list.items.length; i++) {
-    if (list.items[i].common.content_id === id) return { ok: true, item: list.items[i] };
+  var row = ContentCatalogStore_getById(id);
+  if (!row) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_not_found'));
   }
-  throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_not_found'));
+  var items = ContentCatalog_mapRowsToApiItems_([row], false);
+  if (!items.length) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_admin_agent_not_found'));
+  }
+  return { ok: true, item: items[0] };
 }
 
 /**

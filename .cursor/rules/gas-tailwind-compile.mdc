@@ -15,7 +15,7 @@ alwaysApply: true
 
 - En una terminal: **`npm run watch:css`** — recompila Tailwind en watch y **actualiza `tailwind-include.html`** cuando cambia el CSS generado (equivalente a `build:css` sin minify en cada iteración). Detener con Ctrl+C; antes de producción o `clasp push`, conviene un **`npm run build:css`** final (minifica).
 
-- **`./deploy`** (`scripts/deploy-gas.sh`) ejecuta **siempre** **`npm run build:css`** al inicio (así vale desplegar con cambios locales sin commitear).
+- **`./deploy`** (`scripts/deploy-gas.sh`) ejecuta **siempre** **`npm run build:gas-artifacts`** al inicio (`build:css` + `build:kg-vis` para Cytoscape en `gas/kg-lib-cytoscape*.html`). Así vale desplegar con cambios locales sin commitear.
 
 ## No sustituye
 

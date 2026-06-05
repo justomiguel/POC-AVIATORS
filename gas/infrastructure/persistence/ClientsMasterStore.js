@@ -13,6 +13,90 @@ function ClientsMasterStore_listAll() {
 }
 
 /**
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function ClientsMasterStore_listPage(skip, limit) {
+  return ClientsMasterStore_listFiltered({}, skip, limit);
+}
+
+/**
+ * @param {{q?:string,industry?:string,sub_industry?:string}} filters
+ * @return {string}
+ */
+function ClientsMasterStore_orSearchPart_(q) {
+  var escaped = SupabaseRest_escapeFilterValue_(String(q || '').trim());
+  var pattern = '*' + escaped + '*';
+  var fields = [
+    'client_name',
+    'industry',
+    'sub_industry',
+    'country',
+    'main_contact_name',
+    'main_contact_email',
+  ];
+  var clauses = [];
+  var i;
+  for (i = 0; i < fields.length; i++) {
+    clauses.push(fields[i] + '.ilike.' + pattern);
+  }
+  return 'or=(' + clauses.join(',') + ')';
+}
+
+/**
+ * @param {{q?:string,industry?:string,sub_industry?:string}} filters
+ * @return {Array<string>}
+ */
+function ClientsMasterStore_buildFilterParts_(filters) {
+  var f = filters || {};
+  var parts = [];
+  var industry = String(f.industry || '').trim();
+  if (industry) {
+    parts.push(SupabaseRest_filter_('industry', 'eq', industry));
+  }
+  var subIndustry = String(f.sub_industry || '').trim();
+  if (subIndustry) {
+    parts.push(SupabaseRest_filter_('sub_industry', 'eq', subIndustry));
+  }
+  var q = String(f.q || '').trim();
+  if (q) {
+    parts.push(ClientsMasterStore_orSearchPart_(q));
+  }
+  return parts;
+}
+
+/**
+ * @param {{q?:string,industry?:string,sub_industry?:string}} filters
+ * @return {number}
+ */
+function ClientsMasterStore_countFiltered(filters) {
+  var filterParts = ClientsMasterStore_buildFilterParts_(filters);
+  var q = SupabaseRest_query_(['select=client_id'].concat(filterParts).concat(['limit=0']));
+  return SupabaseRest_count(SUPABASE_TABLE.CLIENTS, q);
+}
+
+/**
+ * Página filtrada del maestro de clientes (paginación real en Supabase).
+ * @param {{q?:string,industry?:string,sub_industry?:string}} filters
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function ClientsMasterStore_listFiltered(filters, skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(100, Math.max(1, Number(limit) || 25));
+  var filterParts = ClientsMasterStore_buildFilterParts_(filters);
+  var q = SupabaseRest_query_(
+    ['select=*', 'order=client_name.asc'].concat(filterParts).concat([
+      'offset=' + s,
+      'limit=' + lim,
+    ]),
+  );
+  return SupabaseRest_select(SUPABASE_TABLE.CLIENTS, q);
+}
+
+/**
  * @param {string} clientId
  * @return {Object|null}
  */

@@ -13,6 +13,23 @@ function SalesforceAccountsStore_listAll() {
 }
 
 /**
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function SalesforceAccountsStore_listPage(skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(100, Math.max(1, Number(limit) || 25));
+  var q = SupabaseRest_query_([
+    'select=*',
+    'order=account_name.asc',
+    'offset=' + s,
+    'limit=' + lim,
+  ]);
+  return SupabaseRest_select(SUPABASE_TABLE.SALESFORCE_ACCOUNTS, q);
+}
+
+/**
  * Lista cuentas con filtros en PostgREST (evita cargar todo el roster en memoria).
  * @param {{activeOnly?:boolean|null, industry?:string, industries?:Array<string>, subIndustry?:string}} filters
  * @return {Array<Object>}

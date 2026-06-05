@@ -135,7 +135,7 @@ El flujo recomendado es el script **`./deploy`** (equivale a `scripts/deploy-gas
 
 El script ejecuta, en orden:
 
-1. **`npm run build:css`** — Tailwind actualizado en `tailwind-include.html`.
+1. **`npm run build:gas-artifacts`** — Tailwind (`tailwind-include.html`) + visor del grafo Cytoscape (`kg-lib-cytoscape*.html` desde `vendor/cytoscape/`).
 2. **Embeber logo** — `logo.png` → data URL en `gas/index.html` (si existe `logo.png` en la raíz).
 3. **`clasp push --force`** — sube `gas/` al proyecto Apps Script.
 4. **`clasp version`** — crea una versión numerada.

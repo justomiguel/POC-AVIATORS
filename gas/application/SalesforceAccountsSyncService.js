@@ -13,6 +13,9 @@ var SALESFORCE_ACCOUNTS_EMBEDDING_BATCH_SIZE = 8;
 /** Presupuesto de tiempo por ejecución de trigger (ms); margen bajo el límite ~6 min de GAS. */
 var SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_ = 270000;
 
+/** Presupuesto para alinear grafo de conocimiento tras SF sync / embeddings. */
+var SALESFORCE_ACCOUNTS_KG_CATCHUP_MAX_MS_ = 120000;
+
 /** Minutos entre ejecuciones encadenadas si la cola de embeddings no terminó. */
 var SALESFORCE_ACCOUNTS_EMBEDDING_CONTINUATION_MINUTES_ = 2;
 
@@ -54,6 +57,7 @@ function SalesforceAccounts_defaultClientsAgentPrompt_() {
     'Do NOT use external knowledge.\n\n' +
     'Goal: answer about clients, account ownership, portfolio, farming/hunting status, opportunity timelines, industry filters, and relationship continuity. ' +
     'When roster data, catalog summaries, and uploaded PDFs overlap, combine them without contradiction; prefer the most specific dated fact.\n\n' +
+    'Style: answer with sufficient detail to support account decisions; expand on status, opportunities, and industry context when the data is available. Prefer thorough multi-paragraph answers over terse lists unless the user asks for a short list only.\n\n' +
     'Rules:\n' +
     '1) Do not mix clients or accounts without evidence in the context provided for this turn (roster block, catalog excerpts, or RAG retrieval).\n' +
     '2) If names are ambiguous, ask which account before asserting facts.\n' +
@@ -641,8 +645,17 @@ function SalesforceAccounts_runSyncData_(force) {
   });
 
   try {
-    KnowledgeGraph_syncAllSalesforceAccounts_();
-    KnowledgeGraph_pruneOrphanNodes_();
+    var eki;
+    for (eki = 0; eki < embeddingContentIds.length; eki++) {
+      try {
+        KnowledgeGraph_syncContent_(String(embeddingContentIds[eki] || ''));
+      } catch (eKgOne) {
+        console.log(
+          '[KG] after SF content: ' + String(eKgOne.message || eKgOne).slice(0, 80),
+        );
+      }
+    }
+    KnowledgeGraph_pruneOrphanBatch_(0, 15);
   } catch (eKgSf) {
     console.log(
       '[KG] after SF sync: ' + String(eKgSf.message || eKgSf).slice(0, 120),
@@ -789,7 +802,49 @@ function SalesforceAccounts_scheduleEmbeddingsContinuation_() {
  * @param {Object} dataRes resultado de runSyncData_
  * @param {{processed:number, failed:number, offset:number, hasMore:boolean, total:number}} embStats
  */
-function SalesforceAccounts_recordEmbeddingDrainState_(dataRes, embStats) {
+/**
+ * @param {Object|null} kgStats
+ * @return {string}
+ */
+function SalesforceAccounts_formatKgCatchupMessage_(kgStats) {
+  if (!kgStats) return '';
+  if (kgStats.skipped && kgStats.reason === 'aligned') return ',kg=aligned';
+  if (kgStats.skipped && kgStats.reason === 'no_supabase') return ',kg=skip_no_db';
+  var msg =
+    ',kg=' +
+    (kgStats.processed || 0) +
+    ',kg_fail=' +
+    (kgStats.failed || 0);
+  if (kgStats.removed) msg += ',kg_removed=' + kgStats.removed;
+  if (kgStats.phase) msg += ',kg_phase=' + String(kgStats.phase);
+  if (kgStats.hasMore) msg += ',kg_pending=1,continuation=scheduled';
+  return msg;
+}
+
+/**
+ * @param {number} maxMs
+ * @return {Object}
+ */
+function SalesforceAccounts_runKnowledgeGraphCatchUp_(maxMs) {
+  try {
+    return KnowledgeGraph_runAutomaticCatchUpWithBudget_(maxMs);
+  } catch (eKg) {
+    console.log(
+      '[KG] SF auto catch-up failed: ' + String(eKg.message || eKg).slice(0, 160),
+    );
+    return {
+      ok: false,
+      hasMore: false,
+      skipped: true,
+      reason: 'error',
+      processed: 0,
+      failed: 0,
+      error: String(eKg.message || eKg).slice(0, 200),
+    };
+  }
+}
+
+function SalesforceAccounts_recordEmbeddingDrainState_(dataRes, embStats, kgStats) {
   var state = SalesforceAccountsSyncStateStore_load_();
   var pending = embStats.hasMore
     ? Math.max(0, (embStats.total || 0) - (embStats.offset || 0))
@@ -804,8 +859,10 @@ function SalesforceAccounts_recordEmbeddingDrainState_(dataRes, embStats) {
   if (embStats.hasMore) {
     msg += ',emb_pending=' + pending + ',continuation=scheduled';
   }
+  msg += SalesforceAccounts_formatKgCatchupMessage_(kgStats);
+  var partial = embStats.hasMore || (kgStats && kgStats.hasMore);
   state.last_sync_at = new Date().toISOString();
-  state.last_sync_status = embStats.hasMore ? 'ok_partial' : 'ok';
+  state.last_sync_status = partial ? 'ok_partial' : 'ok';
   state.last_sync_message = msg;
   if (dataRes && !dataRes.skipped) {
     state.accounts_upserted = dataRes.accounts;
@@ -831,6 +888,31 @@ function SalesforceAccounts_runAutomaticSync_(force) {
   if (data.skipped) {
     var qLen = SalesforceAccounts_loadEmbeddingQueue_().length;
     if (qLen === 0) {
+      var kgOnly = SalesforceAccounts_runKnowledgeGraphCatchUp_(
+        SALESFORCE_ACCOUNTS_KG_CATCHUP_MAX_MS_,
+      );
+      var kgCont = !!(kgOnly && kgOnly.hasMore);
+      if (kgCont) {
+        SalesforceAccounts_scheduleEmbeddingsContinuation_();
+      }
+      var idleData = {
+        ok: true,
+        skipped: true,
+        reason: 'no_changes',
+        accounts: 0,
+        inactivated: 0,
+      };
+      SalesforceAccounts_recordEmbeddingDrainState_(
+        idleData,
+        {
+          processed: 0,
+          failed: 0,
+          offset: 0,
+          hasMore: false,
+          total: 0,
+        },
+        kgOnly,
+      );
       return {
         ok: true,
         skipped: true,
@@ -839,7 +921,9 @@ function SalesforceAccounts_runAutomaticSync_(force) {
         inactivated: 0,
         embeddings: 0,
         embeddingsPending: 0,
-        continuationScheduled: false,
+        knowledgeGraphProcessed: kgOnly ? kgOnly.processed || 0 : 0,
+        knowledgeGraphPending: kgCont,
+        continuationScheduled: kgCont,
       };
     }
     data = {
@@ -859,6 +943,7 @@ function SalesforceAccounts_runAutomaticSync_(force) {
     SALESFORCE_ACCOUNTS_EMBEDDING_AUTO_MAX_MS_,
   );
   var cont = false;
+  var kgStats = null;
   if (embStats.hasMore) {
     SalesforceAccounts_storeEmbeddingOffset_(embStats.offset);
     SalesforceAccounts_scheduleEmbeddingsContinuation_();
@@ -866,8 +951,15 @@ function SalesforceAccounts_runAutomaticSync_(force) {
   } else {
     SalesforceAccounts_clearEmbeddingOffset_();
     SalesforceAccounts_storeEmbeddingQueue_([]);
+    kgStats = SalesforceAccounts_runKnowledgeGraphCatchUp_(
+      SALESFORCE_ACCOUNTS_KG_CATCHUP_MAX_MS_,
+    );
+    if (kgStats && kgStats.hasMore) {
+      SalesforceAccounts_scheduleEmbeddingsContinuation_();
+      cont = true;
+    }
   }
-  SalesforceAccounts_recordEmbeddingDrainState_(data, embStats);
+  SalesforceAccounts_recordEmbeddingDrainState_(data, embStats, kgStats);
   var pending = embStats.hasMore
     ? Math.max(0, (embStats.total || 0) - embStats.offset)
     : 0;
@@ -879,6 +971,8 @@ function SalesforceAccounts_runAutomaticSync_(force) {
     inactivated: data.inactivated || 0,
     embeddings: embStats.processed,
     embeddingsPending: pending,
+    knowledgeGraphProcessed: kgStats ? kgStats.processed || 0 : 0,
+    knowledgeGraphPending: !!(kgStats && kgStats.hasMore),
     continuationScheduled: cont,
   };
 }
@@ -911,6 +1005,28 @@ function SalesforceAccounts_embeddingsContinuationJob_() {
     if (!q.length || skip >= q.length) {
       SalesforceAccounts_clearEmbeddingOffset_();
       SalesforceAccounts_storeEmbeddingQueue_([]);
+      var kgResumeOnly = SalesforceAccounts_runKnowledgeGraphCatchUp_(
+        SALESFORCE_ACCOUNTS_KG_CATCHUP_MAX_MS_,
+      );
+      if (kgResumeOnly && kgResumeOnly.hasMore) {
+        SalesforceAccounts_scheduleEmbeddingsContinuation_();
+      }
+      SalesforceAccounts_recordEmbeddingDrainState_(
+        {
+          skipped: true,
+          reason: 'embeddings_resume',
+          accounts: 0,
+          inactivated: 0,
+        },
+        {
+          processed: 0,
+          failed: 0,
+          offset: 0,
+          hasMore: false,
+          total: 0,
+        },
+        kgResumeOnly,
+      );
       return;
     }
     var embStats = SalesforceAccounts_drainEmbeddingsWithTimeBudget_(
@@ -923,14 +1039,21 @@ function SalesforceAccounts_embeddingsContinuationJob_() {
       accounts: 0,
       inactivated: 0,
     };
+    var kgStats = null;
     if (embStats.hasMore) {
       SalesforceAccounts_storeEmbeddingOffset_(embStats.offset);
       SalesforceAccounts_scheduleEmbeddingsContinuation_();
     } else {
       SalesforceAccounts_clearEmbeddingOffset_();
       SalesforceAccounts_storeEmbeddingQueue_([]);
+      kgStats = SalesforceAccounts_runKnowledgeGraphCatchUp_(
+        SALESFORCE_ACCOUNTS_KG_CATCHUP_MAX_MS_,
+      );
+      if (kgStats && kgStats.hasMore) {
+        SalesforceAccounts_scheduleEmbeddingsContinuation_();
+      }
     }
-    SalesforceAccounts_recordEmbeddingDrainState_(resumeData, embStats);
+    SalesforceAccounts_recordEmbeddingDrainState_(resumeData, embStats, kgStats);
   } catch (e) {
     console.error('[SF-SYNC] embedding continuation failed: ' + (e.message || e));
     var errState = SalesforceAccountsSyncStateStore_load_();
