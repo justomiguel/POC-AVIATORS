@@ -37,9 +37,24 @@ var KNOWLEDGE_GRAPH_REBUILD_PHASES_ = [
   'contents',
   'clients',
   'salesforce',
+  'embeddings',
+  'semantic',
+  'entities',
   'stale',
   'prune',
 ];
+
+/** @type {number} */
+var KNOWLEDGE_GRAPH_EMBEDDINGS_BATCH_MAX = 8;
+
+/** @type {number} */
+var KNOWLEDGE_GRAPH_SEMANTIC_MATCH_COUNT = 6;
+
+/** @type {number} */
+var KNOWLEDGE_GRAPH_SEMANTIC_THRESHOLD = 0.78;
+
+/** @type {number} */
+var KNOWLEDGE_GRAPH_ENTITIES_BATCH_MAX = 4;
 
 /** @type {number} */
 var KNOWLEDGE_GRAPH_BFS_DEPTH_DEFAULT = 2;
@@ -59,6 +74,10 @@ var KNOWLEDGE_GRAPH_ENTITY_NODE_TYPES_ = [
   'tag',
   'stage',
   'pricing_model',
+  'offering',
+  'technology',
+  'outcome',
+  'theme',
 ];
 
 /** @type {Array<string>} */
@@ -69,6 +88,11 @@ var KNOWLEDGE_GRAPH_ENTITY_RELATION_TYPES_ = [
   'related_content',
   'has_stage',
   'has_pricing_model',
+  'similar_to',
+  'delivers',
+  'uses_technology',
+  'achieved',
+  'addresses_theme',
 ];
 
 /**
@@ -356,6 +380,91 @@ function KnowledgeGraph_relatedContentEdges_(contentId, contentType, clientName)
 }
 
 /**
+ * Aristas semánticas (embedding) hacia otros contenidos similares.
+ * @param {string} contentId
+ * @return {Array<{target_id:string,relation_type:string,source:string,weight:number,payload:Object}>}
+ */
+function KnowledgeGraph_semanticEdges_(contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) return [];
+  var row = ContentCatalogStore_getById(id);
+  if (!row || !ContentCatalogStore_rowHasEmbedding_(row)) return [];
+
+  /** @type {Array<Object>} */
+  var neighbors = [];
+  try {
+    var rpcRes = SupabaseRest_rpc('match_content_neighbors', {
+      source_id: id,
+      match_count: KNOWLEDGE_GRAPH_SEMANTIC_MATCH_COUNT,
+      match_threshold: KNOWLEDGE_GRAPH_SEMANTIC_THRESHOLD,
+    });
+    if (Array.isArray(rpcRes)) neighbors = rpcRes;
+    else if (rpcRes && typeof rpcRes === 'object') neighbors = [rpcRes];
+  } catch (eRpc) {
+    console.log(
+      '[KG] semantic neighbors rpc failed: ' + String(eRpc.message || eRpc).slice(0, 120),
+    );
+    return [];
+  }
+
+  /** @type {Array<Object>} */
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < neighbors.length; i++) {
+    var hit = neighbors[i] || {};
+    var otherId = String(hit.content_id || '').trim();
+    if (!otherId || otherId === id) continue;
+    var sim = Number(hit.similarity);
+    if (isNaN(sim) || sim < KNOWLEDGE_GRAPH_SEMANTIC_THRESHOLD) continue;
+    var targetNode = KnowledgeGraph_nodeId_('content', otherId);
+    if (seen[targetNode]) continue;
+    seen[targetNode] = true;
+    out.push({
+      target_id: targetNode,
+      relation_type: 'similar_to',
+      source: 'embedding',
+      weight: sim,
+      payload: { similarity: sim, threshold: KNOWLEDGE_GRAPH_SEMANTIC_THRESHOLD },
+    });
+  }
+  return out;
+}
+
+/**
+ * Sincroniza aristas semánticas (capa embedding) para un contenido.
+ * @param {string} contentId
+ */
+function KnowledgeGraph_syncSemanticForContent_(contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) return;
+  try {
+    ContentEmbedding_refreshForContentIdIfMissing_(id);
+  } catch (eEmb) {
+    console.log(
+      '[KG] embedding before semantic failed: ' + String(eEmb.message || eEmb).slice(0, 120),
+    );
+    return;
+  }
+  var row = ContentCatalogStore_getById(id);
+  if (!row || !ContentCatalogStore_rowHasEmbedding_(row)) return;
+  var contentNodeId = KnowledgeGraph_nodeId_('content', id);
+  var edges = KnowledgeGraph_semanticEdges_(id);
+  KnowledgeGraphStore_replaceEdgesForSourceByProvenance_(contentNodeId, 'embedding', edges);
+}
+
+/**
+ * Sincroniza entidades de negocio (capa LLM) para un contenido.
+ * @param {string} contentId
+ */
+function KnowledgeGraph_syncEntitiesForContent_(contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) return;
+  if (typeof KnowledgeGraphExtraction_syncForContentId_ !== 'function') return;
+  KnowledgeGraphExtraction_syncForContentId_(id);
+}
+
+/**
  * @param {string} contentId
  */
 function KnowledgeGraph_removeContent_(contentId) {
@@ -466,6 +575,10 @@ function KnowledgeGraph_pruneOrphanNodes_() {
     stage: true,
     pricing_model: true,
     client_label: true,
+    offering: true,
+    technology: true,
+    outcome: true,
+    theme: true,
   };
   var removed = 0;
   var ni;
@@ -685,15 +798,20 @@ function KnowledgeGraph_getSyncStatusInternal_() {
   }
 
   var missing = 0;
+  var missingEmbeddings = 0;
+  var catalogWithEmbeddings = 0;
   for (ci = 0; ci < catalogRows.length; ci++) {
     var mid = String(catalogRows[ci].content_id || '').trim();
     if (mid && !graphContentIds[mid]) missing++;
+    if (ContentCatalogStore_rowHasEmbedding_(catalogRows[ci])) catalogWithEmbeddings++;
+    else missingEmbeddings++;
   }
 
   var clientNodes = KnowledgeGraphStore_listNodesByType('client', 5000);
   var needsRebuild = (catalogCount > 0 && graphContent === 0) || stale > 0;
   var needsCatchUp = missing > 0;
-  var needsSync = needsRebuild || needsCatchUp;
+  var needsEmbeddings = missingEmbeddings > 0;
+  var needsSync = needsRebuild || needsCatchUp || needsEmbeddings;
 
   return {
     ok: true,
@@ -702,6 +820,9 @@ function KnowledgeGraph_getSyncStatusInternal_() {
     graphClientNodes: clientNodes.length,
     staleGraphNodes: stale,
     missingContents: missing,
+    catalogWithEmbeddings: catalogWithEmbeddings,
+    missingEmbeddings: missingEmbeddings,
+    needsEmbeddings: needsEmbeddings,
     needsRebuild: needsRebuild,
     needsCatchUp: needsCatchUp,
     needsSync: needsSync,
@@ -798,6 +919,82 @@ function KnowledgeGraph_executePhaseBatch_(phase, skip, limit) {
           String(slice[si].account_key || '') +
             ': ' +
             String(eSf.message || eSf).slice(0, 80),
+        );
+      }
+    }
+  } else if (ph === 'embeddings') {
+    var embLim = Math.min(
+      KNOWLEDGE_GRAPH_EMBEDDINGS_BATCH_MAX,
+      Math.max(1, Number(limit) || KNOWLEDGE_GRAPH_EMBEDDINGS_BATCH_MAX),
+    );
+    slice = ContentCatalogStore_listPage(s, embLim);
+    hasMore = slice.length >= embLim;
+    nextSkip = hasMore ? s + embLim : 0;
+    nextPhase = hasMore ? 'embeddings' : KnowledgeGraph_nextRebuildPhase_('embeddings');
+    var emi;
+    for (emi = 0; emi < slice.length; emi++) {
+      try {
+        var embRow = slice[emi];
+        var embCid = String(embRow.content_id || '').trim();
+        if (!embCid) continue;
+        if (ContentCatalogStore_rowHasEmbedding_(embRow)) {
+          done++;
+          continue;
+        }
+        ContentEmbedding_refreshForRow_(embRow);
+        done++;
+      } catch (eEmb) {
+        failed++;
+        errors.push(
+          String(slice[emi].content_id || '') +
+            ': ' +
+            String(eEmb.message || eEmb).slice(0, 80),
+        );
+      }
+    }
+  } else if (ph === 'semantic') {
+    slice = ContentCatalogStore_listPage(s, lim);
+    hasMore = slice.length >= lim;
+    nextSkip = hasMore ? s + lim : 0;
+    nextPhase = hasMore ? 'semantic' : KnowledgeGraph_nextRebuildPhase_('semantic');
+    var smi;
+    for (smi = 0; smi < slice.length; smi++) {
+      try {
+        var semRow = slice[smi];
+        if (!ContentCatalogStore_rowHasEmbedding_(semRow)) {
+          continue;
+        }
+        KnowledgeGraph_syncSemanticForContent_(String(semRow.content_id || ''));
+        done++;
+      } catch (eSem) {
+        failed++;
+        errors.push(
+          String(slice[smi].content_id || '') +
+            ': ' +
+            String(eSem.message || eSem).slice(0, 80),
+        );
+      }
+    }
+  } else if (ph === 'entities') {
+    var entLim = Math.min(
+      KNOWLEDGE_GRAPH_ENTITIES_BATCH_MAX,
+      Math.max(1, Number(limit) || KNOWLEDGE_GRAPH_ENTITIES_BATCH_MAX),
+    );
+    slice = ContentCatalogStore_listPage(s, entLim);
+    hasMore = slice.length >= entLim;
+    nextSkip = hasMore ? s + entLim : 0;
+    nextPhase = hasMore ? 'entities' : KnowledgeGraph_nextRebuildPhase_('entities');
+    var eiEnt;
+    for (eiEnt = 0; eiEnt < slice.length; eiEnt++) {
+      try {
+        KnowledgeGraph_syncEntitiesForContent_(String(slice[eiEnt].content_id || ''));
+        done++;
+      } catch (eEnt) {
+        failed++;
+        errors.push(
+          String(slice[eiEnt].content_id || '') +
+            ': ' +
+            String(eEnt.message || eEnt).slice(0, 80),
         );
       }
     }
@@ -1126,11 +1323,19 @@ function KnowledgeGraph_toApiNode_(nodeRow) {
  * @return {Object}
  */
 function KnowledgeGraph_toApiEdge_(edgeRow) {
+  var weight = Number(edgeRow.weight);
+  if (isNaN(weight) || weight <= 0) weight = 1.0;
   return {
     id: String(edgeRow.edge_id || ''),
     source: String(edgeRow.source_id || ''),
     target: String(edgeRow.target_id || ''),
     relation: String(edgeRow.relation_type || ''),
+    weight: weight,
+    edgeSource: String(edgeRow.source || 'structural'),
+    payload:
+      edgeRow.payload && typeof edgeRow.payload === 'object' && !Array.isArray(edgeRow.payload)
+        ? edgeRow.payload
+        : {},
   };
 }
 
@@ -1403,6 +1608,11 @@ function KnowledgeGraph_relationLabelEs_(relation) {
     has_stage: 'etapa',
     has_pricing_model: 'modelo comercial',
     related_content: 'contenido relacionado',
+    similar_to: 'similar semánticamente',
+    delivers: 'ofrece',
+    uses_technology: 'usa tecnología',
+    achieved: 'logró resultado',
+    addresses_theme: 'aborda tema',
   };
   return map[String(relation || '')] || String(relation || '');
 }
@@ -1508,7 +1718,15 @@ function KnowledgeGraph_hintsForContentNode_(contentNodeId, edges, nodeById) {
     if (rel === 'tagged_with') tags.push(lbl);
     else if (rel === 'belongs_to') client = lbl;
     else if (rel === 'in_industry') industry = lbl;
-    else if (rel === 'related_content') tags.push('↔ ' + lbl);
+    else if (rel === 'related_content' || rel === 'similar_to') tags.push('↔ ' + lbl);
+    else if (
+      rel === 'delivers' ||
+      rel === 'uses_technology' ||
+      rel === 'achieved' ||
+      rel === 'addresses_theme'
+    ) {
+      tags.push(lbl);
+    }
   }
   var eiIn;
   for (eiIn = 0; eiIn < edges.length; eiIn++) {
@@ -1628,13 +1846,24 @@ function KnowledgeGraph_graphToCatalogDocs_(apiNodes, apiEdges, limit) {
 /**
  * Contexto estructurado del grafo para el chat (multi-salto cliente / industria / tags).
  * @param {string} question
- * @param {{limit?:number,maxNodes?:number,depth?:number}} [opts]
+ * @param {{limit?:number,maxNodes?:number,depth?:number,ragContentIds?:Array<string>}} [opts]
  * @return {{ok:boolean,docs:Array<Object>,graphSummary:string,clientName:string,stats:Object}}
  */
 function KnowledgeGraph_resolveContextForQuestion_(question, opts) {
   opts = opts || {};
   var detected = KnowledgeGraph_detectSeedsFromQuestion_(question);
   var seedIds = detected.seedIds || [];
+
+  if (opts.ragContentIds && opts.ragContentIds.length) {
+    var rc;
+    for (rc = 0; rc < opts.ragContentIds.length; rc++) {
+      var cidNode = KnowledgeGraph_nodeId_('content', opts.ragContentIds[rc]);
+      if (seedIds.indexOf(cidNode) < 0) {
+        seedIds.push(cidNode);
+      }
+    }
+  }
+
   if (!seedIds.length) {
     return {
       ok: true,
@@ -1657,6 +1886,10 @@ function KnowledgeGraph_resolveContextForQuestion_(question, opts) {
       tag: true,
       stage: true,
       pricing_model: true,
+      offering: true,
+      technology: true,
+      outcome: true,
+      theme: true,
     },
   });
 

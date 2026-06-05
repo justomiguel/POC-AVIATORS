@@ -133,116 +133,48 @@
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto px-4 md:px-2">
-            <div class="user-avatar-wrap">
-              <img
-                id="user-avatar"
-                class="hidden h-full w-full object-cover"
-                alt=""
-                width="128"
-                height="128"
-                decoding="async"
-                referrerpolicy="no-referrer"
-              />
-              <div id="user-avatar-placeholder" class="user-avatar-placeholder" aria-hidden="true">
-                ?
+            <div
+              id="app-sidebar-profile"
+              class="app-sidebar-profile mb-4 flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/55"
+            >
+              <div class="user-avatar-wrap user-avatar-wrap--compact shrink-0">
+                <img
+                  id="user-avatar"
+                  class="hidden h-full w-full object-cover"
+                  alt=""
+                  width="40"
+                  height="40"
+                  decoding="async"
+                  referrerpolicy="no-referrer"
+                />
+                <div id="user-avatar-placeholder" class="user-avatar-placeholder user-avatar-placeholder--compact" aria-hidden="true">
+                  ?
+                </div>
               </div>
+              <div class="min-w-0 flex-1">
+                <p id="user-display-name" class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  —
+                </p>
+                <p class="mt-0.5">
+                  <span id="sidebar-role" class="role-badge role-badge--compact">—</span>
+                </p>
+              </div>
+              <p id="email" class="sr-only">—</p>
             </div>
-            <p id="user-display-name" class="mb-1 text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
-              —
-            </p>
-            <p class="mb-3 text-center">
-              <span id="sidebar-role" class="role-badge">—</span>
-            </p>
-            <p
-              class="mb-1 text-center text-xs text-slate-500 dark:text-slate-400"
-              data-i18n="sidebar_account"
-            ></p>
-            <p class="mb-4 break-all text-center text-sm text-slate-700 dark:text-slate-300" id="email">—</p>
 
             <nav
               class="app-sidebar-nav mb-2 flex flex-col gap-1 rounded-2xl border border-slate-200/80 bg-white/80 p-2 shadow-sm dark:border-slate-600 dark:bg-slate-900/55 dark:shadow-md dark:shadow-black/25"
               aria-label="main"
             >
+              <p class="app-nav-section-label" data-i18n="nav_section_consult"></p>
               <button
                 type="button"
                 class="app-nav-item is-active flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-100 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="home"
+                data-app-page="chat"
                 id="nav-btn-home"
               >
                 <i class="fa-solid fa-comments w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_home"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="onboarding"
-                id="nav-page-onboarding"
-              >
-                <i class="fa-solid fa-graduation-cap w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_onboarding"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="proposal-building"
-                id="nav-page-proposal-building"
-              >
-                <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_proposal_building"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="contents"
-                id="nav-page-contents"
-              >
-                <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_contents"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="tags"
-                id="nav-page-tags"
-              >
-                <i class="fa-solid fa-tags w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_tags"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="clients"
-                id="nav-page-clients"
-              >
-                <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_clients"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="metrics"
-                id="nav-page-metrics"
-              >
-                <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
-                <span data-i18n="nav_metrics"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="knowledge-graph"
-                id="nav-page-knowledge-graph"
-              >
-                <i class="fa-solid fa-diagram-project w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_knowledge_graph"></span>
-              </button>
-              <button
-                type="button"
-                class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="settings"
-                id="nav-page-settings"
-              >
-                <i class="fa-solid fa-gear w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_settings"></span>
+                <span data-i18n="nav_chat"></span>
               </button>
               <button
                 type="button"
@@ -253,67 +185,153 @@
                 <i class="fa-solid fa-user-lock w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
                 <span data-i18n="nav_request_access"></span>
               </button>
-              <button
-                type="button"
-                class="app-nav-item flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="faq"
-                id="nav-page-faq"
-              >
-                <i class="fa-solid fa-circle-question w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                <span data-i18n="nav_faq"></span>
-              </button>
+
+              <div id="nav-section-knowledge" class="app-nav-section hidden">
+                <p class="app-nav-section-label mt-2" data-i18n="nav_section_knowledge"></p>
+                <button
+                  type="button"
+                  class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                  data-app-page="contents"
+                  id="nav-page-contents"
+                >
+                  <i class="fa-solid fa-folder-tree w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
+                  <span data-i18n="nav_contents"></span>
+                </button>
+                <button
+                  type="button"
+                  class="app-nav-item hidden w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                  data-app-page="clients"
+                  id="nav-page-clients"
+                >
+                  <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
+                  <span data-i18n="nav_clients"></span>
+                </button>
+                <details id="nav-group-explore" class="app-nav-group hidden">
+                  <summary class="app-nav-group-summary">
+                    <i class="fa-solid fa-compass w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span class="min-w-0 flex-1 truncate" data-i18n="nav_explore"></span>
+                    <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400" aria-hidden="true"></i>
+                  </summary>
+                  <div class="app-nav-group-items">
+                    <button
+                      type="button"
+                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                      data-app-page="tags"
+                      id="nav-page-tags"
+                    >
+                      <i class="fa-solid fa-tags w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="nav_tags"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                      data-app-page="knowledge-graph"
+                      id="nav-page-knowledge-graph"
+                    >
+                      <i class="fa-solid fa-diagram-project w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="nav_knowledge_graph"></span>
+                    </button>
+                  </div>
+                </details>
+              </div>
+
+              <div id="nav-section-admin" class="app-nav-section hidden">
+                <details id="nav-group-admin" class="app-nav-group mt-2">
+                  <summary class="app-nav-group-summary">
+                    <i class="fa-solid fa-sliders w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span class="min-w-0 flex-1 truncate" data-i18n="nav_section_admin"></span>
+                    <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400" aria-hidden="true"></i>
+                  </summary>
+                  <div class="app-nav-group-items">
+                    <button
+                      type="button"
+                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                      data-app-page="metrics"
+                      id="nav-page-metrics"
+                    >
+                      <i class="fa-solid fa-chart-line w-5 shrink-0 text-center text-sky-600 dark:text-sky-400"></i>
+                      <span data-i18n="nav_metrics"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                      data-app-page="settings"
+                      id="nav-page-settings"
+                    >
+                      <i class="fa-solid fa-gear w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="nav_settings"></span>
+                    </button>
+                  </div>
+                </details>
+              </div>
             </nav>
           </div>
 
           <div
-            class="app-sidebar-footer shrink-0 space-y-3 border-t border-slate-200/80 bg-slate-50 px-4 pb-4 pt-3 dark:border-slate-600 dark:bg-slate-900 md:px-2"
+            class="app-sidebar-footer shrink-0 border-t border-slate-200/80 bg-slate-50 px-4 pb-4 pt-3 dark:border-slate-600 dark:bg-slate-900 md:px-2"
           >
-            <div>
-              <p
-                class="mb-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400"
-                data-i18n="sidebar_language"
-              ></p>
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  id="locale-btn-es"
-                  data-ui-locale="es"
+            <div class="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                class="app-sidebar-footer-btn app-nav-item inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                data-app-page="faq"
+                id="nav-page-faq"
+                data-i18n-aria-label="nav_faq"
+                aria-label=""
+              >
+                <i class="fa-solid fa-circle-question text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+              </button>
+              <details id="sidebar-locale-dropdown" class="app-sidebar-locale relative">
+                <summary
+                  class="app-sidebar-footer-btn inline-flex h-9 min-w-9 cursor-pointer list-none items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  data-i18n-aria-label="sidebar_language"
+                  aria-label=""
                 >
-                  <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                  <span data-i18n="lang_option_es"></span>
-                </button>
-                <button
-                  type="button"
-                  class="locale-btn flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-left text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  id="locale-btn-en"
-                  data-ui-locale="en"
-                >
-                  <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                  <span data-i18n="lang_option_en"></span>
-                </button>
-              </div>
-            </div>
-            <div>
+                  <i class="fa-solid fa-language text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span id="sidebar-locale-current">ES</span>
+                </summary>
+                <div class="app-sidebar-locale-menu">
+                  <button
+                    type="button"
+                    class="locale-btn app-sidebar-locale-option"
+                    id="locale-btn-es"
+                    data-ui-locale="es"
+                  >
+                    <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="lang_option_es"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="locale-btn app-sidebar-locale-option"
+                    id="locale-btn-en"
+                    data-ui-locale="en"
+                  >
+                    <i class="fa-solid fa-language shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="lang_option_en"></span>
+                  </button>
+                </div>
+              </details>
               <button
                 type="button"
                 id="theme-toggle-btn"
-                class="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                class="app-sidebar-footer-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-sky-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                data-i18n-aria-label="theme_toggle_aria"
+                aria-label=""
+                aria-pressed="false"
               >
-                <i id="theme-toggle-icon" class="fa-solid fa-moon shrink-0 text-sky-600 dark:text-amber-400" aria-hidden="true"></i>
-                <span id="theme-toggle-label" data-i18n="theme_dark"></span>
+                <i id="theme-toggle-icon" class="fa-solid fa-moon text-sky-600 dark:text-amber-400" aria-hidden="true"></i>
+                <span id="theme-toggle-label" class="sr-only" data-i18n="theme_dark"></span>
+              </button>
+              <button
+                type="button"
+                class="app-sidebar-footer-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 shadow-sm transition hover:bg-red-50 dark:border-red-800 dark:bg-slate-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                id="logout-toolbar"
+                data-i18n-aria-label="sidebar_logout_aria"
+                aria-label=""
+              >
+                <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
               </button>
             </div>
-            <button
-              type="button"
-              class="btn btn-md btn-danger w-full"
-              id="logout-toolbar"
-              data-i18n-aria-label="sidebar_logout_aria"
-              aria-label=""
-            >
-              <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-              <span data-i18n="sidebar_logout"></span>
-            </button>
           </div>
         </aside>
         <button
@@ -507,6 +525,49 @@
         <header
           class="home-chat-head shrink-0 border-b border-slate-100 bg-gradient-to-br from-white via-slate-50/90 to-sky-50/25 px-5 py-4 md:px-6 dark:border-slate-700 dark:from-slate-800 dark:via-slate-800/90 dark:to-slate-800"
         >
+          <div
+            id="chat-mode-bar"
+            class="chat-mode-bar mb-3 hidden"
+            role="tablist"
+            data-i18n-aria-label="chat_mode_tabs_aria"
+            aria-label=""
+          >
+            <div class="app-tab-bar app-tab-bar-underline chat-mode-tab-bar">
+              <button
+                type="button"
+                role="tab"
+                id="chat-mode-general"
+                class="app-tab-btn chat-mode-tab is-active"
+                data-chat-mode="home"
+                aria-selected="true"
+              >
+                <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                <span data-i18n="chat_mode_general"></span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="chat-mode-onboarding"
+                class="app-tab-btn chat-mode-tab hidden"
+                data-chat-mode="onboarding"
+                aria-selected="false"
+              >
+                <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
+                <span data-i18n="chat_mode_onboarding"></span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="chat-mode-proposal-building"
+                class="app-tab-btn chat-mode-tab hidden"
+                data-chat-mode="proposal-building"
+                aria-selected="false"
+              >
+                <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
+                <span data-i18n="chat_mode_proposals"></span>
+              </button>
+            </div>
+          </div>
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <h1
@@ -2303,6 +2364,15 @@
                       <option value="250" data-i18n="kg_density_opt_wide"></option>
                     </select>
                   </label>
+                  <label class="block min-w-[10rem] text-sm" for="kg-filter-min-weight">
+                    <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_filter_min_weight"></span>
+                    <select id="kg-filter-min-weight" class="aviators-field w-full text-sm">
+                      <option value="0" selected data-i18n="kg_min_weight_all"></option>
+                      <option value="0.65" data-i18n="kg_min_weight_65"></option>
+                      <option value="0.78" data-i18n="kg_min_weight_78"></option>
+                      <option value="0.85" data-i18n="kg_min_weight_85"></option>
+                    </select>
+                  </label>
                   <button type="button" id="kg-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
                     <i class="fa-solid fa-filter" aria-hidden="true"></i>
                     <span data-i18n="kg_btn_apply"></span>
@@ -2330,6 +2400,10 @@
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="tag" checked /> <span data-i18n="kg_type_tag"></span></label>
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="stage" checked /> <span data-i18n="kg_type_stage"></span></label>
                     <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="pricing_model" checked /> <span data-i18n="kg_type_pricing_model"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="offering" checked /> <span data-i18n="kg_type_offering"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="technology" checked /> <span data-i18n="kg_type_technology"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="outcome" checked /> <span data-i18n="kg_type_outcome"></span></label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" class="kg-type-toggle" data-kg-type="theme" checked /> <span data-i18n="kg_type_theme"></span></label>
                   </div>
                 </fieldset>
                 </div>
@@ -2503,106 +2577,136 @@
                   class="app-tab-panel mt-3 hidden space-y-5"
                   hidden
                 >
+                  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-intro-heading">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="max-w-3xl">
+                        <h3 id="kg-entities-intro-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_intro_heading"></h3>
+                        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_intro_lead"></p>
+                        <p id="kg-entities-catalog-totals" class="mt-2 text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400" role="status" aria-live="polite">&nbsp;</p>
+                      </div>
+                      <div
+                        id="kg-entities-catalog-loader"
+                        class="hidden shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                        <span data-i18n="kg_entities_busy_catalog"></span>
+                      </div>
+                    </div>
+                    <div class="mt-4 grid gap-3 md:grid-cols-3">
+                      <div class="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                        <div class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          <i class="fa-solid fa-sitemap text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                          <span data-i18n="kg_entities_layer_structural_title"></span>
+                        </div>
+                        <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_layer_structural_lead"></p>
+                      </div>
+                      <div class="rounded-xl border border-teal-200/80 bg-teal-50/60 p-3 dark:border-teal-900/50 dark:bg-teal-950/20">
+                        <div class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          <i class="fa-solid fa-wave-square text-teal-600 dark:text-teal-400" aria-hidden="true"></i>
+                          <span data-i18n="kg_entities_layer_semantic_title"></span>
+                        </div>
+                        <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_layer_semantic_lead"></p>
+                      </div>
+                      <div class="rounded-xl border border-violet-200/80 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-950/20">
+                        <div class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          <i class="fa-solid fa-wand-magic-sparkles text-violet-600 dark:text-violet-400" aria-hidden="true"></i>
+                          <span data-i18n="kg_entities_layer_conceptual_title"></span>
+                        </div>
+                        <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_layer_conceptual_lead"></p>
+                      </div>
+                    </div>
+                  </section>
+
                   <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-catalog-heading">
                     <h3 id="kg-entities-catalog-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_catalog_heading"></h3>
                     <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_catalog_lead"></p>
-                    <p id="kg-entities-catalog-totals" class="mt-2 text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400" role="status" aria-live="polite">&nbsp;</p>
-                    <div
-                      id="kg-entities-catalog-loader"
-                      class="mt-4 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
-                      <span data-i18n="kg_entities_busy_catalog"></span>
+                    <div class="mt-4 grid gap-5 xl:grid-cols-2">
+                      <div>
+                        <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_types_panel_heading"></h4>
+                        <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_types_panel_lead"></p>
+                        <div id="kg-entities-types-grid" class="mt-3 space-y-4"></div>
+                      </div>
+                      <div>
+                        <h4 id="kg-entities-relations-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_relations_heading"></h4>
+                        <p class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_relations_lead"></p>
+                        <div id="kg-entities-relations-list" class="mt-3 space-y-4"></div>
+                      </div>
                     </div>
-                    <div id="kg-entities-types-grid" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
-                  </section>
-
-                  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-relations-heading">
-                    <h3 id="kg-entities-relations-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_relations_heading"></h3>
-                    <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_relations_lead"></p>
-                    <ul id="kg-entities-relations-list" class="mt-4 space-y-3"></ul>
                   </section>
 
                   <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/50 md:p-5" aria-labelledby="kg-entities-browse-heading">
                     <h3 id="kg-entities-browse-heading" class="text-base font-semibold text-slate-900 dark:text-slate-100" data-i18n="kg_entities_browse_heading"></h3>
                     <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_entities_browse_lead"></p>
                     <div class="mt-4 flex flex-wrap items-end gap-3">
-                      <label class="block min-w-[10rem] text-sm" for="kg-entities-filter-type">
-                        <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_type"></span>
-                        <select id="kg-entities-filter-type" class="aviators-field w-full text-sm">
-                          <option value="" data-i18n="kg_entities_filter_type_all"></option>
-                          <option value="content" data-i18n="kg_type_content"></option>
-                          <option value="client" data-i18n="kg_type_client"></option>
-                          <option value="client_label" data-i18n="kg_type_client_label"></option>
-                          <option value="industry" data-i18n="kg_type_industry"></option>
-                          <option value="tag" data-i18n="kg_type_tag"></option>
-                          <option value="stage" data-i18n="kg_type_stage"></option>
-                          <option value="pricing_model" data-i18n="kg_type_pricing_model"></option>
-                        </select>
-                      </label>
-                      <label class="block min-w-[12rem] flex-1 text-sm" for="kg-entities-filter-search">
-                        <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_search"></span>
-                        <input
-                          id="kg-entities-filter-search"
-                          type="search"
-                          class="aviators-field w-full text-sm"
-                          autocomplete="off"
-                          data-i18n-placeholder="kg_entities_filter_search_placeholder"
-                        />
-                      </label>
-                      <button type="button" id="kg-entities-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
-                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                        <span data-i18n="kg_btn_apply"></span>
-                      </button>
-                    </div>
-                    <div
-                      id="kg-entities-list-loader"
-                      class="mt-4 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
-                      <span data-i18n="kg_entities_busy_list"></span>
-                    </div>
-                    <p
-                      id="kg-entities-list-error"
-                      class="mt-4 hidden rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
-                      role="alert"
-                    ></p>
-                    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                      <table class="min-w-full text-sm">
-                        <thead class="bg-slate-50 text-left text-slate-600 dark:bg-slate-800/80 dark:text-slate-300">
-                          <tr>
-                            <th class="px-3 py-2" data-i18n="kg_entities_col_name"></th>
-                            <th class="px-3 py-2" data-i18n="kg_entities_col_type"></th>
-                            <th class="px-3 py-2" data-i18n="kg_entities_col_meta"></th>
-                            <th class="px-3 py-2"><span class="sr-only" data-i18n="kg_entities_col_actions"></span></th>
-                          </tr>
-                        </thead>
-                        <tbody id="kg-entities-table-body"></tbody>
-                      </table>
-                    </div>
-                    <p
-                      id="kg-entities-list-empty"
-                      class="mt-4 hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
-                      role="status"
-                      data-i18n="kg_entities_empty"
-                    ></p>
-                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <p id="kg-entities-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status"></p>
-                      <div class="flex gap-2">
-                        <button type="button" id="kg-entities-prev" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
-                          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-                          <span data-i18n="pagination_prev"></span>
-                        </button>
-                        <button type="button" id="kg-entities-next" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
-                          <span data-i18n="pagination_next"></span>
-                          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                        <label class="block min-w-[10rem] text-sm" for="kg-entities-filter-type">
+                          <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_type"></span>
+                          <select id="kg-entities-filter-type" class="aviators-field w-full text-sm">
+                            <option value="" data-i18n="kg_entities_filter_type_all"></option>
+                          </select>
+                        </label>
+                        <label class="block min-w-[12rem] flex-1 text-sm" for="kg-entities-filter-search">
+                          <span class="mb-1 block font-medium text-slate-700 dark:text-slate-300" data-i18n="kg_entities_filter_search"></span>
+                          <input
+                            id="kg-entities-filter-search"
+                            type="search"
+                            class="aviators-field w-full text-sm"
+                            autocomplete="off"
+                            data-i18n-placeholder="kg_entities_filter_search_placeholder"
+                          />
+                        </label>
+                        <button type="button" id="kg-entities-apply-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                          <span data-i18n="kg_btn_apply"></span>
                         </button>
                       </div>
-                    </div>
+                      <div
+                        id="kg-entities-list-loader"
+                        class="mt-4 hidden rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                        <span data-i18n="kg_entities_busy_list"></span>
+                      </div>
+                      <p
+                        id="kg-entities-list-error"
+                        class="mt-4 hidden rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
+                        role="alert"
+                      ></p>
+                      <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                        <table class="min-w-full text-sm">
+                          <thead class="bg-slate-50 text-left text-slate-600 dark:bg-slate-800/80 dark:text-slate-300">
+                            <tr>
+                              <th class="px-3 py-2" data-i18n="kg_entities_col_name"></th>
+                              <th class="px-3 py-2" data-i18n="kg_entities_col_type"></th>
+                              <th class="px-3 py-2" data-i18n="kg_entities_col_meta"></th>
+                              <th class="px-3 py-2"><span class="sr-only" data-i18n="kg_entities_col_actions"></span></th>
+                            </tr>
+                          </thead>
+                          <tbody id="kg-entities-table-body"></tbody>
+                        </table>
+                      </div>
+                      <p
+                        id="kg-entities-list-empty"
+                        class="mt-4 hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                        role="status"
+                        data-i18n="kg_entities_empty"
+                      ></p>
+                      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p id="kg-entities-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status"></p>
+                        <div class="flex gap-2">
+                          <button type="button" id="kg-entities-prev" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                            <span data-i18n="pagination_prev"></span>
+                          </button>
+                          <button type="button" id="kg-entities-next" class="btn btn-sm btn-outline inline-flex items-center gap-2" disabled>
+                            <span data-i18n="pagination_next"></span>
+                            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                          </button>
+                        </div>
+                      </div>
                   </section>
                 </div>
               </div>

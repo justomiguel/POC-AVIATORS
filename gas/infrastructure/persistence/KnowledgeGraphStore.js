@@ -180,7 +180,7 @@ function KnowledgeGraphStore_listPrunableNodesPage(skip, limit) {
     SupabaseRest_filter_(
       'node_type',
       'in',
-      '(tag,industry,stage,pricing_model,client_label)',
+      '(tag,industry,stage,pricing_model,client_label,offering,technology,outcome,theme)',
     ),
     'order=node_type.asc,node_id.asc',
     'offset=' + s,
@@ -293,12 +293,18 @@ function KnowledgeGraphStore_deleteEdgesTouchingNode(nodeId) {
 
 /**
  * @param {string} sourceId
- * @param {Array<Object>} edges — {target_id, relation_type}
+ * @param {string} provenance structural|embedding|llm
+ * @param {Array<Object>} edges — {target_id, relation_type, weight?, source?, payload?}
  */
-function KnowledgeGraphStore_replaceEdgesForSource(sourceId, edges) {
+function KnowledgeGraphStore_replaceEdgesForSourceByProvenance_(sourceId, provenance, edges) {
   var sid = String(sourceId || '').trim();
+  var prov = String(provenance || 'structural').trim() || 'structural';
   if (!sid) return;
-  KnowledgeGraphStore_deleteEdgesBySource(sid);
+  var q = SupabaseRest_query_([
+    SupabaseRest_filter_('source_id', 'eq', sid),
+    SupabaseRest_filter_('source', 'eq', prov),
+  ]);
+  SupabaseRest_delete(SUPABASE_TABLE.KNOWLEDGE_GRAPH_EDGES, q);
   if (!edges || !edges.length) return;
   var now = new Date().toISOString();
   var rows = [];
@@ -307,16 +313,34 @@ function KnowledgeGraphStore_replaceEdgesForSource(sourceId, edges) {
     var tgt = String(edges[i].target_id || '').trim();
     var rel = String(edges[i].relation_type || '').trim();
     if (!tgt || !rel) continue;
+    var weight = Number(edges[i].weight);
+    if (isNaN(weight) || weight <= 0) weight = 1.0;
+    var edgeSource = String(edges[i].source || prov).trim() || prov;
+    var payload =
+      edges[i].payload && typeof edges[i].payload === 'object' && !Array.isArray(edges[i].payload)
+        ? edges[i].payload
+        : {};
     rows.push({
       edge_id: Utilities.getUuid(),
       source_id: sid,
       target_id: tgt,
       relation_type: rel,
+      weight: weight,
+      source: edgeSource,
+      payload: payload,
       updated_at: now,
     });
   }
   if (!rows.length) return;
   SupabaseRest_upsert(SUPABASE_TABLE.KNOWLEDGE_GRAPH_EDGES, rows, 'edge_id');
+}
+
+/**
+ * @param {string} sourceId
+ * @param {Array<Object>} edges — {target_id, relation_type}
+ */
+function KnowledgeGraphStore_replaceEdgesForSource(sourceId, edges) {
+  KnowledgeGraphStore_replaceEdgesForSourceByProvenance_(sourceId, 'structural', edges);
 }
 
 /**

@@ -13,6 +13,7 @@
   var filterClient = document.getElementById('kg-filter-client');
   var filterDepth = document.getElementById('kg-filter-depth');
   var filterDensity = document.getElementById('kg-filter-density');
+  var filterMinWeight = document.getElementById('kg-filter-min-weight');
   var applyBtn = document.getElementById('kg-apply-btn');
   var resetBtn = document.getElementById('kg-reset-btn');
   var focusBtn = document.getElementById('kg-focus-btn');
@@ -227,6 +228,10 @@
     tag: 4,
     stage: 5,
     pricing_model: 6,
+    offering: 7,
+    technology: 8,
+    outcome: 9,
+    theme: 10,
   };
 
   var loading = false;
@@ -285,6 +290,10 @@
     tag: '#10b981',
     stage: '#6366f1',
     pricing_model: '#ec4899',
+    offering: '#0891b2',
+    technology: '#14b8a6',
+    outcome: '#22c55e',
+    theme: '#a855f7',
   };
 
   var NODE_SHAPES = {
@@ -295,6 +304,10 @@
     tag: { shape: 'ellipse', size: 16 },
     stage: { shape: 'triangle', size: 14 },
     pricing_model: { shape: 'star', size: 14 },
+    offering: { shape: 'hexagon', size: 16 },
+    technology: { shape: 'square', size: 16 },
+    outcome: { shape: 'triangle', size: 14 },
+    theme: { shape: 'ellipse', size: 15 },
   };
 
   var EDGE_COLORS = {
@@ -304,6 +317,11 @@
     has_stage: '#4f46e5',
     has_pricing_model: '#db2777',
     related_content: '#0284c7',
+    similar_to: '#0d9488',
+    delivers: '#0891b2',
+    uses_technology: '#14b8a6',
+    achieved: '#16a34a',
+    addresses_theme: '#9333ea',
   };
 
   var REL_I18N = {
@@ -313,6 +331,17 @@
     has_stage: 'kg_rel_has_stage',
     has_pricing_model: 'kg_rel_has_pricing_model',
     related_content: 'kg_rel_related_content',
+    similar_to: 'kg_rel_similar_to',
+    delivers: 'kg_rel_delivers',
+    uses_technology: 'kg_rel_uses_technology',
+    achieved: 'kg_rel_achieved',
+    addresses_theme: 'kg_rel_addresses_theme',
+  };
+
+  var EDGE_SOURCE_I18N = {
+    structural: 'kg_edge_source_structural',
+    embedding: 'kg_edge_source_embedding',
+    llm: 'kg_edge_source_llm',
   };
 
   var TYPE_I18N = {
@@ -323,6 +352,10 @@
     tag: 'kg_type_tag',
     stage: 'kg_type_stage',
     pricing_model: 'kg_type_pricing_model',
+    offering: 'kg_type_offering',
+    technology: 'kg_type_technology',
+    outcome: 'kg_type_outcome',
+    theme: 'kg_type_theme',
   };
 
   var SIMPLE_TYPE_I18N = {
@@ -333,6 +366,10 @@
     tag: 'kg_simple_type_tag',
     stage: 'kg_simple_type_stage',
     pricing_model: 'kg_simple_type_pricing_model',
+    offering: 'kg_simple_type_offering',
+    technology: 'kg_simple_type_technology',
+    outcome: 'kg_simple_type_outcome',
+    theme: 'kg_simple_type_theme',
   };
 
   var SIMPLE_REL_I18N = {
@@ -342,6 +379,11 @@
     has_stage: 'kg_simple_rel_has_stage',
     has_pricing_model: 'kg_simple_rel_has_pricing_model',
     related_content: 'kg_simple_rel_related_content',
+    similar_to: 'kg_simple_rel_similar_to',
+    delivers: 'kg_simple_rel_delivers',
+    uses_technology: 'kg_simple_rel_uses_technology',
+    achieved: 'kg_simple_rel_achieved',
+    addresses_theme: 'kg_simple_rel_addresses_theme',
   };
 
   var ENTITY_DESC_I18N = {
@@ -352,6 +394,10 @@
     tag: 'kg_entity_desc_tag',
     stage: 'kg_entity_desc_stage',
     pricing_model: 'kg_entity_desc_pricing_model',
+    offering: 'kg_entity_desc_offering',
+    technology: 'kg_entity_desc_technology',
+    outcome: 'kg_entity_desc_outcome',
+    theme: 'kg_entity_desc_theme',
   };
 
   var ENTITY_REL_DESC_I18N = {
@@ -361,6 +407,11 @@
     has_stage: 'kg_entity_rel_desc_has_stage',
     has_pricing_model: 'kg_entity_rel_desc_has_pricing_model',
     related_content: 'kg_entity_rel_desc_related_content',
+    similar_to: 'kg_entity_rel_desc_similar_to',
+    delivers: 'kg_entity_rel_desc_delivers',
+    uses_technology: 'kg_entity_rel_desc_uses_technology',
+    achieved: 'kg_entity_rel_desc_achieved',
+    addresses_theme: 'kg_entity_rel_desc_addresses_theme',
   };
 
   var ENTITY_NODE_ORDER = [
@@ -371,6 +422,10 @@
     'tag',
     'stage',
     'pricing_model',
+    'offering',
+    'technology',
+    'outcome',
+    'theme',
   ];
 
   var ENTITY_REL_ORDER = [
@@ -378,8 +433,59 @@
     'tagged_with',
     'in_industry',
     'related_content',
+    'similar_to',
     'has_stage',
     'has_pricing_model',
+    'delivers',
+    'uses_technology',
+    'achieved',
+    'addresses_theme',
+  ];
+
+  var ENTITY_TYPE_LAYERS_ = [
+    {
+      key: 'structural',
+      titleKey: 'kg_entities_layer_group_structural',
+      types: [
+        'content',
+        'client',
+        'client_label',
+        'industry',
+        'tag',
+        'stage',
+        'pricing_model',
+      ],
+    },
+    {
+      key: 'conceptual',
+      titleKey: 'kg_entities_layer_group_conceptual',
+      types: ['offering', 'technology', 'outcome', 'theme'],
+    },
+  ];
+
+  var ENTITY_REL_LAYERS_ = [
+    {
+      key: 'structural',
+      titleKey: 'kg_entities_layer_group_structural',
+      relations: [
+        'belongs_to',
+        'tagged_with',
+        'in_industry',
+        'related_content',
+        'has_stage',
+        'has_pricing_model',
+      ],
+    },
+    {
+      key: 'semantic',
+      titleKey: 'kg_entities_layer_group_semantic',
+      relations: ['similar_to'],
+    },
+    {
+      key: 'conceptual',
+      titleKey: 'kg_entities_layer_group_conceptual',
+      relations: ['delivers', 'uses_technology', 'achieved', 'addresses_theme'],
+    },
   ];
 
   var ENTITY_ICON = {
@@ -390,6 +496,10 @@
     tag: 'fa-hashtag',
     stage: 'fa-layer-group',
     pricing_model: 'fa-coins',
+    offering: 'fa-briefcase',
+    technology: 'fa-microchip',
+    outcome: 'fa-chart-line',
+    theme: 'fa-lightbulb',
   };
 
   var KG_DEFAULT_MAX_NODES = 150;
@@ -435,6 +545,9 @@
     'contents',
     'clients',
     'salesforce',
+    'embeddings',
+    'semantic',
+    'entities',
     'stale',
     'prune',
   ];
@@ -1131,6 +1244,38 @@
     return out;
   }
 
+  function kgGetMinEdgeWeight_() {
+    if (!filterMinWeight) return 0;
+    var w = parseFloat(String(filterMinWeight.value || '0'));
+    return isNaN(w) || w < 0 ? 0 : w;
+  }
+
+  function kgFilterEdgesByWeight_(edges) {
+    var minW = kgGetMinEdgeWeight_();
+    if (!minW || !edges || !edges.length) return edges || [];
+    var out = [];
+    var i;
+    for (i = 0; i < edges.length; i++) {
+      var ew = Number(edges[i].weight);
+      if (isNaN(ew)) ew = 1;
+      if (ew >= minW) out.push(edges[i]);
+    }
+    return out;
+  }
+
+  function kgFormatEdgeMeta_(edge) {
+    var parts = [];
+    var ew = Number(edge && edge.weight);
+    if (!isNaN(ew) && ew < 1 && ew > 0) {
+      parts.push(i18nFmt('kg_edge_weight_fmt', { pct: String(Math.round(ew * 100)) }));
+    }
+    var src = edge && edge.edgeSource ? String(edge.edgeSource) : '';
+    if (src && src !== 'structural') {
+      parts.push(i18n(EDGE_SOURCE_I18N[src] || src));
+    }
+    return parts.length ? ' · ' + parts.join(' · ') : '';
+  }
+
   function kgGetFilters() {
     return {
       contentType: filterType ? String(filterType.value || '').trim() : '',
@@ -1142,6 +1287,7 @@
       maxNodes: filterDensity
         ? parseInt(String(filterDensity.value || String(kgResolveLimits_().densityNormal)), 10)
         : kgResolveLimits_().densityNormal,
+      minEdgeWeight: kgGetMinEdgeWeight_(),
       allowedNodeTypes: kgGetAllowedNodeTypes(),
     };
   }
@@ -1298,27 +1444,33 @@
         });
       }
 
+      var filteredEdges = kgFilterEdgesByWeight_(edges);
       var visEdges = [];
       var ei;
-      for (ei = 0; ei < edges.length; ei++) {
-        var e = edges[ei];
+      for (ei = 0; ei < filteredEdges.length; ei++) {
+        var e = filteredEdges[ei];
         var rel = String(e.relation || '');
         var relI18nKey = REL_I18N[rel] || rel;
         var edgeColor = EDGE_COLORS[rel] || '#94a3b8';
+        var ew = Number(e.weight);
+        if (isNaN(ew) || ew <= 0) ew = 1;
+        var edgeTitle = i18n(relI18nKey) + kgFormatEdgeMeta_(e);
+        var edgeWidth = rel === 'belongs_to' || rel === 'related_content' ? 2 : 1.5;
+        if (rel === 'similar_to' && ew < 1) edgeWidth = 1 + ew;
         visEdges.push({
           id: e.id || e.source + '-' + e.target + '-' + rel,
           from: e.source,
           to: e.target,
-          title: i18n(relI18nKey),
+          title: edgeTitle,
           arrows: { to: { enabled: true, scaleFactor: 0.65 } },
           color: {
             color: edgeColor,
             highlight: edgeColor,
             hover: edgeColor,
-            opacity: 0.88,
+            opacity: rel === 'similar_to' ? 0.72 : 0.88,
           },
-          dashes: rel === 'related_content',
-          width: rel === 'belongs_to' || rel === 'related_content' ? 2 : 1.5,
+          dashes: rel === 'related_content' || rel === 'similar_to',
+          width: edgeWidth,
         });
       }
 
@@ -1353,8 +1505,7 @@
 
       network.on('doubleClick', function (params) {
         if (!params.nodes || !params.nodes.length) return;
-        var nid = params.nodes[0];
-        kgFocusNode_(nid, { zoom: 1.28 });
+        kgFocusEntitySubgraph_(params.nodes[0]);
       });
 
       network.on('stabilizationIterationsDone', function () {
@@ -1422,11 +1573,12 @@
       var other = nodeById[item.otherId];
       var lbl = other ? String(other.label || other.id) : item.otherId;
       var rel = i18n(REL_I18N[item.relation] || item.relation);
+      var meta = kgFormatEdgeMeta_(item);
       var li = document.createElement('li');
       li.textContent =
         direction === 'out'
-          ? i18nFmt('kg_edge_to', { label: lbl }) + ' (' + rel + ')'
-          : i18nFmt('kg_edge_from', { label: lbl }) + ' (' + rel + ')';
+          ? i18nFmt('kg_edge_to', { label: lbl }) + ' (' + rel + ')' + meta
+          : i18nFmt('kg_edge_from', { label: lbl }) + ' (' + rel + ')' + meta;
       listEl.appendChild(li);
     }
   }
@@ -1454,14 +1606,24 @@
     }
     var outItems = [];
     var inItems = [];
-    var edges = (lastSnapshot && lastSnapshot.edges) || [];
+    var edges = kgFilterEdgesByWeight_((lastSnapshot && lastSnapshot.edges) || []);
     var ei;
     for (ei = 0; ei < edges.length; ei++) {
       var e = edges[ei];
       if (e.source === node.id) {
-        outItems.push({ otherId: e.target, relation: e.relation });
+        outItems.push({
+          otherId: e.target,
+          relation: e.relation,
+          weight: e.weight,
+          edgeSource: e.edgeSource,
+        });
       } else if (e.target === node.id) {
-        inItems.push({ otherId: e.source, relation: e.relation });
+        inItems.push({
+          otherId: e.source,
+          relation: e.relation,
+          weight: e.weight,
+          edgeSource: e.edgeSource,
+        });
       }
     }
     if (detailEdgesWrap) {
@@ -1933,13 +2095,12 @@
   }
 
   function kgRenderEntityTypeCard_(type, count) {
-    var card = document.createElement('article');
+    var card = document.createElement('div');
     card.className =
-      'rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-slate-900/40';
-    var head = document.createElement('div');
-    head.className = 'flex items-start gap-2.5';
+      'flex gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-600 dark:bg-slate-900/30';
     var swatch = document.createElement('span');
-    swatch.className = 'mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white';
+    swatch.className =
+      'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white';
     swatch.style.backgroundColor = NODE_COLORS[type] || '#64748b';
     var icon = document.createElement('i');
     icon.className = 'fa-solid ' + (ENTITY_ICON[type] || 'fa-circle') + ' text-sm';
@@ -1947,22 +2108,76 @@
     swatch.appendChild(icon);
     var body = document.createElement('div');
     body.className = 'min-w-0 flex-1';
-    var title = document.createElement('h4');
+    var headRow = document.createElement('div');
+    headRow.className = 'flex items-start justify-between gap-2';
+    var title = document.createElement('p');
     title.className = 'text-sm font-semibold text-slate-900 dark:text-slate-100';
     title.textContent = i18n(TYPE_I18N[type] || type);
-    var countEl = document.createElement('p');
-    countEl.className = 'mt-0.5 text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400';
-    countEl.textContent = i18nFmt('kg_entities_count_fmt', { count: String(count || 0) });
+    var countBadge = document.createElement('span');
+    countBadge.className =
+      'shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    countBadge.textContent = String(count || 0);
     var desc = document.createElement('p');
-    desc.className = 'mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
+    desc.className = 'mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
     desc.textContent = i18n(ENTITY_DESC_I18N[type] || '');
-    body.appendChild(title);
-    body.appendChild(countEl);
+    headRow.appendChild(title);
+    headRow.appendChild(countBadge);
+    body.appendChild(headRow);
     body.appendChild(desc);
-    head.appendChild(swatch);
-    head.appendChild(body);
-    card.appendChild(head);
+    card.appendChild(swatch);
+    card.appendChild(body);
     return card;
+  }
+
+  function kgRenderEntityRelationCard_(rel, count) {
+    var card = document.createElement('div');
+    card.className =
+      'rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-600 dark:bg-slate-900/30';
+    var headRow = document.createElement('div');
+    headRow.className = 'flex items-center gap-2';
+    var line = document.createElement('span');
+    line.className = 'inline-block h-1.5 w-8 shrink-0 rounded-full';
+    line.style.backgroundColor = EDGE_COLORS[rel] || '#94a3b8';
+    var relTitle = document.createElement('p');
+    relTitle.className = 'min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-200';
+    relTitle.textContent = i18n(REL_I18N[rel] || rel);
+    var countBadge = document.createElement('span');
+    countBadge.className =
+      'shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    countBadge.textContent = String(count || 0);
+    var relDesc = document.createElement('p');
+    relDesc.className = 'mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
+    relDesc.textContent = i18n(ENTITY_REL_DESC_I18N[rel] || '');
+    headRow.appendChild(line);
+    headRow.appendChild(relTitle);
+    headRow.appendChild(countBadge);
+    card.appendChild(headRow);
+    card.appendChild(relDesc);
+    return card;
+  }
+
+  function kgPopulateEntitiesFilterTypes_() {
+    if (!entitiesFilterType) return;
+    var prev = String(entitiesFilterType.value || '');
+    entitiesFilterType.innerHTML = '';
+    var allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.setAttribute('data-i18n', 'kg_entities_filter_type_all');
+    entitiesFilterType.appendChild(allOpt);
+    var ti;
+    for (ti = 0; ti < ENTITY_NODE_ORDER.length; ti++) {
+      var nt = ENTITY_NODE_ORDER[ti];
+      var opt = document.createElement('option');
+      opt.value = nt;
+      opt.setAttribute('data-i18n', TYPE_I18N[nt] || nt);
+      entitiesFilterType.appendChild(opt);
+    }
+    if (prev && entitiesFilterType.querySelector('option[value="' + prev + '"]')) {
+      entitiesFilterType.value = prev;
+    }
+    if (typeof A.applyClientI18n === 'function') {
+      A.applyClientI18n(entitiesFilterType.closest('label') || entitiesFilterType.parentElement);
+    }
   }
 
   function kgRenderEntityCatalog_(catalog) {
@@ -1981,12 +2196,25 @@
       for (ri = 0; ri < rows.length; ri++) {
         countByType[String(rows[ri].type || '')] = Number(rows[ri].count) || 0;
       }
-      var ti;
-      for (ti = 0; ti < ENTITY_NODE_ORDER.length; ti++) {
-        var nt = ENTITY_NODE_ORDER[ti];
-        entitiesTypesGrid.appendChild(
-          kgRenderEntityTypeCard_(nt, countByType[nt] || 0),
-        );
+      var li;
+      for (li = 0; li < ENTITY_TYPE_LAYERS_.length; li++) {
+        var layer = ENTITY_TYPE_LAYERS_[li];
+        var section = document.createElement('div');
+        section.className = 'space-y-2';
+        var layerTitle = document.createElement('p');
+        layerTitle.className =
+          'text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        layerTitle.textContent = i18n(layer.titleKey);
+        var grid = document.createElement('div');
+        grid.className = 'grid gap-2 sm:grid-cols-2';
+        var ti;
+        for (ti = 0; ti < layer.types.length; ti++) {
+          var nt = layer.types[ti];
+          grid.appendChild(kgRenderEntityTypeCard_(nt, countByType[nt] || 0));
+        }
+        section.appendChild(layerTitle);
+        section.appendChild(grid);
+        entitiesTypesGrid.appendChild(section);
       }
     }
     if (entitiesRelationsList) {
@@ -1997,37 +2225,25 @@
       for (rj = 0; rj < relRows.length; rj++) {
         relCount[String(relRows[rj].relation || '')] = Number(relRows[rj].count) || 0;
       }
-      var rk;
-      for (rk = 0; rk < ENTITY_REL_ORDER.length; rk++) {
-        var rel = ENTITY_REL_ORDER[rk];
-        var li = document.createElement('li');
-        li.className =
-          'rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/30';
-        var row = document.createElement('div');
-        row.className = 'flex flex-wrap items-start gap-2';
-        var line = document.createElement('span');
-        line.className = 'mt-1 inline-block h-1 w-8 shrink-0 rounded-full';
-        line.style.backgroundColor = EDGE_COLORS[rel] || '#94a3b8';
-        var textWrap = document.createElement('div');
-        textWrap.className = 'min-w-0 flex-1';
-        var relTitle = document.createElement('p');
-        relTitle.className = 'text-sm font-medium text-slate-800 dark:text-slate-200';
-        relTitle.textContent = i18n(REL_I18N[rel] || rel);
-        var relCountEl = document.createElement('p');
-        relCountEl.className = 'text-xs tabular-nums text-slate-500 dark:text-slate-400';
-        relCountEl.textContent = i18nFmt('kg_entities_count_fmt', {
-          count: String(relCount[rel] || 0),
-        });
-        var relDesc = document.createElement('p');
-        relDesc.className = 'mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400';
-        relDesc.textContent = i18n(ENTITY_REL_DESC_I18N[rel] || '');
-        textWrap.appendChild(relTitle);
-        textWrap.appendChild(relCountEl);
-        textWrap.appendChild(relDesc);
-        row.appendChild(line);
-        row.appendChild(textWrap);
-        li.appendChild(row);
-        entitiesRelationsList.appendChild(li);
+      var rl;
+      for (rl = 0; rl < ENTITY_REL_LAYERS_.length; rl++) {
+        var relLayer = ENTITY_REL_LAYERS_[rl];
+        var relSection = document.createElement('div');
+        relSection.className = 'space-y-2';
+        var relLayerTitle = document.createElement('p');
+        relLayerTitle.className =
+          'text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+        relLayerTitle.textContent = i18n(relLayer.titleKey);
+        var relGrid = document.createElement('div');
+        relGrid.className = 'grid gap-2 sm:grid-cols-2';
+        var rk;
+        for (rk = 0; rk < relLayer.relations.length; rk++) {
+          var rel = relLayer.relations[rk];
+          relGrid.appendChild(kgRenderEntityRelationCard_(rel, relCount[rel] || 0));
+        }
+        relSection.appendChild(relLayerTitle);
+        relSection.appendChild(relGrid);
+        entitiesRelationsList.appendChild(relSection);
       }
     }
     entitiesCatalogLoaded = true;
@@ -2190,12 +2406,23 @@
     kgLoadEntitiesList_();
   }
 
+  function kgFocusEntitySubgraph_(nodeId) {
+    if (!nodeId) return;
+    var lim = kgResolveLimits_();
+    selectedNodeId = String(nodeId);
+    if (filterDepth) filterDepth.value = String(lim.bfsDepthCap);
+    if (filterDensity) filterDensity.value = String(lim.densityWide);
+    if (filterSearch) filterSearch.value = '';
+    kgUpdateDetail(nodeById[selectedNodeId] || null);
+    kgSyncNodeListSelection_();
+    kgOpenSidePanel_('detail');
+    kgLoad({ focus: true, skipCache: true });
+  }
+
   function kgOpenNodeInGraph_(node) {
     if (!node || !node.id) return;
-    selectedNodeId = String(node.id);
-    if (filterSearch) filterSearch.value = String(node.label || '').trim();
     if (kgMainTabs) kgMainTabs.activate('kg-tab-graph');
-    kgLoad({ focus: true, skipCache: true });
+    kgFocusEntitySubgraph_(node.id);
   }
 
   function kgApplySyncStatus_(st) {
@@ -2216,6 +2443,16 @@
           graph: String(st.graphContentNodes || 0),
           catalog: String(st.catalogContents || 0),
           missing: String(st.missingContents || 0),
+        }),
+      );
+      return;
+    }
+    if (st.needsEmbeddings) {
+      kgSetStatus(
+        i18nFmt('kg_status_missing_embeddings', {
+          withEmb: String(st.catalogWithEmbeddings || 0),
+          catalog: String(st.catalogContents || 0),
+          missing: String(st.missingEmbeddings || 0),
         }),
       );
       return;
@@ -2243,6 +2480,7 @@
 
   function onShow() {
     kgInitMainTabs_();
+    kgPopulateEntitiesFilterTypes_();
     if (rebuildBtn) {
       rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
     }
@@ -2285,6 +2523,7 @@
       var limReset = kgResolveLimits_();
       if (filterDepth) filterDepth.value = String(limReset.bfsDepthDefault);
       if (filterDensity) filterDensity.value = String(limReset.densityNormal);
+      if (filterMinWeight) filterMinWeight.value = '0';
       if (nodeListFilter) nodeListFilter.value = '';
       selectedNodeId = '';
       kgResetFind_();

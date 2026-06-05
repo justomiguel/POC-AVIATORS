@@ -486,6 +486,7 @@ window.Aviators = window.Aviators || {};
     var loc = ci && ci._locale ? ci._locale : 'es';
     var esBtn = document.getElementById('locale-btn-es');
     var enBtn = document.getElementById('locale-btn-en');
+    var currentEl = document.getElementById('sidebar-locale-current');
     if (esBtn) {
       esBtn.classList.toggle('ring-2', loc === 'es');
       esBtn.classList.toggle('ring-sky-500', loc === 'es');
@@ -497,6 +498,13 @@ window.Aviators = window.Aviators || {};
       enBtn.classList.toggle('ring-sky-500', loc === 'en');
       enBtn.classList.toggle('bg-sky-50', loc === 'en');
       enBtn.classList.toggle('dark:bg-sky-900/45', loc === 'en');
+    }
+    if (currentEl) {
+      currentEl.textContent = loc === 'en' ? 'EN' : 'ES';
+    }
+    var localeDropdown = document.getElementById('sidebar-locale-dropdown');
+    if (localeDropdown && localeDropdown.open) {
+      localeDropdown.open = false;
     }
   };
 

@@ -509,6 +509,20 @@ function ContentCatalog_upsert(payload) {
       '[KG] sync after upsert failed: ' + String(eKg.message || eKg).slice(0, 200),
     );
   }
+  try {
+    KnowledgeGraph_syncSemanticForContent_(contentId);
+  } catch (eKgSem) {
+    console.log(
+      '[KG] semantic sync after upsert failed: ' + String(eKgSem.message || eKgSem).slice(0, 200),
+    );
+  }
+  try {
+    KnowledgeGraph_syncEntitiesForContent_(contentId);
+  } catch (eKgEnt) {
+    console.log(
+      '[KG] entities sync after upsert failed: ' + String(eKgEnt.message || eKgEnt).slice(0, 200),
+    );
+  }
   return ContentCatalog_get(contentId);
 }
 
@@ -1467,6 +1481,12 @@ function ContentCatalog_mergeTags(sources) {
     try {
       KnowledgeGraph_syncContent_(commonRowDb.content_id);
     } catch (ignoreKg) {}
+    try {
+      KnowledgeGraph_syncSemanticForContent_(commonRowDb.content_id);
+    } catch (ignoreKgSem) {}
+    try {
+      KnowledgeGraph_syncEntitiesForContent_(commonRowDb.content_id);
+    } catch (ignoreKgEnt) {}
   }
 
   var sourceOut = [];

@@ -114,6 +114,22 @@ function ContentEmbedding_refreshForContentId_(contentId) {
 }
 
 /**
+ * Regenera embedding solo si la fila no tiene vector persistido.
+ * @param {string} contentId
+ * @return {{ok:boolean,contentId:string,model:string,skipped?:boolean}}
+ */
+function ContentEmbedding_refreshForContentIdIfMissing_(contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) throw new Error('content_id requerido');
+  var row = ContentCatalogStore_getById(id);
+  if (!row) throw new Error('content_id no encontrado');
+  if (ContentCatalogStore_rowHasEmbedding_(row)) {
+    return { ok: true, contentId: id, model: String(row.embedding_model || ''), skipped: true };
+  }
+  return ContentEmbedding_refreshForRow_(row);
+}
+
+/**
  * Backfill paginado de embeddings (admin / contribuidor de contenidos).
  * @param {number} skip
  * @param {number} limit

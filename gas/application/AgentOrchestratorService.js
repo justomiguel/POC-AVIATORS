@@ -144,6 +144,11 @@ function AgentOrchestrator_prepareTurnCatalog_(question, existingPrefetch) {
       ? existingPrefetch.slice()
       : AgentOrchestrator_prefetchCatalogMatches_(question, { limit: 10 });
 
+  var ragContentIds = [];
+  for (var cIdx = 0; cIdx < catalog.length && cIdx < 3; cIdx++) {
+    if (catalog[cIdx].contentId) ragContentIds.push(catalog[cIdx].contentId);
+  }
+
   var graphDocs = [];
   var graphClientName = '';
   try {
@@ -151,6 +156,7 @@ function AgentOrchestrator_prepareTurnCatalog_(question, existingPrefetch) {
       limit: 12,
       maxNodes: 32,
       depth: 2,
+      ragContentIds: ragContentIds,
     });
     if (kg && kg.ok) {
       graphDocs = kg.docs || [];

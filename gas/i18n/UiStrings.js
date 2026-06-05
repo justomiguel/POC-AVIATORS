@@ -10,6 +10,16 @@ var UI_STRINGS = {
   es: {
     app_title: 'Aviators',
     nav_home: 'Chat general',
+    nav_chat: 'Chat',
+    nav_section_consult: 'Consultar',
+    nav_section_knowledge: 'Conocimiento',
+    nav_section_admin: 'Administración',
+    nav_explore: 'Explorar',
+    chat_mode_general: 'General',
+    chat_mode_onboarding: 'Onboarding',
+    chat_mode_proposals: 'Propuestas',
+    chat_mode_tabs_aria: 'Modo de consulta',
+    theme_toggle_aria: 'Cambiar tema claro u oscuro',
     nav_onboarding: 'Onboarding',
     nav_proposal_building: 'Armado de propuestas',
     nav_agents: 'Agentes',
@@ -100,7 +110,8 @@ var UI_STRINGS = {
     kg_guide_lead:
       'No hace falta ser técnico: el dibujo muestra una parte del mapa de relaciones guardado en Supabase. Estos pasos alcanzan para la mayoría de las búsquedas.',
     kg_guide_step_1: 'Elegí un cliente, industria o nombre y tocá «Aplicar filtros».',
-    kg_guide_step_2: 'Hacé clic en un punto del dibujo o en la lista «Nodos visibles» de la derecha.',
+    kg_guide_step_2:
+      'Hacé clic en un punto del dibujo o en la lista «Nodos visibles» de la derecha. Doble clic centra la entidad y muestra sus relaciones hasta la profundidad máxima.',
     kg_guide_step_3: 'Usá la lupa sobre el dibujo para encontrar un nombre y Enter para ir saltando.',
     kg_guide_step_4: 'Si se ve muy cargado, bajá la profundidad o filtrá por un solo cliente.',
     kg_filters_heading: 'Acotar la vista',
@@ -222,6 +233,9 @@ var UI_STRINGS = {
     kg_phase_contents: 'Contenidos',
     kg_phase_clients: 'Clientes',
     kg_phase_salesforce: 'Salesforce',
+    kg_phase_embeddings: 'Embeddings del catálogo',
+    kg_phase_semantic: 'Vínculos semánticos (embeddings)',
+    kg_phase_entities: 'Entidades de negocio (IA)',
     kg_phase_stale: 'Limpieza de nodos obsoletos',
     kg_phase_prune: 'Poda de referencias',
     kg_empty: 'No hay nodos con estos filtros, o el grafo aún no se generó. Probá otros filtros o «Sincronizar desde Supabase» (una vez).',
@@ -235,6 +249,8 @@ var UI_STRINGS = {
     kg_status_ready: 'Grafo en Supabase ({graph} contenidos indexados). Podés explorar sin volver a sincronizar.',
     kg_status_behind:
       'Grafo cargado ({graph}/{catalog} contenidos). Faltan {missing} en el índice; al guardar contenido se actualiza solo, o usá «Sincronizar desde Supabase».',
+    kg_status_missing_embeddings:
+      'Embeddings: {withEmb}/{catalog} contenidos listos. Faltan {missing} para vínculos semánticos; usá «Sincronizar desde Supabase» (etapa embeddings).',
     kg_status_stale:
       'Hay {stale} nodos obsoletos en Supabase. Usá «Sincronizar desde Supabase» para limpiar (no hace falta en cada visita).',
     kg_status_empty:
@@ -275,6 +291,24 @@ var UI_STRINGS = {
     kg_simple_rel_related_content: 'Propuesta y caso de éxito relacionados (mismo cliente)',
     kg_simple_rel_has_stage: 'La propuesta está en esta etapa',
     kg_simple_rel_has_pricing_model: 'La propuesta usa este modelo comercial',
+    kg_simple_rel_similar_to: 'Documentos parecidos por significado (embedding)',
+    kg_simple_rel_delivers: 'El documento ofrece o describe este servicio',
+    kg_simple_rel_uses_technology: 'El documento usa o menciona esta tecnología',
+    kg_simple_rel_achieved: 'El documento reporta este resultado',
+    kg_simple_rel_addresses_theme: 'El documento aborda este tema de negocio',
+    kg_simple_type_offering: 'Una oferta, studio o línea de servicio',
+    kg_simple_type_technology: 'Una tecnología, plataforma o stack',
+    kg_simple_type_outcome: 'Un resultado o KPI de negocio',
+    kg_simple_type_theme: 'Un tema o problema transversal',
+    kg_filter_min_weight: 'Fuerza mínima del vínculo',
+    kg_min_weight_all: 'Todos los vínculos',
+    kg_min_weight_65: 'Medio (≥ 65 %)',
+    kg_min_weight_78: 'Fuerte (≥ 78 %)',
+    kg_min_weight_85: 'Muy fuerte (≥ 85 %)',
+    kg_edge_weight_fmt: '{pct} %',
+    kg_edge_source_structural: 'Estructural',
+    kg_edge_source_embedding: 'Semántico',
+    kg_edge_source_llm: 'Extraído por IA',
     kg_graph_toolbar_heading: 'Vista del grafo',
     kg_graph_stats: '{nodes} nodos · {edges} aristas',
     kg_layout_label: 'Disposición',
@@ -305,6 +339,11 @@ var UI_STRINGS = {
     kg_rel_has_stage: 'Etapa (propuesta)',
     kg_rel_has_pricing_model: 'Modelo comercial',
     kg_rel_related_content: 'Contenido relacionado (propuesta ↔ caso)',
+    kg_rel_similar_to: 'Similar semánticamente',
+    kg_rel_delivers: 'Ofrece',
+    kg_rel_uses_technology: 'Usa tecnología',
+    kg_rel_achieved: 'Logró resultado',
+    kg_rel_addresses_theme: 'Aborda tema',
     kg_type_content: 'Contenido',
     kg_type_client: 'Cliente',
     kg_type_client_label: 'Nombre de cliente (sin maestro)',
@@ -312,16 +351,47 @@ var UI_STRINGS = {
     kg_type_tag: 'Tag',
     kg_type_stage: 'Etapa',
     kg_type_pricing_model: 'Modelo de precio',
+    kg_type_offering: 'Oferta / studio',
+    kg_type_technology: 'Tecnología',
+    kg_type_outcome: 'Resultado',
+    kg_type_theme: 'Tema',
     kg_tabs_aria: 'Secciones del grafo de conocimiento',
     kg_tab_graph: 'Grafo',
     kg_tab_entities: 'Entidades',
-    kg_entities_catalog_heading: 'Tipos de entidad',
+    kg_entities_intro_heading: 'Cómo está armado el grafo',
+    kg_entities_intro_lead:
+      'El grafo combina tres capas: estructura del catálogo, similitud semántica entre documentos y entidades de negocio extraídas por IA. Abajo ves el inventario completo, sin secciones colapsables.',
+    kg_entities_layer_structural_title: 'Capa estructural',
+    kg_entities_layer_structural_lead:
+      'Clientes, industrias, tags, etapas y modelos comerciales que vienen del catálogo y de Salesforce.',
+    kg_entities_layer_semantic_title: 'Capa semántica',
+    kg_entities_layer_semantic_lead:
+      'Enlaces similar_to entre documentos según embeddings: descubre piezas parecidas aunque no compartan cliente.',
+    kg_entities_layer_conceptual_title: 'Capa conceptual',
+    kg_entities_layer_conceptual_lead:
+      'Ofertas, tecnologías, resultados y temas extraídos por IA desde el texto de cada documento.',
+    kg_entities_flow_source_title: 'Entran documentos y clientes',
+    kg_entities_flow_source_lead:
+      'Propuestas, casos, onboarding y cuentas se guardan como puntos del mapa.',
+    kg_entities_flow_classify_title: 'Se clasifican por señales',
+    kg_entities_flow_classify_lead:
+      'Industria, tags, etapa y modelo comercial agrupan materiales parecidos.',
+    kg_entities_flow_discover_title: 'Se descubre contexto',
+    kg_entities_flow_discover_lead:
+      'Las conexiones muestran clientes, temas y piezas relacionadas para navegar desde un punto concreto.',
+    kg_entities_catalog_heading: 'Catálogo de tipos',
     kg_entities_catalog_lead:
-      'El grafo guarda nodos de varios tipos. Cada uno representa un concepto del catálogo o del maestro de clientes; el conteo refleja lo persistido hoy en Supabase.',
+      'Cada tarjeta muestra el significado del tipo y cuántos nodos o relaciones hay hoy en Supabase, agrupados por capa.',
+    kg_entities_types_panel_heading: 'Tipos de nodo',
+    kg_entities_types_panel_lead:
+      'Qué puede aparecer como punto en el grafo. Los conteos son nodos persistidos.',
+    kg_entities_layer_group_structural: 'Estructural',
+    kg_entities_layer_group_semantic: 'Semántica',
+    kg_entities_layer_group_conceptual: 'Conceptual',
     kg_entities_catalog_totals: '{nodes} nodos · {edges} relaciones guardadas',
     kg_entities_relations_heading: 'Tipos de relación',
     kg_entities_relations_lead:
-      'Las aristas conectan nodos con un significado fijo. Así se arma el mapa que ves en la pestaña Grafo.',
+      'Cómo se conectan los nodos. Cada fila indica el significado de la arista y cuántas hay guardadas.',
     kg_entities_count_fmt: '{count} en el índice',
     kg_entity_desc_content:
       'Documento del catálogo Aviators: propuesta, caso de éxito, ficha de cliente u onboarding. Se crea al guardar o indexar contenido.',
@@ -337,6 +407,14 @@ var UI_STRINGS = {
       'Etapa comercial de una propuesta (p. ej. discovery, negociación). Solo aplica a nodos de tipo propuesta.',
     kg_entity_desc_pricing_model:
       'Modelo de precio o engagement de una propuesta (p. ej. time & materials, fixed price).',
+    kg_entity_desc_offering:
+      'Oferta, studio o línea de servicio extraída del documento por IA (capa conceptual del grafo).',
+    kg_entity_desc_technology:
+      'Tecnología, plataforma o stack mencionado en el documento (extraído por IA).',
+    kg_entity_desc_outcome:
+      'Resultado de negocio o KPI reportado (p. ej. reducción de costos, mejora de conversión).',
+    kg_entity_desc_theme:
+      'Tema o problema de negocio transversal (p. ej. detección de fraude, forecasting).',
     kg_entity_rel_desc_belongs_to:
       'Un contenido o nombre de cliente apunta al cliente del maestro al que pertenece.',
     kg_entity_rel_desc_tagged_with:
@@ -345,13 +423,23 @@ var UI_STRINGS = {
       'Un contenido o cliente está clasificado en esa industria.',
     kg_entity_rel_desc_related_content:
       'Propuesta y caso de éxito del mismo cliente quedan enlazados para explorar el contexto comercial.',
+    kg_entity_rel_desc_similar_to:
+      'Dos documentos son semánticamente parecidos según embeddings (pueden cruzar clientes e industrias).',
+    kg_entity_rel_desc_delivers:
+      'El contenido describe o entrega esa oferta o línea de servicio.',
+    kg_entity_rel_desc_uses_technology:
+      'El contenido menciona o implementa esa tecnología.',
+    kg_entity_rel_desc_achieved:
+      'El contenido reporta ese resultado o KPI.',
+    kg_entity_rel_desc_addresses_theme:
+      'El contenido aborda ese tema o problema de negocio.',
     kg_entity_rel_desc_has_stage:
       'La propuesta está en esa etapa del ciclo comercial.',
     kg_entity_rel_desc_has_pricing_model:
       'La propuesta declara ese modelo comercial.',
     kg_entities_browse_heading: 'Inventario de entidades',
     kg_entities_browse_lead:
-      'Listado paginado de nodos guardados. Filtrá por tipo o nombre y abrí cualquier fila en el grafo para ver sus conexiones.',
+      'Busca un nodo por nombre, filtra por tipo y abre la entidad en el grafo desde la tabla.',
     kg_entities_filter_type: 'Tipo de entidad',
     kg_entities_filter_type_all: 'Todos los tipos',
     kg_entities_filter_search: 'Buscar por nombre',
@@ -1986,6 +2074,16 @@ var UI_STRINGS = {
   en: {
     app_title: 'Aviators',
     nav_home: 'General chat',
+    nav_chat: 'Chat',
+    nav_section_consult: 'Consult',
+    nav_section_knowledge: 'Knowledge',
+    nav_section_admin: 'Administration',
+    nav_explore: 'Explore',
+    chat_mode_general: 'General',
+    chat_mode_onboarding: 'Onboarding',
+    chat_mode_proposals: 'Proposals',
+    chat_mode_tabs_aria: 'Consultation mode',
+    theme_toggle_aria: 'Switch light or dark theme',
     nav_onboarding: 'Onboarding',
     nav_proposal_building: 'Proposal building',
     nav_agents: 'Agents',
@@ -2076,7 +2174,8 @@ var UI_STRINGS = {
     kg_guide_lead:
       'No technical background needed: the drawing shows a slice of the relationship map stored in Supabase. These steps cover most searches.',
     kg_guide_step_1: 'Pick a client, industry, or name and click «Apply filters».',
-    kg_guide_step_2: 'Click a dot on the drawing or an item in the «Visible nodes» list on the right.',
+    kg_guide_step_2:
+      'Click a dot on the drawing or an item in the «Visible nodes» list on the right. Double-click focuses the entity and shows its relationships up to maximum depth.',
     kg_guide_step_3: 'Use the search box above the drawing and press Enter to jump between matches.',
     kg_guide_step_4: 'If it feels crowded, lower depth or filter by a single client.',
     kg_filters_heading: 'Narrow the view',
@@ -2198,6 +2297,9 @@ var UI_STRINGS = {
     kg_phase_contents: 'Contents',
     kg_phase_clients: 'Clients',
     kg_phase_salesforce: 'Salesforce',
+    kg_phase_embeddings: 'Catalog embeddings',
+    kg_phase_semantic: 'Semantic links (embeddings)',
+    kg_phase_entities: 'Business entities (AI)',
     kg_phase_stale: 'Removing stale nodes',
     kg_phase_prune: 'Pruning references',
     kg_empty: 'No nodes match these filters, or the graph was never built. Try other filters or run «Sync from Supabase» once.',
@@ -2211,6 +2313,8 @@ var UI_STRINGS = {
     kg_status_ready: 'Graph loaded from Supabase ({graph} content nodes indexed). You can explore without syncing again.',
     kg_status_behind:
       'Graph loaded ({graph}/{catalog} contents). {missing} missing from the index; saving content updates it, or use «Sync from Supabase».',
+    kg_status_missing_embeddings:
+      'Embeddings: {withEmb}/{catalog} contents ready. {missing} still need vectors for semantic links; run «Sync from Supabase» (embeddings stage).',
     kg_status_stale:
       '{stale} obsolete nodes in Supabase. Use «Sync from Supabase» to clean up (not required on every visit).',
     kg_status_empty:
@@ -2251,6 +2355,24 @@ var UI_STRINGS = {
     kg_simple_rel_related_content: 'Related proposal and success case (same client)',
     kg_simple_rel_has_stage: 'The proposal is at this stage',
     kg_simple_rel_has_pricing_model: 'The proposal uses this pricing model',
+    kg_simple_rel_similar_to: 'Semantically similar documents (embedding)',
+    kg_simple_rel_delivers: 'The document offers or describes this service',
+    kg_simple_rel_uses_technology: 'The document uses or mentions this technology',
+    kg_simple_rel_achieved: 'The document reports this outcome',
+    kg_simple_rel_addresses_theme: 'The document addresses this business theme',
+    kg_simple_type_offering: 'An offering, studio, or service line',
+    kg_simple_type_technology: 'A technology, platform, or stack',
+    kg_simple_type_outcome: 'A business outcome or KPI',
+    kg_simple_type_theme: 'A cross-cutting theme or problem',
+    kg_filter_min_weight: 'Minimum link strength',
+    kg_min_weight_all: 'All links',
+    kg_min_weight_65: 'Medium (≥ 65%)',
+    kg_min_weight_78: 'Strong (≥ 78%)',
+    kg_min_weight_85: 'Very strong (≥ 85%)',
+    kg_edge_weight_fmt: '{pct}%',
+    kg_edge_source_structural: 'Structural',
+    kg_edge_source_embedding: 'Semantic',
+    kg_edge_source_llm: 'AI-extracted',
     kg_graph_toolbar_heading: 'Graph view',
     kg_graph_stats: '{nodes} nodes · {edges} edges',
     kg_layout_label: 'Layout',
@@ -2281,6 +2403,11 @@ var UI_STRINGS = {
     kg_rel_has_stage: 'Stage (proposal)',
     kg_rel_has_pricing_model: 'Pricing model',
     kg_rel_related_content: 'Related content (proposal ↔ case)',
+    kg_rel_similar_to: 'Semantically similar',
+    kg_rel_delivers: 'Delivers',
+    kg_rel_uses_technology: 'Uses technology',
+    kg_rel_achieved: 'Achieved outcome',
+    kg_rel_addresses_theme: 'Addresses theme',
     kg_type_content: 'Content',
     kg_type_client: 'Client',
     kg_type_client_label: 'Client name (no master record)',
@@ -2288,16 +2415,47 @@ var UI_STRINGS = {
     kg_type_tag: 'Tag',
     kg_type_stage: 'Stage',
     kg_type_pricing_model: 'Pricing model',
+    kg_type_offering: 'Offering / studio',
+    kg_type_technology: 'Technology',
+    kg_type_outcome: 'Outcome',
+    kg_type_theme: 'Theme',
     kg_tabs_aria: 'Knowledge graph sections',
     kg_tab_graph: 'Graph',
     kg_tab_entities: 'Entities',
-    kg_entities_catalog_heading: 'Entity types',
+    kg_entities_intro_heading: 'How the graph is structured',
+    kg_entities_intro_lead:
+      'The graph combines three layers: catalog structure, semantic similarity between documents, and AI-extracted business entities. Below is the full inventory with no collapsible sections.',
+    kg_entities_layer_structural_title: 'Structural layer',
+    kg_entities_layer_structural_lead:
+      'Clients, industries, tags, stages, and pricing models from the catalog and Salesforce.',
+    kg_entities_layer_semantic_title: 'Semantic layer',
+    kg_entities_layer_semantic_lead:
+      'similar_to links between documents via embeddings: find related pieces even across clients.',
+    kg_entities_layer_conceptual_title: 'Conceptual layer',
+    kg_entities_layer_conceptual_lead:
+      'Offerings, technologies, outcomes, and themes extracted by AI from each document’s text.',
+    kg_entities_flow_source_title: 'Documents and clients enter',
+    kg_entities_flow_source_lead:
+      'Proposals, cases, onboarding, and accounts are stored as points on the map.',
+    kg_entities_flow_classify_title: 'Signals classify them',
+    kg_entities_flow_classify_lead:
+      'Industry, tags, stage, and pricing model group similar materials together.',
+    kg_entities_flow_discover_title: 'Context becomes discoverable',
+    kg_entities_flow_discover_lead:
+      'Connections expose clients, topics, and related materials so you can navigate from one concrete point.',
+    kg_entities_catalog_heading: 'Type catalog',
     kg_entities_catalog_lead:
-      'The graph stores nodes of several types. Each represents a catalog or client-master concept; counts reflect what is persisted in Supabase today.',
+      'Each card shows what the type means and how many nodes or edges exist in Supabase today, grouped by layer.',
+    kg_entities_types_panel_heading: 'Node types',
+    kg_entities_types_panel_lead:
+      'What can appear as a point on the graph. Counts are persisted nodes.',
+    kg_entities_layer_group_structural: 'Structural',
+    kg_entities_layer_group_semantic: 'Semantic',
+    kg_entities_layer_group_conceptual: 'Conceptual',
     kg_entities_catalog_totals: '{nodes} nodes · {edges} saved relationships',
     kg_entities_relations_heading: 'Relation types',
     kg_entities_relations_lead:
-      'Edges connect nodes with a fixed meaning. Together they form the map you see on the Graph tab.',
+      'How nodes connect. Each row explains the edge meaning and how many are stored.',
     kg_entities_count_fmt: '{count} in the index',
     kg_entity_desc_content:
       'An Aviators catalog document: proposal, success case, client sheet, or onboarding. Created when content is saved or indexed.',
@@ -2313,6 +2471,14 @@ var UI_STRINGS = {
       'A commercial stage of a proposal (e.g. discovery, negotiation). Applies to proposal content nodes only.',
     kg_entity_desc_pricing_model:
       'Pricing or engagement model of a proposal (e.g. time & materials, fixed price).',
+    kg_entity_desc_offering:
+      'Offering, studio, or service line extracted from the document by AI (conceptual graph layer).',
+    kg_entity_desc_technology:
+      'Technology, platform, or stack mentioned in the document (AI-extracted).',
+    kg_entity_desc_outcome:
+      'Business outcome or KPI reported (e.g. cost reduction, conversion lift).',
+    kg_entity_desc_theme:
+      'Cross-cutting business theme or problem (e.g. fraud detection, forecasting).',
     kg_entity_rel_desc_belongs_to:
       'Content or a client label points to the master client it belongs to.',
     kg_entity_rel_desc_tagged_with:
@@ -2321,13 +2487,23 @@ var UI_STRINGS = {
       'Content or a client is classified in that industry.',
     kg_entity_rel_desc_related_content:
       'Proposal and success case for the same client are linked for commercial context.',
+    kg_entity_rel_desc_similar_to:
+      'Two documents are semantically similar via embeddings (may cross clients and industries).',
+    kg_entity_rel_desc_delivers:
+      'Content describes or delivers that offering or service line.',
+    kg_entity_rel_desc_uses_technology:
+      'Content mentions or implements that technology.',
+    kg_entity_rel_desc_achieved:
+      'Content reports that outcome or KPI.',
+    kg_entity_rel_desc_addresses_theme:
+      'Content addresses that business theme or problem.',
     kg_entity_rel_desc_has_stage:
       'The proposal is at that stage in the sales cycle.',
     kg_entity_rel_desc_has_pricing_model:
       'The proposal declares that commercial model.',
     kg_entities_browse_heading: 'Entity inventory',
     kg_entities_browse_lead:
-      'Paginated list of stored nodes. Filter by type or name and open any row on the graph to see its connections.',
+      'Search by name, filter by type, and open an entity on the graph from the table.',
     kg_entities_filter_type: 'Entity type',
     kg_entities_filter_type_all: 'All types',
     kg_entities_filter_search: 'Search by name',

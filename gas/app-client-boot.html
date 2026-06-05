@@ -19,8 +19,10 @@
   var sessionNote = document.getElementById('session-note');
   var backLogin = document.getElementById('logout-toolbar');
   var navBtnHome = document.getElementById('nav-btn-home');
-  var navPageOnboarding = document.getElementById('nav-page-onboarding');
-  var navPageProposalBuilding = document.getElementById('nav-page-proposal-building');
+  var navSectionKnowledge = document.getElementById('nav-section-knowledge');
+  var navGroupExplore = document.getElementById('nav-group-explore');
+  var navSectionAdmin = document.getElementById('nav-section-admin');
+  var navGroupAdmin = document.getElementById('nav-group-admin');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageTags = document.getElementById('nav-page-tags');
   var navPageClients = document.getElementById('nav-page-clients');
@@ -29,6 +31,11 @@
   var navPageSettings = document.getElementById('nav-page-settings');
   var navPageRequestAccess = document.getElementById('nav-page-request-access');
   var navPageFaq = document.getElementById('nav-page-faq');
+  var appSidebarProfile = document.getElementById('app-sidebar-profile');
+  var chatModeBar = document.getElementById('chat-mode-bar');
+  var chatModeGeneral = document.getElementById('chat-mode-general');
+  var chatModeOnboarding = document.getElementById('chat-mode-onboarding');
+  var chatModeProposalBuilding = document.getElementById('chat-mode-proposal-building');
   var adminAgentStatus = document.getElementById('admin-agent-status');
   var appShellView = document.getElementById('view-app');
   var appSidebar = document.getElementById('app-sidebar');
@@ -92,6 +99,108 @@
       if (mobileDrawerOpenBtn) mobileDrawerOpenBtn.setAttribute('aria-expanded', 'false');
     }
   }
+
+  function isChatPage_(pg) {
+    return pg === 'home' || pg === 'onboarding' || pg === 'proposal-building';
+  }
+
+  function syncNavGroups_(pg) {
+    if (navGroupExplore && (pg === 'tags' || pg === 'knowledge-graph')) {
+      navGroupExplore.open = true;
+    }
+    if (navGroupAdmin && (pg === 'metrics' || pg === 'settings')) {
+      navGroupAdmin.open = true;
+    }
+  }
+
+  function syncChatModeTabs_(pg) {
+    if (!chatModeBar) return;
+    var canOb = !!S.get('canViewOnboarding');
+    var canPb = !!S.get('canViewProposalBuilding');
+    var modeCount = 1 + (canOb ? 1 : 0) + (canPb ? 1 : 0);
+    chatModeBar.classList.toggle('hidden', !isChatPage_(pg) || modeCount < 2);
+    if (chatModeOnboarding) {
+      chatModeOnboarding.classList.toggle('hidden', !canOb);
+    }
+    if (chatModeProposalBuilding) {
+      chatModeProposalBuilding.classList.toggle('hidden', !canPb);
+    }
+    var tabs = document.querySelectorAll('.chat-mode-tab');
+    var i;
+    for (i = 0; i < tabs.length; i++) {
+      var tab = tabs[i];
+      if (tab.classList.contains('hidden')) {
+        tab.classList.remove('is-active');
+        tab.setAttribute('aria-selected', 'false');
+        continue;
+      }
+      var mode = tab.getAttribute('data-chat-mode') || 'home';
+      var active = mode === pg || (mode === 'home' && pg === 'home');
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    }
+  }
+
+  function syncSidebarNav_(opts) {
+    var o = opts || {};
+    var canViewCatalog = !!o.canViewCatalog;
+    var canViewTags = !!o.canViewTags;
+    var canViewClients = !!o.canViewClients;
+    var canViewMetrics = !!o.canViewMetrics;
+    var canViewKnowledgeGraph = !!o.canViewKnowledgeGraph;
+    var canViewSettings = !!o.canViewSettings;
+    var showKnowledge =
+      canViewCatalog || canViewClients || canViewTags || canViewKnowledgeGraph;
+    var showExplore = canViewTags || canViewKnowledgeGraph;
+    var showAdmin = canViewMetrics || canViewSettings;
+    if (navSectionKnowledge) {
+      navSectionKnowledge.classList.toggle('hidden', !showKnowledge);
+    }
+    if (navGroupExplore) {
+      navGroupExplore.classList.toggle('hidden', !showExplore);
+    }
+    if (navSectionAdmin) {
+      navSectionAdmin.classList.toggle('hidden', !showAdmin);
+    }
+    if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
+    if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
+    if (navPageClients) navPageClients.classList.toggle('hidden', !canViewClients);
+    if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
+    if (navPageKnowledgeGraph) {
+      navPageKnowledgeGraph.classList.toggle('hidden', !canViewKnowledgeGraph);
+    }
+    if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
+    syncChatModeTabs_(S.get('activePage') || 'home');
+  }
+
+  function restoreNavGroupState_() {
+    function readOpen(key, fallbackOpen) {
+      try {
+        var v = localStorage.getItem(key);
+        if (v === '1') return true;
+        if (v === '0') return false;
+      } catch (eRead) {}
+      return !!fallbackOpen;
+    }
+    if (navGroupExplore) {
+      navGroupExplore.open = readOpen('aviators_nav_explore_open', false);
+      navGroupExplore.addEventListener('toggle', function () {
+        try {
+          localStorage.setItem('aviators_nav_explore_open', navGroupExplore.open ? '1' : '0');
+        } catch (eExplore) {}
+      });
+    }
+    if (navGroupAdmin) {
+      navGroupAdmin.open = readOpen('aviators_nav_admin_open', false);
+      navGroupAdmin.addEventListener('toggle', function () {
+        try {
+          localStorage.setItem('aviators_nav_admin_open', navGroupAdmin.open ? '1' : '0');
+        } catch (eAdmin) {}
+      });
+    }
+  }
+
+  restoreNavGroupState_();
 
   function setAppPage(page) {
     var pg = page;
@@ -181,11 +290,18 @@
     if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
     var scrollArea = document.querySelector('.app-content-scroll');
     if (scrollArea) scrollArea.scrollTop = 0;
+    syncNavGroups_(pg);
+    syncChatModeTabs_(pg);
     var navItems = document.querySelectorAll('.app-nav-item');
     for (i = 0; i < navItems.length; i++) {
       var nb = navItems[i];
       var ap = nb.getAttribute('data-app-page') || '';
-      var isCurrent = ap === pg && !nb.classList.contains('hidden');
+      var isCurrent = false;
+      if (ap === 'chat') {
+        isCurrent = isChatPage_(pg);
+      } else {
+        isCurrent = ap === pg && !nb.classList.contains('hidden');
+      }
       nb.classList.toggle('is-active', isCurrent);
       if (isCurrent) {
         nb.setAttribute('aria-current', 'page');
@@ -379,6 +495,14 @@
         (!data.email && !!data.note) || !!data.showNoRoleBanner,
       );
       emailEl.textContent = data.email || i18n('label_no_email');
+      if (appSidebarProfile) {
+        var emailTitle = (data.email || '').trim();
+        if (emailTitle) {
+          appSidebarProfile.setAttribute('title', emailTitle);
+        } else {
+          appSidebarProfile.removeAttribute('title');
+        }
+      }
 
       if (userDisplayName)
         userDisplayName.textContent =
@@ -507,20 +631,14 @@
           })
           .debugRoleDirectory();
       }
-      if (navPageOnboarding) {
-        navPageOnboarding.classList.toggle('hidden', !canViewOnboarding);
-      }
-      if (navPageProposalBuilding) {
-        navPageProposalBuilding.classList.toggle('hidden', !canViewProposalBuilding);
-      }
-      if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
-      if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
-      if (navPageClients) navPageClients.classList.toggle('hidden', !canViewClients);
-      if (navPageMetrics) navPageMetrics.classList.toggle('hidden', !canViewMetrics);
-      if (navPageKnowledgeGraph) {
-        navPageKnowledgeGraph.classList.toggle('hidden', !canViewKnowledgeGraph);
-      }
-      if (navPageSettings) navPageSettings.classList.toggle('hidden', !canViewSettings);
+      syncSidebarNav_({
+        canViewCatalog: canViewCatalog,
+        canViewTags: canViewTags,
+        canViewClients: canViewClients,
+        canViewMetrics: canViewMetrics,
+        canViewKnowledgeGraph: canViewKnowledgeGraph,
+        canViewSettings: canViewSettings,
+      });
       setAppPage('home');
       syncMobileDrawerViewport();
       if (A.renderDashboard) {
@@ -628,11 +746,14 @@
   if (navBtnHome) {
     navBtnHome.addEventListener('click', function () { setAppPage('home'); });
   }
-  if (navPageOnboarding) {
-    navPageOnboarding.addEventListener('click', function () { setAppPage('onboarding'); });
+  if (chatModeGeneral) {
+    chatModeGeneral.addEventListener('click', function () { setAppPage('home'); });
   }
-  if (navPageProposalBuilding) {
-    navPageProposalBuilding.addEventListener('click', function () { setAppPage('proposal-building'); });
+  if (chatModeOnboarding) {
+    chatModeOnboarding.addEventListener('click', function () { setAppPage('onboarding'); });
+  }
+  if (chatModeProposalBuilding) {
+    chatModeProposalBuilding.addEventListener('click', function () { setAppPage('proposal-building'); });
   }
   if (navPageContents) {
     navPageContents.addEventListener('click', function () { setAppPage('contents'); });
@@ -750,6 +871,7 @@
     if (themeToggleBtn) {
       themeToggleBtn.setAttribute('aria-pressed', dark ? 'true' : 'false');
       themeToggleBtn.setAttribute('title', i18n(dark ? 'theme_light' : 'theme_dark'));
+      themeToggleBtn.setAttribute('aria-label', i18n('theme_toggle_aria'));
     }
     if (opts.persist) {
       try { localStorage.setItem('aviators_theme', theme); } catch (e) {}

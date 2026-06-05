@@ -215,6 +215,21 @@ function ContentCatalogStore_matchSemantic(vector, opts) {
 }
 
 /**
+ * @param {Object} row
+ * @return {boolean}
+ */
+function ContentCatalogStore_rowHasEmbedding_(row) {
+  if (!row || typeof row !== 'object') return false;
+  var emb = row.embedding;
+  if (emb == null || emb === '') return false;
+  if (typeof emb === 'string') {
+    var t = emb.trim();
+    if (!t || t === '[]' || t === 'null') return false;
+  }
+  return true;
+}
+
+/**
  * @param {string} contentId
  * @return {boolean}
  */
