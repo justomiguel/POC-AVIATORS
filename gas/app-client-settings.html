@@ -13,6 +13,10 @@
   var qpObAddBtn = document.getElementById('admin-qp-onboarding-add-btn');
   var qpObSaveBtn = document.getElementById('admin-qp-onboarding-save-btn');
   var qpObStatus = document.getElementById('admin-qp-onboarding-status');
+  var qpGoList = document.getElementById('admin-qp-globant-offering-list');
+  var qpGoAddBtn = document.getElementById('admin-qp-globant-offering-add-btn');
+  var qpGoSaveBtn = document.getElementById('admin-qp-globant-offering-save-btn');
+  var qpGoStatus = document.getElementById('admin-qp-globant-offering-status');
 
   var resetSection = document.getElementById('admin-reset-all-section');
   var resetAllBtn = document.getElementById('admin-reset-all-btn');
@@ -1587,8 +1591,8 @@
     function applyToChatIfActive_(prompts) {
       S.set(cfg.stateKey, prompts);
       var active = S.get('activePage') || 'home';
-      var isOb = cfg.stateKey === 'onboardingQuickPrompts';
-      if ((isOb && active === 'onboarding') || (!isOb && active === 'home')) {
+      var chatPage = cfg.chatPage || 'home';
+      if (active === chatPage) {
         if (A.chat && A.chat.applyQuickPromptsForActivePage) {
           var ci = S.get('cachedI18n');
           var localeUi = ci && ci._locale === 'en' ? 'en' : 'es';
@@ -1630,11 +1634,7 @@
                 e && e.message ? e.message : i18n('admin_quick_prompts_save_error');
             }
           });
-        if (cfg.saveRpc === 'onboardingQuickPromptsSave') {
-          saveChain.onboardingQuickPromptsSave(JSON.stringify(prompts));
-        } else {
-          saveChain.quickPromptsSave(JSON.stringify(prompts));
-        }
+        saveChain[cfg.saveRpc](JSON.stringify(prompts));
       });
     }
 
@@ -1648,11 +1648,7 @@
             applyToChatIfActive_(prompts || []);
           })
           .withFailureHandler(function () {});
-        if (cfg.getRpc === 'onboardingQuickPromptsGet') {
-          loadChain.onboardingQuickPromptsGet();
-        } else {
-          loadChain.quickPromptsGet();
-        }
+        loadChain[cfg.getRpc]();
       },
     };
   }
@@ -1664,6 +1660,7 @@
     status: qpStatus,
     idPrefix: 'qp',
     stateKey: 'quickPrompts',
+    chatPage: 'home',
     getRpc: 'quickPromptsGet',
     saveRpc: 'quickPromptsSave',
     saveDoneKey: 'admin_quick_prompts_save_done',
@@ -1676,19 +1673,35 @@
     status: qpObStatus,
     idPrefix: 'ob',
     stateKey: 'onboardingQuickPrompts',
+    chatPage: 'onboarding',
     getRpc: 'onboardingQuickPromptsGet',
     saveRpc: 'onboardingQuickPromptsSave',
     saveDoneKey: 'admin_quick_prompts_save_done',
   });
 
-  function initQuickPrompts(homePrompts, onboardingPrompts) {
+  var qpGlobantOfferingSection = qpBindSection_({
+    list: qpGoList,
+    addBtn: qpGoAddBtn,
+    saveBtn: qpGoSaveBtn,
+    status: qpGoStatus,
+    idPrefix: 'go',
+    stateKey: 'globantOfferingQuickPrompts',
+    chatPage: 'globant-offering',
+    getRpc: 'globantOfferingQuickPromptsGet',
+    saveRpc: 'globantOfferingQuickPromptsSave',
+    saveDoneKey: 'admin_quick_prompts_save_done',
+  });
+
+  function initQuickPrompts(homePrompts, onboardingPrompts, globantOfferingPrompts) {
     if (qpHomeSection) qpHomeSection.initList(homePrompts || []);
     if (qpOnboardingSection) qpOnboardingSection.initList(onboardingPrompts || []);
+    if (qpGlobantOfferingSection) qpGlobantOfferingSection.initList(globantOfferingPrompts || []);
   }
 
   function reloadQuickPrompts() {
     if (qpHomeSection) qpHomeSection.reload();
     if (qpOnboardingSection) qpOnboardingSection.reload();
+    if (qpGlobantOfferingSection) qpGlobantOfferingSection.reload();
   }
 
   if (kgLimitsSaveBtn) {
@@ -1944,10 +1957,10 @@
   }
 
   A.settings = {
-    init: function (homePrompts, onboardingPrompts) {
+    init: function (homePrompts, onboardingPrompts, globantOfferingPrompts) {
       initSettingsTabs();
       roleConfigBindAllPools_();
-      initQuickPrompts(homePrompts, onboardingPrompts);
+      initQuickPrompts(homePrompts, onboardingPrompts, globantOfferingPrompts);
       if (S.get('canManageRoleConfig')) {
         roleConfigLoad_();
       }

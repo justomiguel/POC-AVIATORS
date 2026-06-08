@@ -184,6 +184,109 @@ function GlobantRagApiClient_create(config) {
     };
   }
 
+  var DOCUMENT_UPLOAD_PATH_ = '/document';
+
+  /**
+   * @param {GoogleAppsScript.URL_Fetch.HTTPResponse} r
+   * @return {{ id: string }}
+   */
+  function parseUploadDocumentResponse_(r) {
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: DOCUMENT_UPLOAD_PATH_,
+          code: String(code),
+          detail: text,
+        }),
+      );
+    }
+    var parsed = JSON.parse(text);
+    if (!parsed.id) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_logical', {
+          path: DOCUMENT_UPLOAD_PATH_,
+          detail: text,
+        }),
+      );
+    }
+    return { id: parsed.id };
+  }
+
+  /**
+   * Sube PDF sin metadata (application/pdf). Evita multipart con concat de byte[] grandes.
+   * @param {string} profileName
+   * @param {Blob} pdfBlob
+   * @return {{ id: string }}
+   */
+  function postPdfDocumentRaw_(profileName, pdfBlob) {
+    var path =
+      '/v1/search/profile/' + encodeURIComponent(profileName) + DOCUMENT_UPLOAD_PATH_;
+    var url = baseUrl + path;
+    var r = BearerHttp_fetch(url, {
+      method: 'post',
+      contentType: 'application/pdf',
+      headers: Object.assign(authHeaders(), {
+        filename: pdfBlob.getName() || 'document.pdf',
+      }),
+      payload: pdfBlob.getBytes(),
+      muteHttpExceptions: true,
+      followRedirects: true,
+      validateHttpsCertificates: true,
+    });
+    return parseUploadDocumentResponse_(r);
+  }
+
+  /**
+   * PUT metadata sobre documento ya subido (sin re-enviar PDF).
+   * @param {string} profileName
+   * @param {string} documentId
+   * @param {Object} metadata
+   * @return {{ id: string, indexStatus: string }}
+   */
+  function reindexDocumentWithMetadataImpl_(profileName, documentId, metadata) {
+    var path =
+      '/v1/search/profile/' + encodeURIComponent(profileName) + DOCUMENT_UPLOAD_PATH_;
+    var url = baseUrl + path;
+    var boundary = '----GlobantReindex' + Utilities.getUuid().replace(/-/g, '');
+    var metadataJson = JSON.stringify(metadata || {});
+    var parts = [];
+    parts.push('--' + boundary);
+    parts.push('Content-Disposition: form-data; name="metadata"');
+    parts.push('');
+    parts.push(metadataJson);
+    parts.push('--' + boundary + '--');
+    var fullPayload = Utilities.newBlob(parts.join('\r\n')).getBytes();
+    var r = BearerHttp_fetch(url, {
+      method: 'put',
+      contentType: 'multipart/form-data; boundary=' + boundary,
+      headers: Object.assign(authHeaders(), {
+        documentId: documentId,
+      }),
+      payload: fullPayload,
+      muteHttpExceptions: true,
+      followRedirects: true,
+      validateHttpsCertificates: true,
+    });
+    var code = r.getResponseCode();
+    var text = r.getContentText() || '';
+    if (!BearerHttp_isSuccess(code)) {
+      throw new Error(
+        UiStrings_fmt_('err_globant_api_http', {
+          path: path,
+          code: String(code),
+          detail: text,
+        }),
+      );
+    }
+    var parsed = JSON.parse(text || '{}');
+    return {
+      id: String(parsed.id || documentId),
+      indexStatus: String(parsed.indexStatus || 'Unknown'),
+    };
+  }
+
   return {
     /** Lista RAG Assistants (/searchProfiles) para el proyecto de la token. */
     listSearchProfiles: function () {
@@ -336,85 +439,27 @@ function GlobantRagApiClient_create(config) {
      * @return {{ id: string }}
      */
     uploadPdfDocument: function (profileName, pdfBlob, metadata) {
-      var path =
-        '/v1/search/profile/' +
-        encodeURIComponent(profileName) +
-        '/document';
-      var url = baseUrl + path;
-      var r;
-
       if (metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0) {
-        var boundary = '----GlobantUpload' + Utilities.getUuid().replace(/-/g, '');
-        var metadataJson = JSON.stringify(metadata);
-        var fileName = pdfBlob.getName() || 'document.pdf';
-        var pdfBytes = pdfBlob.getBytes();
-
-        var parts = [];
-        parts.push('--' + boundary);
-        parts.push('Content-Disposition: form-data; name="metadata"');
-        parts.push('');
-        parts.push(metadataJson);
-        parts.push('--' + boundary);
-        parts.push('Content-Disposition: form-data; name="file"; filename="' + fileName + '"');
-        parts.push('Content-Type: application/pdf');
-        parts.push('');
-
-        var preFileBlob = Utilities.newBlob(parts.join('\r\n') + '\r\n');
-        var postFileBlob = Utilities.newBlob('\r\n--' + boundary + '--');
-        var fullPayload = Utilities.newBlob(
-          [].concat(preFileBlob.getBytes(), pdfBytes, postFileBlob.getBytes()),
-        ).getBytes();
-
-        r = BearerHttp_fetch(url, {
-          method: 'post',
-          contentType: 'multipart/form-data; boundary=' + boundary,
-          headers: authHeaders(),
-          payload: fullPayload,
-          muteHttpExceptions: true,
-          followRedirects: true,
-          validateHttpsCertificates: true,
-        });
-      } else {
-        r = BearerHttp_fetch(url, {
-          method: 'post',
-          contentType: 'application/pdf',
-          headers: Object.assign(authHeaders(), {
-            filename: pdfBlob.getName(),
-          }),
-          payload: pdfBlob.getBytes(),
-          muteHttpExceptions: true,
-          followRedirects: true,
-          validateHttpsCertificates: true,
-        });
-      }
-
-      var code = r.getResponseCode();
-      var text = r.getContentText() || '';
-      if (!BearerHttp_isSuccess(code)) {
-        throw new Error(
-          UiStrings_fmt_('err_globant_api_http', {
-            path:
+        // Multipart con PDF inline hace Array.concat de byte[] grandes → RangeError en GAS.
+        var uploaded = postPdfDocumentRaw_(profileName, pdfBlob);
+        try {
+          reindexDocumentWithMetadataImpl_(profileName, uploaded.id, metadata);
+        } catch (eMeta) {
+          try {
+            request(
+              'delete',
               '/v1/search/profile/' +
-              encodeURIComponent(profileName) +
-              '/document',
-            code: String(code),
-            detail: text,
-          }),
-        );
+                encodeURIComponent(profileName) +
+                '/document/' +
+                encodeURIComponent(uploaded.id),
+              {},
+            );
+          } catch (ignoreDelete) {}
+          throw eMeta;
+        }
+        return { id: uploaded.id };
       }
-      var parsed = JSON.parse(text);
-      if (!parsed.id) {
-        throw new Error(
-          UiStrings_fmt_('err_globant_api_logical', {
-            path:
-              '/v1/search/profile/' +
-              encodeURIComponent(profileName) +
-              '/document',
-            detail: text,
-          }),
-        );
-      }
-      return { id: parsed.id };
+      return postPdfDocumentRaw_(profileName, pdfBlob);
     },
 
     /**
@@ -451,55 +496,7 @@ function GlobantRagApiClient_create(config) {
      * @return {{ id: string, indexStatus: string }}
      */
     reindexDocumentWithMetadata: function (profileName, documentId, metadata) {
-      var path =
-        '/v1/search/profile/' +
-        encodeURIComponent(profileName) +
-        '/document';
-      var url = baseUrl + path;
-
-      var boundary = '----GlobantReindex' + Utilities.getUuid().replace(/-/g, '');
-      var metadataJson = JSON.stringify(metadata || {});
-
-      var parts = [];
-      parts.push('--' + boundary);
-      parts.push('Content-Disposition: form-data; name="metadata"');
-      parts.push('');
-      parts.push(metadataJson);
-      parts.push('--' + boundary + '--');
-
-      var fullPayload = Utilities.newBlob(parts.join('\r\n')).getBytes();
-
-      var r = BearerHttp_fetch(url, {
-        method: 'put',
-        contentType: 'multipart/form-data; boundary=' + boundary,
-        headers: Object.assign(authHeaders(), {
-          documentId: documentId,
-        }),
-        payload: fullPayload,
-        muteHttpExceptions: true,
-        followRedirects: true,
-        validateHttpsCertificates: true,
-      });
-
-      var code = r.getResponseCode();
-      var text = r.getContentText() || '';
-      if (!BearerHttp_isSuccess(code)) {
-        throw new Error(
-          UiStrings_fmt_('err_globant_api_http', {
-            path:
-              '/v1/search/profile/' +
-              encodeURIComponent(profileName) +
-              '/document (reindex)',
-            code: String(code),
-            detail: text,
-          }),
-        );
-      }
-      var parsed = JSON.parse(text);
-      return {
-        id: String(parsed.id || documentId),
-        indexStatus: String(parsed.indexStatus || 'Unknown'),
-      };
+      return reindexDocumentWithMetadataImpl_(profileName, documentId, metadata);
     },
 
     /**

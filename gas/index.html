@@ -295,14 +295,24 @@
                   <button
                     type="button"
                     class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                    data-app-page="proposal-building"
-                    id="nav-page-proposal-building"
+                    data-app-page="globant-offering"
+                    id="nav-page-globant-offering"
                   >
-                    <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
-                    <span data-i18n="nav_proposal_building"></span>
+                    <i class="fa-solid fa-building w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_globant_offering"></span>
                   </button>
                 </div>
               </details>
+
+              <button
+                type="button"
+                class="app-nav-item app-nav-item--standalone hidden mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                data-app-page="proposal-building"
+                id="nav-page-proposal-building"
+              >
+                <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-violet-600 dark:text-violet-400" aria-hidden="true"></i>
+                <span data-i18n="nav_proposal_building"></span>
+              </button>
 
               <details id="nav-group-knowledge" class="app-nav-group hidden">
                 <summary class="app-nav-group-summary">
@@ -613,26 +623,292 @@
             </div>
 
             <div
+              id="page-globant-offering"
+              class="app-page app-page-globant-offering hidden space-y-6"
+              data-app-page="globant-offering"
+            >
+              <header id="globant-offering-welcome" class="mb-6 text-center">
+                <h1
+                  class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl dark:text-slate-100"
+                  data-i18n="page_globant_offering_title"
+                ></h1>
+                <p
+                  class="mx-auto mt-2 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-400"
+                  data-i18n-html="page_globant_offering_lead_html"
+                ></p>
+              </header>
+            </div>
+
+            <div
               id="page-proposal-building"
-              class="app-page app-page-proposal-building hidden space-y-6"
+              class="app-page app-page-proposal-building hidden mx-auto max-w-5xl space-y-6"
               data-app-page="proposal-building"
             >
-              <header id="proposal-building-welcome" class="mb-4 text-center">
+              <header id="proposal-building-welcome" class="mb-2 text-center">
                 <h1
                   class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl dark:text-slate-100"
                   data-i18n="page_proposal_building_title"
                 ></h1>
                 <p
-                  class="mx-auto mt-2 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-400"
+                  class="mx-auto mt-2 max-w-3xl text-base leading-relaxed text-slate-600 dark:text-slate-400"
                   data-i18n-html="page_proposal_building_lead_html"
                 ></p>
               </header>
+              <nav
+                id="pb-stepper"
+                class="pb-stepper"
+                role="tablist"
+                data-i18n-aria-label="pb_stepper_aria"
+                aria-label=""
+              >
+                <button type="button" role="tab" class="pb-stepper-tab is-active" data-pb-step="materials" id="pb-tab-materials" aria-selected="true">
+                  <span class="pb-stepper-icon pb-stepper-icon-sky"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_materials"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="brief" id="pb-tab-brief" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-violet"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_brief"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="configure" id="pb-tab-configure" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-amber"><i class="fa-solid fa-sliders" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_configure"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="building" id="pb-tab-building" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-emerald"><i class="fa-solid fa-file-powerpoint" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_deck"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="studios" id="pb-tab-studios" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-rose"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_studios"></span>
+                </button>
+              </nav>
+              <div id="pb-builder" class="pb-builder space-y-6">
+                <section id="pb-panel-materials" class="pb-panel dashboard-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="materials" aria-labelledby="pb-materials-heading">
+                  <h2 id="pb-materials-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_materials_heading"></h2>
+                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_materials_lead"></p>
+                  <div class="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 p-4 dark:border-sky-800 dark:bg-sky-950/20">
+                    <label class="block text-sm" for="pb-materials-input">
+                      <span class="mb-2 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_materials_files"></span>
+                      <input type="file" id="pb-materials-input" class="aviators-field w-full text-sm" multiple accept=".pdf,.txt,.md,.csv,.docx,image/*,application/pdf,text/*" />
+                    </label>
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_materials_formats"></p>
+                  </div>
+                  <label class="mt-4 block text-sm" for="pb-materials-notes">
+                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_materials_notes"></span>
+                    <textarea id="pb-materials-notes" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_materials_notes"></textarea>
+                  </label>
+                  <ul id="pb-materials-list" class="mt-4 space-y-2" role="list"></ul>
+                  <p id="pb-materials-status" class="mt-3 text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+                  <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                    <button type="button" id="pb-analyze-materials-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                      <span data-i18n="pb_btn_analyze_materials"></span>
+                    </button>
+                  </div>
+                </section>
+                <section id="pb-panel-brief" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="brief" aria-labelledby="pb-brief-story-heading">
+                  <div id="pb-client-story" class="pb-client-story mb-6"></div>
+                  <section id="pb-step-validate" class="space-y-4">
+                    <div>
+                      <h2 id="pb-wizard-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_validation_heading"></h2>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_validation_lead"></p>
+                    </div>
+                    <label class="block text-sm" for="pb-field-project-summary">
+                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_project_summary"></span>
+                      <textarea id="pb-field-project-summary" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_project_summary"></textarea>
+                    </label>
+                    <label class="block text-sm" for="pb-field-client">
+                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_client"></span>
+                      <input type="text" id="pb-field-client" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_client" />
+                    </label>
+                    <div id="pb-tech-hints-wrap" class="hidden">
+                      <h3 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_technology_hints"></h3>
+                      <ul id="pb-tech-hints-list" class="flex flex-wrap gap-2 text-sm"></ul>
+                    </div>
+                    <div>
+                      <div class="mb-2 flex items-center justify-between gap-2">
+                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_scope_items"></h3>
+                        <button type="button" id="pb-add-scope-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                          <span data-i18n="pb_btn_add_scope_item"></span>
+                        </button>
+                      </div>
+                      <div id="pb-scope-list" class="space-y-3"></div>
+                    </div>
+                    <label class="block text-sm" for="pb-field-commercial-model">
+                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_commercial_model"></span>
+                      <select id="pb-field-commercial-model" class="aviators-field w-full text-sm">
+                        <option value="">—</option>
+                        <option value="TIME_AND_MATERIALS" data-i18n="pb_pricing_time_and_materials"></option>
+                        <option value="STAFF_AUGMENTATION" data-i18n="pb_pricing_staff_augmentation"></option>
+                        <option value="FIXED_PRICE" data-i18n="pb_pricing_fixed_price"></option>
+                        <option value="SUBSCRIPTION" data-i18n="pb_pricing_subscription"></option>
+                        <option value="AI_PODS" data-i18n="pb_pricing_ai_pods"></option>
+                      </select>
+                    </label>
+                    <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-600 dark:bg-slate-900/30" aria-labelledby="pb-business-heading">
+                      <h3 id="pb-business-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_business_context_heading"></h3>
+                      <p class="mt-1 mb-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_business_context_lead"></p>
+                      <label class="mb-3 block text-sm" for="pb-field-rfp-deadline">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_rfp_deadline"></span>
+                        <input type="text" id="pb-field-rfp-deadline" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_rfp_deadline" />
+                      </label>
+                      <div class="mb-3 grid gap-3 md:grid-cols-3">
+                        <label class="block text-sm md:col-span-1" for="pb-field-budget-amount">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_amount"></span>
+                          <input type="text" id="pb-field-budget-amount" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_amount" />
+                        </label>
+                        <label class="block text-sm md:col-span-1" for="pb-field-budget-currency">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_currency"></span>
+                          <input type="text" id="pb-field-budget-currency" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_currency" />
+                        </label>
+                        <label class="block text-sm md:col-span-1" for="pb-field-budget-notes">
+                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_notes"></span>
+                          <input type="text" id="pb-field-budget-notes" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_notes" />
+                        </label>
+                      </div>
+                      <div class="mb-3">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_stakeholders"></span>
+                          <button type="button" id="pb-add-stakeholder-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                            <span data-i18n="pb_btn_add_stakeholder"></span>
+                          </button>
+                        </div>
+                        <div id="pb-stakeholders-list" class="space-y-3"></div>
+                      </div>
+                      <label class="mb-3 block text-sm" for="pb-field-objectives">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_business_objectives"></span>
+                        <textarea id="pb-field-objectives" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_business_objectives"></textarea>
+                      </label>
+                      <label class="block text-sm" for="pb-field-constraints">
+                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_constraints"></span>
+                        <textarea id="pb-field-constraints" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_constraints"></textarea>
+                      </label>
+                    </section>
+                    <div>
+                      <div class="mb-2 flex items-center justify-between gap-2">
+                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_milestones"></h3>
+                        <button type="button" id="pb-add-milestone-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                          <span data-i18n="pb_btn_add_milestone"></span>
+                        </button>
+                      </div>
+                      <div id="pb-milestone-list" class="space-y-3"></div>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                      <button type="button" id="pb-confirm-brief-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                        <span data-i18n="pb_btn_confirm_brief"></span>
+                      </button>
+                    </div>
+                  </section>
+                </section>
+                <section id="pb-panel-configure" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="configure">
+                  <section id="pb-step-industry" class="space-y-4">
+                    <div>
+                      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_industry_heading"></h2>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_industry_lead"></p>
+                    </div>
+                    <fieldset class="space-y-2">
+                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_industry"></legend>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" checked />
+                        <span data-i18n="pb_industry_airlines"></span>
+                      </label>
+                      <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
+                        <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" disabled />
+                        <span data-i18n="pb_industry_logistics"></span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
+                      </label>
+                    </fieldset>
+                    <fieldset class="space-y-2">
+                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_proposal_language"></legend>
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_proposal_language_lead"></p>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-proposal-language" value="es" class="h-4 w-4" checked />
+                        <span data-i18n="pb_lang_es"></span>
+                      </label>
+                      <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
+                        <input type="radio" name="pb-proposal-language" value="en" class="h-4 w-4" disabled />
+                        <span data-i18n="pb_lang_en"></span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
+                      </label>
+                    </fieldset>
+                    <p id="pb-deck-preview" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+                  </section>
+                  <section id="pb-step-deck-options" class="mt-6 space-y-4 border-t border-slate-200 pt-6 dark:border-slate-600">
+                    <div>
+                      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_deck_options_heading"></h2>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_deck_options_lead"></p>
+                    </div>
+                    <fieldset class="space-y-2">
+                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_globant"></legend>
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_globant_lead"></p>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-include-globant" value="yes" class="h-4 w-4" checked />
+                        <span data-i18n="pb_option_yes"></span>
+                      </label>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-include-globant" value="no" class="h-4 w-4" />
+                        <span data-i18n="pb_option_no"></span>
+                      </label>
+                    </fieldset>
+                    <fieldset id="pb-airlines-studio-fieldset" class="space-y-2">
+                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_airlines_studio"></legend>
+                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_airlines_studio_lead"></p>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-include-airlines-studio" value="yes" class="h-4 w-4" checked />
+                        <span data-i18n="pb_option_yes"></span>
+                      </label>
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+                        <input type="radio" name="pb-include-airlines-studio" value="no" class="h-4 w-4" />
+                        <span data-i18n="pb_option_no"></span>
+                      </label>
+                    </fieldset>
+                    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                      <button type="button" id="pb-industry-continue-btn" class="hidden" aria-hidden="true"></button>
+                      <button type="button" id="pb-start-building-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                        <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
+                        <span data-i18n="pb_btn_start_building"></span>
+                      </button>
+                    </div>
+                  </section>
+                </section>
+                <section id="pb-panel-building" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="building" aria-labelledby="pb-building-heading">
+                  <h2 id="pb-building-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_building_heading"></h2>
+                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_building_lead"></p>
+                  <div id="pb-building-status-card" class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <p id="pb-building-status-text" class="text-sm text-slate-700 dark:text-slate-300" role="status" aria-live="polite"></p>
+                    <a id="pb-building-deck-link" class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-300 hidden" href="#" target="_blank" rel="noopener noreferrer">
+                      <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                      <span data-i18n="pb_btn_open_deck"></span>
+                    </a>
+                  </div>
+                </section>
+                <section id="pb-panel-studios" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="studios" aria-labelledby="pb-studios-heading">
+                  <h2 id="pb-studios-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_studios_heading"></h2>
+                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_studios_lead"></p>
+                  <p id="pb-studios-busy" class="hidden text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite">
+                    <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                    <span data-i18n="pb_busy_recommend_studios"></span>
+                  </p>
+                  <div id="pb-studios-list" class="space-y-3"></div>
+                  <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_studios_next_hint"></p>
+                  <div class="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                    <button type="button" id="pb-open-globant-offering-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-building" aria-hidden="true"></i>
+                      <span data-i18n="pb_btn_open_globant_offering"></span>
+                    </button>
+                  </div>
+                </section>
+              </div>
               <p
                 id="proposal-building-status"
-                class="mx-auto max-w-2xl text-center text-sm text-slate-500 dark:text-slate-400"
+                class="mx-auto max-w-3xl text-center text-sm text-slate-500 dark:text-slate-400"
                 role="status"
                 aria-live="polite"
-                data-i18n="pb_status_intake"
+                data-i18n="pb_status_materials"
               ></p>
             </div>
 
@@ -682,13 +958,13 @@
               <button
                 type="button"
                 role="tab"
-                id="chat-mode-proposal-building"
+                id="chat-mode-globant-offering"
                 class="app-tab-btn chat-mode-tab hidden"
-                data-chat-mode="proposal-building"
+                data-chat-mode="globant-offering"
                 aria-selected="false"
               >
-                <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
-                <span data-i18n="chat_mode_proposals"></span>
+                <i class="fa-solid fa-building" aria-hidden="true"></i>
+                <span data-i18n="chat_mode_globant_offering"></span>
               </button>
             </div>
           </div>
@@ -871,14 +1147,6 @@
           ></textarea>
           <div class="chat-send-actions">
             <div id="globant-agent-row" class="btn-row flex flex-wrap gap-2 hidden">
-              <button
-                type="button"
-                id="pb-validate-brief-btn"
-                class="btn btn-md btn-outline hidden inline-flex items-center gap-2"
-              >
-                <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
-                <span data-i18n="pb_btn_validate_brief"></span>
-              </button>
               <button
                 type="button"
                 id="ask-agent-btn"
@@ -4043,6 +4311,24 @@
                         <p id="admin-qp-onboarding-status" class="settings-status-msg" role="status" aria-live="polite"></p>
                       </div>
                     </div>
+                    <div id="settings-qp-globant-offering-section" class="settings-panel-inner mt-8 border-t border-slate-200 pt-8 dark:border-slate-600">
+                      <div class="settings-panel-head">
+                        <h3 id="admin-qp-globant-offering-heading" class="settings-panel-title" data-i18n="admin_globant_offering_quick_prompts_sec_heading"></h3>
+                        <p class="settings-panel-lead" data-i18n="admin_globant_offering_quick_prompts_sec_lead"></p>
+                      </div>
+                      <div id="admin-qp-globant-offering-list" class="mb-5 space-y-3"></div>
+                      <div class="settings-panel-footer">
+                        <button type="button" id="admin-qp-globant-offering-add-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                          <span data-i18n="admin_quick_prompts_add_btn"></span>
+                        </button>
+                        <button type="button" id="admin-qp-globant-offering-save-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                          <span data-i18n="admin_globant_offering_quick_prompts_save_btn"></span>
+                        </button>
+                        <p id="admin-qp-globant-offering-status" class="settings-status-msg" role="status" aria-live="polite"></p>
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Panel: Salesforce -->
@@ -4564,141 +4850,6 @@
             <span data-i18n="contents_similar_review_delete_selected"></span>
           </button>
         </div>
-      </div>
-    </div>
-    <div
-      id="pb-wizard-modal"
-      class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
-      aria-hidden="true"
-    >
-      <div
-        id="pb-wizard-dialog"
-        class="app-dialog max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-600 dark:bg-slate-800"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pb-wizard-heading"
-      >
-        <section id="pb-step-validate" class="space-y-4">
-          <div>
-            <h2 id="pb-wizard-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_validation_heading"></h2>
-            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_validation_lead"></p>
-          </div>
-          <label class="block text-sm" for="pb-field-client">
-            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_client"></span>
-            <input type="text" id="pb-field-client" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_client" />
-          </label>
-          <div>
-            <div class="mb-2 flex items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_scope_items"></h3>
-              <button type="button" id="pb-add-scope-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
-                <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                <span data-i18n="pb_btn_add_scope_item"></span>
-              </button>
-            </div>
-            <div id="pb-scope-list" class="space-y-3"></div>
-          </div>
-          <label class="block text-sm" for="pb-field-commercial-model">
-            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_commercial_model"></span>
-            <select id="pb-field-commercial-model" class="aviators-field w-full text-sm">
-              <option value="">—</option>
-              <option value="TIME_AND_MATERIALS" data-i18n="pb_pricing_time_and_materials"></option>
-              <option value="STAFF_AUGMENTATION" data-i18n="pb_pricing_staff_augmentation"></option>
-              <option value="FIXED_PRICE" data-i18n="pb_pricing_fixed_price"></option>
-              <option value="SUBSCRIPTION" data-i18n="pb_pricing_subscription"></option>
-              <option value="AI_PODS" data-i18n="pb_pricing_ai_pods"></option>
-            </select>
-          </label>
-          <div>
-            <div class="mb-2 flex items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_milestones"></h3>
-              <button type="button" id="pb-add-milestone-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
-                <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                <span data-i18n="pb_btn_add_milestone"></span>
-              </button>
-            </div>
-            <div id="pb-milestone-list" class="space-y-3"></div>
-          </div>
-          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
-            <button type="button" id="pb-confirm-brief-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
-              <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-              <span data-i18n="pb_btn_confirm_brief"></span>
-            </button>
-          </div>
-        </section>
-        <section id="pb-step-industry" class="hidden space-y-4">
-          <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_industry_heading"></h2>
-            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_industry_lead"></p>
-          </div>
-          <fieldset class="space-y-2">
-            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_industry"></legend>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" checked />
-              <span data-i18n="pb_industry_airlines"></span>
-            </label>
-            <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
-              <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" disabled />
-              <span data-i18n="pb_industry_logistics"></span>
-              <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
-            </label>
-          </fieldset>
-          <fieldset class="space-y-2">
-            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_proposal_language"></legend>
-            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_proposal_language_lead"></p>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-proposal-language" value="es" class="h-4 w-4" checked />
-              <span data-i18n="pb_lang_es"></span>
-            </label>
-            <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
-              <input type="radio" name="pb-proposal-language" value="en" class="h-4 w-4" disabled />
-              <span data-i18n="pb_lang_en"></span>
-              <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
-            </label>
-          </fieldset>
-          <p id="pb-deck-preview" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
-          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
-            <button type="button" id="pb-industry-continue-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
-              <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-              <span data-i18n="pb_btn_continue_deck_options"></span>
-            </button>
-          </div>
-        </section>
-        <section id="pb-step-deck-options" class="hidden space-y-4">
-          <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_deck_options_heading"></h2>
-            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_deck_options_lead"></p>
-          </div>
-          <fieldset class="space-y-2">
-            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_globant"></legend>
-            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_globant_lead"></p>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-include-globant" value="yes" class="h-4 w-4" checked />
-              <span data-i18n="pb_option_yes"></span>
-            </label>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-include-globant" value="no" class="h-4 w-4" />
-              <span data-i18n="pb_option_no"></span>
-            </label>
-          </fieldset>
-          <fieldset id="pb-airlines-studio-fieldset" class="space-y-2">
-            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_airlines_studio"></legend>
-            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_airlines_studio_lead"></p>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-include-airlines-studio" value="yes" class="h-4 w-4" checked />
-              <span data-i18n="pb_option_yes"></span>
-            </label>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-include-airlines-studio" value="no" class="h-4 w-4" />
-              <span data-i18n="pb_option_no"></span>
-            </label>
-          </fieldset>
-          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
-            <button type="button" id="pb-start-building-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
-              <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
-              <span data-i18n="pb_btn_start_building"></span>
-            </button>
-          </div>
-        </section>
       </div>
     </div>
     <div

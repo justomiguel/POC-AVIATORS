@@ -61,20 +61,80 @@ function KnowledgeGraphExtraction_parseJson_(text) {
 }
 
 /**
+ * @param {Object} row
+ * @return {string}
+ */
+function KnowledgeGraphExtraction_catalogOfferingEnum_(row) {
+  if (typeof KnowledgeGraph_resolveProposalOfferingEnum_ === 'function') {
+    var specific = ContentCatalogStore_rowToSpecific_(row);
+    return KnowledgeGraph_resolveProposalOfferingEnum_(specific);
+  }
+  return '';
+}
+
+/**
+ * @param {Object} row
+ * @return {Array<string>}
+ */
+function KnowledgeGraphExtraction_catalogTechnologyKeys_(row) {
+  var specific = ContentCatalogStore_rowToSpecific_(row);
+  var raw = specific && specific.technologies ? String(specific.technologies) : '';
+  if (!raw || typeof KnowledgeGraph_splitTechnologies_ !== 'function') return [];
+  var list = KnowledgeGraph_splitTechnologies_(raw);
+  var out = [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var slug = KnowledgeGraph_slug_(list[i]);
+    if (slug && slug !== 'unknown') out.push(slug);
+  }
+  return out;
+}
+
+/**
  * @param {string} entityType
  * @param {string} label
- * @return {{nodeId:string,label:string,slug:string}|null}
+ * @param {Object} [row]
+ * @return {{nodeId:string,label:string,slug:string,type:string}|null}
  */
-function KnowledgeGraphExtraction_canonicalizeEntity_(entityType, label) {
+function KnowledgeGraphExtraction_canonicalizeEntity_(entityType, label, row) {
   var type = String(entityType || '').trim();
   if (KG_EXTRACTION_ENTITY_TYPES_.indexOf(type) < 0) return null;
   var lbl = String(label || '').trim();
   if (!lbl || lbl.length < 2) return null;
+
+  if (type === 'offering') {
+    var catalogOff = row ? KnowledgeGraphExtraction_catalogOfferingEnum_(row) : '';
+    if (catalogOff) return null;
+    var enumFromLabel =
+      typeof ContentExtraction_normalizeProposalPricingEnum_ === 'function'
+        ? ContentExtraction_normalizeProposalPricingEnum_(lbl)
+        : '';
+    if (enumFromLabel) {
+      var enumNodeId = KnowledgeGraph_nodeId_('offering', enumFromLabel);
+      var enumLabel =
+        typeof KnowledgeGraph_offeringEnumLabel_ === 'function'
+          ? KnowledgeGraph_offeringEnumLabel_(enumFromLabel)
+          : enumFromLabel;
+      return {
+        nodeId: enumNodeId,
+        label: enumLabel,
+        slug: enumFromLabel.toLowerCase(),
+        type: 'offering',
+      };
+    }
+  }
+
   if (lbl.length > 120) lbl = lbl.slice(0, 120);
   var slug = KnowledgeGraph_slug_(lbl);
   if (!slug || slug === 'unknown') return null;
+
+  if (type === 'technology' && row) {
+    var techKeys = KnowledgeGraphExtraction_catalogTechnologyKeys_(row);
+    if (techKeys.indexOf(slug) >= 0) return null;
+  }
+
   var nodeId = KnowledgeGraph_nodeId_(type, slug);
-  return { nodeId: nodeId, label: lbl, slug: slug };
+  return { nodeId: nodeId, label: lbl, slug: slug, type: type };
 }
 
 /**
@@ -111,10 +171,13 @@ function KnowledgeGraphExtraction_buildContextText_(row) {
 }
 
 /**
+ * @param {Object} row
  * @return {string}
  */
-function KnowledgeGraphExtraction_systemPrompt_() {
-  return [
+function KnowledgeGraphExtraction_systemPrompt_(row) {
+  row = row || {};
+  var catalogOff = KnowledgeGraphExtraction_catalogOfferingEnum_(row);
+  var lines = [
     'You extract structured business knowledge graph entities from Aviators catalog documents.',
     'Aviators is a B2B knowledge base for aviation, airlines, airports, logistics and related industries.',
     'Return ONLY valid JSON. No markdown.',
@@ -122,15 +185,29 @@ function KnowledgeGraphExtraction_systemPrompt_() {
     'Relation types allowed (from content node to entity): delivers, uses_technology, achieved, addresses_theme.',
     'Keep labels concise (2-8 words). Avoid duplicates and near-duplicates.',
     'outcome: measurable business results (KPIs, % improvements). Include metric and value when explicit.',
-    'technology: platforms, tools, stacks, AI/ML methods.',
-    'offering: Globant studios, services, practice lines, solution offerings.',
+    'technology: platforms, tools, stacks, AI/ML methods NOT already listed in catalog field technologies.',
     'theme: cross-cutting business problems (fraud detection, demand forecasting, etc.).',
+    'Do NOT extract Globant Studios as offering — studios are catalog metadata (from_studio), not LLM offerings.',
+  ];
+  if (catalogOff) {
+    lines.push(
+      'Catalog already has offering enum ' +
+        catalogOff +
+        ' — do NOT emit type offering; use technology/outcome/theme only.',
+    );
+  } else {
+    lines.push(
+      'offering: ONLY named Globant engagement models (AI Pods, T&M, Fixed Price, Managed Services) when NOT already in catalog metadata.',
+    );
+  }
+  lines.push(
     'Max ' + KG_EXTRACTION_MAX_ENTITIES_ + ' entities and ' + KG_EXTRACTION_MAX_RELATIONS_ + ' relations.',
     'Schema:',
     '{"entities":[{"type":"technology","label":"Demand Forecasting ML","metric":"","value":null}],',
     '"relations":[{"relation":"uses_technology","entity_index":0,"confidence":0.85}]}',
     'entity_index refers to the entities array index (0-based). confidence: 0.5-1.0.',
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 /**
@@ -150,9 +227,10 @@ function KnowledgeGraphExtraction_userPrompt_(row) {
 /**
  * @param {Object} parsed
  * @param {string} contentNodeId
+ * @param {Object} row
  * @return {{nodes:Array<Object>,edges:Array<Object>}}
  */
-function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId) {
+function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId, row) {
   parsed = parsed && typeof parsed === 'object' ? parsed : {};
   var rawEntities = Array.isArray(parsed.entities) ? parsed.entities : [];
   /** @type {Array<{nodeId:string,label:string,type:string,payload:Object}>} */
@@ -160,18 +238,21 @@ function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId) {
   /** @type {Array<Object>} */
   var edges = [];
   var entityByIndex = {};
+  var seenNode = {};
   var ei;
   for (ei = 0; ei < rawEntities.length && nodes.length < KG_EXTRACTION_MAX_ENTITIES_; ei++) {
     var ent = rawEntities[ei] || {};
-    var hit = KnowledgeGraphExtraction_canonicalizeEntity_(ent.type, ent.label);
+    var hit = KnowledgeGraphExtraction_canonicalizeEntity_(ent.type, ent.label, row);
     if (!hit) continue;
-    var payload = { slug: hit.slug };
+    if (seenNode[hit.nodeId]) continue;
+    seenNode[hit.nodeId] = true;
+    var payload = { slug: hit.slug, source: 'llm' };
     if (String(ent.metric || '').trim()) payload.metric = String(ent.metric).trim();
     if (ent.value != null && ent.value !== '') payload.value = ent.value;
     nodes.push({
       nodeId: hit.nodeId,
       label: hit.label,
-      type: String(ent.type || '').trim(),
+      type: hit.type,
       payload: payload,
     });
     entityByIndex[ei] = hit.nodeId;
@@ -211,12 +292,12 @@ function KnowledgeGraphExtraction_extractFromRow_(row) {
   }
   var client = KnowledgeGraphExtraction_createClient_();
   var out = client.chatSimple(
-    KnowledgeGraphExtraction_systemPrompt_(),
+    KnowledgeGraphExtraction_systemPrompt_(row),
     KnowledgeGraphExtraction_userPrompt_(row),
   );
   var parsed = KnowledgeGraphExtraction_parseJson_(out.text || '');
   var contentNodeId = KnowledgeGraph_nodeId_('content', String(row.content_id || ''));
-  return KnowledgeGraphExtraction_materialize_(parsed, contentNodeId);
+  return KnowledgeGraphExtraction_materialize_(parsed, contentNodeId, row);
 }
 
 /**

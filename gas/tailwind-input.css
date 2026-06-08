@@ -551,74 +551,74 @@
      */
     .app-shell-view[data-active-page="home"] .app-content-scroll,
     .app-shell-view[data-active-page="onboarding"] .app-content-scroll,
-    .app-shell-view[data-active-page="proposal-building"] .app-content-scroll {
+    .app-shell-view[data-active-page="globant-offering"] .app-content-scroll {
       @apply flex min-h-0 flex-1 flex-col px-0 pt-0 pb-0;
       overflow: hidden;
     }
     .app-shell-view[data-active-page="home"] .session-banner,
     .app-shell-view[data-active-page="onboarding"] .session-banner,
-    .app-shell-view[data-active-page="proposal-building"] .session-banner {
+    .app-shell-view[data-active-page="globant-offering"] .session-banner {
       @apply mx-3 mb-0 mt-2 shrink-0;
     }
     .app-shell-view[data-active-page="home"] #home-member,
     .app-shell-view[data-active-page="onboarding"] #home-member,
-    .app-shell-view[data-active-page="proposal-building"] #home-member {
+    .app-shell-view[data-active-page="globant-offering"] #home-member {
       @apply flex min-h-0 flex-1 flex-col space-y-0;
       max-width: none;
     }
     .app-shell-view[data-active-page="home"] #page-home,
     .app-shell-view[data-active-page="home"] #member-standard-home,
     .app-shell-view[data-active-page="onboarding"] #page-onboarding,
-    .app-shell-view[data-active-page="proposal-building"] #page-proposal-building {
+    .app-shell-view[data-active-page="globant-offering"] #page-globant-offering {
       @apply flex shrink-0 flex-col space-y-0;
     }
     .app-shell-view[data-active-page="home"] #home-welcome {
       @apply mb-0 shrink-0 px-3 pt-3 pb-2 text-left;
     }
     .app-shell-view[data-active-page="onboarding"] #onboarding-welcome,
-    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome {
+    .app-shell-view[data-active-page="globant-offering"] #globant-offering-welcome {
       @apply mb-0 shrink-0 px-3 pt-3 pb-2 text-left;
     }
     .app-shell-view[data-active-page="home"] #home-welcome h1,
     .app-shell-view[data-active-page="onboarding"] #onboarding-welcome h1,
-    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome h1 {
+    .app-shell-view[data-active-page="globant-offering"] #globant-offering-welcome h1 {
       @apply text-lg font-semibold;
     }
     .app-shell-view[data-active-page="home"] #home-welcome p {
       @apply mx-0 mt-0.5 line-clamp-2 max-w-none text-xs leading-snug;
     }
     .app-shell-view[data-active-page="onboarding"] #onboarding-welcome p,
-    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome p {
+    .app-shell-view[data-active-page="globant-offering"] #globant-offering-welcome p {
       @apply hidden;
     }
     .app-shell-view[data-active-page="onboarding"] .home-chat-head-main,
-    .app-shell-view[data-active-page="proposal-building"] .home-chat-head-main {
+    .app-shell-view[data-active-page="globant-offering"] .home-chat-head-main {
       @apply hidden;
     }
     .app-shell-view[data-active-page="home"] #dashboard-lead {
       @apply hidden;
     }
     .app-shell-view[data-active-page="onboarding"] #onboarding-welcome,
-    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome {
+    .app-shell-view[data-active-page="globant-offering"] #globant-offering-welcome {
       @apply border-b border-slate-200/80 bg-white/95 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/95;
     }
     .app-shell-view[data-active-page="onboarding"] #onboarding-welcome h1,
-    .app-shell-view[data-active-page="proposal-building"] #proposal-building-welcome h1 {
+    .app-shell-view[data-active-page="globant-offering"] #globant-offering-welcome h1 {
       @apply text-base font-semibold;
     }
     .app-shell-view[data-active-page="home"] .chat-mode-bar,
     .app-shell-view[data-active-page="onboarding"] .chat-mode-bar,
-    .app-shell-view[data-active-page="proposal-building"] .chat-mode-bar {
+    .app-shell-view[data-active-page="globant-offering"] .chat-mode-bar {
       @apply hidden;
     }
     .app-shell-view[data-active-page="onboarding"] .home-chat-head,
-    .app-shell-view[data-active-page="proposal-building"] .home-chat-head {
+    .app-shell-view[data-active-page="globant-offering"] .home-chat-head {
       @apply border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800;
       background-image: none;
     }
     .app-shell-view[data-active-page="home"] .home-chat-shell,
     .app-shell-view[data-active-page="onboarding"] .home-chat-shell,
-    .app-shell-view[data-active-page="proposal-building"] .home-chat-shell {
+    .app-shell-view[data-active-page="globant-offering"] .home-chat-shell {
       @apply mb-0 flex min-h-0 flex-1 flex-col rounded-none border-x-0 border-b-0 shadow-none;
       height: auto;
       min-height: 0;
@@ -626,7 +626,6 @@
       max-width: none;
       width: 100%;
     }
-    .app-shell-view[data-active-page="onboarding"] #proposal-building-status,
     .app-shell-view[data-active-page="proposal-building"] #proposal-building-status {
       @apply mx-3 mb-0 shrink-0 px-0 text-left text-xs;
     }
@@ -643,11 +642,11 @@
     }
     .app-shell-view[data-active-page="home"] .chat-empty,
     .app-shell-view[data-active-page="onboarding"] .chat-empty,
-    .app-shell-view[data-active-page="proposal-building"] .chat-empty {
+    .app-shell-view[data-active-page="globant-offering"] .chat-empty {
       @apply py-4;
     }
     .app-shell-view[data-active-page="onboarding"] .home-chat-toolbar,
-    .app-shell-view[data-active-page="proposal-building"] .home-chat-toolbar {
+    .app-shell-view[data-active-page="globant-offering"] .home-chat-toolbar {
       @apply gap-1.5;
     }
     #chat-quick-prompts {
@@ -1890,6 +1889,124 @@
   }
   .kg-legend-item {
     @apply leading-snug;
+  }
+
+  /* Armado de propuestas — stepper y storytelling */
+  .pb-stepper {
+    @apply flex flex-wrap items-stretch justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2 dark:border-slate-600 dark:bg-slate-900/40;
+  }
+  .pb-stepper-tab {
+    @apply inline-flex min-w-[5.5rem] flex-1 flex-col items-center gap-1.5 rounded-xl border border-transparent px-2 py-2.5 text-center text-xs font-semibold text-slate-500 transition;
+    @apply hover:bg-white/80 dark:hover:bg-slate-800/80;
+    @apply disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .pb-stepper-tab.is-active {
+    @apply border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100;
+  }
+  .pb-stepper-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-sm;
+  }
+  .pb-stepper-icon-sky {
+    @apply bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300;
+  }
+  .pb-stepper-icon-violet {
+    @apply bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300;
+  }
+  .pb-stepper-icon-amber {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300;
+  }
+  .pb-stepper-icon-emerald {
+    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300;
+  }
+  .pb-stepper-icon-rose {
+    @apply bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300;
+  }
+  .pb-stepper-icon-slate {
+    @apply bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-sky {
+    @apply ring-2 ring-sky-300 dark:ring-sky-700;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-violet {
+    @apply ring-2 ring-violet-300 dark:ring-violet-700;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-amber {
+    @apply ring-2 ring-amber-300 dark:ring-amber-700;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-emerald {
+    @apply ring-2 ring-emerald-300 dark:ring-emerald-700;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-rose {
+    @apply ring-2 ring-rose-300 dark:ring-rose-700;
+  }
+  .pb-stepper-tab.is-active .pb-stepper-icon-slate {
+    @apply ring-2 ring-slate-400 dark:ring-slate-500;
+  }
+  .pb-story-grid {
+    @apply grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-stretch;
+  }
+  .pb-story-card {
+    @apply rounded-2xl border p-4;
+  }
+  .pb-story-card-extracted {
+    @apply border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20;
+  }
+  .pb-story-card-match {
+    @apply border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/25;
+  }
+  .pb-story-card-nomatch {
+    @apply border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/25;
+  }
+  .pb-story-arrow {
+    @apply hidden items-center justify-center text-2xl text-slate-400 md:flex;
+  }
+  .pb-story-title {
+    @apply mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .pb-story-lead {
+    @apply mb-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400;
+  }
+  .pb-story-value {
+    @apply text-base font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .pb-story-summary {
+    @apply mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300;
+  }
+  .pb-story-meta {
+    @apply mt-1 text-xs text-slate-600 dark:text-slate-400;
+  }
+  .pb-story-suggestions {
+    @apply mt-2 flex flex-wrap gap-2;
+  }
+  .pb-suggestion-btn {
+    @apply rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:bg-slate-800 dark:text-amber-200 dark:hover:bg-amber-950/40;
+  }
+  .pb-studio-card {
+    @apply rounded-xl border border-rose-200 bg-gradient-to-br from-white to-rose-50/40 p-4 dark:border-rose-900 dark:from-slate-800 dark:to-rose-950/20;
+  }
+  .pb-studio-card-head {
+    @apply mb-2 flex flex-wrap items-center justify-between gap-2;
+  }
+  .pb-studio-name {
+    @apply flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100;
+  }
+  .pb-studio-badge {
+    @apply rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-800 dark:bg-rose-950/60 dark:text-rose-200;
+  }
+  .pb-studio-priority-high .pb-studio-badge {
+    @apply bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100;
+  }
+  .pb-studio-offerings {
+    @apply mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400;
+  }
+  .pb-studio-rationale {
+    @apply text-sm leading-relaxed text-slate-700 dark:text-slate-300;
+  }
+  .pb-studio-catalog-title {
+    @apply mb-1;
+  }
+  .pb-studio-actions a.btn {
+    @apply no-underline;
   }
 }
 

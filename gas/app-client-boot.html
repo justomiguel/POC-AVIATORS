@@ -24,6 +24,7 @@
   var navGroupAdmin = document.getElementById('nav-group-admin');
   var navPageOnboarding = document.getElementById('nav-page-onboarding');
   var navPageProposalBuilding = document.getElementById('nav-page-proposal-building');
+  var navPageGlobantOffering = document.getElementById('nav-page-globant-offering');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageTags = document.getElementById('nav-page-tags');
   var navPageClients = document.getElementById('nav-page-clients');
@@ -37,7 +38,7 @@
   var chatModeBar = document.getElementById('chat-mode-bar');
   var chatModeGeneral = document.getElementById('chat-mode-general');
   var chatModeOnboarding = document.getElementById('chat-mode-onboarding');
-  var chatModeProposalBuilding = document.getElementById('chat-mode-proposal-building');
+  var chatModeGlobantOffering = document.getElementById('chat-mode-globant-offering');
   var adminAgentStatus = document.getElementById('admin-agent-status');
   var appShellView = document.getElementById('view-app');
   var appSidebar = document.getElementById('app-sidebar');
@@ -103,13 +104,13 @@
   }
 
   function isChatPage_(pg) {
-    return pg === 'home' || pg === 'onboarding' || pg === 'proposal-building';
+    return pg === 'home' || pg === 'onboarding' || pg === 'globant-offering';
   }
 
   function syncNavGroups_(pg) {
     if (
       navGroupChatModes &&
-      (pg === 'home' || pg === 'onboarding' || pg === 'proposal-building')
+      (pg === 'home' || pg === 'onboarding' || pg === 'globant-offering')
     ) {
       navGroupChatModes.open = true;
     }
@@ -160,8 +161,8 @@
     if (chatModeOnboarding) {
       chatModeOnboarding.classList.toggle('hidden', !canOb);
     }
-    if (chatModeProposalBuilding) {
-      chatModeProposalBuilding.classList.toggle('hidden', !canPb);
+    if (chatModeGlobantOffering) {
+      chatModeGlobantOffering.classList.toggle('hidden', !canPb);
     }
     var tabs = document.querySelectorAll('.chat-mode-tab');
     var i;
@@ -204,6 +205,9 @@
     }
     if (navPageProposalBuilding) {
       navPageProposalBuilding.classList.toggle('hidden', !canViewProposalBuilding);
+    }
+    if (navPageGlobantOffering) {
+      navPageGlobantOffering.classList.toggle('hidden', !canViewProposalBuilding);
     }
     if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
     if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
@@ -290,11 +294,14 @@
     if (pg === 'proposal-building' && !S.get('canViewProposalBuilding')) {
       pg = 'home';
     }
+    if (pg === 'globant-offering' && !S.get('canViewProposalBuilding')) {
+      pg = 'home';
+    }
     if (pg === 'request-access' && !S.get('isVisitor')) {
       pg = 'home';
     }
     if (
-      (prevPage === 'home' || prevPage === 'onboarding' || prevPage === 'proposal-building') &&
+      (prevPage === 'home' || prevPage === 'onboarding' || prevPage === 'globant-offering') &&
       pg !== prevPage &&
       A.chat &&
       typeof A.chat.saveCurrentConversation === 'function'
@@ -309,6 +316,7 @@
       var show =
         (pg === 'home' && id === 'page-home') ||
         (pg === 'onboarding' && id === 'page-onboarding') ||
+        (pg === 'globant-offering' && id === 'page-globant-offering') ||
         (pg === 'proposal-building' && id === 'page-proposal-building') ||
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'tags' && id === 'page-tags') ||
@@ -322,7 +330,10 @@
     }
     var chatShell = document.getElementById('home-chat-shell');
     if (chatShell) {
-      chatShell.classList.toggle('hidden', pg !== 'home' && pg !== 'onboarding' && pg !== 'proposal-building');
+      chatShell.classList.toggle(
+        'hidden',
+        pg !== 'home' && pg !== 'onboarding' && pg !== 'globant-offering',
+      );
     }
     if (homeMember) {
       homeMember.classList.toggle('hidden', pg === 'faq' || pg === 'request-access');
@@ -332,11 +343,14 @@
     }
     S.set('activePage', pg || '');
     if (
-      (pg === 'home' || pg === 'onboarding' || pg === 'proposal-building') &&
+      (pg === 'home' || pg === 'onboarding' || pg === 'globant-offering') &&
       A.chat &&
       typeof A.chat.onEnterChatPage === 'function'
     ) {
       A.chat.onEnterChatPage(pg);
+    }
+    if (pg === 'proposal-building' && A.proposalBuilding && typeof A.proposalBuilding.onEnterPage === 'function') {
+      A.proposalBuilding.onEnterPage();
     }
     var viewApp = document.getElementById('view-app');
     if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
@@ -438,9 +452,11 @@
     }
     var ce = document.getElementById('chat-empty');
     if (ce && !ce.classList.contains('hidden')) {
-      ce.textContent = i18n(
-        S.get('activePage') === 'onboarding' ? 'chat_empty_hint_onboarding' : 'chat_empty_hint',
-      );
+      var ap = S.get('activePage');
+      var emptyKey = 'chat_empty_hint';
+      if (ap === 'onboarding') emptyKey = 'chat_empty_hint_onboarding';
+      else if (ap === 'globant-offering') emptyKey = 'chat_empty_hint_globant_offering';
+      ce.textContent = i18n(emptyKey);
     }
     if (A.chat && typeof A.chat.applyPageChrome === 'function') {
       A.chat.applyPageChrome(S.get('activePage') || 'home');
@@ -720,6 +736,8 @@
       S.set('quickPrompts', qpBootstrap);
       var qpObBootstrap = bootstrap.onboardingQuickPrompts || [];
       S.set('onboardingQuickPrompts', qpObBootstrap);
+      var qpGoBootstrap = bootstrap.globantOfferingQuickPrompts || [];
+      S.set('globantOfferingQuickPrompts', qpGoBootstrap);
       if (A.chat.applyQuickPromptsForActivePage) {
         var locale =
           (S.get('cachedI18n') && S.get('cachedI18n')._locale) || wantLocale || 'es';
@@ -728,7 +746,7 @@
 
       // Settings page (quick prompts + destructive reset)
       if (canViewSettings && A.settings && A.settings.init) {
-        A.settings.init(qpBootstrap, qpObBootstrap);
+        A.settings.init(qpBootstrap, qpObBootstrap, qpGoBootstrap);
       }
 
       loadContextFilesLazy();
@@ -797,8 +815,11 @@
   if (chatModeOnboarding) {
     chatModeOnboarding.addEventListener('click', function () { setAppPage('onboarding'); });
   }
-  if (chatModeProposalBuilding) {
-    chatModeProposalBuilding.addEventListener('click', function () { setAppPage('proposal-building'); });
+  if (navPageGlobantOffering) {
+    navPageGlobantOffering.addEventListener('click', function () { setAppPage('globant-offering'); });
+  }
+  if (chatModeGlobantOffering) {
+    chatModeGlobantOffering.addEventListener('click', function () { setAppPage('globant-offering'); });
   }
   if (navPageContents) {
     navPageContents.addEventListener('click', function () { setAppPage('contents'); });

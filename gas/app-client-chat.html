@@ -34,6 +34,7 @@
   var CHAT_PROGRESS_TICK_MS = 5200;
   var MAX_HISTORY = 10;
   var CHAT_AGENT_ONBOARDING = 'onboarding';
+  var CHAT_AGENT_PROPOSALS = 'proposals';
 
   var dashboardTitleEl = document.getElementById('dashboard-title');
   var dashboardLeadEl = document.getElementById('dashboard-lead');
@@ -42,19 +43,19 @@
     return S.get('activePage') === 'onboarding';
   }
 
-  function homeChatIsProposalBuildingPage_() {
-    return S.get('activePage') === 'proposal-building';
+  function homeChatIsGlobantOfferingPage_() {
+    return S.get('activePage') === 'globant-offering';
   }
 
   function homeChatHistKey_() {
     if (homeChatIsOnboardingPage_()) return 'onboardingChatHistory';
-    if (homeChatIsProposalBuildingPage_()) return 'proposalBuildingChatHistory';
+    if (homeChatIsGlobantOfferingPage_()) return 'globantOfferingChatHistory';
     return 'chatHistory';
   }
 
   function homeChatConvKey_() {
     if (homeChatIsOnboardingPage_()) return 'onboardingChatConvId';
-    if (homeChatIsProposalBuildingPage_()) return 'proposalBuildingChatConvId';
+    if (homeChatIsGlobantOfferingPage_()) return 'globantOfferingChatConvId';
     return 'chatConvId';
   }
 
@@ -68,19 +69,48 @@
 
   function homeChatForcedAgentId_() {
     if (homeChatIsOnboardingPage_()) return CHAT_AGENT_ONBOARDING;
+    if (homeChatIsGlobantOfferingPage_()) return CHAT_AGENT_PROPOSALS;
     return null;
   }
 
   function homeChatStartersKey_() {
     if (homeChatIsOnboardingPage_()) return 'onboardingChatStartersShown';
-    if (homeChatIsProposalBuildingPage_()) return 'proposalBuildingChatStartersShown';
+    if (homeChatIsGlobantOfferingPage_()) return 'globantOfferingChatStartersShown';
     return 'chatStartersShown';
   }
 
   function homeChatGetQuickPrompts_() {
     if (homeChatIsOnboardingPage_()) return S.get('onboardingQuickPrompts') || [];
-    if (homeChatIsProposalBuildingPage_()) return [];
+    if (homeChatIsGlobantOfferingPage_()) return S.get('globantOfferingQuickPrompts') || [];
     return S.get('quickPrompts') || [];
+  }
+
+  function homeChatForcedAgentMeta_(agentId) {
+    if (agentId === CHAT_AGENT_ONBOARDING) {
+      return {
+        submitMode: 'onboarding',
+        busyKey: 'orch_step_onboarding_answering',
+        agentTitleKey: 'faq_agent_onboarding_title',
+        scope: 'onboardingChat',
+        defaultAgentName: 'onboarding',
+      };
+    }
+    if (agentId === CHAT_AGENT_PROPOSALS) {
+      return {
+        submitMode: 'globant_offering',
+        busyKey: 'orch_step_globant_offering_answering',
+        agentTitleKey: 'faq_agent_proposals_title',
+        scope: 'globantOfferingChat',
+        defaultAgentName: 'proposals',
+      };
+    }
+    return {
+      submitMode: 'agent',
+      busyKey: 'orch_step_routing',
+      agentTitleKey: '',
+      scope: 'homeChat',
+      defaultAgentName: '',
+    };
   }
 
   function pushHistory(role, content, extra) {
@@ -1308,8 +1338,8 @@
     p.className = 'chat-empty';
     var emptyKey = homeChatIsOnboardingPage_()
       ? 'chat_empty_hint_onboarding'
-      : homeChatIsProposalBuildingPage_()
-        ? 'chat_empty_hint_proposal_building'
+      : homeChatIsGlobantOfferingPage_()
+        ? 'chat_empty_hint_globant_offering'
         : 'chat_empty_hint';
     p.setAttribute('data-i18n', emptyKey);
     p.textContent = i18n(emptyKey);
@@ -1319,62 +1349,63 @@
   function homeChatApplyPageChrome_(page) {
     var pg = page || S.get('activePage') || 'home';
     var isOb = pg === 'onboarding';
-    var isPb = pg === 'proposal-building';
+    var isGo = pg === 'globant-offering';
     if (dashboardTitleEl) {
       dashboardTitleEl.textContent = i18n(
-        isOb ? 'page_onboarding_title' : isPb ? 'page_proposal_building_title' : 'dashboard_title',
+        isOb ? 'page_onboarding_title' : isGo ? 'page_globant_offering_title' : 'dashboard_title',
       );
     }
     if (dashboardLeadEl) {
       dashboardLeadEl.textContent = i18n(
-        isOb ? 'page_onboarding_chat_lead' : isPb ? 'page_proposal_building_chat_lead' : 'dashboard_lead',
+        isOb ? 'page_onboarding_chat_lead' : isGo ? 'page_globant_offering_chat_lead' : 'dashboard_lead',
       );
     }
     if (consultHeadingEl) {
       consultHeadingEl.textContent = i18n(
-        isOb ? 'onboarding_consult_heading' : isPb ? 'pb_consult_heading' : 'static_consult_heading',
+        isOb
+          ? 'onboarding_consult_heading'
+          : isGo
+            ? 'globant_offering_consult_heading'
+            : 'static_consult_heading',
       );
     }
     var composerLead = document.querySelector('.chat-composer-lead');
     if (composerLead) {
       composerLead.textContent = i18n(
-        isOb ? 'onboarding_consult_lead' : isPb ? 'pb_consult_lead' : 'static_consult_lead',
+        isOb
+          ? 'onboarding_consult_lead'
+          : isGo
+            ? 'globant_offering_consult_lead'
+            : 'static_consult_lead',
       );
     }
-    if (chatAttachRow && homeChatIsOnboardingPage_()) {
+    if (chatAttachRow && (homeChatIsOnboardingPage_() || homeChatIsGlobantOfferingPage_())) {
       homeChatClearAttachment_();
     }
     if (chatAttachRow) {
       var llm = S.get('lastLlmCfg') || {};
       chatAttachRow.classList.toggle(
         'hidden',
-        llm.mode !== 'globant' || isOb,
+        llm.mode !== 'globant' || isOb || isGo,
       );
-    }
-    var pbValidateBtn = document.getElementById('pb-validate-brief-btn');
-    if (pbValidateBtn) {
-      pbValidateBtn.classList.toggle('hidden', !isPb || (S.get('proposalBuildingPhase') || 'intake') === 'building');
     }
     var emptyEl = document.getElementById('chat-empty');
     if (emptyEl && !emptyEl.classList.contains('hidden')) {
       emptyEl.textContent = i18n(
-        isOb ? 'chat_empty_hint_onboarding' : isPb ? 'chat_empty_hint_proposal_building' : 'chat_empty_hint',
+        isOb
+          ? 'chat_empty_hint_onboarding'
+          : isGo
+            ? 'chat_empty_hint_globant_offering'
+            : 'chat_empty_hint',
       );
     }
-    var qpWrap = document.getElementById('chat-quick-prompts');
-    if (qpWrap && isPb) qpWrap.classList.add('hidden');
     var qpLabel = document.getElementById('chat-quick-prompts-label');
     if (qpLabel) {
-      qpLabel.setAttribute(
-        'data-i18n',
-        isOb ? 'chat_quick_prompts_onboarding_label' : 'chat_quick_prompts_label',
-      );
-      qpLabel.textContent = i18n(
-        isOb ? 'chat_quick_prompts_onboarding_label' : 'chat_quick_prompts_label',
-      );
-    }
-    if (isPb && A.proposalBuilding && typeof A.proposalBuilding.onEnterPage === 'function') {
-      A.proposalBuilding.onEnterPage();
+      var qpLabelKey = 'chat_quick_prompts_label';
+      if (isOb) qpLabelKey = 'chat_quick_prompts_onboarding_label';
+      else if (isGo) qpLabelKey = 'chat_quick_prompts_globant_offering_label';
+      qpLabel.setAttribute('data-i18n', qpLabelKey);
+      qpLabel.textContent = i18n(qpLabelKey);
     }
   }
 
@@ -1433,7 +1464,9 @@
     if (chatAttachRow) {
       chatAttachRow.classList.toggle(
         'hidden',
-        llmCfg.mode !== 'globant' || homeChatIsOnboardingPage_(),
+        llmCfg.mode !== 'globant' ||
+          homeChatIsOnboardingPage_() ||
+          homeChatIsGlobantOfferingPage_(),
       );
     }
     if (llmCfg.mode !== 'globant') homeChatClearAttachment_();
@@ -1486,8 +1519,8 @@
   if (!S.get('onboardingChatConvId')) {
     S.set('onboardingChatConvId', homeChatNewConvId_());
   }
-  if (!S.get('proposalBuildingChatConvId')) {
-    S.set('proposalBuildingChatConvId', homeChatNewConvId_());
+  if (!S.get('globantOfferingChatConvId')) {
+    S.set('globantOfferingChatConvId', homeChatNewConvId_());
   }
 
   // ── History panel ─────────────────────────────────────────────────────────
@@ -1509,8 +1542,8 @@
     }
     var titlePrefix = homeChatIsOnboardingPage_()
       ? i18n('nav_onboarding') + ': '
-      : homeChatIsProposalBuildingPage_()
-        ? i18n('nav_proposal_building') + ': '
+      : homeChatIsGlobantOfferingPage_()
+        ? i18n('nav_globant_offering') + ': '
         : '';
     var title = (titlePrefix + (firstUser || i18n('chat_history_untitled'))).slice(0, 80);
     try {
@@ -1922,100 +1955,17 @@
       .globantAnalyzeEphemeralDocument(gp, attachPayloadJson, histJson);
   }
 
-  function homeChatRunProposalBuildingAgent_(gp, skipUserAppend) {
-    if (!skipUserAppend) {
-      homeChatAppendUser(gp);
-      pushHistory('user', gp, { submitMode: 'proposal_building' });
-      S.set('chatLastSubmitMode', 'proposal_building');
-    }
-    askAgentBtn.disabled = true;
-    askBtn.disabled = true;
-    homeChatBeginAnswerProgress_('orch_step_proposal_building_answering', null);
-    askStatus.textContent = i18n('orch_step_proposal_building_answering');
-    var histJson = skipUserAppend ? homeChatHistoryJsonForRegenerate_() : getHistoryJson();
-    var ctx = S.get('proposalBuildingContext') || {};
-    google.script.run
-      .withSuccessHandler(function (res) {
-        askAgentBtn.disabled = false;
-        askBtn.disabled = false;
-        homeChatRemoveThinking();
-        var answer = res.answer || '';
-        var badge = i18nFmt('orch_routed_badge', {
-          agent: res.agentName || i18n('faq_agent_proposals_title'),
-        });
-        homeChatFinishAgentResponse_(
-          answer,
-          badge,
-          (res.meta && res.meta.references) || [],
-          res.agentName || 'proposals',
-          res.eventId || '',
-          'proposals',
-          'proposal_building',
-        );
-      })
-      .withFailureHandler(function (e) {
-        askAgentBtn.disabled = false;
-        askBtn.disabled = false;
-        homeChatRemoveThinking();
-        A.reportRpcError(e, {
-          scope: 'proposalBuildingChat',
-          fallbackKey: 'err_ask_agent',
-          modal: true,
-          setStatus: function (msg) {
-            askStatus.textContent = msg;
-            askStatus.classList.add('err');
-          },
-        });
-      })
-      .proposalBuildingAnswer(gp, histJson, JSON.stringify(ctx));
-  }
-
-  function homeChatAppendUserForProposalBuilding_(text, attachmentName) {
-    homeChatAppendUser(text, attachmentName);
-    pushHistory('user', text, {
-      submitMode: 'proposal_intake',
-      attachmentName: attachmentName || '',
-    });
-    S.set('chatLastSubmitMode', 'proposal_intake');
-  }
-
-  function homeChatOnProposalBuildingReady_() {
-    homeChatApplyPageChrome_(S.get('activePage'));
-    var ctx = S.get('proposalBuildingContext') || {};
-    var industry = ctx.industryLabel || ctx.industry || '';
-    var deck = ctx.deckLabel || '';
-    var intro = i18nFmt('pb_status_building_ready', { industry: industry, deck: deck });
-    if (ctx.proposalDeckFileUrl && ctx.proposalDeckFileName) {
-      intro +=
-        '\n\n' +
-        i18nFmt('pb_deck_open_link_md', {
-          name: ctx.proposalDeckFileName,
-          url: ctx.proposalDeckFileUrl,
-        });
-    } else if (ctx.proposalDeckFileName) {
-      intro += '\n\n' + i18nFmt('pb_deck_created_line', { name: ctx.proposalDeckFileName });
-      if (ctx.successCasesApplied > 0) {
-        intro +=
-          '\n' +
-          i18nFmt('pb_deck_success_cases_line', {
-            count: String(ctx.successCasesApplied),
-          });
-      }
-    }
-    homeChatAppendAgent(intro, '', [], 'proposals', '', 'proposals', -1);
-    pushHistory('assistant', intro, { agentKey: 'proposals', submitMode: 'proposal_building' });
-  }
-
   function homeChatRunForcedAgentQuery_(agentId, gp, skipUserAppend) {
+    var meta = homeChatForcedAgentMeta_(agentId);
     if (!skipUserAppend) {
       homeChatAppendUser(gp);
-      pushHistory('user', gp, { submitMode: 'onboarding' });
-      S.set('chatLastSubmitMode', 'onboarding');
+      pushHistory('user', gp, { submitMode: meta.submitMode });
+      S.set('chatLastSubmitMode', meta.submitMode);
     }
     askAgentBtn.disabled = true;
     askBtn.disabled = true;
-    homeChatBeginAnswerProgress_('orch_step_onboarding_answering', null);
-    askStatus.textContent = i18n('orch_step_onboarding_answering');
+    homeChatBeginAnswerProgress_(meta.busyKey, null);
+    askStatus.textContent = i18n(meta.busyKey);
     var histJson = skipUserAppend ? homeChatHistoryJsonForRegenerate_() : getHistoryJson();
     google.script.run
       .withSuccessHandler(function (res) {
@@ -2023,17 +1973,18 @@
         askBtn.disabled = false;
         homeChatRemoveThinking();
         var answer = res.answer || '';
+        var agentTitle = meta.agentTitleKey ? i18n(meta.agentTitleKey) : '';
         var badge = i18nFmt('orch_routed_badge', {
-          agent: res.agentName || i18n('faq_agent_onboarding_title'),
+          agent: res.agentName || agentTitle,
         });
         homeChatFinishAgentResponse_(
           answer,
           badge,
           (res.meta && res.meta.references) || [],
-          res.agentName || 'onboarding',
+          res.agentName || meta.defaultAgentName,
           res.eventId || '',
           agentId,
-          'onboarding',
+          meta.submitMode,
         );
       })
       .withFailureHandler(function (e) {
@@ -2041,7 +1992,7 @@
         askBtn.disabled = false;
         homeChatRemoveThinking();
         A.reportRpcError(e, {
-          scope: 'onboardingChat',
+          scope: meta.scope,
           fallbackKey: 'err_ask_agent',
           modal: true,
           setStatus: function (msg) {
@@ -2206,8 +2157,8 @@
       homeChatRunForcedAgentQuery_(CHAT_AGENT_ONBOARDING, q, true);
       return;
     }
-    if (mode === 'proposal_building') {
-      homeChatRunProposalBuildingAgent_(q, true);
+    if (mode === 'globant_offering' || mode === 'proposal_building') {
+      homeChatRunForcedAgentQuery_(CHAT_AGENT_PROPOSALS, q, true);
       return;
     }
     homeChatRunOrchestratorQuery_(q, true);
@@ -2239,15 +2190,7 @@
       var f = chatAttachInput.files && chatAttachInput.files[0];
       if (!f) return;
       chatAttachBtn.disabled = true;
-      var readFn = homeChatReadPdfAttachment_;
-      if (
-        homeChatIsProposalBuildingPage_() &&
-        A.proposalBuilding &&
-        typeof A.proposalBuilding.readAttachmentFile === 'function'
-      ) {
-        readFn = A.proposalBuilding.readAttachmentFile;
-      }
-      readFn(
+      homeChatReadPdfAttachment_(
         f,
         function (wrap) {
           chatAttachBtn.disabled = false;
@@ -2278,39 +2221,6 @@
       var gp = (questionEl.value || '').trim();
       var forcedAgent = homeChatForcedAgentId_();
       var attached = homeChatGetAttachment_();
-
-      if (homeChatIsProposalBuildingPage_() && A.proposalBuilding) {
-        var attachName = attached ? attached.name : '';
-        if (attached) {
-          homeChatClearAttachment_();
-        }
-        homeChatHideQuickPromptStarters_();
-        questionEl.value = '';
-        var pbPhase = A.proposalBuilding.getPhase ? A.proposalBuilding.getPhase() : 'intake';
-        if (pbPhase === 'building') {
-          if (!gp) {
-            askStatus.textContent = i18n('ask_empty_question');
-            askStatus.classList.add('err');
-            return;
-          }
-          homeChatRunProposalBuildingAgent_(gp, false);
-          return;
-        }
-        if (
-          A.proposalBuilding.wantsValidatePhrase &&
-          A.proposalBuilding.wantsValidatePhrase(gp)
-        ) {
-          A.proposalBuilding.onSend(gp, attachName, attached);
-          return;
-        }
-        if (!gp && !attachName) {
-          askStatus.textContent = i18n('pb_err_extract_empty');
-          askStatus.classList.add('err');
-          return;
-        }
-        A.proposalBuilding.onSend(gp || i18n('pb_btn_validate_brief'), attachName, attached);
-        return;
-      }
 
       if (attached && !forcedAgent) {
         if (!gp) {
@@ -2350,9 +2260,6 @@
       homeChatSaveCurrentConversation_();
       clearHistory();
       S.set(homeChatConvKey_(), homeChatNewConvId_());
-      if (homeChatIsProposalBuildingPage_() && A.proposalBuilding && A.proposalBuilding.resetSession) {
-        A.proposalBuilding.resetSession();
-      }
       homeChatResetThread();
       if (questionEl) questionEl.value = '';
       homeChatClearAttachment_();
@@ -2398,9 +2305,6 @@
     restoreQuickPromptStarters: homeChatRestoreQuickPromptStarters_,
     getAttachment: homeChatGetAttachment_,
     clearAttachment: homeChatClearAttachment_,
-    appendUserForProposalBuilding: homeChatAppendUserForProposalBuilding_,
-    runProposalBuildingAgent_: homeChatRunProposalBuildingAgent_,
-    onProposalBuildingReady_: homeChatOnProposalBuildingReady_,
     THINKING_ID: CHAT_THINKING_ID,
   };
 })(window.Aviators);

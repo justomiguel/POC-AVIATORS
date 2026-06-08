@@ -360,6 +360,46 @@ function KnowledgeGraphStore_replaceEdgesForSource(sourceId, edges) {
 }
 
 /**
+ * Inserta o actualiza una arista estructural sin borrar las demás del mismo source.
+ * @param {string} sourceId
+ * @param {string} targetId
+ * @param {string} relationType
+ * @param {Object} [payload]
+ */
+function KnowledgeGraphStore_upsertStructuralEdge_(sourceId, targetId, relationType, payload) {
+  var sid = String(sourceId || '').trim();
+  var tid = String(targetId || '').trim();
+  var rel = String(relationType || '').trim();
+  if (!sid || !tid || !rel) return;
+  var edgeId =
+    'struct:' +
+    KnowledgeGraph_slug_(sid).slice(0, 40) +
+    ':' +
+    rel +
+    ':' +
+    KnowledgeGraph_slug_(tid).slice(0, 40);
+  var now = new Date().toISOString();
+  var pl =
+    payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  SupabaseRest_upsert(
+    SUPABASE_TABLE.KNOWLEDGE_GRAPH_EDGES,
+    [
+      {
+        edge_id: edgeId,
+        source_id: sid,
+        target_id: tid,
+        relation_type: rel,
+        weight: 1.0,
+        source: 'structural',
+        payload: pl,
+        updated_at: now,
+      },
+    ],
+    'edge_id',
+  );
+}
+
+/**
  * @param {string} nodeType
  * @return {number}
  */

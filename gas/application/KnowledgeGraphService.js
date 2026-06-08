@@ -78,6 +78,7 @@ var KNOWLEDGE_GRAPH_ENTITY_NODE_TYPES_ = [
   'stage',
   'pricing_model',
   'offering',
+  'studio',
   'technology',
   'outcome',
   'theme',
@@ -91,6 +92,9 @@ var KNOWLEDGE_GRAPH_ENTITY_RELATION_TYPES_ = [
   'related_content',
   'has_stage',
   'has_pricing_model',
+  'has_offering',
+  'from_studio',
+  'studio_offers',
   'similar_to',
   'delivers',
   'uses_technology',
@@ -230,6 +234,144 @@ function KnowledgeGraph_ensurePricingNode_(pricingModel) {
 }
 
 /**
+ * Etiqueta legible para enum de offering / pricing del catálogo.
+ * @param {string} enumVal
+ * @return {string}
+ */
+function KnowledgeGraph_offeringEnumLabel_(enumVal) {
+  var key = String(enumVal || '').trim().toUpperCase();
+  /** @type {Object<string,string>} */
+  var labels = {
+    TIME_AND_MATERIALS: 'Time & Materials',
+    STAFF_AUGMENTATION: 'Staff Augmentation',
+    FIXED_PRICE: 'Fixed Price',
+    SUBSCRIPTION: 'Subscription',
+    AI_PODS: 'AI Pods',
+    MANAGED_SERVICES: 'Managed Services',
+    OUTCOME_BASED: 'Outcome Based',
+  };
+  return labels[key] || key;
+}
+
+/**
+ * Nodo offering estructural desde enum del catálogo (AI Pods, T&M, etc.).
+ * @param {string} offeringEnum
+ * @return {{nodeId:string, label:string}|null}
+ */
+function KnowledgeGraph_ensureOfferingEnumNode_(offeringEnum) {
+  var off = String(offeringEnum || '').trim().toUpperCase();
+  if (!off) return null;
+  if (typeof CONTENT_PRICING_MODELS !== 'undefined') {
+    if (CONTENT_PRICING_MODELS.indexOf(off) < 0) return null;
+  }
+  var nodeId = KnowledgeGraph_nodeId_('offering', off);
+  var label = KnowledgeGraph_offeringEnumLabel_(off);
+  KnowledgeGraphStore_upsertNode(
+    Object.assign(
+      KnowledgeGraph_buildNodeRow_('offering', label, { offering: off, source: 'catalog' }),
+      { node_id: nodeId },
+    ),
+  );
+  return { nodeId: nodeId, label: label };
+}
+
+/**
+ * Nodo Globant Studio desde metadata de propuesta.
+ * @param {string} studioName
+ * @return {{nodeId:string, label:string}|null}
+ */
+function KnowledgeGraph_ensureStudioNode_(studioName) {
+  var name = String(studioName || '').trim();
+  if (!name || name.length < 2) return null;
+  var slug = KnowledgeGraph_slug_(name);
+  if (!slug || slug === 'unknown') return null;
+  var nodeId = KnowledgeGraph_nodeId_('studio', slug);
+  KnowledgeGraphStore_upsertNode(
+    Object.assign(
+      KnowledgeGraph_buildNodeRow_('studio', name, { studio: name, slug: slug }),
+      { node_id: nodeId },
+    ),
+  );
+  return { nodeId: nodeId, label: name };
+}
+
+/**
+ * Nodo technology estructural desde campo technologies del catálogo.
+ * @param {string} techLabel
+ * @return {{nodeId:string, label:string}|null}
+ */
+function KnowledgeGraph_ensureTechnologyNode_(techLabel) {
+  var lbl = String(techLabel || '').trim();
+  if (!lbl || lbl.length < 2) return null;
+  if (lbl.length > 80) lbl = lbl.slice(0, 80);
+  var slug = KnowledgeGraph_slug_(lbl);
+  if (!slug || slug === 'unknown') return null;
+  var nodeId = KnowledgeGraph_nodeId_('technology', slug);
+  KnowledgeGraphStore_upsertNode(
+    Object.assign(
+      KnowledgeGraph_buildNodeRow_('technology', lbl, { slug: slug, source: 'catalog' }),
+      { node_id: nodeId },
+    ),
+  );
+  return { nodeId: nodeId, label: lbl };
+}
+
+/**
+ * Enum de offering/pricing desde metadata de propuesta.
+ * @param {Object} specific
+ * @return {string}
+ */
+function KnowledgeGraph_resolveProposalOfferingEnum_(specific) {
+  var sp = specific && typeof specific === 'object' ? specific : {};
+  var off = String(sp.offering || '').trim();
+  if (!off) off = String(sp.pricing_model || '').trim();
+  if (typeof ContentExtraction_normalizeProposalPricingEnum_ === 'function') {
+    return ContentExtraction_normalizeProposalPricingEnum_(off);
+  }
+  return off.toUpperCase();
+}
+
+/**
+ * @param {string} studioNodeId
+ * @param {string} offeringNodeId
+ * @param {string} contentId
+ */
+function KnowledgeGraph_linkStudioOffering_(studioNodeId, offeringNodeId, contentId) {
+  var sid = String(studioNodeId || '').trim();
+  var oid = String(offeringNodeId || '').trim();
+  if (!sid || !oid) return;
+  if (typeof KnowledgeGraphStore_upsertStructuralEdge_ === 'function') {
+    KnowledgeGraphStore_upsertStructuralEdge_(sid, oid, 'studio_offers', {
+      via_content_id: String(contentId || '').trim(),
+    });
+  }
+}
+
+/**
+ * @param {string} raw
+ * @return {Array<string>}
+ */
+function KnowledgeGraph_splitTechnologies_(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return [];
+  var parts = text.split(/[,;\n]+/);
+  /** @type {Array<string>} */
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < parts.length; i++) {
+    var p = String(parts[i] || '').trim();
+    if (!p || p.length < 2) continue;
+    var key = p.toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push(p);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/**
  * @param {Object} row — fila contents de Supabase
  */
 function KnowledgeGraph_syncContent_(contentId) {
@@ -248,6 +390,9 @@ function KnowledgeGraph_syncContent_(contentId) {
   var tags = ContentCatalog_csvToTags_(String(row.tags_csv || ''));
   var specific = ContentCatalogStore_rowToSpecific_(row);
   var now = new Date().toISOString();
+  var materialKind = String(specific.material_kind || '').trim();
+  var offeringMeta = String(specific.offering || specific.pricing_model || '').trim();
+  var studioMeta = String(specific.globant_studio || '').trim();
 
   var contentNodeId = KnowledgeGraph_nodeId_('content', id);
   KnowledgeGraphStore_upsertNode({
@@ -260,6 +405,9 @@ function KnowledgeGraph_syncContent_(contentId) {
       title: title,
       client_name: clientName,
       industry: industry,
+      material_kind: materialKind,
+      offering: offeringMeta,
+      globant_studio: studioMeta,
       updated_at: String(row.updated_at || now),
     },
     updated_at: now,
@@ -330,6 +478,26 @@ function KnowledgeGraph_syncContent_(contentId) {
     var pricingNode = KnowledgeGraph_ensurePricingNode_(specific.pricing_model);
     if (pricingNode) {
       edges.push({ target_id: pricingNode.nodeId, relation_type: 'has_pricing_model' });
+    }
+    var offeringEnum = KnowledgeGraph_resolveProposalOfferingEnum_(specific);
+    var offeringNode = KnowledgeGraph_ensureOfferingEnumNode_(offeringEnum);
+    if (offeringNode) {
+      edges.push({ target_id: offeringNode.nodeId, relation_type: 'has_offering' });
+    }
+    var studioNode = KnowledgeGraph_ensureStudioNode_(specific.globant_studio);
+    if (studioNode) {
+      edges.push({ target_id: studioNode.nodeId, relation_type: 'from_studio' });
+    }
+    if (studioNode && offeringNode) {
+      KnowledgeGraph_linkStudioOffering_(studioNode.nodeId, offeringNode.nodeId, id);
+    }
+    var techList = KnowledgeGraph_splitTechnologies_(specific.technologies);
+    var txi;
+    for (txi = 0; txi < techList.length; txi++) {
+      var techNode = KnowledgeGraph_ensureTechnologyNode_(techList[txi]);
+      if (techNode) {
+        edges.push({ target_id: techNode.nodeId, relation_type: 'uses_technology' });
+      }
     }
   }
 
@@ -579,6 +747,7 @@ function KnowledgeGraph_pruneOrphanNodes_() {
     pricing_model: true,
     client_label: true,
     offering: true,
+    studio: true,
     technology: true,
     outcome: true,
     theme: true,
@@ -1569,6 +1738,10 @@ function KnowledgeGraph_nodePassesFilters_(nodeRow, filters) {
   if (contentType && nt === 'content') {
     if (String(pl.content_type || '') !== contentType) return false;
   }
+  var materialKind = String(filters.materialKind || '').trim();
+  if (materialKind && nt === 'content') {
+    if (String(pl.material_kind || '') !== materialKind) return false;
+  }
   var searchQ = String(filters.searchQuery || '').trim().toLowerCase();
   if (searchQ) {
     var lbl = String(nodeRow.label || nodeRow.node_id || '').toLowerCase();
@@ -1588,8 +1761,14 @@ function KnowledgeGraph_resolveSeedIds_(filters) {
   var clientId = String(filters.clientId || '').trim();
   var centerNodeId = String(filters.centerNodeId || '').trim();
   var searchQ = String(filters.searchQuery || '').trim();
+  var offeringFilter = String(filters.offering || '').trim().toUpperCase();
+  var materialKindFilter = String(filters.materialKind || '').trim();
 
   if (centerNodeId) return [centerNodeId];
+
+  if (offeringFilter) {
+    return [KnowledgeGraph_nodeId_('offering', offeringFilter)];
+  }
 
   if (clientId) return [KnowledgeGraph_nodeId_('client', clientId)];
 
@@ -1626,6 +1805,13 @@ function KnowledgeGraph_resolveSeedIds_(filters) {
           ? row.payload
           : {};
       if (String(pl.content_type || '') !== contentType) continue;
+    }
+    if (materialKindFilter) {
+      var plMk =
+        row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+          ? row.payload
+          : {};
+      if (String(plMk.material_kind || '') !== materialKindFilter) continue;
     }
     seeds.push(String(row.node_id || ''));
   }
@@ -1817,6 +2003,9 @@ function KnowledgeGraph_relationLabelEs_(relation) {
     tagged_with: 'tag',
     has_stage: 'etapa',
     has_pricing_model: 'modelo comercial',
+    has_offering: 'offering Globant',
+    from_studio: 'studio Globant',
+    studio_offers: 'studio comercializa offering',
     related_content: 'contenido relacionado',
     similar_to: 'similar semánticamente',
     delivers: 'ofrece',
@@ -2097,6 +2286,7 @@ function KnowledgeGraph_resolveContextForQuestion_(question, opts) {
       stage: true,
       pricing_model: true,
       offering: true,
+      studio: true,
       technology: true,
       outcome: true,
       theme: true,
@@ -2289,6 +2479,8 @@ function KnowledgeGraph_getSnapshot(filters) {
     clientId: String(filters.clientId || '').trim(),
     centerNodeId: String(filters.centerNodeId || '').trim(),
     searchQuery: String(filters.searchQuery || '').trim(),
+    offering: String(filters.offering || '').trim(),
+    materialKind: String(filters.materialKind || '').trim(),
     depth: filters.depth,
     maxNodes: filters.maxNodes,
     allowedNodeTypes: allowed,

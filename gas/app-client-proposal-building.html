@@ -4,24 +4,51 @@
   var i18n = A.i18n;
   var i18nFmt = A.i18nFmt;
 
-  var modal = document.getElementById('pb-wizard-modal');
-  var dialog = document.getElementById('pb-wizard-dialog');
-  var stepValidate = document.getElementById('pb-step-validate');
-  var stepIndustry = document.getElementById('pb-step-industry');
-  var stepDeckOptions = document.getElementById('pb-step-deck-options');
-  var industryContinueBtn = document.getElementById('pb-industry-continue-btn');
-  var airlinesStudioFieldset = document.getElementById('pb-airlines-studio-fieldset');
+  var PB_STEPS_ = ['materials', 'brief', 'configure', 'building', 'studios'];
+  var PB_STEP_ORDER_ = {
+    materials: 0,
+    brief: 1,
+    configure: 2,
+    building: 3,
+    studios: 4,
+  };
+
+  var stepper = document.getElementById('pb-stepper');
+  var builderPanels = document.querySelectorAll('[data-pb-panel]');
+  var pageStatus = document.getElementById('proposal-building-status');
+  var clientStory = document.getElementById('pb-client-story');
   var fieldClient = document.getElementById('pb-field-client');
+  var fieldProjectSummary = document.getElementById('pb-field-project-summary');
   var fieldCommercial = document.getElementById('pb-field-commercial-model');
+  var fieldRfpDeadline = document.getElementById('pb-field-rfp-deadline');
+  var fieldBudgetAmount = document.getElementById('pb-field-budget-amount');
+  var fieldBudgetCurrency = document.getElementById('pb-field-budget-currency');
+  var fieldBudgetNotes = document.getElementById('pb-field-budget-notes');
+  var fieldObjectives = document.getElementById('pb-field-objectives');
+  var fieldConstraints = document.getElementById('pb-field-constraints');
+  var stakeholdersList = document.getElementById('pb-stakeholders-list');
+  var addStakeholderBtn = document.getElementById('pb-add-stakeholder-btn');
   var scopeList = document.getElementById('pb-scope-list');
   var milestoneList = document.getElementById('pb-milestone-list');
+  var techHintsWrap = document.getElementById('pb-tech-hints-wrap');
+  var techHintsList = document.getElementById('pb-tech-hints-list');
   var addScopeBtn = document.getElementById('pb-add-scope-btn');
   var addMilestoneBtn = document.getElementById('pb-add-milestone-btn');
   var confirmBriefBtn = document.getElementById('pb-confirm-brief-btn');
   var startBuildingBtn = document.getElementById('pb-start-building-btn');
   var deckPreview = document.getElementById('pb-deck-preview');
-  var pageStatus = document.getElementById('proposal-building-status');
-  var validateBriefBtn = document.getElementById('pb-validate-brief-btn');
+  var airlinesStudioFieldset = document.getElementById('pb-airlines-studio-fieldset');
+  var materialsInput = document.getElementById('pb-materials-input');
+  var materialsNotes = document.getElementById('pb-materials-notes');
+  var materialsList = document.getElementById('pb-materials-list');
+  var materialsStatus = document.getElementById('pb-materials-status');
+  var analyzeMaterialsBtn = document.getElementById('pb-analyze-materials-btn');
+  var buildingStatusText = document.getElementById('pb-building-status-text');
+  var buildingDeckLink = document.getElementById('pb-building-deck-link');
+  var studiosList = document.getElementById('pb-studios-list');
+  var studiosBusy = document.getElementById('pb-studios-busy');
+  var openGlobantOfferingBtn = document.getElementById('pb-open-globant-offering-btn');
+  var builderRoot = document.getElementById('pb-builder');
 
   var PB_IMAGE_RE = /^image\/(png|jpe?g|webp|gif)$/i;
   var PB_TEXT_RE = /^(text\/|application\/json)/i;
@@ -30,41 +57,65 @@
     return S.get('activePage') === 'proposal-building';
   }
 
-  function pbUpdateChrome_() {
-    if (!pbIsActivePage_()) return;
-    var phase = S.get('proposalBuildingPhase') || 'intake';
-    if (validateBriefBtn) {
-      validateBriefBtn.classList.toggle('hidden', phase === 'building');
+  function pbCurrentStep_() {
+    return S.get('proposalBuildingBuilderStep') || 'materials';
+  }
+
+  function pbSetStep_(step, opts) {
+    var options = opts || {};
+    if (PB_STEPS_.indexOf(step) < 0) step = 'materials';
+    S.set('proposalBuildingBuilderStep', step);
+    var maxReached = S.get('proposalBuildingMaxStep') || 0;
+    var stepIdx = PB_STEP_ORDER_[step];
+    if (stepIdx > maxReached) S.set('proposalBuildingMaxStep', stepIdx);
+
+    var si;
+    for (si = 0; si < builderPanels.length; si++) {
+      var panel = builderPanels[si];
+      var panelStep = panel.getAttribute('data-pb-panel');
+      panel.classList.toggle('hidden', panelStep !== step);
     }
-    if (pageStatus) {
-      if (phase === 'building') {
-        var ctx = S.get('proposalBuildingContext') || {};
-        pageStatus.textContent = i18nFmt('pb_status_building_ready', {
-          industry: ctx.industryLabel || ctx.industry || '',
-          deck: ctx.deckLabel || '',
-        });
-      } else {
-        pageStatus.textContent = i18n('pb_status_intake');
+
+    if (stepper) {
+      var tabs = stepper.querySelectorAll('[data-pb-step]');
+      var ti;
+      for (ti = 0; ti < tabs.length; ti++) {
+        var tab = tabs[ti];
+        var tabStep = tab.getAttribute('data-pb-step');
+        var tabIdx = PB_STEP_ORDER_[tabStep];
+        var isActive = tabStep === step;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        tab.disabled = tabIdx > (S.get('proposalBuildingMaxStep') || 0) && !isActive;
       }
     }
-  }
 
-  function pbShowModal_(step) {
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-    if (stepValidate) stepValidate.classList.toggle('hidden', step !== 'validate');
-    if (stepIndustry) stepIndustry.classList.toggle('hidden', step !== 'industry');
-    if (stepDeckOptions) stepDeckOptions.classList.toggle('hidden', step !== 'deck-options');
-    if (dialog && dialog.focus) {
-      try { dialog.focus(); } catch (eFocus) {}
+    S.set('proposalBuildingPhase', 'builder');
+    pbUpdateChrome_();
+
+    if (options.scrollTop && builderRoot) {
+      try {
+        builderRoot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (eScroll) {}
     }
   }
 
-  function pbHideModal_() {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+  function pbUpdateChrome_() {
+    if (!pbIsActivePage_()) return;
+    var step = pbCurrentStep_();
+    if (pageStatus) {
+      if (step === 'materials') {
+        pageStatus.textContent = i18n('pb_status_materials');
+      } else if (step === 'brief') {
+        pageStatus.textContent = i18n('pb_status_brief');
+      } else if (step === 'configure') {
+        pageStatus.textContent = i18n('pb_status_configure');
+      } else if (step === 'building') {
+        pageStatus.textContent = i18n('pb_status_building_progress');
+      } else if (step === 'studios') {
+        pageStatus.textContent = i18n('pb_status_studios');
+      }
+    }
   }
 
   function pbEmptyScopeRow_() {
@@ -175,6 +226,193 @@
     }
   }
 
+  function pbEmptyStakeholderRow_() {
+    return { name: '', role: '', organization: '', email: '' };
+  }
+
+  function pbBuildStakeholderRowEl_(row, idx) {
+    var wrap = document.createElement('div');
+    wrap.className = 'grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-2 dark:border-slate-600';
+    wrap.setAttribute('data-stakeholder-idx', String(idx));
+
+    var fields = [
+      { cls: 'pb-stk-name', ph: 'pb_ph_stakeholder_name', val: row.name || '' },
+      { cls: 'pb-stk-role', ph: 'pb_ph_stakeholder_role', val: row.role || '' },
+      { cls: 'pb-stk-org', ph: 'pb_ph_stakeholder_org', val: row.organization || '' },
+      { cls: 'pb-stk-email', ph: 'pb_ph_stakeholder_email', val: row.email || '' },
+    ];
+    var fi;
+    for (fi = 0; fi < fields.length; fi++) {
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'aviators-field w-full text-sm ' + fields[fi].cls;
+      input.placeholder = i18n(fields[fi].ph);
+      input.value = fields[fi].val;
+      wrap.appendChild(input);
+    }
+
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2 md:col-span-2';
+    rmBtn.innerHTML =
+      '<i class="fa-solid fa-trash" aria-hidden="true"></i><span></span>';
+    rmBtn.querySelector('span').textContent = i18n('pb_btn_remove_scope_item');
+    rmBtn.addEventListener('click', function () {
+      wrap.remove();
+    });
+    wrap.appendChild(rmBtn);
+    return wrap;
+  }
+
+  function pbRenderStakeholdersList_(items) {
+    if (!stakeholdersList) return;
+    stakeholdersList.innerHTML = '';
+    var rows = items && items.length ? items : [];
+    if (!rows.length) return;
+    for (var i = 0; i < rows.length; i++) {
+      stakeholdersList.appendChild(pbBuildStakeholderRowEl_(rows[i], i));
+    }
+  }
+
+  function pbListToTextarea_(list) {
+    if (!Array.isArray(list) || !list.length) return '';
+    return list.join('\n');
+  }
+
+  function pbTextareaToList_(text) {
+    var lines = String(text || '').split(/\n+/);
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < lines.length; i++) {
+      var line = String(lines[i] || '').trim();
+      if (!line) continue;
+      var key = line.toLowerCase();
+      if (!seen[key]) {
+        out.push(line);
+        seen[key] = true;
+      }
+    }
+    return out;
+  }
+
+  function pbReadStakeholdersFromForm_() {
+    var out = [];
+    if (!stakeholdersList) return out;
+    var nodes = stakeholdersList.querySelectorAll('[data-stakeholder-idx]');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var name = String((node.querySelector('.pb-stk-name') || {}).value || '').trim();
+      var role = String((node.querySelector('.pb-stk-role') || {}).value || '').trim();
+      var org = String((node.querySelector('.pb-stk-org') || {}).value || '').trim();
+      var email = String((node.querySelector('.pb-stk-email') || {}).value || '').trim();
+      if (!name && !role && !org && !email) continue;
+      out.push({ name: name, role: role, organization: org, email: email });
+    }
+    return out;
+  }
+
+  function pbRenderTechHints_(hints) {
+    if (!techHintsWrap || !techHintsList) return;
+    var list = Array.isArray(hints) ? hints : [];
+    techHintsList.innerHTML = '';
+    if (!list.length) {
+      techHintsWrap.classList.add('hidden');
+      return;
+    }
+    techHintsWrap.classList.remove('hidden');
+    for (var i = 0; i < list.length; i++) {
+      var tag = document.createElement('li');
+      tag.className =
+        'rounded-full bg-violet-100 px-3 py-1 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200';
+      tag.textContent = String(list[i] || '').trim();
+      techHintsList.appendChild(tag);
+    }
+  }
+
+  function pbRenderClientStory_(brief) {
+    if (!clientStory) return;
+    var b = brief || {};
+    var match = b.clientMatch || {};
+    var extracted = String(match.extractedName || b.clientName || '').trim();
+    var catalogName = String(match.catalogClientName || '').trim();
+    var matched = !!match.matched;
+
+    var html = '<div class="pb-story-grid">';
+    html += '<article class="pb-story-card pb-story-card-extracted">';
+    html += '<h3 class="pb-story-title"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> ';
+    html += i18n('pb_story_extracted_heading') + '</h3>';
+    html += '<p class="pb-story-lead">' + i18n('pb_story_extracted_lead') + '</p>';
+    html += '<p class="pb-story-value">' + (extracted || i18n('pb_story_unknown_client')) + '</p>';
+    if (b.projectSummary) {
+      html += '<p class="pb-story-summary">' + String(b.projectSummary).replace(/</g, '&lt;') + '</p>';
+    }
+    html += '</article>';
+
+    html += '<div class="pb-story-arrow" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></div>';
+
+    html += '<article class="pb-story-card ' + (matched ? 'pb-story-card-match' : 'pb-story-card-nomatch') + '">';
+    html += '<h3 class="pb-story-title"><i class="fa-solid fa-database" aria-hidden="true"></i> ';
+    html += i18n('pb_story_catalog_heading') + '</h3>';
+    if (matched) {
+      html += '<p class="pb-story-lead">' + i18n('pb_story_catalog_match_lead') + '</p>';
+      html += '<p class="pb-story-value">' + catalogName + '</p>';
+      if (match.industry) {
+        html += '<p class="pb-story-meta">' + i18nFmt('pb_story_industry_line', { industry: match.industry }) + '</p>';
+      }
+      if (match.subIndustry) {
+        html += '<p class="pb-story-meta">' + i18nFmt('pb_story_subindustry_line', { sub: match.subIndustry }) + '</p>';
+      }
+      if (match.matchScore && match.matchScore < 1) {
+        html += '<p class="pb-story-meta">' + i18nFmt('pb_story_score_line', {
+          score: String(Math.round(match.matchScore * 100)),
+        }) + '</p>';
+      }
+    } else {
+      html += '<p class="pb-story-lead">' + i18n('pb_story_catalog_nomatch_lead') + '</p>';
+      var suggestions = Array.isArray(match.suggestions) ? match.suggestions : [];
+      if (suggestions.length) {
+        html += '<ul class="pb-story-suggestions">';
+        for (var si = 0; si < suggestions.length; si++) {
+          var sug = suggestions[si];
+          html += '<li><button type="button" class="pb-suggestion-btn" data-client-name="' +
+            String(sug.client_name || '').replace(/"/g, '&quot;') + '">' +
+            String(sug.client_name || '') + '</button></li>';
+        }
+        html += '</ul>';
+      }
+    }
+    html += '</article></div>';
+
+    clientStory.innerHTML = html;
+    var sugBtns = clientStory.querySelectorAll('.pb-suggestion-btn');
+    for (var bi = 0; bi < sugBtns.length; bi++) {
+      sugBtns[bi].addEventListener('click', function () {
+        var name = this.getAttribute('data-client-name') || '';
+        if (fieldClient && name) fieldClient.value = name;
+      });
+    }
+  }
+
+  function pbOpenBriefStep_(brief) {
+    var b = brief || {};
+    var budget = b.budget || {};
+    if (fieldClient) fieldClient.value = b.suggestedClientName || b.clientName || '';
+    if (fieldProjectSummary) fieldProjectSummary.value = b.projectSummary || '';
+    if (fieldCommercial) fieldCommercial.value = b.commercialModel || '';
+    if (fieldRfpDeadline) fieldRfpDeadline.value = b.rfpDeadline || '';
+    if (fieldBudgetAmount) fieldBudgetAmount.value = budget.amount || '';
+    if (fieldBudgetCurrency) fieldBudgetCurrency.value = budget.currency || '';
+    if (fieldBudgetNotes) fieldBudgetNotes.value = budget.notes || '';
+    if (fieldObjectives) fieldObjectives.value = pbListToTextarea_(b.businessObjectives || []);
+    if (fieldConstraints) fieldConstraints.value = pbListToTextarea_(b.constraints || []);
+    pbRenderStakeholdersList_(b.stakeholders || []);
+    pbRenderScopeList_(b.scopeItems || []);
+    pbRenderMilestoneList_(b.milestones || []);
+    pbRenderTechHints_(b.technologyHints || []);
+    pbRenderClientStory_(b);
+    pbSetStep_('brief', { scrollTop: true });
+  }
+
   function pbSelectedProposalLanguage_() {
     var picked = document.querySelector('input[name="pb-proposal-language"]:checked');
     var val = picked ? String(picked.value || '').trim() : 'es';
@@ -216,31 +454,50 @@
     }
     return {
       clientName: fieldClient ? String(fieldClient.value || '').trim() : '',
+      projectSummary: fieldProjectSummary ? String(fieldProjectSummary.value || '').trim() : '',
       scopeItems: scopeItems,
       commercialModel: fieldCommercial ? String(fieldCommercial.value || '').trim() : '',
       milestones: milestones,
+      technologyHints: prevBrief.technologyHints || [],
+      stakeholders: pbReadStakeholdersFromForm_(),
+      budget: {
+        amount: fieldBudgetAmount ? String(fieldBudgetAmount.value || '').trim() : '',
+        currency: fieldBudgetCurrency ? String(fieldBudgetCurrency.value || '').trim() : '',
+        notes: fieldBudgetNotes ? String(fieldBudgetNotes.value || '').trim() : '',
+      },
+      businessObjectives: fieldObjectives ? pbTextareaToList_(fieldObjectives.value) : [],
+      constraints: fieldConstraints ? pbTextareaToList_(fieldConstraints.value) : [],
+      rfpDeadline: fieldRfpDeadline ? String(fieldRfpDeadline.value || '').trim() : '',
       detectedLanguage: String(prevBrief.detectedLanguage || 'es').trim() === 'en' ? 'en' : 'es',
+      clientMatch: prevBrief.clientMatch || null,
     };
   }
 
-  function pbOpenValidation_(brief) {
-    var b = brief || {};
-    if (fieldClient) fieldClient.value = b.clientName || '';
-    if (fieldCommercial) fieldCommercial.value = b.commercialModel || '';
-    pbRenderScopeList_(b.scopeItems || []);
-    pbRenderMilestoneList_(b.milestones || []);
-    pbShowModal_('validate');
+  function pbOpenStudioInCatalog_(contentId) {
+    var cid = String(contentId || '').trim();
+    if (!cid || !S.get('canViewCatalog')) return;
+    S.set('contentsPendingOpenId', cid);
+    if (typeof A.setAppPage === 'function') A.setAppPage('contents');
   }
 
-  function pbOpenIndustryStep_() {
+  function pbOpenStudioInKg_(nodeId) {
+    var nid = String(nodeId || '').trim();
+    if (!nid || !S.get('canViewKnowledgeGraph')) return;
+    S.set('kgPendingFocusNodeId', nid);
+    if (typeof A.setAppPage === 'function') A.setAppPage('knowledge-graph');
+  }
+
+  function pbOpenConfigureStep_() {
     var airlinesRadio = document.querySelector('input[name="pb-industry"][value="Aerolineas"]');
     if (airlinesRadio) airlinesRadio.checked = true;
     var langEs = document.querySelector('input[name="pb-proposal-language"][value="es"]');
     if (langEs) langEs.checked = true;
+    pbResetDeckOptions_();
+    pbUpdateDeckOptionsChrome_();
     if (deckPreview) {
       deckPreview.textContent = i18nFmt('pb_deck_selected', { deck: i18n('pb_deck_airlines') });
     }
-    pbShowModal_('industry');
+    pbSetStep_('configure', { scrollTop: true });
   }
 
   function pbResetDeckOptions_() {
@@ -258,20 +515,6 @@
     if (!airlinesStudioFieldset) return;
     var industry = pbSelectedIndustry_();
     airlinesStudioFieldset.classList.toggle('hidden', industry !== 'Aerolineas');
-  }
-
-  function pbOpenDeckOptionsStep_() {
-    var industry = pbSelectedIndustry_();
-    if (!industry) {
-      A.showErrorDialog({
-        title: i18n('pb_industry_heading'),
-        message: i18n('pb_err_industry_required'),
-      });
-      return;
-    }
-    pbResetDeckOptions_();
-    pbUpdateDeckOptionsChrome_();
-    pbShowModal_('deck-options');
   }
 
   function pbReadDeckOptions_() {
@@ -352,103 +595,314 @@
     onErr(new Error(i18nFmt('pb_err_attachment_mime', { name: name, mime: mime || '—' })));
   }
 
-  function pbCollectExtractPayload_(userPrompt, attachment) {
-    var hist = S.get('proposalBuildingChatHistory') || [];
-    return JSON.stringify({
-      userPrompt: userPrompt || '',
-      chatHistory: hist,
-      attachment: attachment || null,
-    });
+  function pbGetMaterials_() {
+    return S.get('proposalBuildingMaterials') || [];
   }
 
-  function pbRunExtract_(userPrompt, options) {
-    var opts = options || {};
-    A.showBlockingModal(i18n('pb_busy_extracting'));
+  function pbSetMaterials_(list) {
+    S.set('proposalBuildingMaterials', list || []);
+    pbRenderMaterialsList_();
+  }
+
+  function pbRenderMaterialsList_() {
+    if (!materialsList) return;
+    materialsList.innerHTML = '';
+    var items = pbGetMaterials_();
+    if (!items.length) return;
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i];
+      var li = document.createElement('li');
+      li.className =
+        'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600';
+      var statusKey = row.status === 'done' ? 'pb_material_status_done' : row.status === 'error' ? 'pb_material_status_error' : 'pb_material_status_pending';
+      li.innerHTML =
+        '<span class="min-w-0 truncate font-medium text-slate-800 dark:text-slate-200">' +
+        String(row.name || '') +
+        '</span><span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">' +
+        i18n(statusKey) +
+        '</span>';
+      materialsList.appendChild(li);
+    }
+  }
+
+  function pbOnMaterialsInputChange_() {
+    if (!materialsInput || !materialsInput.files) return;
+    var files = materialsInput.files;
+    var pending = [];
+    for (var i = 0; i < files.length; i++) {
+      pending.push({
+        name: files[i].name,
+        file: files[i],
+        status: 'pending',
+      });
+    }
+    pbSetMaterials_(pending);
+    if (materialsStatus) {
+      materialsStatus.textContent = i18nFmt('pb_materials_count', { count: String(pending.length) });
+    }
+  }
+
+  function pbAnalyzeMaterials_() {
+    var materials = pbGetMaterials_();
+    var notes = materialsNotes ? String(materialsNotes.value || '').trim() : '';
+    if (!materials.length && !notes) {
+      A.showErrorDialog({
+        title: i18n('pb_materials_heading'),
+        message: i18n('pb_err_extract_empty'),
+      });
+      return;
+    }
+
+    var fileNames = [];
+    var extractedBriefs = [];
+    var idx = 0;
+    var total = materials.length;
+
+    function finishMerge_() {
+      if (!extractedBriefs.length && notes) {
+        A.showBlockingModal(i18n('pb_busy_extracting'));
+        google.script.run
+          .withSuccessHandler(function (res) {
+            A.hideBlockingModal();
+            if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+            S.set('proposalBuildingDraftBrief', (res && res.brief) || {});
+            pbOpenBriefStep_((res && res.brief) || {});
+          })
+          .withFailureHandler(function (e) {
+            A.hideBlockingModal();
+            if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+            A.reportRpcError(e, {
+              scope: 'proposalBuildingExtract',
+              fallbackKey: 'pb_err_extract',
+              modal: true,
+            });
+          })
+          .proposalBuildingExtractBrief(
+            JSON.stringify({ userPrompt: notes, chatHistory: [], sourceFileNames: fileNames }),
+          );
+        return;
+      }
+      if (extractedBriefs.length === 1) {
+        if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+        S.set('proposalBuildingDraftBrief', extractedBriefs[0]);
+        pbOpenBriefStep_(extractedBriefs[0]);
+        return;
+      }
+      A.showBlockingModal(i18n('pb_busy_merging_briefs'));
+      google.script.run
+        .withSuccessHandler(function (mergeRes) {
+          A.hideBlockingModal();
+          if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+          var merged = (mergeRes && mergeRes.brief) || {};
+          S.set('proposalBuildingDraftBrief', merged);
+          pbOpenBriefStep_(merged);
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+          A.reportRpcError(e, {
+            scope: 'proposalBuildingMerge',
+            fallbackKey: 'pb_err_extract',
+            modal: true,
+          });
+        })
+        .proposalBuildingMergeExtractedBriefs(JSON.stringify(extractedBriefs));
+    }
+
+    function extractNext_() {
+      if (idx >= total) {
+        finishMerge_();
+        return;
+      }
+      var mat = materials[idx];
+      fileNames.push(mat.name);
+      A.showBlockingModal(
+        i18nFmt('pb_busy_extracting_file', { current: String(idx + 1), total: String(total), name: mat.name }),
+      );
+      pbReadAttachmentFile_(
+        mat.file,
+        function (attachment) {
+          var payload = {
+            userPrompt: idx === 0 ? notes : '',
+            chatHistory: [],
+            attachment: attachment,
+            sourceFileNames: fileNames.slice(),
+          };
+          google.script.run
+            .withSuccessHandler(function (res) {
+              var brief = (res && res.brief) || {};
+              brief.__sourceFiles = fileNames.slice();
+              extractedBriefs.push(brief);
+              mat.status = 'done';
+              materials[idx] = mat;
+              pbSetMaterials_(materials);
+              idx++;
+              extractNext_();
+            })
+            .withFailureHandler(function (e) {
+              mat.status = 'error';
+              materials[idx] = mat;
+              pbSetMaterials_(materials);
+              A.hideBlockingModal();
+              if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+              A.reportRpcError(e, {
+                scope: 'proposalBuildingExtract',
+                fallbackKey: 'pb_err_extract',
+                modal: true,
+              });
+            })
+            .proposalBuildingExtractBrief(JSON.stringify(payload));
+        },
+        function (err) {
+          A.hideBlockingModal();
+          if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = false;
+          A.showErrorDialog({
+            title: i18n('pb_materials_heading'),
+            message: String((err && err.message) || i18n('pb_err_extract')),
+          });
+        },
+      );
+    }
+
+    if (analyzeMaterialsBtn) analyzeMaterialsBtn.disabled = true;
+    if (!total) {
+      finishMerge_();
+      return;
+    }
+    extractNext_();
+  }
+
+  function pbRenderStudios_(studios) {
+    if (!studiosList) return;
+    studiosList.innerHTML = '';
+    var list = Array.isArray(studios) ? studios : [];
+    if (!list.length) {
+      var empty = document.createElement('p');
+      empty.className = 'text-sm text-slate-600 dark:text-slate-400';
+      empty.textContent = i18n('pb_studios_empty');
+      studiosList.appendChild(empty);
+      return;
+    }
+    var canCatalog = !!S.get('canViewCatalog');
+    var canKg = !!S.get('canViewKnowledgeGraph');
+    for (var i = 0; i < list.length; i++) {
+      var st = list[i];
+      var card = document.createElement('article');
+      var priority = String(st.priority || 'medium').toLowerCase();
+      card.className = 'pb-studio-card pb-studio-priority-' + priority;
+
+      var head = document.createElement('div');
+      head.className = 'pb-studio-card-head';
+      var title = document.createElement('h3');
+      title.className = 'pb-studio-name';
+      title.innerHTML =
+        '<i class="fa-solid fa-building" aria-hidden="true"></i> ' +
+        String(st.studioName || '');
+      head.appendChild(title);
+      if (priority) {
+        var badge = document.createElement('span');
+        badge.className = 'pb-studio-badge';
+        badge.textContent = priority;
+        head.appendChild(badge);
+      }
+      card.appendChild(head);
+
+      if (st.catalogTitle) {
+        var catTitle = document.createElement('p');
+        catTitle.className = 'pb-studio-catalog-title text-sm font-medium text-slate-700 dark:text-slate-300';
+        catTitle.textContent = st.catalogTitle;
+        card.appendChild(catTitle);
+      }
+
+      var offerings = Array.isArray(st.offerings) ? st.offerings.join(', ') : '';
+      if (offerings) {
+        var offEl = document.createElement('p');
+        offEl.className = 'pb-studio-offerings';
+        offEl.textContent = offerings;
+        card.appendChild(offEl);
+      }
+
+      var rationale = document.createElement('p');
+      rationale.className = 'pb-studio-rationale';
+      rationale.textContent = String(st.rationale || '');
+      card.appendChild(rationale);
+
+      var actions = document.createElement('div');
+      actions.className = 'pb-studio-actions mt-3 flex flex-wrap gap-2';
+      var contentId = String(st.contentId || '').trim();
+      var kgNodeId = String(st.kgNodeId || '').trim();
+      if (contentId && canCatalog) {
+        (function (cid) {
+          var catBtn = document.createElement('button');
+          catBtn.type = 'button';
+          catBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+          catBtn.innerHTML =
+            '<i class="fa-solid fa-book" aria-hidden="true"></i><span></span>';
+          catBtn.querySelector('span').textContent = i18n('pb_btn_open_studio_catalog');
+          catBtn.addEventListener('click', function () {
+            pbOpenStudioInCatalog_(cid);
+          });
+          actions.appendChild(catBtn);
+        })(contentId);
+      }
+      if (kgNodeId && canKg) {
+        (function (nid) {
+          var kgBtn = document.createElement('button');
+          kgBtn.type = 'button';
+          kgBtn.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+          kgBtn.innerHTML =
+            '<i class="fa-solid fa-diagram-project" aria-hidden="true"></i><span></span>';
+          kgBtn.querySelector('span').textContent = i18n('pb_btn_open_studio_kg');
+          kgBtn.addEventListener('click', function () {
+            pbOpenStudioInKg_(nid);
+          });
+          actions.appendChild(kgBtn);
+        })(kgNodeId);
+      }
+      if (st.driveFileUrl) {
+        var driveLink = document.createElement('a');
+        driveLink.className = 'btn btn-sm btn-outline inline-flex items-center gap-2';
+        driveLink.href = st.driveFileUrl;
+        driveLink.target = '_blank';
+        driveLink.rel = 'noopener noreferrer';
+        driveLink.innerHTML =
+          '<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i><span></span>';
+        driveLink.querySelector('span').textContent = i18n('pb_btn_open_studio_drive');
+        actions.appendChild(driveLink);
+      }
+      if (actions.children.length) card.appendChild(actions);
+
+      studiosList.appendChild(card);
+    }
+  }
+
+  function pbFetchStudioRecommendations_() {
+    var brief = S.get('proposalBuildingValidatedBrief') || {};
+    var ctx = S.get('proposalBuildingContext') || {};
+    var industry = ctx.industry || pbSelectedIndustry_();
+    if (studiosBusy) studiosBusy.classList.remove('hidden');
+    if (continueAdvisorBtn) continueAdvisorBtn.disabled = true;
     google.script.run
       .withSuccessHandler(function (res) {
-        A.hideBlockingModal();
-        if (opts.appendUser && A.chat && typeof A.chat.appendUserForProposalBuilding === 'function') {
-          A.chat.appendUserForProposalBuilding(userPrompt, opts.attachmentName || '');
-        }
-        S.set('proposalBuildingDraftBrief', (res && res.brief) || {});
-        pbOpenValidation_((res && res.brief) || {});
+        if (studiosBusy) studiosBusy.classList.add('hidden');
+        if (continueAdvisorBtn) continueAdvisorBtn.disabled = false;
+        var studios = (res && res.studios) || [];
+        S.set('proposalBuildingStudioRecommendations', studios);
+        pbRenderStudios_(studios);
+        var updatedCtx = S.get('proposalBuildingContext') || {};
+        updatedCtx.recommendedStudios = studios;
+        S.set('proposalBuildingContext', updatedCtx);
       })
       .withFailureHandler(function (e) {
-        A.hideBlockingModal();
+        if (studiosBusy) studiosBusy.classList.add('hidden');
+        if (continueAdvisorBtn) continueAdvisorBtn.disabled = false;
         A.reportRpcError(e, {
-          scope: 'proposalBuildingExtract',
-          fallbackKey: 'pb_err_extract',
+          scope: 'proposalBuildingStudios',
+          fallbackKey: 'pb_err_studios',
           modal: true,
         });
       })
-      .proposalBuildingExtractBrief(pbCollectExtractPayload_(userPrompt, opts.attachment || null));
-  }
-
-  function pbWantsValidatePhrase_(text) {
-    return /(extraer|validar)\s+(el\s+)?brief|extract|validate\s+(the\s+)?brief/i.test(
-      String(text || ''),
-    );
-  }
-
-  function pbOnSend_(userPrompt, attachmentName, attachment) {
-    var phase = S.get('proposalBuildingPhase') || 'intake';
-    var gp = String(userPrompt || '').trim();
-    if (!gp && !attachmentName) {
-      return { ok: false, key: 'ask_empty_question' };
-    }
-    if (phase === 'building') {
-      if (A.chat && typeof A.chat.runProposalBuildingAgent_ === 'function') {
-        A.chat.runProposalBuildingAgent_(gp, false);
-      }
-      return { ok: true, handled: true };
-    }
-    pbRunExtract_(gp || i18n('pb_btn_validate_brief'), {
-      appendUser: true,
-      attachmentName: attachmentName || '',
-      attachment: attachment || null,
-    });
-    return { ok: true, handled: true };
-  }
-
-  function pbOnValidateButton_() {
-    var questionEl = document.getElementById('question');
-    var gp = questionEl ? String(questionEl.value || '').trim() : '';
-    var attachment = A.chat && typeof A.chat.getAttachment === 'function' ? A.chat.getAttachment() : null;
-    if (!gp && !attachment) {
-      return { ok: false, key: 'pb_err_extract_empty' };
-    }
-    if (questionEl) questionEl.value = '';
-    var attachName = attachment ? attachment.name || '' : '';
-    if (A.chat && typeof A.chat.clearAttachment === 'function' && attachment) {
-      A.chat.clearAttachment();
-    }
-    pbRunExtract_(gp || i18n('pb_btn_validate_brief'), {
-      appendUser: !!gp,
-      attachmentName: attachName,
-      attachment: attachment,
-    });
-    return { ok: true, handled: true };
-  }
-
-  if (addScopeBtn) {
-    addScopeBtn.addEventListener('click', function () {
-      if (scopeList) scopeList.appendChild(pbBuildScopeRowEl_(pbEmptyScopeRow_(), scopeList.children.length));
-    });
-  }
-  if (addMilestoneBtn) {
-    addMilestoneBtn.addEventListener('click', function () {
-      if (milestoneList) {
-        milestoneList.appendChild(pbBuildMilestoneRowEl_(pbEmptyMilestoneRow_(), milestoneList.children.length));
-      }
-    });
-  }
-
-  if (confirmBriefBtn) {
-    confirmBriefBtn.addEventListener('click', function () {
-      var validated = pbReadBriefFromForm_();
-      S.set('proposalBuildingValidatedBrief', validated);
-      pbOpenIndustryStep_();
-    });
+      .proposalBuildingRecommendStudios(JSON.stringify(brief), industry);
   }
 
   var PB_CREATE_DECK_STEPS_ = 4;
@@ -484,7 +938,6 @@
     A.hideBlockingModal();
     if (startBuildingBtn) startBuildingBtn.disabled = false;
     var brief = S.get('proposalBuildingValidatedBrief') || {};
-    S.set('proposalBuildingPhase', 'building');
     S.set('proposalBuildingContext', {
       validatedBrief: brief,
       industry: res.industry,
@@ -502,31 +955,64 @@
       successCaseTitles: res.successCaseTitles || [],
       customizationWarnings: res.customizationWarnings || [],
       language: brief.detectedLanguage || 'es',
+      recommendedStudios: S.get('proposalBuildingStudioRecommendations') || [],
     });
-    pbHideModal_();
-    pbUpdateChrome_();
+
+    if (buildingStatusText) {
+      buildingStatusText.textContent = i18nFmt('pb_building_ready_line', {
+        name: res.proposalDeckFileName || '',
+        cases: String(res.successCasesApplied || 0),
+      });
+    }
+    if (buildingDeckLink && res.proposalDeckFileUrl) {
+      buildingDeckLink.href = res.proposalDeckFileUrl;
+      buildingDeckLink.classList.remove('hidden');
+    }
+
+    pbSetStep_('building', { scrollTop: true });
+
     if (A.toast && res.proposalDeckFileName) {
       A.toast.success(i18nFmt('pb_deck_created_line', { name: res.proposalDeckFileName }));
-      if (res.successCasesApplied > 0) {
-        A.toast.info(
-          i18nFmt('pb_deck_success_cases_line', {
-            count: String(res.successCasesApplied),
-          }),
-        );
-      }
     }
-    if (A.chat && typeof A.chat.onProposalBuildingReady_ === 'function') {
-      A.chat.onProposalBuildingReady_();
-    }
+
+    pbSetStep_('studios', { scrollTop: true });
+    pbFetchStudioRecommendations_();
   }
 
-  if (industryContinueBtn) {
-    industryContinueBtn.addEventListener('click', function () {
-      pbApplyIndustryAndLanguageToBrief_();
-      pbOpenDeckOptionsStep_();
+  if (materialsInput) {
+    materialsInput.addEventListener('change', pbOnMaterialsInputChange_);
+  }
+  if (analyzeMaterialsBtn) {
+    analyzeMaterialsBtn.addEventListener('click', pbAnalyzeMaterials_);
+  }
+  if (addScopeBtn) {
+    addScopeBtn.addEventListener('click', function () {
+      if (scopeList) scopeList.appendChild(pbBuildScopeRowEl_(pbEmptyScopeRow_(), scopeList.children.length));
     });
   }
-
+  if (addMilestoneBtn) {
+    addMilestoneBtn.addEventListener('click', function () {
+      if (milestoneList) {
+        milestoneList.appendChild(pbBuildMilestoneRowEl_(pbEmptyMilestoneRow_(), milestoneList.children.length));
+      }
+    });
+  }
+  if (addStakeholderBtn) {
+    addStakeholderBtn.addEventListener('click', function () {
+      if (stakeholdersList) {
+        stakeholdersList.appendChild(
+          pbBuildStakeholderRowEl_(pbEmptyStakeholderRow_(), stakeholdersList.children.length),
+        );
+      }
+    });
+  }
+  if (confirmBriefBtn) {
+    confirmBriefBtn.addEventListener('click', function () {
+      var validated = pbReadBriefFromForm_();
+      S.set('proposalBuildingValidatedBrief', validated);
+      pbOpenConfigureStep_();
+    });
+  }
   if (startBuildingBtn) {
     startBuildingBtn.addEventListener('click', function () {
       var industry = pbSelectedIndustry_();
@@ -542,6 +1028,7 @@
       var deckOptionsJson = JSON.stringify(pbReadDeckOptions_());
       S.set('proposalBuildingDeckOptions', pbReadDeckOptions_());
       startBuildingBtn.disabled = true;
+      pbSetStep_('building');
       pbShowDeckCreateProgress_(0, 'pb_step_compose_understanding');
       google.script.run
         .withSuccessHandler(function (composeRes) {
@@ -594,6 +1081,11 @@
         .proposalBuildingComposeUnderstanding(briefJson, industry);
     });
   }
+  if (openGlobantOfferingBtn) {
+    openGlobantOfferingBtn.addEventListener('click', function () {
+      if (A.setAppPage) A.setAppPage('globant-offering');
+    });
+  }
 
   var industryRadios = document.querySelectorAll('input[name="pb-industry"]');
   for (var r = 0; r < industryRadios.length; r++) {
@@ -607,48 +1099,57 @@
     });
   }
 
-  if (validateBriefBtn) {
-    validateBriefBtn.addEventListener('click', function () {
-      var result = pbOnValidateButton_();
-      if (!result.ok && result.key) {
-        var askStatus = document.getElementById('ask-status');
-        if (askStatus) {
-          askStatus.textContent = i18n(result.key);
-          askStatus.classList.add('err');
-        }
-      }
-    });
-  }
-
-  if (modal) {
-    modal.addEventListener('click', function (ev) {
-      if (ev.target === modal) return;
+  if (stepper) {
+    stepper.addEventListener('click', function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-pb-step]') : null;
+      if (!btn || btn.disabled) return;
+      var step = btn.getAttribute('data-pb-step');
+      if (!step) return;
+      var maxStep = S.get('proposalBuildingMaxStep') || 0;
+      if (PB_STEP_ORDER_[step] > maxStep) return;
+      pbSetStep_(step, { scrollTop: true });
     });
   }
 
   S.on('activePage', function (pg) {
-    if (pg === 'proposal-building') pbUpdateChrome_();
+    if (pg === 'proposal-building') {
+      pbUpdateChrome_();
+    }
   });
 
   A.proposalBuilding = {
     isActivePage: pbIsActivePage_,
-    onEnterPage: pbUpdateChrome_,
-    onSend: pbOnSend_,
-    wantsValidatePhrase: pbWantsValidatePhrase_,
+    onEnterPage: function () {
+      if (!S.get('proposalBuildingBuilderStep')) {
+        pbSetStep_('materials');
+      } else {
+        pbUpdateChrome_();
+      }
+    },
+    getBuilderStep: pbCurrentStep_,
     readAttachmentFile: pbReadAttachmentFile_,
     getContext: function () {
       return S.get('proposalBuildingContext') || null;
     },
-    getPhase: function () {
-      return S.get('proposalBuildingPhase') || 'intake';
-    },
     resetSession: function () {
-      S.set('proposalBuildingPhase', 'intake');
+      S.set('proposalBuildingPhase', 'builder');
+      S.set('proposalBuildingBuilderStep', 'materials');
+      S.set('proposalBuildingMaxStep', 0);
       S.set('proposalBuildingDraftBrief', null);
       S.set('proposalBuildingValidatedBrief', null);
       S.set('proposalBuildingContext', null);
+      S.set('proposalBuildingMaterials', []);
+      S.set('proposalBuildingStudioRecommendations', null);
+      pbSetMaterials_([]);
+      if (materialsInput) materialsInput.value = '';
+      if (materialsNotes) materialsNotes.value = '';
+      pbSetStep_('materials');
       pbUpdateChrome_();
     },
   };
+
+  if (pbIsActivePage_()) {
+    pbSetStep_(pbCurrentStep_());
+  }
 })(window.Aviators);
 </script>

@@ -805,6 +805,33 @@ var METRICS_ONBOARDING_QUICK_PROMPTS_DEFAULTS_ = [
   { id: 'ob5', es: '¿Qué es un GDS?', en: 'What is a GDS?', order: 5 },
 ];
 
+var METRICS_GLOBANT_OFFERING_QUICK_PROMPTS_DEFAULTS_ = [
+  {
+    id: 'go1',
+    es: '¿Qué Studios de Globant encajan en aviación?',
+    en: 'Which Globant Studios fit aviation?',
+    order: 1,
+  },
+  {
+    id: 'go2',
+    es: '¿Qué es AI Pods y cuándo conviene usarlo?',
+    en: 'What are AI Pods and when should we use them?',
+    order: 2,
+  },
+  {
+    id: 'go3',
+    es: '¿Qué offerings comerciales tenemos documentados?',
+    en: 'What commercial offerings do we have documented?',
+    order: 3,
+  },
+  {
+    id: 'go4',
+    es: 'Casos de éxito para una RFP de transformación digital',
+    en: 'Success cases for a digital transformation RFP',
+    order: 4,
+  },
+];
+
 /**
  * @param {string} scope — «home» u «onboarding»
  * @param {Array<{id:string,es:string,en:string,order:number}>} defaults
@@ -848,6 +875,17 @@ function MetricsService_onboardingQuickPromptsGet_() {
 }
 
 /**
+ * Lee prompts del chat Globant Offering (agente proposals).
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function MetricsService_globantOfferingQuickPromptsGet_() {
+  return MetricsService_quickPromptsGetForScope_(
+    'globant-offering',
+    METRICS_GLOBANT_OFFERING_QUICK_PROMPTS_DEFAULTS_,
+  );
+}
+
+/**
  * Reemplaza prompts de un alcance (clear + re-append).
  * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
  * @param {string=} scope
@@ -874,4 +912,12 @@ function MetricsService_quickPromptsSave_(prompts) {
  */
 function MetricsService_onboardingQuickPromptsSave_(prompts) {
   return MetricsService_quickPromptsSaveForScope_(prompts, 'onboarding');
+}
+
+/**
+ * @param {Array<{id:string,es:string,en:string,order:number}>} prompts
+ * @return {{ok:boolean}}
+ */
+function MetricsService_globantOfferingQuickPromptsSave_(prompts) {
+  return MetricsService_quickPromptsSaveForScope_(prompts, 'globant-offering');
 }

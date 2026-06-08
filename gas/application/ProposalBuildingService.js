@@ -240,11 +240,26 @@ function ProposalBuilding_normalizeBrief_(parsed) {
   else if (lang.indexOf('es') === 0) lang = 'es';
   else lang = '';
 
+  var techHints = [];
+  if (Array.isArray(o.technologyHints)) {
+    for (var ti = 0; ti < o.technologyHints.length; ti++) {
+      var th = String(o.technologyHints[ti] || '').trim();
+      if (th) techHints.push(th);
+    }
+  }
+
   return {
     clientName: String(o.clientName || o.client_name || '').trim(),
+    projectSummary: String(o.projectSummary || o.summary || o.overview || '').trim(),
     scopeItems: scopeItems,
     commercialModel: ProposalBuilding_normalizeCommercialModel_(o.commercialModel || o.pricing_model),
     milestones: milestones,
+    technologyHints: techHints,
+    stakeholders: ProposalBuilding_normalizeStakeholders_(o.stakeholders),
+    budget: ProposalBuilding_normalizeBudget_(o.budget || o.budgetNotes),
+    businessObjectives: ProposalBuilding_normalizeStringList_(o.businessObjectives || o.objectives),
+    constraints: ProposalBuilding_normalizeStringList_(o.constraints || o.risks),
+    rfpDeadline: String(o.rfpDeadline || o.proposalDeadline || o.submissionDeadline || '').trim(),
     detectedLanguage: lang,
     confidence: String(o.confidence || 'medium').trim().toLowerCase(),
     warnings: Array.isArray(o.warnings)
@@ -255,6 +270,479 @@ function ProposalBuilding_normalizeBrief_(parsed) {
         })
       : [],
   };
+}
+
+/**
+ * @param {*} value
+ * @return {Array<string>}
+ */
+function ProposalBuilding_normalizeStringList_(value) {
+  var out = [];
+  var seen = {};
+  if (Array.isArray(value)) {
+    for (var i = 0; i < value.length; i++) {
+      var row = String(value[i] || '').trim();
+      if (!row) continue;
+      var key = row.toLowerCase();
+      if (!seen[key]) {
+        out.push(row);
+        seen[key] = true;
+      }
+    }
+    return out;
+  }
+  var text = String(value || '').trim();
+  if (!text) return out;
+  var lines = text.split(/\n+/);
+  for (var j = 0; j < lines.length; j++) {
+    var line = String(lines[j] || '').trim();
+    if (!line) continue;
+    var lk = line.toLowerCase();
+    if (!seen[lk]) {
+      out.push(line);
+      seen[lk] = true;
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {*} rows
+ * @return {Array<{name:string,role:string,organization:string,email:string}>}
+ */
+function ProposalBuilding_normalizeStakeholders_(rows) {
+  var out = [];
+  if (!Array.isArray(rows)) return out;
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    var row = rows[ri];
+    if (!row || typeof row !== 'object') continue;
+    var name = String(row.name || row.fullName || row.contact || '').trim();
+    var role = String(row.role || row.title || row.position || '').trim();
+    var org = String(row.organization || row.company || row.department || '').trim();
+    var email = String(row.email || row.mail || '').trim();
+    if (!name && !role && !email) continue;
+    out.push({
+      name: name,
+      role: role,
+      organization: org,
+      email: email,
+    });
+  }
+  return out;
+}
+
+/**
+ * @param {*} raw
+ * @return {{amount:string,currency:string,notes:string}}
+ */
+function ProposalBuilding_normalizeBudget_(raw) {
+  if (typeof raw === 'string') {
+    return { amount: '', currency: '', notes: String(raw || '').trim() };
+  }
+  var b = raw && typeof raw === 'object' ? raw : {};
+  return {
+    amount: String(b.amount || b.value || b.total || '').trim(),
+    currency: String(b.currency || b.ccy || '').trim().toUpperCase(),
+    notes: String(b.notes || b.description || b.range || '').trim(),
+  };
+}
+
+/**
+ * @param {Object} base
+ * @param {Object} incoming
+ * @return {Object}
+ */
+function ProposalBuilding_mergeBriefs_(base, incoming) {
+  base = ProposalBuilding_normalizeBrief_(base || {});
+  incoming = ProposalBuilding_normalizeBrief_(incoming || {});
+  if (!base.clientName && incoming.clientName) base.clientName = incoming.clientName;
+  if (!base.projectSummary && incoming.projectSummary) {
+    base.projectSummary = incoming.projectSummary;
+  } else if (base.projectSummary && incoming.projectSummary && base.projectSummary !== incoming.projectSummary) {
+    base.projectSummary = base.projectSummary + '\n\n' + incoming.projectSummary;
+  }
+  if (!base.commercialModel && incoming.commercialModel) {
+    base.commercialModel = incoming.commercialModel;
+  }
+  if (!base.detectedLanguage && incoming.detectedLanguage) {
+    base.detectedLanguage = incoming.detectedLanguage;
+  }
+  if (!base.rfpDeadline && incoming.rfpDeadline) {
+    base.rfpDeadline = incoming.rfpDeadline;
+  }
+  base.budget = base.budget || ProposalBuilding_normalizeBudget_(null);
+  incoming.budget = incoming.budget || ProposalBuilding_normalizeBudget_(null);
+  if (!base.budget.amount && incoming.budget.amount) base.budget.amount = incoming.budget.amount;
+  if (!base.budget.currency && incoming.budget.currency) {
+    base.budget.currency = incoming.budget.currency;
+  }
+  if (!base.budget.notes && incoming.budget.notes) {
+    base.budget.notes = incoming.budget.notes;
+  } else if (base.budget.notes && incoming.budget.notes && base.budget.notes !== incoming.budget.notes) {
+    base.budget.notes = base.budget.notes + '\n' + incoming.budget.notes;
+  }
+  var shKey = function (s) {
+    return (
+      String(s.name || '').trim().toLowerCase() +
+      '|' +
+      String(s.role || '').trim().toLowerCase() +
+      '|' +
+      String(s.email || '').trim().toLowerCase()
+    );
+  };
+  var shSeen = {};
+  var sh;
+  for (sh = 0; sh < base.stakeholders.length; sh++) {
+    shSeen[shKey(base.stakeholders[sh])] = true;
+  }
+  for (sh = 0; sh < incoming.stakeholders.length; sh++) {
+    var shRow = incoming.stakeholders[sh];
+    var shk = shKey(shRow);
+    if (!shSeen[shk]) {
+      base.stakeholders.push(shRow);
+      shSeen[shk] = true;
+    }
+  }
+  base.businessObjectives = ProposalBuilding_mergeStringLists_(base.businessObjectives, incoming.businessObjectives);
+  base.constraints = ProposalBuilding_mergeStringLists_(base.constraints, incoming.constraints);
+  var scopeKey = function (it) {
+    return (
+      String(it.title || '').trim().toLowerCase() +
+      '|' +
+      String(it.description || '').trim().toLowerCase()
+    );
+  };
+  var scopeSeen = {};
+  var si;
+  for (si = 0; si < base.scopeItems.length; si++) {
+    scopeSeen[scopeKey(base.scopeItems[si])] = true;
+  }
+  for (si = 0; si < incoming.scopeItems.length; si++) {
+    var scopeRow = incoming.scopeItems[si];
+    var sk = scopeKey(scopeRow);
+    if (!scopeSeen[sk]) {
+      base.scopeItems.push(scopeRow);
+      scopeSeen[sk] = true;
+    }
+  }
+  var msKey = function (m) {
+    return (
+      String(m.label || '').trim().toLowerCase() +
+      '|' +
+      String(m.date || '').trim().toLowerCase()
+    );
+  };
+  var msSeen = {};
+  var mj;
+  for (mj = 0; mj < base.milestones.length; mj++) {
+    msSeen[msKey(base.milestones[mj])] = true;
+  }
+  for (mj = 0; mj < incoming.milestones.length; mj++) {
+    var msRow = incoming.milestones[mj];
+    var mk = msKey(msRow);
+    if (!msSeen[mk]) {
+      base.milestones.push(msRow);
+      msSeen[mk] = true;
+    }
+  }
+  var techSeen = {};
+  var tk;
+  for (tk = 0; tk < base.technologyHints.length; tk++) {
+    techSeen[String(base.technologyHints[tk] || '').trim().toLowerCase()] = true;
+  }
+  for (tk = 0; tk < incoming.technologyHints.length; tk++) {
+    var thRow = String(incoming.technologyHints[tk] || '').trim();
+    if (!thRow) continue;
+    var thKey = thRow.toLowerCase();
+    if (!techSeen[thKey]) {
+      base.technologyHints.push(thRow);
+      techSeen[thKey] = true;
+    }
+  }
+  var warnSeen = {};
+  var wi;
+  for (wi = 0; wi < base.warnings.length; wi++) {
+    warnSeen[String(base.warnings[wi] || '').trim()] = true;
+  }
+  for (wi = 0; wi < incoming.warnings.length; wi++) {
+    var wRow = String(incoming.warnings[wi] || '').trim();
+    if (wRow && !warnSeen[wRow]) {
+      base.warnings.push(wRow);
+      warnSeen[wRow] = true;
+    }
+  }
+  return base;
+}
+
+/**
+ * @param {Array<string>} a
+ * @param {Array<string>} b
+ * @return {Array<string>}
+ */
+function ProposalBuilding_mergeStringLists_(a, b) {
+  return ProposalBuilding_normalizeStringList_((a || []).concat(b || []));
+}
+
+/**
+ * @param {string} studioName
+ * @return {string}
+ */
+function ProposalBuilding_studioKgNodeId_(studioName) {
+  var slug = KnowledgeGraph_slug_(studioName);
+  if (!slug || slug === 'unknown') return '';
+  return KnowledgeGraph_nodeId_('studio', slug);
+}
+
+/**
+ * @param {string} name
+ * @param {Array<Object>} catalogStudios
+ * @return {Object|null}
+ */
+function ProposalBuilding_findCatalogStudio_(name, catalogStudios) {
+  var target = String(name || '').trim().toLowerCase();
+  if (!target) return null;
+  var list = Array.isArray(catalogStudios) ? catalogStudios : [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var row = list[i];
+    if (String(row.studioName || '').trim().toLowerCase() === target) return row;
+  }
+  for (i = 0; i < list.length; i++) {
+    var rowLoose = list[i];
+    var cn = String(rowLoose.studioName || '').trim().toLowerCase();
+    if (!cn) continue;
+    if (cn.indexOf(target) >= 0 || target.indexOf(cn) >= 0) return rowLoose;
+  }
+  return null;
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @param {Array<Object>} catalogStudios
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_enrichStudioRecommendations_(studios, catalogStudios) {
+  var out = [];
+  var i;
+  for (i = 0; i < studios.length; i++) {
+    var st = studios[i];
+    if (!st || typeof st !== 'object') continue;
+    var enriched = {
+      studioName: String(st.studioName || '').trim(),
+      offerings: Array.isArray(st.offerings) ? st.offerings.slice() : [],
+      rationale: String(st.rationale || '').trim(),
+      priority: String(st.priority || 'medium').trim().toLowerCase(),
+      contentId: String(st.contentId || '').trim(),
+      catalogTitle: '',
+      driveFileUrl: '',
+      kgNodeId: ProposalBuilding_studioKgNodeId_(st.studioName),
+      contentIds: [],
+    };
+    var cat = ProposalBuilding_findCatalogStudio_(enriched.studioName, catalogStudios);
+    if (cat) {
+      enriched.contentIds = Array.isArray(cat.contentIds) ? cat.contentIds.slice() : [];
+      if (!enriched.contentId && enriched.contentIds.length) {
+        enriched.contentId = enriched.contentIds[0];
+      }
+      if (cat.kgNodeId) enriched.kgNodeId = cat.kgNodeId;
+      if (Array.isArray(cat.catalogItems) && enriched.contentId) {
+        var ci;
+        for (ci = 0; ci < cat.catalogItems.length; ci++) {
+          var item = cat.catalogItems[ci];
+          if (item && item.contentId === enriched.contentId) {
+            enriched.catalogTitle = String(item.title || '').trim();
+            enriched.driveFileUrl = String(item.driveFileUrl || '').trim();
+            break;
+          }
+        }
+      }
+      if (!enriched.catalogTitle && cat.catalogItems && cat.catalogItems.length) {
+        enriched.catalogTitle = String(cat.catalogItems[0].title || '').trim();
+        enriched.driveFileUrl = String(cat.catalogItems[0].driveFileUrl || '').trim();
+        if (!enriched.contentId) enriched.contentId = String(cat.catalogItems[0].contentId || '').trim();
+      }
+    }
+    if (enriched.contentId && enriched.contentIds.indexOf(enriched.contentId) < 0) {
+      enriched.contentIds.unshift(enriched.contentId);
+    }
+    out.push(enriched);
+  }
+  return out;
+}
+
+/**
+ * @param {string} rawName
+ * @param {string} fileHint
+ * @param {number=} limit
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_listClientSuggestions_(rawName, fileHint, limit) {
+  limit = Math.min(5, Math.max(1, Number(limit) || 3));
+  var rows = ClientsMasterStore_listAll();
+  if (!rows.length) return [];
+  var uniq = ClientsMaster_buildMatchCandidates_(rawName, fileHint);
+  var scored = [];
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    var client = ClientsMasterStore_toApiItem_(rows[ri]);
+    var cn = ClientsMaster_normalizeName_(client.client_name);
+    if (!cn || cn.length < 2) continue;
+    var bestForClient = 0;
+    var uj;
+    for (uj = 0; uj < uniq.length; uj++) {
+      var candRaw = uniq[uj];
+      var cand = ClientsMaster_normalizeName_(candRaw);
+      if (!cand || cand.length < 2) continue;
+      var score = ClientsMaster_combinedMatchScore_(
+        cand,
+        cn,
+        candRaw,
+        client.client_name,
+      );
+      if (score > bestForClient) bestForClient = score;
+    }
+    if (bestForClient > 0.25) {
+      scored.push({
+        client_name: client.client_name,
+        industry: String(client.industry || '').trim(),
+        sub_industry: String(client.sub_industry || '').trim(),
+        matchScore: bestForClient,
+      });
+    }
+  }
+  scored.sort(function (a, b) {
+    return b.matchScore - a.matchScore;
+  });
+  return scored.slice(0, limit);
+}
+
+/**
+ * @param {Object} brief
+ * @param {Array<string>} sourceFileNames
+ * @return {Object}
+ */
+function ProposalBuilding_enrichBriefWithClientMatch_(brief, sourceFileNames) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var names = Array.isArray(sourceFileNames) ? sourceFileNames : [];
+  var fileHint = names.join(' ');
+  var extracted = String(brief.clientName || '').trim();
+  var match = ClientsMaster_matchFromHints_(extracted, fileHint);
+  brief.clientMatch = {
+    extractedName: extracted,
+    matched: !!match.matched,
+    catalogClientName: match.matched ? String(match.client_name || '').trim() : '',
+    industry: String(match.industry || '').trim(),
+    subIndustry: String(match.sub_industry || '').trim(),
+    matchScore: Number(match.matchScore) || (match.matched ? 1 : 0),
+    suggestions: match.matched
+      ? []
+      : ProposalBuilding_listClientSuggestions_(extracted, fileHint, 3),
+  };
+  if (match.matched && match.client_name) {
+    brief.suggestedClientName = String(match.client_name || '').trim();
+    if (!brief.clientName) brief.clientName = brief.suggestedClientName;
+  } else {
+    brief.suggestedClientName = extracted || String(match.client_name || '').trim();
+  }
+  return brief;
+}
+
+/**
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_listStudiosFromCatalog_() {
+  var rows = ContentCatalogStore_listAll();
+  var byStudio = {};
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var apiItem = ContentCatalogStore_toApiItem_(rows[i], ContentCatalog_csvToTags_);
+    var spec = apiItem.specific || {};
+    var common = apiItem.common || {};
+    var mk = String(spec.material_kind || '').trim().toUpperCase();
+    var studio = String(spec.globant_studio || '').trim();
+    var ctype = String(common.content_type || '').trim();
+    if (!studio && mk !== 'GLOBANT_STUDIO' && ctype !== 'proposal') continue;
+    if (!studio) studio = String(common.title || '').trim();
+    if (!studio) continue;
+    var key = studio.toLowerCase();
+    if (!byStudio[key]) {
+      byStudio[key] = {
+        studioName: studio,
+        offerings: [],
+        contentIds: [],
+        summaries: [],
+        catalogItems: [],
+        kgNodeId: ProposalBuilding_studioKgNodeId_(studio),
+      };
+    }
+    var off = String(spec.offering || spec.pricing_model || '').trim();
+    if (off && byStudio[key].offerings.indexOf(off) < 0) {
+      byStudio[key].offerings.push(off);
+    }
+    if (common.content_id && byStudio[key].contentIds.indexOf(common.content_id) < 0) {
+      byStudio[key].contentIds.push(common.content_id);
+      byStudio[key].catalogItems.push({
+        contentId: common.content_id,
+        title: String(common.title || '').trim(),
+        driveFileUrl: String(common.drive_file_url || '').trim(),
+        materialKind: mk,
+      });
+    }
+    var sum = String(common.summary || '').trim();
+    if (sum && byStudio[key].summaries.length < 2) {
+      byStudio[key].summaries.push(sum.slice(0, 420));
+    }
+  }
+  var out = [];
+  var k;
+  for (k in byStudio) {
+    if (!Object.prototype.hasOwnProperty.call(byStudio, k)) continue;
+    out.push(byStudio[k]);
+  }
+  out.sort(function (a, b) {
+    return String(a.studioName || '').localeCompare(String(b.studioName || ''));
+  });
+  return out;
+}
+
+/**
+ * @param {string} answerText
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_parseStudioRecommendations_(answerText) {
+  var raw = String(answerText || '').trim();
+  if (!raw) return [];
+  var parsed = ContentExtraction_parseLooseJson_(raw);
+  var list = [];
+  if (parsed && Array.isArray(parsed.studios)) {
+    list = parsed.studios;
+  } else if (parsed && Array.isArray(parsed.recommendations)) {
+    list = parsed.recommendations;
+  }
+  var out = [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var row = list[i];
+    if (!row || typeof row !== 'object') continue;
+    var name = String(row.studioName || row.studio || row.name || '').trim();
+    if (!name) continue;
+    var offerings = [];
+    if (Array.isArray(row.offerings)) {
+      for (var oi = 0; oi < row.offerings.length; oi++) {
+        var off = String(row.offerings[oi] || '').trim();
+        if (off) offerings.push(off);
+      }
+    }
+    out.push({
+      studioName: name,
+      offerings: offerings,
+      rationale: String(row.rationale || row.reason || row.why || '').trim(),
+      priority: String(row.priority || 'medium').trim().toLowerCase(),
+      contentId: String(row.contentId || row.content_id || '').trim(),
+    });
+  }
+  return out;
 }
 
 /**
@@ -271,9 +759,16 @@ function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachme
     'Respondé SOLO con JSON válido (sin markdown):',
     '{',
     '  "clientName": "nombre del cliente si aparece, o vacío",',
+    '  "projectSummary": "resumen ejecutivo del pedido en 2-4 oraciones",',
     '  "scopeItems": [{"title":"ítem corto","description":"qué pide el cliente / nuestro entendimiento"}],',
     '  "commercialModel": "uno de: ' + models + ', o vacío si no está claro",',
     '  "milestones": [{"label":"hito","date":"fecha o rango","notes":"detalle opcional"}],',
+    '  "technologyHints": ["tecnologías, plataformas o dominios mencionados"],',
+    '  "stakeholders": [{"name":"nombre","role":"cargo","organization":"empresa/área","email":"opcional"}],',
+    '  "budget": {"amount":"monto numérico o rango","currency":"USD|EUR|ARS|…","notes":"detalle de presupuesto"},',
+    '  "businessObjectives": ["objetivos de negocio del cliente"],',
+    '  "constraints": ["restricciones, riesgos o condiciones del RFP"],',
+    '  "rfpDeadline": "fecha límite de entrega de propuesta si aparece",',
     '  "detectedLanguage": "es o en según el idioma dominante del material",',
     '  "confidence": "high|medium|low",',
     '  "warnings": ["notas sobre ambigüedades"]',
@@ -283,8 +778,12 @@ function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachme
     '- scopeItems: si hay varios pedidos o workstreams, un ítem por cada uno.',
     '- commercialModel: elegí el más cercano al RFP; no inventes si no hay señal.',
     '- milestones: fechas límite, go-live, entregas o fases con fecha cuando existan.',
+    '- stakeholders: contactos o sponsors mencionados; no inventes emails.',
+    '- budget: solo si hay cifra o rango explícito; currency vacío si no está claro.',
+    '- businessObjectives y constraints: ítems cortos con evidencia en el material.',
+    '- rfpDeadline: fecha de cierre del RFP / entrega de propuesta, no hitos de proyecto.',
     '- detectedLanguage: idioma en el que debería redactarse la propuesta.',
-    '- Sé conservador: no inventes cliente, fechas ni modelo comercial sin evidencia.',
+    '- Sé conservador: no inventes cliente, presupuesto, fechas ni modelo comercial sin evidencia.',
   ].join('\n');
 
   if (chatBlock) {
@@ -350,11 +849,139 @@ function ProposalBuilding_extractBrief(payloadJson) {
   if (!brief.detectedLanguage) {
     brief.detectedLanguage = UiStrings_activeLocale_() === 'en' ? 'en' : 'es';
   }
-  if (!brief.scopeItems.length && !brief.clientName && !brief.milestones.length) {
+  if (
+    !brief.scopeItems.length &&
+    !brief.clientName &&
+    !brief.milestones.length &&
+    !brief.stakeholders.length &&
+    !brief.projectSummary &&
+    !brief.budget.amount &&
+    !brief.businessObjectives.length
+  ) {
     brief.warnings.push(UiStrings_t(UiStrings_activeLocale_(), 'pb_warn_extract_sparse'));
   }
 
+  var sourceFiles = [];
+  if (Array.isArray(payload.sourceFileNames)) {
+    for (var sf = 0; sf < payload.sourceFileNames.length; sf++) {
+      var fn = String(payload.sourceFileNames[sf] || '').trim();
+      if (fn) sourceFiles.push(fn);
+    }
+  } else if (attachment.name) {
+    sourceFiles.push(attachment.name);
+  }
+  brief = ProposalBuilding_enrichBriefWithClientMatch_(brief, sourceFiles);
+
   return { ok: true, brief: brief };
+}
+
+/**
+ * @param {string} briefsJson
+ * @return {{ok:boolean, brief:Object}}
+ */
+function ProposalBuilding_mergeExtractedBriefs(briefsJson) {
+  AdminAuth_requireProposalBuildingView();
+  var list = [];
+  try {
+    list = JSON.parse(String(briefsJson || '[]'));
+  } catch (eList) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_payload'));
+  }
+  if (!Array.isArray(list) || !list.length) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_extract_empty'));
+  }
+  var merged = {};
+  var fileNames = [];
+  var fileSeen = {};
+  var li;
+  for (li = 0; li < list.length; li++) {
+    var row = list[li];
+    if (row && Array.isArray(row.__sourceFiles)) {
+      var fi;
+      for (fi = 0; fi < row.__sourceFiles.length; fi++) {
+        var fn = String(row.__sourceFiles[fi] || '').trim();
+        if (fn && !fileSeen[fn]) {
+          fileNames.push(fn);
+          fileSeen[fn] = true;
+        }
+      }
+      delete row.__sourceFiles;
+    }
+    merged = ProposalBuilding_mergeBriefs_(merged, row);
+  }
+  merged = ProposalBuilding_enrichBriefWithClientMatch_(merged, fileNames);
+  return { ok: true, brief: merged };
+}
+
+/**
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @return {{ok:boolean, studios:Array<Object>, catalogStudios:Array<Object>}}
+ */
+function ProposalBuilding_recommendStudios(briefJson, industryKey) {
+  AdminAuth_requireProposalBuildingView();
+  AgentOrchestrator_requireGlobant_();
+  var brief = {};
+  try {
+    brief = JSON.parse(String(briefJson || '{}'));
+  } catch (eBrief) {
+    brief = {};
+  }
+  brief = ProposalBuilding_normalizeBrief_(brief);
+  var industry = String(industryKey || '').trim();
+  var catalogStudios = ProposalBuilding_listStudiosFromCatalog_();
+  var studioLines = [];
+  var ci;
+  for (ci = 0; ci < catalogStudios.length; ci++) {
+    var st = catalogStudios[ci];
+    var line = '- ' + st.studioName;
+    if (st.contentIds && st.contentIds.length) {
+      line += ' · contentId=' + st.contentIds[0];
+    }
+    if (st.kgNodeId) {
+      line += ' · kgNodeId=' + st.kgNodeId;
+    }
+    if (st.offerings && st.offerings.length) {
+      line += ' · offerings: ' + st.offerings.join(', ');
+    }
+    if (st.summaries && st.summaries.length) {
+      line += ' · ' + st.summaries[0];
+    }
+    studioLines.push(line);
+  }
+  var prompt = [
+    'Recomendá hasta 5 Globant Studios que deberían acoplarse a esta propuesta comercial.',
+    'Usá el catálogo indexado cuando sea posible; no inventes studios que no estén listados salvo que el brief lo exija explícitamente.',
+    'Cuando elijas un studio del catálogo, incluí su contentId (y kgNodeId si está en la lista).',
+    'Respondé SOLO con JSON válido (sin markdown):',
+    '{"studios":[{"studioName":"nombre","offerings":["AI_PODS"],"rationale":"por qué encaja con el brief","priority":"high|medium|low","contentId":"id catálogo si aplica"}]}',
+    '',
+    'Industria propuesta: ' + (industry || '(no indicada)'),
+    'Brief validado:',
+    JSON.stringify(brief),
+    '',
+    'Studios en catálogo Aviators:',
+    studioLines.length ? studioLines.join('\n') : '(sin studios indexados; sugerí según expertise Globant documentada)',
+  ].join('\n');
+
+  var r = AgentOrchestrator_answerWith(prompt, _ADMIN_AGENT_ID_PROPOSALS, []);
+  var studios = ProposalBuilding_parseStudioRecommendations_(r.answer || '');
+  if (!studios.length && catalogStudios.length) {
+    var fb;
+    for (fb = 0; fb < Math.min(3, catalogStudios.length); fb++) {
+      studios.push({
+        studioName: catalogStudios[fb].studioName,
+        offerings: catalogStudios[fb].offerings || [],
+        rationale: UiStrings_t(UiStrings_activeLocale_(), 'pb_studio_fallback_rationale'),
+        priority: 'medium',
+        contentId: catalogStudios[fb].contentIds && catalogStudios[fb].contentIds[0]
+          ? catalogStudios[fb].contentIds[0]
+          : '',
+      });
+    }
+  }
+  studios = ProposalBuilding_enrichStudioRecommendations_(studios, catalogStudios);
+  return { ok: true, studios: studios, catalogStudios: catalogStudios };
 }
 
 /**
@@ -1303,6 +1930,62 @@ function ProposalBuilding_buildSystemContext_(context) {
       );
     }
   }
+  if (brief.rfpDeadline) {
+    lines.push('Fecha límite RFP / entrega propuesta: ' + brief.rfpDeadline);
+  }
+  var budget = brief.budget || ProposalBuilding_normalizeBudget_(null);
+  var budgetLine = '';
+  if (budget.amount) budgetLine += budget.amount;
+  if (budget.currency) budgetLine += (budgetLine ? ' ' : '') + budget.currency;
+  if (budget.notes) budgetLine += (budgetLine ? ' — ' : '') + budget.notes;
+  lines.push('Presupuesto / budget: ' + (budgetLine || '(no indicado)'));
+  lines.push('Stakeholders:');
+  var stks = Array.isArray(brief.stakeholders) ? brief.stakeholders : [];
+  if (!stks.length) {
+    lines.push('- (sin contactos explícitos)');
+  } else {
+    for (var sk = 0; sk < stks.length; sk++) {
+      var stk = stks[sk];
+      lines.push(
+        '- ' +
+          String(stk.name || '(sin nombre)').trim() +
+          (stk.role ? ' · ' + stk.role : '') +
+          (stk.organization ? ' · ' + stk.organization : '') +
+          (stk.email ? ' · ' + stk.email : ''),
+      );
+    }
+  }
+  lines.push('Objetivos de negocio:');
+  var objs = Array.isArray(brief.businessObjectives) ? brief.businessObjectives : [];
+  if (!objs.length) {
+    lines.push('- (no indicados)');
+  } else {
+    for (var ob = 0; ob < objs.length; ob++) {
+      lines.push('- ' + String(objs[ob] || '').trim());
+    }
+  }
+  lines.push('Restricciones / condiciones:');
+  var cons = Array.isArray(brief.constraints) ? brief.constraints : [];
+  if (!cons.length) {
+    lines.push('- (ninguna explícita)');
+  } else {
+    for (var co = 0; co < cons.length; co++) {
+      lines.push('- ' + String(cons[co] || '').trim());
+    }
+  }
+  var studioLine = '';
+  if (Array.isArray(context.recommendedStudios) && context.recommendedStudios.length) {
+    studioLine = 'Studios Globant recomendados para esta propuesta:';
+    for (var si = 0; si < context.recommendedStudios.length; si++) {
+      var st = context.recommendedStudios[si];
+      if (!st || typeof st !== 'object') continue;
+      studioLine +=
+        '\n- ' +
+        String(st.studioName || '').trim() +
+        (st.rationale ? ': ' + String(st.rationale).trim() : '');
+    }
+  }
+  if (studioLine) lines.push(studioLine);
   lines.push(
     'Objetivo: ayudar a redactar la propuesta comercial usando el deck base de la industria, manteniendo coherencia con el brief validado y el repositorio indexado de propuestas.',
   );

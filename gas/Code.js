@@ -116,6 +116,10 @@ function getBootstrap() {
   try {
     onboardingQuickPrompts = MetricsService_onboardingQuickPromptsGet_();
   } catch (eQpOb) {}
+  var globantOfferingQuickPrompts = [];
+  try {
+    globantOfferingQuickPrompts = MetricsService_globantOfferingQuickPromptsGet_();
+  } catch (eQpGo) {}
 
   var webAppUrl = '';
   try {
@@ -137,6 +141,7 @@ function getBootstrap() {
     permissions: perms,
     quickPrompts: quickPrompts,
     onboardingQuickPrompts: onboardingQuickPrompts,
+    globantOfferingQuickPrompts: globantOfferingQuickPrompts,
     dataBackend: AviatorsDataBackend_mode_(),
     webAppUrl: webAppUrl,
     kgLimits: kgLimits,
@@ -1823,6 +1828,37 @@ function onboardingQuickPromptsSave(promptsJson) {
 }
 
 /**
+ * Prompts rápidos del chat Globant Offering.
+ * @return {Array<{id:string,es:string,en:string,order:number}>}
+ */
+function globantOfferingQuickPromptsGet() {
+  return AviatorsCode_runRpc_('globantOfferingQuickPromptsGet', function () {
+    return MetricsService_globantOfferingQuickPromptsGet_();
+  });
+}
+
+/**
+ * Guarda prompts rápidos de Globant Offering. Solo admin.
+ * @param {string} promptsJson
+ * @return {{ok:boolean}}
+ */
+function globantOfferingQuickPromptsSave(promptsJson) {
+  return AviatorsCode_runRpc_('globantOfferingQuickPromptsSave', function () {
+    AdminAuth_requireAdmin();
+    var prompts = [];
+    try {
+      prompts = JSON.parse(promptsJson);
+    } catch (eGo) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    if (!Array.isArray(prompts)) {
+      throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_quick_prompts_parse'));
+    }
+    return MetricsService_globantOfferingQuickPromptsSave_(prompts);
+  });
+}
+
+/**
  * Extrae brief comercial desde chat/adjuntos (Armado de propuestas).
  * @param {string} payloadJson
  * @return {{ok:boolean, brief:Object}}
@@ -1830,6 +1866,27 @@ function onboardingQuickPromptsSave(promptsJson) {
 function proposalBuildingExtractBrief(payloadJson) {
   return AviatorsCode_runRpc_('proposalBuildingExtractBrief', function () {
     return ProposalBuilding_extractBrief(payloadJson);
+  });
+}
+
+/**
+ * Fusiona varios briefs extraídos (multi-documento).
+ * @param {string} briefsJson
+ */
+function proposalBuildingMergeExtractedBriefs(briefsJson) {
+  return AviatorsCode_runRpc_('proposalBuildingMergeExtractedBriefs', function () {
+    return ProposalBuilding_mergeExtractedBriefs(briefsJson);
+  });
+}
+
+/**
+ * Recomienda Globant Studios para la propuesta (agente proposals + catálogo).
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ */
+function proposalBuildingRecommendStudios(briefJson, industryKey) {
+  return AviatorsCode_runRpc_('proposalBuildingRecommendStudios', function () {
+    return ProposalBuilding_recommendStudios(briefJson, industryKey);
   });
 }
 

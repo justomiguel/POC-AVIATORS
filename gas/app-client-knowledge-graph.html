@@ -10,6 +10,8 @@
   var filterSearch = document.getElementById('kg-filter-search');
   var filterType = document.getElementById('kg-filter-content-type');
   var filterIndustry = document.getElementById('kg-filter-industry');
+  var filterMaterialKind = document.getElementById('kg-filter-material-kind');
+  var filterOffering = document.getElementById('kg-filter-offering');
   var filterClient = document.getElementById('kg-filter-client');
   var filterDepth = document.getElementById('kg-filter-depth');
   var filterDensity = document.getElementById('kg-filter-density');
@@ -235,9 +237,10 @@
     stage: 5,
     pricing_model: 6,
     offering: 7,
-    technology: 8,
-    outcome: 9,
-    theme: 10,
+    studio: 8,
+    technology: 9,
+    outcome: 10,
+    theme: 11,
   };
 
   var loading = false;
@@ -297,6 +300,7 @@
     stage: '#6366f1',
     pricing_model: '#ec4899',
     offering: '#0891b2',
+    studio: '#0369a1',
     technology: '#14b8a6',
     outcome: '#22c55e',
     theme: '#a855f7',
@@ -311,6 +315,7 @@
     stage: { shape: 'triangle', size: 14 },
     pricing_model: { shape: 'star', size: 14 },
     offering: { shape: 'hexagon', size: 16 },
+    studio: { shape: 'box', size: 18 },
     technology: { shape: 'square', size: 16 },
     outcome: { shape: 'triangle', size: 14 },
     theme: { shape: 'ellipse', size: 15 },
@@ -322,6 +327,9 @@
     tagged_with: '#059669',
     has_stage: '#4f46e5',
     has_pricing_model: '#db2777',
+    has_offering: '#0e7490',
+    from_studio: '#1d4ed8',
+    studio_offers: '#2563eb',
     related_content: '#0284c7',
     similar_to: '#0d9488',
     delivers: '#0891b2',
@@ -336,6 +344,9 @@
     tagged_with: 'kg_rel_tagged_with',
     has_stage: 'kg_rel_has_stage',
     has_pricing_model: 'kg_rel_has_pricing_model',
+    has_offering: 'kg_rel_has_offering',
+    from_studio: 'kg_rel_from_studio',
+    studio_offers: 'kg_rel_studio_offers',
     related_content: 'kg_rel_related_content',
     similar_to: 'kg_rel_similar_to',
     delivers: 'kg_rel_delivers',
@@ -359,6 +370,7 @@
     stage: 'kg_type_stage',
     pricing_model: 'kg_type_pricing_model',
     offering: 'kg_type_offering',
+    studio: 'kg_type_studio',
     technology: 'kg_type_technology',
     outcome: 'kg_type_outcome',
     theme: 'kg_type_theme',
@@ -373,6 +385,7 @@
     stage: 'kg_simple_type_stage',
     pricing_model: 'kg_simple_type_pricing_model',
     offering: 'kg_simple_type_offering',
+    studio: 'kg_simple_type_studio',
     technology: 'kg_simple_type_technology',
     outcome: 'kg_simple_type_outcome',
     theme: 'kg_simple_type_theme',
@@ -384,6 +397,9 @@
     tagged_with: 'kg_simple_rel_tagged_with',
     has_stage: 'kg_simple_rel_has_stage',
     has_pricing_model: 'kg_simple_rel_has_pricing_model',
+    has_offering: 'kg_simple_rel_has_offering',
+    from_studio: 'kg_simple_rel_from_studio',
+    studio_offers: 'kg_simple_rel_studio_offers',
     related_content: 'kg_simple_rel_related_content',
     similar_to: 'kg_simple_rel_similar_to',
     delivers: 'kg_simple_rel_delivers',
@@ -401,6 +417,7 @@
     stage: 'kg_entity_desc_stage',
     pricing_model: 'kg_entity_desc_pricing_model',
     offering: 'kg_entity_desc_offering',
+    studio: 'kg_entity_desc_studio',
     technology: 'kg_entity_desc_technology',
     outcome: 'kg_entity_desc_outcome',
     theme: 'kg_entity_desc_theme',
@@ -412,6 +429,9 @@
     tagged_with: 'kg_entity_rel_desc_tagged_with',
     has_stage: 'kg_entity_rel_desc_has_stage',
     has_pricing_model: 'kg_entity_rel_desc_has_pricing_model',
+    has_offering: 'kg_entity_rel_desc_has_offering',
+    from_studio: 'kg_entity_rel_desc_from_studio',
+    studio_offers: 'kg_entity_rel_desc_studio_offers',
     related_content: 'kg_entity_rel_desc_related_content',
     similar_to: 'kg_entity_rel_desc_similar_to',
     delivers: 'kg_entity_rel_desc_delivers',
@@ -429,6 +449,7 @@
     'stage',
     'pricing_model',
     'offering',
+    'studio',
     'technology',
     'outcome',
     'theme',
@@ -442,6 +463,9 @@
     'similar_to',
     'has_stage',
     'has_pricing_model',
+    'has_offering',
+    'from_studio',
+    'studio_offers',
     'delivers',
     'uses_technology',
     'achieved',
@@ -460,12 +484,14 @@
         'tag',
         'stage',
         'pricing_model',
+        'offering',
+        'studio',
       ],
     },
     {
       key: 'conceptual',
       titleKey: 'kg_entities_layer_group_conceptual',
-      types: ['offering', 'technology', 'outcome', 'theme'],
+      types: ['technology', 'outcome', 'theme'],
     },
   ];
 
@@ -480,6 +506,10 @@
         'related_content',
         'has_stage',
         'has_pricing_model',
+        'has_offering',
+        'from_studio',
+        'studio_offers',
+        'uses_technology',
       ],
     },
     {
@@ -490,7 +520,7 @@
     {
       key: 'conceptual',
       titleKey: 'kg_entities_layer_group_conceptual',
-      relations: ['delivers', 'uses_technology', 'achieved', 'addresses_theme'],
+      relations: ['delivers', 'achieved', 'addresses_theme'],
     },
   ];
 
@@ -503,6 +533,7 @@
     stage: 'fa-layer-group',
     pricing_model: 'fa-coins',
     offering: 'fa-briefcase',
+    studio: 'fa-building-columns',
     technology: 'fa-microchip',
     outcome: 'fa-chart-line',
     theme: 'fa-lightbulb',
@@ -671,6 +702,22 @@
         }),
       );
     }
+    if (filterMaterialKind && filterMaterialKind.value) {
+      var mkLabel = filterMaterialKind.options[filterMaterialKind.selectedIndex];
+      parts.push(
+        i18nFmt('kg_loading_filter_material_kind', {
+          name: String((mkLabel && mkLabel.textContent) || filterMaterialKind.value),
+        }),
+      );
+    }
+    if (filterOffering && filterOffering.value) {
+      var offLabel = filterOffering.options[filterOffering.selectedIndex];
+      parts.push(
+        i18nFmt('kg_loading_filter_offering', {
+          name: String((offLabel && offLabel.textContent) || filterOffering.value),
+        }),
+      );
+    }
     if (filterSearch && String(filterSearch.value || '').trim()) {
       parts.push(
         i18nFmt('kg_loading_filter_search', {
@@ -742,6 +789,8 @@
     if (filterSearch) filterSearch.disabled = d;
     if (filterType) filterType.disabled = d;
     if (filterIndustry) filterIndustry.disabled = d;
+    if (filterMaterialKind) filterMaterialKind.disabled = d;
+    if (filterOffering) filterOffering.disabled = d;
     if (filterClient) filterClient.disabled = d;
     if (filterDepth) filterDepth.disabled = d;
     if (filterDensity) filterDensity.disabled = d;
@@ -1035,6 +1084,10 @@
       'related_content',
       'has_stage',
       'has_pricing_model',
+      'has_offering',
+      'from_studio',
+      'studio_offers',
+      'uses_technology',
     ];
     var ri;
     for (ri = 0; ri < relKeys.length; ri++) {
@@ -1287,6 +1340,8 @@
     return {
       contentType: filterType ? String(filterType.value || '').trim() : '',
       industry: filterIndustry ? String(filterIndustry.value || '').trim() : '',
+      materialKind: filterMaterialKind ? String(filterMaterialKind.value || '').trim() : '',
+      offering: filterOffering ? String(filterOffering.value || '').trim() : '',
       clientId: filterClient ? String(filterClient.value || '').trim() : '',
       searchQuery: filterSearch ? String(filterSearch.value || '').trim() : '',
       depth: filterDepth ? parseInt(String(filterDepth.value || '2'), 10) : 2,
@@ -2585,6 +2640,14 @@
     kgLoad({ focus: true, skipCache: true });
   }
 
+  function kgTryOpenPendingFocus_() {
+    var nid = String(S.get('kgPendingFocusNodeId') || '').trim();
+    if (!nid) return;
+    S.set('kgPendingFocusNodeId', '');
+    if (kgMainTabs) kgMainTabs.activate('kg-tab-graph');
+    kgFocusEntitySubgraph_(nid);
+  }
+
   function kgOpenNodeInGraph_(node) {
     if (!node || !node.id) return;
     if (kgMainTabs) kgMainTabs.activate('kg-tab-graph');
@@ -2674,6 +2737,13 @@
       kgApplyLimitsToFilters_();
       kgBuildLegend();
       kgPopulateFilterOptions();
+      var pendingFocus = String(S.get('kgPendingFocusNodeId') || '').trim();
+      if (pendingFocus) {
+        S.set('kgPendingFocusNodeId', '');
+        if (kgMainTabs) kgMainTabs.activate('kg-tab-graph');
+        kgFocusEntitySubgraph_(pendingFocus);
+        return;
+      }
       kgCheckPendingSyncBanner_(function () {
         if (S.get('canRebuildKnowledgeGraph')) {
           kgFetchSyncStatusThenLoad_();
@@ -2707,6 +2777,8 @@
       if (filterSearch) filterSearch.value = '';
       if (filterType) filterType.value = '';
       if (filterIndustry) filterIndustry.value = '';
+      if (filterMaterialKind) filterMaterialKind.value = '';
+      if (filterOffering) filterOffering.value = '';
       if (filterClient) filterClient.value = '';
       var limReset = kgResolveLimits_();
       if (filterDepth) filterDepth.value = String(limReset.bfsDepthDefault);
@@ -2916,6 +2988,8 @@
   A.knowledgeGraph = {
     onShow: onShow,
     load: kgLoad,
+    tryOpenPendingFocus: kgTryOpenPendingFocus_,
+    focusNodeById: kgFocusEntitySubgraph_,
   };
 })(window.Aviators);
 </script>
