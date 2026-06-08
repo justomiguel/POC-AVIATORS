@@ -8,9 +8,11 @@
   var dialog = document.getElementById('pb-wizard-dialog');
   var stepValidate = document.getElementById('pb-step-validate');
   var stepIndustry = document.getElementById('pb-step-industry');
+  var stepDeckOptions = document.getElementById('pb-step-deck-options');
+  var industryContinueBtn = document.getElementById('pb-industry-continue-btn');
+  var airlinesStudioFieldset = document.getElementById('pb-airlines-studio-fieldset');
   var fieldClient = document.getElementById('pb-field-client');
   var fieldCommercial = document.getElementById('pb-field-commercial-model');
-  var fieldLanguage = document.getElementById('pb-field-language');
   var scopeList = document.getElementById('pb-scope-list');
   var milestoneList = document.getElementById('pb-milestone-list');
   var addScopeBtn = document.getElementById('pb-add-scope-btn');
@@ -53,6 +55,7 @@
     modal.setAttribute('aria-hidden', 'false');
     if (stepValidate) stepValidate.classList.toggle('hidden', step !== 'validate');
     if (stepIndustry) stepIndustry.classList.toggle('hidden', step !== 'industry');
+    if (stepDeckOptions) stepDeckOptions.classList.toggle('hidden', step !== 'deck-options');
     if (dialog && dialog.focus) {
       try { dialog.focus(); } catch (eFocus) {}
     }
@@ -172,7 +175,20 @@
     }
   }
 
+  function pbSelectedProposalLanguage_() {
+    var picked = document.querySelector('input[name="pb-proposal-language"]:checked');
+    var val = picked ? String(picked.value || '').trim() : 'es';
+    return val === 'en' ? 'en' : 'es';
+  }
+
+  function pbApplyIndustryAndLanguageToBrief_() {
+    var brief = S.get('proposalBuildingValidatedBrief') || {};
+    brief.detectedLanguage = pbSelectedProposalLanguage_();
+    S.set('proposalBuildingValidatedBrief', brief);
+  }
+
   function pbReadBriefFromForm_() {
+    var prevBrief = S.get('proposalBuildingValidatedBrief') || {};
     var scopeItems = [];
     if (scopeList) {
       var scopeNodes = scopeList.querySelectorAll('[data-scope-idx]');
@@ -203,7 +219,7 @@
       scopeItems: scopeItems,
       commercialModel: fieldCommercial ? String(fieldCommercial.value || '').trim() : '',
       milestones: milestones,
-      detectedLanguage: fieldLanguage ? String(fieldLanguage.value || 'es').trim() : 'es',
+      detectedLanguage: String(prevBrief.detectedLanguage || 'es').trim() === 'en' ? 'en' : 'es',
     };
   }
 
@@ -211,17 +227,60 @@
     var b = brief || {};
     if (fieldClient) fieldClient.value = b.clientName || '';
     if (fieldCommercial) fieldCommercial.value = b.commercialModel || '';
-    if (fieldLanguage) fieldLanguage.value = b.detectedLanguage === 'en' ? 'en' : 'es';
     pbRenderScopeList_(b.scopeItems || []);
     pbRenderMilestoneList_(b.milestones || []);
     pbShowModal_('validate');
   }
 
   function pbOpenIndustryStep_() {
-    var radios = document.querySelectorAll('input[name="pb-industry"]');
-    for (var i = 0; i < radios.length; i++) radios[i].checked = false;
-    if (deckPreview) deckPreview.textContent = '';
+    var airlinesRadio = document.querySelector('input[name="pb-industry"][value="Aerolineas"]');
+    if (airlinesRadio) airlinesRadio.checked = true;
+    var langEs = document.querySelector('input[name="pb-proposal-language"][value="es"]');
+    if (langEs) langEs.checked = true;
+    if (deckPreview) {
+      deckPreview.textContent = i18nFmt('pb_deck_selected', { deck: i18n('pb_deck_airlines') });
+    }
     pbShowModal_('industry');
+  }
+
+  function pbResetDeckOptions_() {
+    var globantYes = document.querySelector('input[name="pb-include-globant"][value="yes"]');
+    var globantNo = document.querySelector('input[name="pb-include-globant"][value="no"]');
+    var studioYes = document.querySelector('input[name="pb-include-airlines-studio"][value="yes"]');
+    var studioNo = document.querySelector('input[name="pb-include-airlines-studio"][value="no"]');
+    if (globantYes) globantYes.checked = true;
+    if (globantNo) globantNo.checked = false;
+    if (studioYes) studioYes.checked = true;
+    if (studioNo) studioNo.checked = false;
+  }
+
+  function pbUpdateDeckOptionsChrome_() {
+    if (!airlinesStudioFieldset) return;
+    var industry = pbSelectedIndustry_();
+    airlinesStudioFieldset.classList.toggle('hidden', industry !== 'Aerolineas');
+  }
+
+  function pbOpenDeckOptionsStep_() {
+    var industry = pbSelectedIndustry_();
+    if (!industry) {
+      A.showErrorDialog({
+        title: i18n('pb_industry_heading'),
+        message: i18n('pb_err_industry_required'),
+      });
+      return;
+    }
+    pbResetDeckOptions_();
+    pbUpdateDeckOptionsChrome_();
+    pbShowModal_('deck-options');
+  }
+
+  function pbReadDeckOptions_() {
+    var globantPicked = document.querySelector('input[name="pb-include-globant"]:checked');
+    var studioPicked = document.querySelector('input[name="pb-include-airlines-studio"]:checked');
+    return {
+      includeGlobant: globantPicked ? globantPicked.value === 'yes' : true,
+      includeAirlinesStudio: studioPicked ? studioPicked.value === 'yes' : true,
+    };
   }
 
   function pbSelectedIndustry_() {
@@ -392,6 +451,82 @@
     });
   }
 
+  var PB_CREATE_DECK_STEPS_ = 4;
+
+  function pbShowDeckCreateProgress_(stepIndex, stepKey) {
+    var total = PB_CREATE_DECK_STEPS_;
+    var current = stepIndex + 1;
+    var barPct = total > 0 ? Math.round((current / total) * 100) : 0;
+    if (current < total && barPct < 8) barPct = 8;
+    A.showBlockingModal({
+      progress: true,
+      message: i18n('pb_busy_creating_deck_title'),
+      analyzed: current,
+      total: total,
+      current: current,
+      stepLabel: i18nFmt('pb_create_step_label', { current: current, total: total }),
+      phase: i18n(stepKey),
+      barPercent: barPct,
+    });
+  }
+
+  function pbOnDeckCreateFailed_(err) {
+    A.hideBlockingModal();
+    if (startBuildingBtn) startBuildingBtn.disabled = false;
+    A.reportRpcError(err, {
+      scope: 'proposalBuildingDeck',
+      fallbackKey: 'pb_err_deck_template_missing',
+      modal: true,
+    });
+  }
+
+  function pbOnDeckCreateReady_(res, understanding, successCases, deckOptions) {
+    A.hideBlockingModal();
+    if (startBuildingBtn) startBuildingBtn.disabled = false;
+    var brief = S.get('proposalBuildingValidatedBrief') || {};
+    S.set('proposalBuildingPhase', 'building');
+    S.set('proposalBuildingContext', {
+      validatedBrief: brief,
+      industry: res.industry,
+      industryLabel: pbIndustryLabel_(res.industry),
+      deckKey: res.deckKey,
+      deckLabel: res.deckLabel,
+      deckDriveId: res.deckDriveId || '',
+      proposalDeckFileId: res.proposalDeckFileId || '',
+      proposalDeckFileUrl: res.proposalDeckFileUrl || '',
+      proposalDeckFileName: res.proposalDeckFileName || '',
+      composedUnderstanding: understanding || null,
+      deckOptions: deckOptions || null,
+      successCases: successCases || [],
+      successCasesApplied: res.successCasesApplied || 0,
+      successCaseTitles: res.successCaseTitles || [],
+      customizationWarnings: res.customizationWarnings || [],
+      language: brief.detectedLanguage || 'es',
+    });
+    pbHideModal_();
+    pbUpdateChrome_();
+    if (A.toast && res.proposalDeckFileName) {
+      A.toast.success(i18nFmt('pb_deck_created_line', { name: res.proposalDeckFileName }));
+      if (res.successCasesApplied > 0) {
+        A.toast.info(
+          i18nFmt('pb_deck_success_cases_line', {
+            count: String(res.successCasesApplied),
+          }),
+        );
+      }
+    }
+    if (A.chat && typeof A.chat.onProposalBuildingReady_ === 'function') {
+      A.chat.onProposalBuildingReady_();
+    }
+  }
+
+  if (industryContinueBtn) {
+    industryContinueBtn.addEventListener('click', function () {
+      pbApplyIndustryAndLanguageToBrief_();
+      pbOpenDeckOptionsStep_();
+    });
+  }
+
   if (startBuildingBtn) {
     startBuildingBtn.addEventListener('click', function () {
       var industry = pbSelectedIndustry_();
@@ -402,45 +537,61 @@
         });
         return;
       }
+      pbApplyIndustryAndLanguageToBrief_();
+      var briefJson = JSON.stringify(S.get('proposalBuildingValidatedBrief') || {});
+      var deckOptionsJson = JSON.stringify(pbReadDeckOptions_());
+      S.set('proposalBuildingDeckOptions', pbReadDeckOptions_());
       startBuildingBtn.disabled = true;
-      A.showBlockingModal(i18n('pb_busy_creating_deck'));
+      pbShowDeckCreateProgress_(0, 'pb_step_compose_understanding');
       google.script.run
-        .withSuccessHandler(function (res) {
-          A.hideBlockingModal();
-          startBuildingBtn.disabled = false;
-          var brief = S.get('proposalBuildingValidatedBrief') || {};
-          S.set('proposalBuildingPhase', 'building');
-          S.set('proposalBuildingContext', {
-            validatedBrief: brief,
-            industry: res.industry,
-            industryLabel: pbIndustryLabel_(res.industry),
-            deckKey: res.deckKey,
-            deckLabel: res.deckLabel,
-            deckDriveId: res.deckDriveId || '',
-            proposalDeckFileId: res.proposalDeckFileId || '',
-            proposalDeckFileUrl: res.proposalDeckFileUrl || '',
-            proposalDeckFileName: res.proposalDeckFileName || '',
-            language: brief.detectedLanguage || 'es',
-          });
-          pbHideModal_();
-          pbUpdateChrome_();
-          if (A.chat && typeof A.chat.onProposalBuildingReady_ === 'function') {
-            A.chat.onProposalBuildingReady_();
-          }
+        .withSuccessHandler(function (composeRes) {
+          var understanding = (composeRes && composeRes.understanding) || null;
+          pbShowDeckCreateProgress_(1, 'pb_step_copy_deck');
+          google.script.run
+            .withSuccessHandler(function (copyRes) {
+              pbShowDeckCreateProgress_(2, 'pb_step_compose_success_rationales');
+              google.script.run
+                .withSuccessHandler(function (rationalesRes) {
+                  var successCases = (rationalesRes && rationalesRes.successCases) || [];
+                  pbShowDeckCreateProgress_(3, 'pb_step_customize_slides');
+                  google.script.run
+                    .withSuccessHandler(function (customRes) {
+                      pbOnDeckCreateReady_(
+                        {
+                          industry: copyRes.industry,
+                          deckKey: copyRes.deckKey,
+                          deckLabel: copyRes.deckLabel,
+                          deckDriveId: copyRes.deckDriveId || '',
+                          proposalDeckFileId: copyRes.proposalDeckFileId || '',
+                          proposalDeckFileUrl: copyRes.proposalDeckFileUrl || '',
+                          proposalDeckFileName: copyRes.proposalDeckFileName || '',
+                          successCasesApplied: customRes.successCasesApplied || 0,
+                          successCaseTitles: customRes.successCaseTitles || [],
+                          customizationWarnings: customRes.customizationWarnings || [],
+                        },
+                        understanding,
+                        successCases,
+                        pbReadDeckOptions_(),
+                      );
+                    })
+                    .withFailureHandler(pbOnDeckCreateFailed_)
+                    .proposalBuildingCustomizeProposalDeck(
+                      copyRes.proposalDeckFileId,
+                      industry,
+                      briefJson,
+                      JSON.stringify(understanding || {}),
+                      JSON.stringify(successCases),
+                      deckOptionsJson,
+                    );
+                })
+                .withFailureHandler(pbOnDeckCreateFailed_)
+                .proposalBuildingComposeSuccessCaseRationales(briefJson, industry);
+            })
+            .withFailureHandler(pbOnDeckCreateFailed_)
+            .proposalBuildingCopyProposalDeck(industry, briefJson);
         })
-        .withFailureHandler(function (e) {
-          A.hideBlockingModal();
-          startBuildingBtn.disabled = false;
-          A.reportRpcError(e, {
-            scope: 'proposalBuildingDeck',
-            fallbackKey: 'pb_err_deck_template_missing',
-            modal: true,
-          });
-        })
-        .proposalBuildingResolveDeck(
-          industry,
-          JSON.stringify(S.get('proposalBuildingValidatedBrief') || {}),
-        );
+        .withFailureHandler(pbOnDeckCreateFailed_)
+        .proposalBuildingComposeUnderstanding(briefJson, industry);
     });
   }
 
@@ -448,6 +599,7 @@
   for (var r = 0; r < industryRadios.length; r++) {
     industryRadios[r].addEventListener('change', function () {
       var ind = pbSelectedIndustry_();
+      pbUpdateDeckOptionsChrome_();
       if (!deckPreview || !ind) return;
       var deckLabel =
         ind === 'Logistica' ? i18n('pb_deck_logistics') : i18n('pb_deck_airlines');

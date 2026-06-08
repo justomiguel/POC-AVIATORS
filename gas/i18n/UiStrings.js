@@ -11,7 +11,14 @@ var UI_STRINGS = {
     app_title: 'Aviators',
     app_startup_loading: 'Preparando la aplicación…',
     app_startup_i18n: 'Cargando textos…',
-    app_startup_session: 'Comprobando sesión…',
+    app_startup_i18n_sub_meta:
+      'Torre de control: autorizando plan de vuelo lingüístico…',
+    app_startup_i18n_sub1: 'Compartimiento 1: menús y navegación a bordo…',
+    app_startup_i18n_sub2: 'Compartimiento 2: formularios y estados vacíos…',
+    app_startup_i18n_sub3: 'Compartimiento 3: mensajes de error y pistas técnicas…',
+    app_startup_session: 'Cargando roles y agentes…',
+    app_startup_session_sub:
+      'Sincronizando permisos y configuración de agentes…',
     app_startup_failed: 'No se pudieron cargar los textos. Recargá la página.',
     nav_home: 'Chat General',
     nav_chat: 'Chat',
@@ -163,8 +170,19 @@ var UI_STRINGS = {
     kg_btn_reset: 'Restablecer',
     kg_btn_focus: 'Centrar en selección',
     kg_btn_rebuild: 'Sincronizar desde Supabase',
+    kg_btn_rebuild_scratch: 'Reconstruir desde cero',
     kg_sync_admin_lead:
-      'Genera embeddings, vínculos semánticos y entidades de negocio para todo el catálogo. Corre en segundo plano por etapas (contenidos → embeddings → semántica → IA).',
+      'Sincronizar actualiza el grafo sin borrarlo. Reconstruir desde cero vacía nodos y aristas en Supabase y vuelve a generar todo (embeddings, semántica, entidades) en segundo plano.',
+    kg_rebuild_scratch_confirm_title: 'Reconstruir grafo desde cero',
+    kg_rebuild_scratch_confirm:
+      'Se borrarán todos los nodos y relaciones del grafo en Supabase. El catálogo de contenidos no se toca. Después se encolará un rebuild completo en segundo plano. Esta acción no se puede deshacer.',
+    kg_rebuild_scratch_confirm_phrase: 'RECONSTRUIR',
+    kg_rebuild_scratch_busy: 'Vaciando grafo y encolando rebuild…',
+    kg_rebuild_scratch_done:
+      'Grafo vaciado. Rebuild en segundo plano iniciado (etapa {phase}). Podés seguir el progreso en el banner.',
+    kg_rebuild_scratch_queued:
+      'Grafo vaciado. El rebuild completo arranca en ~{minutes} min (trigger en segundo plano). Seguí el progreso en el banner.',
+    kg_rebuild_scratch_error: 'No se pudo reconstruir el grafo desde cero.',
     kg_btn_open_content: 'Ver en catálogo',
     kg_busy_loading: 'Cargando grafo…',
     kg_busy_loading_filters_fmt: 'Solicitando vista · {filters}',
@@ -225,8 +243,16 @@ var UI_STRINGS = {
       'Quedó una sincronización del grafo sin terminar (etapa {phaseNum}/{phaseTotal}: {phase}, {done} procesados, {failed} fallos). Podés reanudarla o descartar el progreso y solo ver el grafo actual.',
     kg_pending_sync_bg_msg:
       'Sincronización en segundo plano (etapa {phaseNum}/{phaseTotal}: {phase}, {done} procesados, {failed} fallos). Trigger programado: {trigger}. Podés seguir explorando el grafo; no hace falta esperar.',
+    kg_pending_sync_scratch_queued:
+      'Grafo vaciado; el rebuild completo se encola en ~{minutes} min. El primer lote arranca cuando dispare el trigger.',
+    kg_pending_sync_batch_detail:
+      'Último lote ({phase}): +{done} ok, {failed} fallos · offset {skip} · acumulado en etapa: {total}.',
+    kg_pending_sync_last_error:
+      'Error en etapa {phase}: {detail}',
     kg_bg_sync_trigger_yes: 'sí, continúa solo',
+    kg_bg_sync_trigger_client: 'sí, el navegador reanuda solo',
     kg_bg_sync_trigger_no: 'no (reanudá manualmente)',
+    kg_bg_sync_auto_resuming: 'Reanudando sincronización en segundo plano…',
     kg_bg_sync_starting: 'Programando sincronización en segundo plano…',
     kg_bg_sync_enqueued:
       'Sync en segundo plano activa ({phase}, {processed} en el primer lote). El grafo en pantalla es lectura; Supabase se actualiza en background.',
@@ -591,6 +617,10 @@ var UI_STRINGS = {
     contents_extract_phase_impact: 'Impacto, métricas, evidencia y notas…',
     contents_extract_phase_proposal:
       'Stage, modelo de pricing, esfuerzo y timeline…',
+    contents_extract_phase_proposal_commercial:
+      'Stage, pricing, esfuerzo, timeline y probabilidad…',
+    contents_extract_phase_proposal_scope:
+      'Studio, tópico, alcance y notas de entrega…',
     contents_extract_phase_client:
       'Estado de cuenta, proyectos activos y health score…',
     contents_extract_phase_onboarding: 'Tópico, categoría y audiencia…',
@@ -699,6 +729,8 @@ var UI_STRINGS = {
       'Tags ampliados con temas detectados en el documento (mejor para la nube de tags).',
     contents_warn_challenge_from_summary:
       'Challenge inferido del resumen porque el documento no trajo secciones separadas.',
+    contents_warn_summary_from_notes:
+      'El resumen se amplió con alcance/notas del documento para mejorar búsqueda y embeddings.',
     contents_warn_extraction_pass_empty: 'Pasada {pass} sin datos extraídos.',
     contents_warn_extraction_pass_failed: 'Pasada {pass} falló: {detail}',
     contents_uploaded: 'Archivo subido. Ahora podés extraer metadata.',
@@ -867,6 +899,24 @@ var UI_STRINGS = {
     pb_btn_add_milestone: 'Agregar hito',
     pb_btn_continue_industry: 'Continuar',
     pb_btn_start_building: 'Armar propuesta',
+    pb_btn_continue_deck_options: 'Continuar',
+    pb_deck_options_heading: 'Contenido del deck',
+    pb_deck_options_lead:
+      'Elegí qué secciones incluir en la presentación. La agenda se arma automáticamente según lo que conservés.',
+    pb_lbl_include_globant: '¿Incluir sección «Somos Globant»?',
+    pb_include_globant_lead:
+      'Si elegís no, se quitan las slides 4 a 8 de la plantilla (quiénes somos).',
+    pb_lbl_include_airlines_studio: '¿Incluir información del studio de Aerolíneas?',
+    pb_include_airlines_studio_lead:
+      'Si elegís no, se quitan las slides del studio de aerolíneas (9 a 11 en la plantilla).',
+    pb_option_yes: 'Sí, incluir',
+    pb_option_no: 'No, omitir',
+    pb_agenda_item_globant: 'Somos Globant',
+    pb_agenda_item_airlines_studio: 'Studio de Aerolíneas',
+    pb_agenda_item_understanding: 'Nuestro entendimiento',
+    pb_agenda_item_solution: 'Nuestra solución',
+    pb_agenda_item_success_cases: 'Casos de éxito',
+    pb_agenda_line_fmt: '{label}',
     pb_validation_heading: 'Validar brief extraído',
     pb_validation_lead:
       'Revisá y corregí lo detectado en el chat o el adjunto. Este brief guía el armado de la propuesta.',
@@ -885,10 +935,13 @@ var UI_STRINGS = {
     pb_lbl_detected_language: 'Idioma detectado',
     pb_lang_es: 'Español',
     pb_lang_en: 'English',
-    pb_industry_heading: 'Industria y deck base',
+    pb_industry_heading: 'Industria, idioma y deck base',
     pb_industry_lead:
-      'Elegí la industria para seleccionar la plantilla de deck. El idioma de redacción se tomó del material analizado.',
+      'Elegí la industria y el idioma de redacción de la propuesta. Por ahora solo está disponible el deck de Aerolíneas en español.',
     pb_lbl_industry: 'Industria',
+    pb_lbl_proposal_language: 'Idioma de la propuesta',
+    pb_proposal_language_lead: 'Define en qué idioma se redactará el deck y el contenido generado con IA.',
+    pb_option_unavailable: 'Próximamente',
     pb_industry_airlines: 'Aerolíneas',
     pb_industry_logistics: 'Logística',
     pb_deck_airlines: 'Deck base · Aerolíneas',
@@ -896,8 +949,37 @@ var UI_STRINGS = {
     pb_deck_selected: 'Deck seleccionado: {deck}',
     pb_busy_extracting: 'Extrayendo brief del material…',
     pb_busy_resolving_deck: 'Preparando deck base…',
-    pb_busy_creating_deck: 'Creando presentación en Drive…',
+    pb_busy_creating_deck: 'Creando y personalizando presentación en Drive…',
+    pb_busy_creating_deck_title: 'Creando propuesta',
+    pb_create_step_label: 'Paso {current} de {total}',
+    pb_step_compose_understanding: 'Redactando nuestro entendimiento con IA…',
+    pb_step_copy_deck: 'Copiando plantilla en Drive…',
+    pb_step_compose_success_rationales: 'Explicando por qué encajan los casos de éxito con IA…',
+    pb_step_customize_slides: 'Personalizando slides y casos de éxito…',
     pb_deck_created_line: 'Presentación creada en Drive: {name}',
+    pb_deck_open_link_md: 'Abrir presentación: [{name}]({url})',
+    pb_deck_success_cases_line: 'Casos de éxito incluidos: {count}',
+    pb_client_fallback_label: 'Cliente',
+    pb_understanding_fallback: 'Alcance a confirmar con el cliente.',
+    pb_understanding_intro:
+      'Nuestro cliente {client} está solicitando lo siguiente:',
+    pb_deck_title_fallback: 'Alcance de la propuesta',
+    pb_success_case_link_label: 'Ver caso de éxito',
+    pb_success_case_why_label: 'Por qué incluimos este caso en la propuesta:',
+    pb_success_case_rationale_fallback:
+      'Referencia alineada con la industria y el alcance validado del brief.',
+    pb_success_case_summary_fallback: 'Caso de éxito relevante para esta propuesta.',
+    pb_success_case_title_fallback: 'Caso de éxito',
+    pb_err_slides_api_unavailable:
+      'Falta habilitar el servicio avanzado de Google Slides en el proyecto Apps Script.',
+    pb_err_deck_not_google_slides:
+      'La plantilla del deck debe ser una presentación de Google Slides (no PowerPoint u otro formato).',
+    pb_warn_template_slide_missing:
+      'La plantilla no tiene la slide {slide} para casos de éxito; se omitió esa sección.',
+    pb_warn_no_success_cases:
+      'No se encontraron casos de éxito aplicables; se quitó la slide plantilla de casos.',
+    pb_warn_success_slide_clone_failed:
+      'No se pudieron clonar las slides de casos de éxito en la presentación.',
     pb_err_deck_template_missing:
       'Falta configurar la plantilla base del deck (PROPOSAL_DECK_AIRLINES_ID o PROPOSAL_DECK_LOGISTICS_ID en Propiedades del script).',
     pb_err_deck_template_not_found:
@@ -926,7 +1008,7 @@ var UI_STRINGS = {
     session_role_err_supabase:
       'No se pudo leer tu rol desde la BD. Si el problema continúa, contactá a quien administra Aviators.',
     busy_connecting: 'Conectando…',
-    session_check: 'Comprobando sesión…',
+    session_check: 'Cargando roles y agentes…',
     role_label_visitor: 'Visitante',
     role_option_admin: 'Admin',
     role_option_presales: 'Presales',
@@ -2100,7 +2182,12 @@ var UI_STRINGS = {
     app_title: 'Aviators',
     app_startup_loading: 'Starting the app…',
     app_startup_i18n: 'Loading labels…',
-    app_startup_session: 'Checking session…',
+    app_startup_i18n_sub_meta: 'Control tower: clearing the linguistic flight plan…',
+    app_startup_i18n_sub1: 'Cargo bay 1: menus and navigation aboard…',
+    app_startup_i18n_sub2: 'Cargo bay 2: forms and empty states…',
+    app_startup_i18n_sub3: 'Cargo bay 3: errors and technical hints…',
+    app_startup_session: 'Loading roles and agents…',
+    app_startup_session_sub: 'Syncing permissions and agent configuration…',
     app_startup_failed: 'Could not load labels. Please reload the page.',
     nav_home: 'General chat',
     nav_chat: 'Chat',
@@ -2252,8 +2339,19 @@ var UI_STRINGS = {
     kg_btn_reset: 'Reset',
     kg_btn_focus: 'Focus selection',
     kg_btn_rebuild: 'Sync from Supabase',
+    kg_btn_rebuild_scratch: 'Rebuild from scratch',
     kg_sync_admin_lead:
-      'Builds embeddings, semantic links, and business entities for the full catalog. Runs in the background in stages (contents → embeddings → semantic → AI).',
+      'Sync updates the graph without wiping it. Rebuild from scratch clears all nodes and edges in Supabase, then regenerates everything (embeddings, semantic, entities) in the background.',
+    kg_rebuild_scratch_confirm_title: 'Rebuild graph from scratch',
+    kg_rebuild_scratch_confirm:
+      'All graph nodes and relationships in Supabase will be deleted. The content catalog is not affected. A full background rebuild will then be queued. This cannot be undone.',
+    kg_rebuild_scratch_confirm_phrase: 'REBUILD',
+    kg_rebuild_scratch_busy: 'Clearing graph and queueing rebuild…',
+    kg_rebuild_scratch_done:
+      'Graph cleared. Background rebuild started ({phase} stage). Track progress in the banner.',
+    kg_rebuild_scratch_queued:
+      'Graph cleared. Full rebuild starts in ~{minutes} min (background trigger). Track progress in the banner.',
+    kg_rebuild_scratch_error: 'Could not rebuild the graph from scratch.',
     kg_btn_open_content: 'View in catalog',
     kg_busy_loading: 'Loading graph…',
     kg_busy_loading_filters_fmt: 'Requesting view · {filters}',
@@ -2314,8 +2412,16 @@ var UI_STRINGS = {
       'A graph sync did not finish (step {phaseNum}/{phaseTotal}: {phase}, {done} processed, {failed} failed). Resume it or discard progress and view the current graph.',
     kg_pending_sync_bg_msg:
       'Background sync running (step {phaseNum}/{phaseTotal}: {phase}, {done} processed, {failed} failed). Trigger scheduled: {trigger}. You can keep exploring; no need to wait.',
+    kg_pending_sync_scratch_queued:
+      'Graph cleared; full rebuild queues in ~{minutes} min. The first batch runs when the trigger fires.',
+    kg_pending_sync_batch_detail:
+      'Last batch ({phase}): +{done} ok, {failed} failed · offset {skip} · stage total: {total}.',
+    kg_pending_sync_last_error:
+      'Error in step {phase}: {detail}',
     kg_bg_sync_trigger_yes: 'yes, continues automatically',
+    kg_bg_sync_trigger_client: 'yes, the browser resumes automatically',
     kg_bg_sync_trigger_no: 'no (resume manually)',
+    kg_bg_sync_auto_resuming: 'Resuming background sync…',
     kg_bg_sync_starting: 'Scheduling background sync…',
     kg_bg_sync_enqueued:
       'Background sync active ({phase}, {processed} in the first batch). The on-screen graph is read-only; Supabase updates in the background.',
@@ -2679,6 +2785,10 @@ var UI_STRINGS = {
     contents_extract_phase_impact: 'Impact, metrics, evidence, and notes…',
     contents_extract_phase_proposal:
       'Stage, pricing model, effort, and timeline…',
+    contents_extract_phase_proposal_commercial:
+      'Stage, pricing, effort, timeline, and win probability…',
+    contents_extract_phase_proposal_scope:
+      'Studio, topic, scope, and delivery notes…',
     contents_extract_phase_client:
       'Account status, active projects, and health score…',
     contents_extract_phase_onboarding: 'Topic, category, and audience…',
@@ -2787,6 +2897,8 @@ var UI_STRINGS = {
       'Tags supplemented from themes detected in the document (better for the tag cloud).',
     contents_warn_challenge_from_summary:
       'Challenge inferred from summary because the document had no separate sections.',
+    contents_warn_summary_from_notes:
+      'Summary was expanded with scope/notes from the document to improve search and embeddings.',
     contents_warn_extraction_pass_empty: 'Pass {pass} returned no extracted data.',
     contents_warn_extraction_pass_failed: 'Pass {pass} failed: {detail}',
     contents_uploaded: 'File uploaded. You can now extract metadata.',
@@ -2954,6 +3066,24 @@ var UI_STRINGS = {
     pb_btn_add_milestone: 'Add milestone',
     pb_btn_continue_industry: 'Continue',
     pb_btn_start_building: 'Build proposal',
+    pb_btn_continue_deck_options: 'Continue',
+    pb_deck_options_heading: 'Deck content',
+    pb_deck_options_lead:
+      'Choose which sections to include in the presentation. The agenda is built automatically from what you keep.',
+    pb_lbl_include_globant: 'Include «Who we are — Globant» section?',
+    pb_include_globant_lead:
+      'If you choose no, slides 4–8 are removed from the template (who we are).',
+    pb_lbl_include_airlines_studio: 'Include Airlines studio information?',
+    pb_include_airlines_studio_lead:
+      'If you choose no, the airlines studio slides are removed (slides 9–11 in the template).',
+    pb_option_yes: 'Yes, include',
+    pb_option_no: 'No, omit',
+    pb_agenda_item_globant: 'Who we are — Globant',
+    pb_agenda_item_airlines_studio: 'Airlines studio',
+    pb_agenda_item_understanding: 'Our understanding',
+    pb_agenda_item_solution: 'Our solution',
+    pb_agenda_item_success_cases: 'Success cases',
+    pb_agenda_line_fmt: '{label}',
     pb_validation_heading: 'Validate extracted brief',
     pb_validation_lead:
       'Review and correct what we detected from the chat or attachment. This brief guides proposal building.',
@@ -2972,10 +3102,13 @@ var UI_STRINGS = {
     pb_lbl_detected_language: 'Detected language',
     pb_lang_es: 'Spanish',
     pb_lang_en: 'English',
-    pb_industry_heading: 'Industry and base deck',
+    pb_industry_heading: 'Industry, language and base deck',
     pb_industry_lead:
-      'Choose the industry to select the deck template. Proposal language is taken from the analyzed material.',
+      'Choose the industry and proposal language. Only the Airlines deck in Spanish is available for now.',
     pb_lbl_industry: 'Industry',
+    pb_lbl_proposal_language: 'Proposal language',
+    pb_proposal_language_lead: 'Sets the language for the deck and AI-generated content.',
+    pb_option_unavailable: 'Coming soon',
     pb_industry_airlines: 'Airlines',
     pb_industry_logistics: 'Logistics',
     pb_deck_airlines: 'Base deck · Airlines',
@@ -2983,8 +3116,37 @@ var UI_STRINGS = {
     pb_deck_selected: 'Selected deck: {deck}',
     pb_busy_extracting: 'Extracting brief from material…',
     pb_busy_resolving_deck: 'Preparing base deck…',
-    pb_busy_creating_deck: 'Creating presentation in Drive…',
+    pb_busy_creating_deck: 'Creating and customizing presentation in Drive…',
+    pb_busy_creating_deck_title: 'Creating proposal',
+    pb_create_step_label: 'Step {current} of {total}',
+    pb_step_compose_understanding: 'Drafting our understanding with AI…',
+    pb_step_copy_deck: 'Copying template to Drive…',
+    pb_step_compose_success_rationales: 'Explaining why success cases fit with AI…',
+    pb_step_customize_slides: 'Customizing slides and success cases…',
     pb_deck_created_line: 'Presentation created in Drive: {name}',
+    pb_deck_open_link_md: 'Open presentation: [{name}]({url})',
+    pb_deck_success_cases_line: 'Success cases included: {count}',
+    pb_client_fallback_label: 'Client',
+    pb_understanding_fallback: 'Scope to be confirmed with the client.',
+    pb_understanding_intro:
+      'Our client {client} is requesting the following:',
+    pb_deck_title_fallback: 'Proposal scope',
+    pb_success_case_link_label: 'View success case',
+    pb_success_case_why_label: 'Why we include this case in the proposal:',
+    pb_success_case_rationale_fallback:
+      'Reference aligned with the industry and validated brief scope.',
+    pb_success_case_summary_fallback: 'Success case relevant to this proposal.',
+    pb_success_case_title_fallback: 'Success case',
+    pb_err_slides_api_unavailable:
+      'Enable the Google Slides advanced service in the Apps Script project.',
+    pb_err_deck_not_google_slides:
+      'The deck template must be a Google Slides presentation (not PowerPoint or other format).',
+    pb_warn_template_slide_missing:
+      'Template is missing slide {slide} for success cases; that section was skipped.',
+    pb_warn_no_success_cases:
+      'No applicable success cases were found; the template success-case slide was removed.',
+    pb_warn_success_slide_clone_failed:
+      'Could not clone success-case slides in the presentation.',
     pb_err_deck_template_missing:
       'Base deck template is not configured (set PROPOSAL_DECK_AIRLINES_ID or PROPOSAL_DECK_LOGISTICS_ID in script properties).',
     pb_err_deck_template_not_found:
@@ -3013,7 +3175,7 @@ var UI_STRINGS = {
     session_role_err_supabase:
       'Could not read your role from the database. If this persists, contact your Aviators administrator.',
     busy_connecting: 'Connecting…',
-    session_check: 'Checking session…',
+    session_check: 'Loading roles and agents…',
     role_label_visitor: 'Visitor',
     role_option_admin: 'Admin',
     role_option_presales: 'Presales',
@@ -4251,14 +4413,33 @@ function UiStrings_getClientEmbedStub_() {
 var UI_STRINGS_CLIENT_PACK_PARTS_ = 3;
 
 /**
+ * Huella del pack cliente (cambia si se añaden claves o se editan textos).
  * @param {'es'|'en'} locale
- * @return {{ok:boolean,locale:string,parts:number}}
+ * @return {string}
+ */
+function UiStrings_clientPackRevision_(locale) {
+  var loc = locale === 'en' ? 'en' : 'es';
+  var full = UiStrings_getClientPackForLocale(loc);
+  var json = JSON.stringify(full);
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.MD5,
+    json,
+    Utilities.Charset.UTF_8,
+  );
+  return Utilities.base64EncodeWebSafe(digest).slice(0, 22);
+}
+
+/**
+ * @param {'es'|'en'} locale
+ * @return {{ok:boolean,locale:string,parts:number,revision:string}}
  */
 function UiStrings_getClientPackMeta_(locale) {
+  var loc = locale === 'en' ? 'en' : 'es';
   return {
     ok: true,
-    locale: locale === 'en' ? 'en' : 'es',
+    locale: loc,
     parts: UI_STRINGS_CLIENT_PACK_PARTS_,
+    revision: UiStrings_clientPackRevision_(loc),
   };
 }
 

@@ -24,13 +24,16 @@ var KNOWLEDGE_GRAPH_AUTO_CATCHUP_BATCH_ = 10;
 var KG_BG_CATCHUP_HANDLER_ = 'KnowledgeGraph_backgroundCatchupJob_';
 
 /** @type {number} */
-var KG_BG_CATCHUP_MAX_MS_ = 270000;
+var KG_BG_CATCHUP_MAX_MS_ = 240000;
 
 /** @type {number} */
-var KG_BG_CATCHUP_KICKSTART_MS_ = 45000;
+var KG_BG_CATCHUP_KICKSTART_MS_ = 22000;
 
 /** @type {number} */
-var KG_BG_CATCHUP_CONT_MINUTES_ = 2;
+var KG_BG_CATCHUP_CONT_MINUTES_ = 1;
+
+/** @type {number} */
+var KG_BG_CATCHUP_BUDGET_BUFFER_MS_ = 8000;
 
 /** @type {Array<string>} */
 var KNOWLEDGE_GRAPH_REBUILD_PHASES_ = [
@@ -1070,6 +1073,47 @@ function KnowledgeGraph_autoCatchupProgressClear_() {
 }
 
 /**
+ * @param {string} phase
+ * @return {number}
+ */
+function KnowledgeGraph_catchupBatchLimitForPhase_(phase) {
+  var ph = String(phase || '');
+  if (ph === 'entities') return 2;
+  if (ph === 'embeddings') return 3;
+  if (ph === 'semantic') return 4;
+  if (ph === 'salesforce') return 6;
+  return KNOWLEDGE_GRAPH_AUTO_CATCHUP_BATCH_;
+}
+
+/**
+ * @param {Object} progress
+ * @param {string} phase
+ * @param {Object} batch
+ */
+function KnowledgeGraph_recordCatchupBatchProgress_(progress, phase, batch) {
+  var ph = String(phase || '');
+  var done = Number(batch.done) || 0;
+  var failed = Number(batch.failed) || 0;
+  var skip = Number(progress.skip) || 0;
+  var totalDone = progress.totals && progress.totals[ph + '_done']
+    ? Number(progress.totals[ph + '_done'])
+    : 0;
+  progress.last_batch = {
+    phase: ph,
+    done: done,
+    failed: failed,
+    skip: skip,
+    total: totalDone,
+    hasMore: !!batch.hasMore,
+    nextPhase: batch.nextPhase || ph,
+    at: new Date().toISOString(),
+  };
+  progress.last_error = null;
+  console.log('[KG-BG] batch ' + JSON.stringify(progress.last_batch));
+  KnowledgeGraph_autoCatchupProgressWrite_(progress);
+}
+
+/**
  * Sincronización incremental del grafo (sin sesión admin; usada por trigger SF).
  * @param {number} maxMs
  * @return {Object}
@@ -1115,18 +1159,26 @@ function KnowledgeGraph_runAutomaticCatchUpWithBudget_(maxMs) {
   var totalDone = 0;
   var totalFailed = 0;
   var totalRemoved = 0;
+  var batchesRun = 0;
 
-  while (Date.now() - startMs < budget) {
+  while (Date.now() - startMs < budget - KG_BG_CATCHUP_BUDGET_BUFFER_MS_) {
     var ph = String(progress.phase || 'contents');
     if (ph === 'done') break;
 
-    var batch = KnowledgeGraph_executePhaseBatch_(
-      ph,
-      progress.skip,
-      KNOWLEDGE_GRAPH_AUTO_CATCHUP_BATCH_,
-    );
-    if (!batch.ok) break;
+    var batchLimit = KnowledgeGraph_catchupBatchLimitForPhase_(ph);
+    var batch = KnowledgeGraph_executePhaseBatch_(ph, progress.skip, batchLimit);
+    if (!batch.ok) {
+      progress.last_error = {
+        phase: ph,
+        detail: String(batch.error || 'batch_failed').slice(0, 200),
+        at: new Date().toISOString(),
+      };
+      KnowledgeGraph_autoCatchupProgressWrite_(progress);
+      console.log('[KG-BG] batch aborted phase=' + ph + ' err=' + (batch.error || ''));
+      break;
+    }
 
+    batchesRun++;
     totalDone += batch.done || 0;
     totalFailed += batch.failed || 0;
     totalRemoved += batch.removed || 0;
@@ -1149,12 +1201,15 @@ function KnowledgeGraph_runAutomaticCatchUpWithBudget_(maxMs) {
       progress.skip = batch.nextSkip;
     }
 
+    KnowledgeGraph_recordCatchupBatchProgress_(progress, ph, batch);
+
     if (progress.phase === 'done') {
+      progress.completed_at = new Date().toISOString();
       KnowledgeGraph_autoCatchupProgressWrite_(progress);
       KnowledgeGraph_autoCatchupProgressClear_();
+      console.log('[KG-BG] catchup complete batches=' + batchesRun);
       break;
     }
-    KnowledgeGraph_autoCatchupProgressWrite_(progress);
   }
 
   var hasMore = !!(progress && progress.phase && progress.phase !== 'done');
@@ -1166,6 +1221,7 @@ function KnowledgeGraph_runAutomaticCatchUpWithBudget_(maxMs) {
     processed: totalDone,
     failed: totalFailed,
     removed: totalRemoved,
+    batchesRun: batchesRun,
     progress: progress,
   };
 }
@@ -1209,17 +1265,86 @@ function KnowledgeGraph_deleteBackgroundCatchupTriggers_() {
   }
 }
 
+/**
+ * @return {boolean}
+ */
 function KnowledgeGraph_scheduleBackgroundCatchup_() {
   var listed = KnowledgeGraph_listTriggersSafe_();
   if (!listed.ok) {
     console.log('[KG-BG] cannot schedule continuation: ScriptApp scope');
-    return;
+    return false;
   }
-  KnowledgeGraph_deleteBackgroundCatchupTriggers_();
-  ScriptApp.newTrigger(KG_BG_CATCHUP_HANDLER_)
-    .timeBased()
-    .afterMinutes(KG_BG_CATCHUP_CONT_MINUTES_)
-    .create();
+  try {
+    KnowledgeGraph_deleteBackgroundCatchupTriggers_();
+    ScriptAppSchedule_afterMinutes_(KG_BG_CATCHUP_HANDLER_, KG_BG_CATCHUP_CONT_MINUTES_);
+    KnowledgeGraph_autoCatchupProgressWrite_({
+      continuation_mode: 'trigger',
+      trigger_scheduled_at: new Date().toISOString(),
+    });
+    console.log(
+      '[KG-BG] scheduled ' +
+        KG_BG_CATCHUP_HANDLER_ +
+        ' in ' +
+        KG_BG_CATCHUP_CONT_MINUTES_ +
+        ' min',
+    );
+    return true;
+  } catch (eSched) {
+    console.error('[KG-BG] schedule failed: ' + String(eSched.message || eSched));
+    return false;
+  }
+}
+
+/**
+ * Marca que la continuación depende de RPC desde el navegador (sin trigger GAS).
+ */
+function KnowledgeGraph_markClientRpcContinuation_() {
+  KnowledgeGraph_autoCatchupProgressWrite_({
+    continuation_mode: 'client_rpc',
+    trigger_scheduled_at: null,
+  });
+  console.log('[KG-BG] continuation_mode=client_rpc (browser will resume)');
+}
+
+/**
+ * @param {Object|null} progress
+ * @return {{triggerScheduled: boolean, continuationMode: string}}
+ */
+function KnowledgeGraph_resolveContinuationStatus_(progress) {
+  var p = progress || null;
+  var mode = p && p.continuation_mode ? String(p.continuation_mode) : '';
+  var triggerInstalled = KnowledgeGraph_backgroundCatchupTriggerInstalled_();
+  if (triggerInstalled) {
+    return { triggerScheduled: true, continuationMode: 'trigger' };
+  }
+  if (mode === 'client_rpc') {
+    return { triggerScheduled: false, continuationMode: 'client_rpc' };
+  }
+  if (p && p.trigger_scheduled_at) {
+    var age = Date.now() - new Date(p.trigger_scheduled_at).getTime();
+    if (age < (KG_BG_CATCHUP_CONT_MINUTES_ + 3) * 60000) {
+      return { triggerScheduled: true, continuationMode: 'trigger' };
+    }
+  }
+  return { triggerScheduled: false, continuationMode: mode || '' };
+}
+
+/**
+ * Si hay sync pendiente sin trigger, intenta programarlo o cae a client_rpc.
+ * @return {boolean} true si quedó trigger o ya estaba activo
+ */
+function KnowledgeGraph_healBackgroundContinuation_() {
+  var p = KnowledgeGraph_autoCatchupProgressRead_();
+  if (!p || !p.phase || p.phase === 'done') return false;
+  var cur = KnowledgeGraph_resolveContinuationStatus_(p);
+  if (cur.triggerScheduled || cur.continuationMode === 'client_rpc') {
+    return cur.triggerScheduled || cur.continuationMode === 'client_rpc';
+  }
+  if (KnowledgeGraph_scheduleBackgroundCatchup_()) {
+    return true;
+  }
+  KnowledgeGraph_markClientRpcContinuation_();
+  return true;
 }
 
 /**
@@ -1228,9 +1353,27 @@ function KnowledgeGraph_scheduleBackgroundCatchup_() {
 function KnowledgeGraph_backgroundCatchupJob_() {
   KnowledgeGraph_deleteBackgroundCatchupTriggers_();
   try {
+    var prog = KnowledgeGraph_autoCatchupProgressRead_();
+    console.log(
+      '[KG-BG] job start phase=' +
+        (prog && prog.phase ? prog.phase : '?') +
+        ' skip=' +
+        (prog && prog.skip != null ? prog.skip : '?'),
+    );
     var res = KnowledgeGraph_runAutomaticCatchUpWithBudget_(KG_BG_CATCHUP_MAX_MS_);
+    console.log(
+      '[KG-BG] job end hasMore=' +
+        !!(res && res.hasMore) +
+        ' processed=' +
+        (res && res.processed) +
+        ' phase=' +
+        (res && res.phase),
+    );
     if (res && res.hasMore) {
-      KnowledgeGraph_scheduleBackgroundCatchup_();
+      if (!KnowledgeGraph_scheduleBackgroundCatchup_()) {
+        KnowledgeGraph_markClientRpcContinuation_();
+        console.error('[KG-BG] job could not reschedule; client_rpc fallback');
+      }
     }
   } catch (e) {
     console.error('[KG-BG] job failed: ' + (e.message || e));
@@ -1244,10 +1387,18 @@ function KnowledgeGraph_backgroundCatchupJob_() {
 function KnowledgeGraph_getBackgroundCatchupStatus() {
   KnowledgeGraph_requireView_();
   var p = KnowledgeGraph_autoCatchupProgressRead_();
+  var inProgress = !!(p && p.phase && p.phase !== 'done');
+  var cont = KnowledgeGraph_resolveContinuationStatus_(p);
+  if (inProgress && !cont.triggerScheduled && cont.continuationMode !== 'client_rpc') {
+    KnowledgeGraph_healBackgroundContinuation_();
+    p = KnowledgeGraph_autoCatchupProgressRead_();
+    cont = KnowledgeGraph_resolveContinuationStatus_(p);
+  }
   return {
     ok: true,
-    inProgress: !!(p && p.phase && p.phase !== 'done'),
-    triggerScheduled: KnowledgeGraph_backgroundCatchupTriggerInstalled_(),
+    inProgress: inProgress,
+    triggerScheduled: cont.triggerScheduled,
+    continuationMode: cont.continuationMode,
     progress: p,
   };
 }
@@ -1274,18 +1425,77 @@ function AdminKnowledgeGraph_enqueueBackgroundSync(reset) {
       phase: 'done',
     };
   }
+  var triggerOk = false;
+  var continuationMode = '';
   if (kick.hasMore) {
-    KnowledgeGraph_scheduleBackgroundCatchup_();
+    triggerOk = KnowledgeGraph_scheduleBackgroundCatchup_();
+    if (!triggerOk) {
+      KnowledgeGraph_markClientRpcContinuation_();
+      continuationMode = 'client_rpc';
+    } else {
+      continuationMode = 'trigger';
+    }
   }
+  var cont = KnowledgeGraph_resolveContinuationStatus_(kick.progress || null);
   return {
     ok: true,
     aligned: false,
     hasMore: !!kick.hasMore,
-    triggerScheduled: KnowledgeGraph_backgroundCatchupTriggerInstalled_(),
+    triggerScheduled: triggerOk || cont.triggerScheduled,
+    continuationMode: continuationMode || cont.continuationMode,
     processed: kick.processed || 0,
     failed: kick.failed || 0,
     phase: kick.phase || 'contents',
-    progress: kick.progress || null,
+    progress: KnowledgeGraph_autoCatchupProgressRead_(),
+  };
+}
+
+/**
+ * Vacía el grafo en Supabase y encola rebuild completo en segundo plano.
+ * No ejecuta lotes pesados en la misma RPC (solo purge + trigger).
+ * @return {Object}
+ */
+function AdminKnowledgeGraph_rebuildFromScratch_() {
+  KnowledgeGraph_requireAdmin_();
+  if (!AviatorsDataBackend_supabaseConfigured_()) {
+    AviatorsError_throw_(
+      'ERR_SUPABASE_NOT_CONFIGURED',
+      'AdminKnowledgeGraph_rebuildFromScratch',
+      'no_supabase',
+    );
+  }
+  KnowledgeGraph_deleteBackgroundCatchupTriggers_();
+  KnowledgeGraph_autoCatchupProgressClear_();
+  KnowledgeGraph_rebuildProgressClear_();
+  KnowledgeGraphStore_purgeAll_();
+  KnowledgeGraph_autoCatchupProgressWrite_({
+    started_at: new Date().toISOString(),
+    phase: 'contents',
+    skip: 0,
+    totals: {},
+    from_scratch: true,
+    trigger_minutes: KG_BG_CATCHUP_CONT_MINUTES_,
+  });
+  console.log('[KG-BG] rebuild from scratch: graph purged, queueing trigger');
+  var triggerOk = KnowledgeGraph_scheduleBackgroundCatchup_();
+  var continuationMode = 'trigger';
+  if (!triggerOk) {
+    KnowledgeGraph_markClientRpcContinuation_();
+    continuationMode = 'client_rpc';
+  }
+  return {
+    ok: true,
+    purged: true,
+    queued: true,
+    aligned: false,
+    hasMore: true,
+    triggerScheduled: triggerOk,
+    continuationMode: continuationMode,
+    triggerMinutes: KG_BG_CATCHUP_CONT_MINUTES_,
+    processed: 0,
+    failed: 0,
+    phase: 'contents',
+    progress: KnowledgeGraph_autoCatchupProgressRead_(),
   };
 }
 

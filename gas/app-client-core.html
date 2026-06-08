@@ -105,17 +105,79 @@ window.Aviators = window.Aviators || {};
   var blockingModalDetail = document.getElementById('blocking-modal-detail');
   var blockingModalFilename = document.getElementById('blocking-modal-filename');
   var startupLoader = document.getElementById('app-startup-loader');
+  var startupLoaderCard = document.getElementById('app-startup-loader-card');
   var startupLoaderMsg = document.getElementById('app-startup-loader-msg');
+  var startupLoaderSub = document.getElementById('app-startup-loader-sub');
+  var startupLoaderVisualDefault = document.getElementById('app-startup-loader-visual-default');
+  var startupLoaderVisualI18n = document.getElementById('app-startup-loader-visual-i18n');
+  var startupLoaderVisualSession = document.getElementById('app-startup-loader-visual-session');
+  var startupLoaderLogo = document.getElementById('app-startup-loader-logo');
+  var startupLoaderI18nOrbit = startupLoaderVisualI18n
+    ? startupLoaderVisualI18n.querySelector('.loader-i18n-orbit')
+    : null;
 
-  A.showStartupLoader = function (message) {
+  function startupLoaderEnsureLogoSrc_() {
+    if (!startupLoaderLogo || startupLoaderLogo.getAttribute('src')) return;
+    var brandLogo = document.getElementById('aviators-logo');
+    var src = brandLogo && brandLogo.getAttribute('src');
+    if (src) startupLoaderLogo.setAttribute('src', src);
+  }
+
+  function startupLoaderSetVariant_(variant) {
+    var isI18n = variant === 'i18n';
+    var isSession = variant === 'session';
+    var showDefault = !isI18n && !isSession;
+    if (startupLoaderVisualDefault) {
+      startupLoaderVisualDefault.classList.toggle('hidden', !showDefault);
+    }
+    if (startupLoaderVisualI18n) {
+      startupLoaderVisualI18n.classList.toggle('hidden', !isI18n);
+    }
+    if (startupLoaderVisualSession) {
+      startupLoaderVisualSession.classList.toggle('hidden', !isSession);
+    }
+    if (startupLoaderCard) {
+      startupLoaderCard.classList.toggle('is-i18n-loading', isI18n);
+      startupLoaderCard.classList.toggle('is-session-loading', isSession);
+    }
+    if (startupLoaderSub) {
+      var showSub = isI18n || isSession;
+      startupLoaderSub.classList.toggle('hidden', !showSub);
+      startupLoaderSub.setAttribute('aria-hidden', showSub ? 'false' : 'true');
+      if (!showSub) startupLoaderSub.textContent = '';
+    }
+    if (!isI18n && startupLoaderI18nOrbit) {
+      startupLoaderI18nOrbit.setAttribute('data-i18n-part', '0');
+    }
+    if (isSession) startupLoaderEnsureLogoSrc_();
+  }
+
+  /**
+   * @param {string=} message
+   * @param {{variant?:'default'|'i18n'|'session', subtitle?:string}=} opts
+   */
+  A.showStartupLoader = function (message, opts) {
+    opts = opts || {};
+    var variant = opts.variant === 'i18n' || opts.variant === 'session' ? opts.variant : 'default';
+    startupLoaderSetVariant_(variant);
     if (startupLoaderMsg && message) startupLoaderMsg.textContent = message;
+    if (startupLoaderSub && opts.subtitle) startupLoaderSub.textContent = opts.subtitle;
     if (startupLoader) {
       startupLoader.classList.remove('hidden');
       startupLoader.setAttribute('aria-busy', 'true');
     }
   };
 
+  /** @param {number} partIndex 0 = meta, 1…n = fragmentos del pack */
+  A.setStartupLoaderI18nProgress = function (partIndex, subtitle) {
+    if (!startupLoaderI18nOrbit) return;
+    var idx = Math.max(0, Math.min(3, Number(partIndex) || 0));
+    startupLoaderI18nOrbit.setAttribute('data-i18n-part', String(idx));
+    if (startupLoaderSub && subtitle) startupLoaderSub.textContent = subtitle;
+  };
+
   A.hideStartupLoader = function () {
+    startupLoaderSetVariant_('default');
     if (startupLoader) {
       startupLoader.classList.add('hidden');
       startupLoader.setAttribute('aria-busy', 'false');

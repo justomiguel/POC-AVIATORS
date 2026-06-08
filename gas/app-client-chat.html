@@ -1985,10 +1985,21 @@
     var industry = ctx.industryLabel || ctx.industry || '';
     var deck = ctx.deckLabel || '';
     var intro = i18nFmt('pb_status_building_ready', { industry: industry, deck: deck });
-    if (ctx.proposalDeckFileName) {
+    if (ctx.proposalDeckFileUrl && ctx.proposalDeckFileName) {
+      intro +=
+        '\n\n' +
+        i18nFmt('pb_deck_open_link_md', {
+          name: ctx.proposalDeckFileName,
+          url: ctx.proposalDeckFileUrl,
+        });
+    } else if (ctx.proposalDeckFileName) {
       intro += '\n\n' + i18nFmt('pb_deck_created_line', { name: ctx.proposalDeckFileName });
-      if (ctx.proposalDeckFileUrl) {
-        intro += '\n' + ctx.proposalDeckFileUrl;
+      if (ctx.successCasesApplied > 0) {
+        intro +=
+          '\n' +
+          i18nFmt('pb_deck_success_cases_line', {
+            count: String(ctx.successCasesApplied),
+          });
       }
     }
     homeChatAppendAgent(intro, '', [], 'proposals', '', 'proposals', -1);

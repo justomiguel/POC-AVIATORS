@@ -42,15 +42,97 @@
       aria-live="polite"
       aria-busy="true"
     >
-      <div class="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-7 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-        <div class="loader-flight-inline" aria-hidden="true">
-          <span class="loader-flight-inline-contrail"></span>
-          <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+      <div
+        id="app-startup-loader-card"
+        class="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-8 py-7 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+      >
+        <div id="app-startup-loader-visual" class="w-full" aria-hidden="true">
+          <div id="app-startup-loader-visual-default" class="loader-startup-visual-default">
+            <div class="loader-flight-inline">
+              <span class="loader-flight-inline-contrail"></span>
+              <i class="fa-solid fa-plane loader-flight-inline-plane" aria-hidden="true"></i>
+            </div>
+          </div>
+          <div id="app-startup-loader-visual-i18n" class="loader-startup-visual-i18n hidden">
+            <div class="loader-i18n-orbit" data-i18n-part="0">
+              <span class="loader-i18n-orbit-tag loader-i18n-orbit-tag--es">ES</span>
+              <span class="loader-i18n-orbit-tag loader-i18n-orbit-tag--en">EN</span>
+              <span class="loader-i18n-orbit-tag loader-i18n-orbit-tag--glyph">
+                <i class="fa-solid fa-language" aria-hidden="true"></i>
+              </span>
+              <div class="loader-i18n-radar">
+                <span class="loader-i18n-radar-ring loader-i18n-radar-ring--outer"></span>
+                <span class="loader-i18n-radar-ring loader-i18n-radar-ring--mid"></span>
+                <span class="loader-i18n-radar-ring loader-i18n-radar-ring--inner"></span>
+                <span class="loader-i18n-radar-sweep"></span>
+                <span class="loader-i18n-blip loader-i18n-blip--1"></span>
+                <span class="loader-i18n-blip loader-i18n-blip--2"></span>
+                <span class="loader-i18n-blip loader-i18n-blip--3"></span>
+                <i class="fa-solid fa-plane loader-i18n-radar-plane" aria-hidden="true"></i>
+              </div>
+            </div>
+          </div>
+          <div id="app-startup-loader-visual-session" class="loader-startup-visual-session hidden">
+            <div class="loader-session-manifest" aria-hidden="true">
+              <div class="loader-session-deck">
+                <span class="loader-session-deck-aura"></span>
+                <div class="loader-session-logo-frame">
+                  <img
+                    id="app-startup-loader-logo"
+                    class="loader-session-logo"
+                    alt=""
+                    width="72"
+                    height="72"
+                    decoding="async"
+                    draggable="false"
+                  />
+                  <span class="loader-session-scanline"></span>
+                </div>
+              </div>
+              <div class="loader-session-bus">
+                <span class="loader-session-wire loader-session-wire--roles"></span>
+                <span class="loader-session-wire loader-session-wire--agents"></span>
+              </div>
+              <div class="loader-session-modules">
+                <div class="loader-session-chip loader-session-chip--roles">
+                  <span class="loader-session-chip-icon">
+                    <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                  </span>
+                  <span class="loader-session-chip-track">
+                    <span class="loader-session-chip-fill"></span>
+                  </span>
+                </div>
+                <div class="loader-session-chip loader-session-chip--agents">
+                  <span class="loader-session-chip-icon">
+                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                  </span>
+                  <span class="loader-session-chip-track">
+                    <span class="loader-session-chip-fill"></span>
+                  </span>
+                </div>
+              </div>
+              <div class="loader-session-runway">
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+                <span class="loader-session-papi"></span>
+              </div>
+            </div>
+          </div>
         </div>
         <p
           id="app-startup-loader-msg"
           class="text-center text-sm font-medium text-slate-700 dark:text-slate-200"
           data-i18n="app_startup_loading"
+        ></p>
+        <p
+          id="app-startup-loader-sub"
+          class="hidden min-h-[1.125rem] max-w-[18rem] text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400"
+          aria-hidden="true"
         ></p>
       </div>
     </div>
@@ -2276,10 +2358,16 @@
                   class="hidden flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-600 dark:bg-slate-800/40"
                 >
                   <p class="min-w-0 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="kg_sync_admin_lead"></p>
-                  <button type="button" id="kg-rebuild-btn" class="btn btn-md btn-secondary shrink-0 inline-flex items-center gap-2">
-                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                    <span data-i18n="kg_btn_rebuild"></span>
-                  </button>
+                  <div class="flex shrink-0 flex-wrap items-center gap-2">
+                    <button type="button" id="kg-rebuild-btn" class="btn btn-md btn-secondary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                      <span data-i18n="kg_btn_rebuild"></span>
+                    </button>
+                    <button type="button" id="kg-rebuild-scratch-btn" class="btn btn-md btn-outline-danger inline-flex items-center gap-2">
+                      <i class="fa-solid fa-bomb" aria-hidden="true"></i>
+                      <span data-i18n="kg_btn_rebuild_scratch"></span>
+                    </button>
+                  </div>
                 </div>
               </header>
               <div
@@ -2289,6 +2377,7 @@
                 aria-live="polite"
               >
                 <p id="kg-pending-sync-msg" class="leading-relaxed"></p>
+                <p id="kg-pending-sync-detail" class="mt-2 hidden text-xs leading-relaxed opacity-90"></p>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button type="button" id="kg-pending-sync-resume-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
                     <i class="fa-solid fa-play" aria-hidden="true"></i>
@@ -4529,13 +4618,6 @@
             </div>
             <div id="pb-milestone-list" class="space-y-3"></div>
           </div>
-          <label class="block text-sm" for="pb-field-language">
-            <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_detected_language"></span>
-            <select id="pb-field-language" class="aviators-field w-full text-sm">
-              <option value="es" data-i18n="pb_lang_es"></option>
-              <option value="en" data-i18n="pb_lang_en"></option>
-            </select>
-          </label>
           <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
             <button type="button" id="pb-confirm-brief-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
               <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
@@ -4551,15 +4633,65 @@
           <fieldset class="space-y-2">
             <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_industry"></legend>
             <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" />
+              <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" checked />
               <span data-i18n="pb_industry_airlines"></span>
             </label>
-            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-              <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" />
+            <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
+              <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" disabled />
               <span data-i18n="pb_industry_logistics"></span>
+              <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
+            </label>
+          </fieldset>
+          <fieldset class="space-y-2">
+            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_proposal_language"></legend>
+            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_proposal_language_lead"></p>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-proposal-language" value="es" class="h-4 w-4" checked />
+              <span data-i18n="pb_lang_es"></span>
+            </label>
+            <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
+              <input type="radio" name="pb-proposal-language" value="en" class="h-4 w-4" disabled />
+              <span data-i18n="pb_lang_en"></span>
+              <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
             </label>
           </fieldset>
           <p id="pb-deck-preview" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+          <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+            <button type="button" id="pb-industry-continue-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+              <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+              <span data-i18n="pb_btn_continue_deck_options"></span>
+            </button>
+          </div>
+        </section>
+        <section id="pb-step-deck-options" class="hidden space-y-4">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_deck_options_heading"></h2>
+            <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_deck_options_lead"></p>
+          </div>
+          <fieldset class="space-y-2">
+            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_globant"></legend>
+            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_globant_lead"></p>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-include-globant" value="yes" class="h-4 w-4" checked />
+              <span data-i18n="pb_option_yes"></span>
+            </label>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-include-globant" value="no" class="h-4 w-4" />
+              <span data-i18n="pb_option_no"></span>
+            </label>
+          </fieldset>
+          <fieldset id="pb-airlines-studio-fieldset" class="space-y-2">
+            <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_airlines_studio"></legend>
+            <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_airlines_studio_lead"></p>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-include-airlines-studio" value="yes" class="h-4 w-4" checked />
+              <span data-i18n="pb_option_yes"></span>
+            </label>
+            <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
+              <input type="radio" name="pb-include-airlines-studio" value="no" class="h-4 w-4" />
+              <span data-i18n="pb_option_no"></span>
+            </label>
+          </fieldset>
           <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
             <button type="button" id="pb-start-building-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
               <i class="fa-solid fa-file-signature" aria-hidden="true"></i>

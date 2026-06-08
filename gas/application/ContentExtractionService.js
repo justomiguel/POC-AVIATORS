@@ -311,6 +311,15 @@ function ContentExtraction_inferTagsFromDraft_(contentType, common, specific) {
     String(specific.pricing_model || ''),
     String(specific.topic || ''),
   );
+  if (contentType === 'proposal') {
+    parts.push(
+      String(specific.globant_studio || ''),
+      String(specific.effort_estimate || ''),
+      String(specific.timeline || ''),
+      String(specific.win_probability || ''),
+      String(specific.material_kind || ''),
+    );
+  }
   var inferred = ContentExtraction_inferTagsFromText_(parts.join('\n'));
 
   var typeTag = CONTENT_TYPE_TAG_MAP_[contentType];
@@ -329,6 +338,11 @@ function ContentExtraction_inferTagsFromDraft_(contentType, common, specific) {
     if (pm === 'TIME_AND_MATERIALS') inferred.push('#timeAndMaterials');
     if (pm === 'FIXED_PRICE') inferred.push('#fixedPrice');
     if (pm === 'STAFF_AUGMENTATION') inferred.push('#staffAugmentation');
+    if (pm === 'AI_PODS') inferred.push('#aiPods');
+    var mk = String(specific.material_kind || '').trim();
+    if (mk === 'GLOBANT_STUDIO' && specific.globant_studio) {
+      inferred.push('#globantStudio');
+    }
   }
 
   return ContentExtraction_normalizeTags_(inferred);
@@ -688,6 +702,28 @@ function ContentExtraction_resolveSpecific_(parsed, contentType) {
     }
   }
 
+  if (contentType === 'proposal') {
+    var proposalHoist = [
+      'material_kind',
+      'topic',
+      'globant_studio',
+      'offering',
+      'stage',
+      'pricing_model',
+      'effort_estimate',
+      'timeline',
+      'win_probability',
+      'notes',
+    ];
+    var pj;
+    for (pj = 0; pj < proposalHoist.length; pj++) {
+      var pk = proposalHoist[pj];
+      if (parsed[pk] != null && (specific[pk] == null || specific[pk] === '')) {
+        specific[pk] = parsed[pk];
+      }
+    }
+  }
+
   parsed.specific = specific;
   return specific;
 }
@@ -785,6 +821,145 @@ function ContentExtraction_normalizeSuccessCaseSpecific_(specific) {
 }
 
 /**
+ * @param {string} value
+ * @return {string}
+ */
+function ContentExtraction_normalizeProposalPricingEnum_(value) {
+  var norm = ContentExtraction_normalizeEnum_(value, CONTENT_PRICING_MODELS, '');
+  if (norm) return norm;
+  var lower = String(value || '').toLowerCase();
+  if (/time\s*&?\s*material|\bt\s*&\s*m\b|honorarios|time.and.material/i.test(lower)) {
+    return 'TIME_AND_MATERIALS';
+  }
+  if (/staff\s*aug|augmentation|refuerzo|reforzamiento/i.test(lower)) {
+    return 'STAFF_AUGMENTATION';
+  }
+  if (/fixed\s*price|precio\s*fijo|lump\s*sum|fixed\s*bid/i.test(lower)) {
+    return 'FIXED_PRICE';
+  }
+  if (/subscription|suscripci/i.test(lower)) {
+    return 'SUBSCRIPTION';
+  }
+  if (/ai\s*pods|\bpods\b/i.test(lower)) {
+    return 'AI_PODS';
+  }
+  return '';
+}
+
+/**
+ * @param {string} value
+ * @return {string}
+ */
+function ContentExtraction_normalizeProposalMaterialKind_(value) {
+  var norm = ContentExtraction_normalizeEnum_(value, CONTENT_PROPOSAL_MATERIAL_KINDS, '');
+  if (norm) return norm;
+  var lower = String(value || '').toLowerCase();
+  if (/commercial|propuesta|rfp|client|tender/i.test(lower)) return 'COMMERCIAL_PROPOSAL';
+  if (/studio/i.test(lower)) return 'GLOBANT_STUDIO';
+  if (/offering|engagement\s*model/i.test(lower)) return 'GLOBANT_OFFERING';
+  if (/corporate|corporativo|sales\s*material/i.test(lower)) return 'CORPORATE';
+  return 'COMMERCIAL_PROPOSAL';
+}
+
+/**
+ * Normaliza claves alternativas (ES/EN) del LLM en propuestas.
+ * @param {Object} specific
+ * @return {Object}
+ */
+function ContentExtraction_normalizeProposalSpecific_(specific) {
+  var sp = specific && typeof specific === 'object' ? specific : {};
+  var out = {
+    material_kind: ContentExtraction_normalizeProposalMaterialKind_(
+      ContentExtraction_pickString_(sp, [
+        'material_kind',
+        'materialKind',
+        'tipo_material',
+        'document_type',
+        'kind',
+      ]),
+    ),
+    topic: ContentExtraction_pickString_(sp, [
+      'topic',
+      'topic_area',
+      'thematic',
+      'tema',
+      'tematica',
+      'temática',
+      'subject',
+    ]),
+    globant_studio: ContentExtraction_pickString_(sp, [
+      'globant_studio',
+      'globantStudio',
+      'studio',
+      'estudio',
+      'studio_name',
+    ]),
+    offering: ContentExtraction_normalizeProposalPricingEnum_(
+      ContentExtraction_pickString_(sp, ['offering', 'offering_model', 'engagement_model']),
+    ),
+    stage: ContentExtraction_normalizeEnum_(
+      ContentExtraction_pickString_(sp, ['stage', 'deal_stage', 'estado', 'status', 'deal_status']),
+      CONTENT_PROPOSAL_STAGES,
+      'PRESENTED',
+    ),
+    pricing_model: ContentExtraction_normalizeProposalPricingEnum_(
+      ContentExtraction_pickString_(sp, [
+        'pricing_model',
+        'pricingModel',
+        'commercial_model',
+        'modelo_comercial',
+        'pricing',
+        'modelo_precio',
+      ]),
+    ),
+    effort_estimate: ContentExtraction_pickString_(sp, [
+      'effort_estimate',
+      'effortEstimate',
+      'effort',
+      'esfuerzo',
+      'staffing',
+      'fte',
+      'team_size',
+      'recursos',
+    ]),
+    timeline: ContentExtraction_pickString_(sp, [
+      'timeline',
+      'duration',
+      'plazo',
+      'duracion',
+      'duración',
+      'schedule',
+      'cronograma',
+    ]),
+    win_probability: ContentExtraction_pickString_(sp, [
+      'win_probability',
+      'winProbability',
+      'probability',
+      'probabilidad',
+      'win_chance',
+    ]),
+    notes: ContentExtraction_pickString_(sp, [
+      'notes',
+      'notas',
+      'scope',
+      'alcance',
+      'deliverables',
+      'entregables',
+      'comments',
+      'additional',
+      'our_understanding',
+    ]),
+  };
+  if (out.material_kind === 'GLOBANT_OFFERING' && !out.offering && out.pricing_model) {
+    out.offering = out.pricing_model;
+  }
+  if (!out.pricing_model && out.offering) {
+    out.pricing_model = out.offering;
+  }
+  return out;
+}
+
+/**
  * @param {string} contentType
  * @param {Object} specific
  * @return {Object}
@@ -792,24 +967,7 @@ function ContentExtraction_normalizeSuccessCaseSpecific_(specific) {
 function ContentExtraction_normalizeSpecific_(contentType, specific) {
   var sp = specific && typeof specific === 'object' ? specific : {};
   if (contentType === 'proposal') {
-    sp.material_kind = ContentExtraction_normalizeEnum_(
-      sp.material_kind,
-      CONTENT_PROPOSAL_MATERIAL_KINDS,
-      'COMMERCIAL_PROPOSAL',
-    );
-    sp.topic = String(sp.topic || '').trim();
-    sp.globant_studio = String(sp.globant_studio || '').trim();
-    sp.offering = ContentExtraction_normalizeEnum_(sp.offering, CONTENT_PRICING_MODELS, '');
-    sp.stage = ContentExtraction_normalizeEnum_(sp.stage, CONTENT_PROPOSAL_STAGES, 'PRESENTED');
-    sp.pricing_model = ContentExtraction_normalizeEnum_(
-      sp.pricing_model,
-      CONTENT_PRICING_MODELS,
-      'TIME_AND_MATERIALS',
-    );
-    if (sp.material_kind === 'GLOBANT_OFFERING' && !sp.offering && sp.pricing_model) {
-      sp.offering = sp.pricing_model;
-    }
-    return sp;
+    return ContentExtraction_normalizeProposalSpecific_(sp);
   }
   if (contentType === 'success_case') {
     return ContentExtraction_normalizeSuccessCaseSpecific_(sp);
@@ -959,6 +1117,31 @@ function ContentExtraction_enrichDraft_(parsed, contentType, fileName, opts) {
         spEnriched,
       );
       common.tags = tagRetry.tags;
+      parsed.common = common;
+    }
+  }
+
+  if (contentType === 'proposal') {
+    var spProposal = parsed.specific || {};
+    var sumProposal = String(common.summary || '').trim();
+    var notesProposal = String(spProposal.notes || '').trim();
+    if (sumProposal.length < 120 && notesProposal.length > 80) {
+      var clipNotes =
+        notesProposal.length > 500 ? notesProposal.slice(0, 497) + '…' : notesProposal;
+      if (!sumProposal) {
+        common.summary = clipNotes;
+      } else if (notesProposal.indexOf(sumProposal) < 0) {
+        common.summary = sumProposal + ' ' + clipNotes;
+      }
+      parsed.common = common;
+      warnings.push(UiStrings_t(locale, 'contents_warn_summary_from_notes'));
+      var tagRetryProposal = ContentExtraction_enrichTags_(
+        common.tags,
+        contentType,
+        common,
+        spProposal,
+      );
+      common.tags = tagRetryProposal.tags;
       parsed.common = common;
     }
   }
@@ -1145,6 +1328,9 @@ function ContentExtraction_resolveChatModel_() {
 /** @type {Array<string>} Pasadas de extracción para success cases (PDF reenviado en cada una). */
 var CONTENT_SUCCESS_CASE_PASSES = ['common', 'challenge', 'solution', 'impact'];
 
+/** @type {Array<string>} Pasadas de extracción para propuestas comerciales. */
+var CONTENT_PROPOSAL_PASSES = ['common', 'commercial', 'scope'];
+
 /**
  * @param {string} text
  * @return {Object}
@@ -1282,11 +1468,21 @@ function ContentExtraction_promptSuccessCasePass_(passId, hints) {
 
 /**
  * @param {string} passId
+ * @param {string=} contentType
  * @return {string}
  */
-function ContentExtraction_systemPromptForPass_(passId) {
+function ContentExtraction_systemPromptForPass_(passId, contentType) {
   if (passId === 'common') {
     return ContentExtraction_systemPrompt_();
+  }
+  if (contentType === 'proposal') {
+    return [
+      'You are a precision extractor for Aviators commercial proposals (aviation, airlines, airports, logistics, Globant studios).',
+      'You receive a PDF and extract ONE focused field group only.',
+      'Read every page including tables, footers, and slide notes.',
+      'Return ONLY valid JSON as requested. No markdown.',
+      'Never invent facts not supported by the document.',
+    ].join('\n');
   }
   return [
     'You are a precision extractor for Aviators success case documents (aviation, airlines, airports, logistics).',
@@ -1363,6 +1559,249 @@ function ContentExtraction_mergeSuccessCasePass_(passId, parsed, draft, locale) 
 }
 
 /**
+ * @param {string} passId
+ * @param {{fileName?:string, clientsHint?:string, entryIndustry?:string}=} hints
+ * @return {string}
+ */
+function ContentExtraction_promptProposalPass_(passId, hints) {
+  hints = hints || {};
+  var fileName = String(hints.fileName || '').trim();
+  var clientsHint = String(hints.clientsHint || '').trim();
+  var entryIndustry = String(hints.entryIndustry || '').trim();
+  var fileHint = fileName
+    ? 'Original file name: "' + fileName + '". Use as hint for title/client when unclear.\n'
+    : '';
+  var entryIndustryHint = entryIndustry
+    ? 'User pre-selected industry: "' +
+      entryIndustry +
+      '". Set common.industry to this exact value unless the document clearly contradicts it.\n'
+    : '';
+
+  if (passId === 'common') {
+    return [
+      'Extract COMMON catalog metadata from this commercial proposal / RFP / Globant sales PDF.',
+      fileHint,
+      entryIndustryHint,
+      clientsHint,
+      'Read cover, headers, footers, tables, staffing grids, SOW sections, and metadata blocks.',
+      'Return ONLY valid JSON. No markdown.',
+      ContentExtraction_buildTagPromptBlock_('proposal'),
+      ContentExtraction_getIndustryCatalogHint_(),
+      'INDUSTRY must be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', ') + ' when material_kind is COMMERCIAL_PROPOSAL.',
+      'Schema:',
+      '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{"material_kind":""},"confidence":"high|medium|low","warnings":[]}',
+      'common.summary: 4-6 sentences covering (1) document purpose, (2) client/context, (3) proposed scope or solution headline, (4) commercial model if visible, (5) key technologies or studios mentioned. Use document language.',
+      'common.client_name: legal or commercial customer/account name when present.',
+      'specific.material_kind MUST be one of: ' +
+        CONTENT_PROPOSAL_MATERIAL_KINDS.join(', ') +
+        '. COMMERCIAL_PROPOSAL for client RFP/deal decks; GLOBANT_STUDIO for Studio capability decks; GLOBANT_OFFERING for AI Pods/engagement models; CORPORATE for general commercial material; OTHER if none fit.',
+      'Do NOT extract stage, pricing, effort, timeline, or scope detail here — other passes handle those.',
+    ]
+      .filter(function (line) {
+        return !!line;
+      })
+      .join('\n');
+  }
+
+  if (passId === 'commercial') {
+    return [
+      'Extract ONLY commercial / deal metadata from this proposal PDF.',
+      fileHint,
+      'Search: pricing, commercial model, stage, win probability, effort, staffing, FTE, timeline, duration, SOW commercial tables.',
+      'Section titles (any language): Pricing, Commercial, Investment, Propuesta económica, Modelo comercial, Effort, Esfuerzo, Timeline, Cronograma, Duración, Staffing, Team, FTE.',
+      'Return ONLY valid JSON:',
+      '{"stage":"","pricing_model":"","offering":"","effort_estimate":"","timeline":"","win_probability":"","confidence":"high|medium|low","warnings":[]}',
+      'stage MUST be one of: ' +
+        CONTENT_PROPOSAL_STAGES.join(', ') +
+        '. Use PRESENTED when not a live deal artifact.',
+      'pricing_model and offering MUST be one of: ' +
+        CONTENT_PRICING_MODELS.join(', ') +
+        ' when stated; otherwise empty string.',
+      'effort_estimate: team size, FTEs, man-days, or effort range from tables (e.g. "12 FTE · 6 months").',
+      'timeline: project duration or calendar window (e.g. "Q2–Q4 2025", "18 weeks").',
+      'win_probability: percentage or qualitative win chance if stated; else empty.',
+      'Use document language. Do not invent numbers.',
+    ].join('\n');
+  }
+
+  if (passId === 'scope') {
+    return [
+      'Extract scope, studio, topic, and supplementary notes from this proposal PDF.',
+      fileHint,
+      'Search: scope, alcance, deliverables, entregables, our understanding, approach, solution overview, studio branding, technologies.',
+      'Return ONLY valid JSON:',
+      '{"topic":"","globant_studio":"","notes":"","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
+      'topic: thematic subject (aviation, loyalty, cloud migration, AI transformation, etc.). Required for CORPORATE/OTHER material.',
+      'globant_studio: Globant Studio name when document is from/about a Studio (Aviation Studio, AI Studio, etc.).',
+      'notes: 4-8 sentences — scope items, deliverables, assumptions, tech stack, differentiators not captured elsewhere. Prefer bullet content merged into prose.',
+      'tags (optional): 0-6 English #camelCase tags for capabilities, tech, domain.',
+      'Do NOT repeat the full summary here; focus on operational scope and deliverables.',
+    ].join('\n');
+  }
+
+  throw new Error('proposal pass invalido');
+}
+
+/**
+ * @param {string} passId
+ * @param {Object} parsed
+ * @param {Object} draft
+ * @param {string} locale
+ */
+function ContentExtraction_mergeProposalPass_(passId, parsed, draft, locale) {
+  var warnings = draft.warnings || [];
+  var conf = String(parsed.confidence || '').toLowerCase();
+
+  if (passId === 'common') {
+    var commonIn =
+      parsed.common && typeof parsed.common === 'object' ? parsed.common : parsed;
+    var commonOut = draft.common || {};
+    var commonKeys = ['title', 'summary', 'client_name', 'industry', 'tags'];
+    var cki;
+    for (cki = 0; cki < commonKeys.length; cki++) {
+      var ckey = commonKeys[cki];
+      if (!Object.prototype.hasOwnProperty.call(commonIn, ckey)) continue;
+      if (ckey === 'tags' && Array.isArray(commonIn.tags)) {
+        commonOut.tags = ContentExtraction_normalizeTags_(commonIn.tags);
+      } else if (commonIn[ckey] != null && String(commonIn[ckey]).trim()) {
+        commonOut[ckey] = commonIn[ckey];
+      }
+    }
+    draft.common = commonOut;
+    var specIn =
+      parsed.specific && typeof parsed.specific === 'object' ? parsed.specific : parsed;
+    var specOut = draft.specific || {};
+    var mk = ContentExtraction_valueToText_(specIn.material_kind || parsed.material_kind);
+    if (mk) specOut.material_kind = mk;
+    draft.specific = specOut;
+    if (conf === 'high' || conf === 'medium') draft.confidence = conf;
+  } else if (passId === 'commercial') {
+    var specComm = draft.specific || {};
+    var commKeys = [
+      'stage',
+      'pricing_model',
+      'offering',
+      'effort_estimate',
+      'timeline',
+      'win_probability',
+    ];
+    var cmi;
+    for (cmi = 0; cmi < commKeys.length; cmi++) {
+      var ck = commKeys[cmi];
+      var cv = ContentExtraction_valueToText_(parsed[ck]);
+      if (cv) specComm[ck] = cv;
+    }
+    draft.specific = specComm;
+  } else if (passId === 'scope') {
+    var specScope = draft.specific || {};
+    var tp = ContentExtraction_valueToText_(parsed.topic);
+    var gs = ContentExtraction_valueToText_(parsed.globant_studio);
+    var nt = ContentExtraction_valueToText_(parsed.notes);
+    if (tp) specScope.topic = tp;
+    if (gs) specScope.globant_studio = gs;
+    if (nt) {
+      var prevNotes = String(specScope.notes || '').trim();
+      specScope.notes = prevNotes ? prevNotes + '\n\n' + nt : nt;
+    }
+    draft.specific = specScope;
+    if (Array.isArray(parsed.tags) && parsed.tags.length) {
+      var commonTags = draft.common || {};
+      var prevTagList = Array.isArray(commonTags.tags) ? commonTags.tags : [];
+      commonTags.tags = prevTagList.concat(parsed.tags);
+      draft.common = commonTags;
+    }
+  }
+
+  if (Array.isArray(parsed.warnings)) {
+    var wi;
+    for (wi = 0; wi < parsed.warnings.length; wi++) {
+      var w = String(parsed.warnings[wi] || '').trim();
+      if (w) warnings.push(w);
+    }
+  }
+
+  draft.warnings = warnings;
+}
+
+/**
+ * @param {Object} client
+ * @param {GoogleAppsScript.Base.Blob} blob
+ * @param {{fileName?:string, clientsHint?:string}} hints
+ * @param {string} passId
+ * @param {Object} draft
+ * @param {string} locale
+ * @param {{client:Object,fileId:string,folder:string}=} session
+ */
+function ContentExtraction_runProposalPass_(client, blob, hints, passId, draft, locale, session) {
+  try {
+    var prompt = ContentExtraction_promptProposalPass_(passId, hints);
+    var systemPrompt = ContentExtraction_systemPromptForPass_(passId, 'proposal');
+    var result = ContentExtraction_chatFilePass_(client, systemPrompt, prompt, blob, session);
+    var parsed = ContentExtraction_parseLooseJson_(result.text || '');
+    if (!parsed || !Object.keys(parsed).length) {
+      draft.warnings.push(
+        UiStrings_fmt_('contents_warn_extraction_pass_empty', { pass: passId }),
+      );
+      return;
+    }
+    ContentExtraction_mergeProposalPass_(passId, parsed, draft, locale);
+  } catch (ePass) {
+    console.log(
+      '[CONTENT-EXTRACT] proposal pass failed: ' +
+        passId +
+        ' — ' +
+        String(ePass.message || ePass).slice(0, 200),
+    );
+    draft.warnings.push(
+      UiStrings_fmt_('contents_warn_extraction_pass_failed', {
+        pass: passId,
+        detail: String(ePass.message || ePass).slice(0, 120),
+      }),
+    );
+  }
+}
+
+/**
+ * Extracción multi-pasada para propuestas: common + commercial + scope.
+ * @param {Object} client
+ * @param {GoogleAppsScript.Base.Blob} blob
+ * @param {{fileName?:string, clientsHint?:string}} hints
+ * @return {Object}
+ */
+function ContentExtraction_extractProposalMultiPass_(client, blob, hints) {
+  var locale = UiStrings_activeLocale_();
+  var draft = ContentExtraction_emptyDraft_('proposal');
+  var session = GlobantDocumentChat_beginSession_(client, blob);
+  try {
+    var pi;
+    for (pi = 0; pi < CONTENT_PROPOSAL_PASSES.length; pi++) {
+      ContentExtraction_runProposalPass_(
+        client,
+        blob,
+        hints,
+        CONTENT_PROPOSAL_PASSES[pi],
+        draft,
+        locale,
+        session,
+      );
+    }
+  } finally {
+    GlobantDocumentChat_endSession_(session);
+  }
+  return draft;
+}
+
+/**
+ * @param {string} contentType
+ * @return {Array<string>|null}
+ */
+function ContentExtraction_passIdsForType_(contentType) {
+  if (contentType === 'success_case') return CONTENT_SUCCESS_CASE_PASSES;
+  if (contentType === 'proposal') return CONTENT_PROPOSAL_PASSES;
+  return null;
+}
+
+/**
  * @param {string} contentType
  * @return {Object}
  */
@@ -1376,6 +1815,25 @@ function ContentExtraction_emptyDraft_(contentType) {
         impact_metric: '',
         impact_value: '',
         evidence: '',
+        notes: '',
+      },
+      confidence: 'low',
+      warnings: [],
+    };
+  }
+  if (contentType === 'proposal') {
+    return {
+      common: { title: '', summary: '', client_name: '', industry: '', tags: [] },
+      specific: {
+        material_kind: '',
+        topic: '',
+        globant_studio: '',
+        offering: '',
+        stage: '',
+        pricing_model: '',
+        effort_estimate: '',
+        timeline: '',
+        win_probability: '',
         notes: '',
       },
       confidence: 'low',
@@ -1407,8 +1865,8 @@ function ContentExtraction_parseDraftState_(draftJson, contentType) {
  * @return {Array<string>}
  */
 function ContentExtraction_listPassIds_(contentType) {
-  if (contentType === 'success_case') return CONTENT_SUCCESS_CASE_PASSES.slice();
-  return [];
+  var passes = ContentExtraction_passIdsForType_(contentType);
+  return passes ? passes.slice() : [];
 }
 
 /**
@@ -1424,7 +1882,7 @@ function ContentExtraction_listPassIds_(contentType) {
 function ContentExtraction_runSuccessCasePass_(client, blob, hints, passId, draft, locale, session) {
   try {
     var prompt = ContentExtraction_promptSuccessCasePass_(passId, hints);
-    var systemPrompt = ContentExtraction_systemPromptForPass_(passId);
+    var systemPrompt = ContentExtraction_systemPromptForPass_(passId, 'success_case');
     var result = ContentExtraction_chatFilePass_(client, systemPrompt, prompt, blob, session);
     var parsed = ContentExtraction_parseLooseJson_(result.text || '');
     if (!parsed || !Object.keys(parsed).length) {
@@ -1481,7 +1939,7 @@ function ContentExtraction_extractSuccessCaseMultiPass_(client, blob, hints) {
 }
 
 /**
- * Ejecuta una pasada de extracción (success_case) o devuelve plan vacío si no aplica.
+ * Ejecuta una pasada de extracción (success_case o proposal).
  * @param {string} payloadJson {name, mimeType, dataBase64}
  * @param {string} contentType
  * @param {string} passId common|challenge|solution|impact
@@ -1492,10 +1950,11 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
   ContentCatalog_requireContributor_();
   var type = String(contentType || '').trim();
   var pid = String(passId || '').trim();
-  if (type !== 'success_case') {
+  var passes = ContentExtraction_passIdsForType_(type);
+  if (!passes) {
     throw new Error('ERR_CONTENT_EXTRACT_PASS_TYPE');
   }
-  var passIndex = CONTENT_SUCCESS_CASE_PASSES.indexOf(pid);
+  var passIndex = passes.indexOf(pid);
   if (passIndex < 0) throw new Error('ERR_CONTENT_EXTRACT_PASS_INVALID');
 
   var raw = String(payloadJson || '').trim();
@@ -1516,9 +1975,13 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
   var locale = UiStrings_activeLocale_();
   var draft = ContentExtraction_parseDraftState_(draftJson, type);
 
-  ContentExtraction_runSuccessCasePass_(client, prepared.blob, hints, pid, draft, locale);
+  if (type === 'success_case') {
+    ContentExtraction_runSuccessCasePass_(client, prepared.blob, hints, pid, draft, locale);
+  } else if (type === 'proposal') {
+    ContentExtraction_runProposalPass_(client, prepared.blob, hints, pid, draft, locale);
+  }
 
-  var isLast = passIndex === CONTENT_SUCCESS_CASE_PASSES.length - 1;
+  var isLast = passIndex === passes.length - 1;
   if (isLast) {
     if (draft.common && typeof draft.common === 'object') {
       draft.common.content_type = type;
@@ -1535,7 +1998,7 @@ function ContentExtraction_extractPass(payloadJson, contentType, passId, draftJs
     draft: draft,
     passId: pid,
     passIndex: passIndex,
-    passTotal: CONTENT_SUCCESS_CASE_PASSES.length,
+    passTotal: passes.length,
     extractionComplete: isLast,
   };
 }
@@ -1567,6 +2030,15 @@ function ContentExtraction_extractInline(payloadJson, contentType) {
   var draft;
   if (contentType === 'success_case') {
     draft = ContentExtraction_extractSuccessCaseMultiPass_(client, prepared.blob, hints);
+    if (draft.common && typeof draft.common === 'object') {
+      draft.common.content_type = contentType;
+    }
+    ContentExtraction_resolveSpecific_(draft, contentType);
+    draft = ContentExtraction_enrichDraft_(draft, contentType, prepared.name, {
+      entryIndustry: hints.entryIndustry || '',
+    });
+  } else if (contentType === 'proposal') {
+    draft = ContentExtraction_extractProposalMultiPass_(client, prepared.blob, hints);
     if (draft.common && typeof draft.common === 'object') {
       draft.common.content_type = contentType;
     }

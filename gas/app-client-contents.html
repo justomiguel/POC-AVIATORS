@@ -2438,9 +2438,12 @@
 
   /** @const Pasadas success_case (mismo orden que CONTENT_SUCCESS_CASE_PASSES en servidor). */
   var CONTENTS_SUCCESS_CASE_PASS_IDS = ['common', 'challenge', 'solution', 'impact'];
+  /** @const Pasadas proposal (mismo orden que CONTENT_PROPOSAL_PASSES en servidor). */
+  var CONTENTS_PROPOSAL_PASS_IDS = ['common', 'commercial', 'scope'];
 
   function contentsExtractionPassIds_(type) {
     if (type === 'success_case') return CONTENTS_SUCCESS_CASE_PASS_IDS.slice();
+    if (type === 'proposal') return CONTENTS_PROPOSAL_PASS_IDS.slice();
     return null;
   }
 
@@ -2450,6 +2453,8 @@
       challenge: 'contents_extract_phase_challenge',
       solution: 'contents_extract_phase_solution',
       impact: 'contents_extract_phase_impact',
+      commercial: 'contents_extract_phase_proposal_commercial',
+      scope: 'contents_extract_phase_proposal_scope',
     };
     if (map[passId]) return map[passId];
     if (type === 'proposal') return 'contents_extract_phase_proposal';

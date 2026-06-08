@@ -1970,6 +1970,17 @@
   .blocking-flight-plane,
   .admin-seed-progress-indeterminate,
   .loader-flight-inline-plane,
+  .loader-i18n-radar-sweep,
+  .loader-i18n-radar-plane,
+  .loader-i18n-orbit-tag,
+  .loader-i18n-blip,
+  .loader-session-deck-aura,
+  .loader-session-logo-frame,
+  .loader-session-scanline,
+  .loader-session-wire,
+  .loader-session-chip,
+  .loader-session-chip-fill,
+  .loader-session-papi,
   .chat-thinking-icon,
   .fa-spin {
     animation: none !important;

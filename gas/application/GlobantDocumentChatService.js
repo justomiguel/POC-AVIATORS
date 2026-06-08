@@ -42,32 +42,47 @@ function GlobantDocumentChat_getAssistantName_() {
  * @return {string} assistantName usado como carpeta en /v1/files y en /v1/assistant/chat
  */
 function GlobantDocumentChat_ensurePermanentAssistant_(client) {
-  var p = PropertiesService.getScriptProperties();
-  var name = GlobantDocumentChat_getAssistantName_();
-  var existing = client.getAssistant(name);
-  if (existing) {
-    var resolved =
-      String(existing.assistantName || existing.name || name).trim() || name;
-    if (!p.getProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME)) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var p = PropertiesService.getScriptProperties();
+    var name = GlobantDocumentChat_getAssistantName_();
+    var stored = (p.getProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME) || '').trim();
+
+    function persistAndReturn_(assistantObj, fallbackName) {
+      var resolved =
+        String(
+          (assistantObj && (assistantObj.assistantName || assistantObj.name)) ||
+            fallbackName ||
+            '',
+        ).trim() || name;
       p.setProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME, resolved);
+      return resolved;
     }
-    return resolved;
+
+    if (stored) {
+      var cached = client.getAssistant(stored);
+      if (cached) return persistAndReturn_(cached, stored);
+    }
+
+    var existing = client.getAssistant(name);
+    if (existing) return persistAndReturn_(existing, name);
+
+    var parts = GlobantAssistant_parseProviderModel_(GlobantAssistant_resolveChatModel_());
+    var created = client.createChatAssistant({
+      name: name,
+      description: UiStrings_t(
+        UiStrings_activeLocale_(),
+        'globant_files_assistant_description',
+      ),
+      prompt: UiStrings_t(UiStrings_activeLocale_(), 'globant_files_assistant_prompt'),
+      providerName: parts.providerName,
+      modelName: parts.modelName,
+    });
+    return persistAndReturn_(created, name);
+  } finally {
+    lock.releaseLock();
   }
-  var parts = GlobantAssistant_parseProviderModel_(GlobantAssistant_resolveChatModel_());
-  var created = client.createChatAssistant({
-    name: name,
-    description: UiStrings_t(
-      UiStrings_activeLocale_(),
-      'globant_files_assistant_description',
-    ),
-    prompt: UiStrings_t(UiStrings_activeLocale_(), 'globant_files_assistant_prompt'),
-    providerName: parts.providerName,
-    modelName: parts.modelName,
-  });
-  var assistantName =
-    String(created.assistantName || created.name || name).trim() || name;
-  p.setProperty(LLM_PROP.GLOBANT_FILES_ASSISTANT_NAME, assistantName);
-  return assistantName;
 }
 
 /**

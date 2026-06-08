@@ -1321,6 +1321,13 @@ function adminKnowledgeGraphEnqueueBackgroundSync(reset) {
   });
 }
 
+/** Solo admin · vacía el grafo en Supabase y encola rebuild completo. */
+function adminKnowledgeGraphRebuildFromScratch() {
+  return AviatorsCode_runRpc_('adminKnowledgeGraphRebuildFromScratch', function () {
+    return AdminKnowledgeGraph_rebuildFromScratch_();
+  });
+}
+
 /** Solo admin · cancelar sync en segundo plano. */
 function adminKnowledgeGraphDiscardBackgroundSync() {
   return AviatorsCode_runRpc_('adminKnowledgeGraphDiscardBackgroundSync', function () {
@@ -1859,6 +1866,67 @@ function proposalBuildingAnswer(question, historyJson, contextJson) {
 function proposalBuildingResolveDeck(industryKey, briefJson) {
   return AviatorsCode_runRpc_('proposalBuildingResolveDeck', function () {
     return ProposalBuilding_resolveDeck(industryKey, briefJson);
+  });
+}
+
+/**
+ * Redacta «Nuestro entendimiento» con IA a partir del brief validado.
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ */
+function proposalBuildingComposeUnderstanding(briefJson, industryKey) {
+  return AviatorsCode_runRpc_('proposalBuildingComposeUnderstanding', function () {
+    return ProposalBuilding_composeUnderstanding(briefJson, industryKey);
+  });
+}
+
+/**
+ * Copia la plantilla de deck a Propuestas/ sin personalizar slides.
+ * @param {string} industryKey
+ * @param {string} briefJson
+ */
+function proposalBuildingCopyProposalDeck(industryKey, briefJson) {
+  return AviatorsCode_runRpc_('proposalBuildingCopyProposalDeck', function () {
+    return ProposalBuilding_copyProposalDeck(industryKey, briefJson);
+  });
+}
+
+/**
+ * Explica con IA por qué cada caso de éxito encaja con el brief validado.
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ */
+function proposalBuildingComposeSuccessCaseRationales(briefJson, industryKey) {
+  return AviatorsCode_runRpc_('proposalBuildingComposeSuccessCaseRationales', function () {
+    return ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey);
+  });
+}
+
+/**
+ * Personaliza slides (entendimiento, casos de éxito) en una copia ya creada.
+ * @param {string} presentationId
+ * @param {string} industryKey
+ * @param {string} briefJson
+ * @param {string} understandingJson
+ * @param {string=} successCasesJson
+ */
+function proposalBuildingCustomizeProposalDeck(
+  presentationId,
+  industryKey,
+  briefJson,
+  understandingJson,
+  successCasesJson,
+  deckOptionsJson,
+) {
+  return AviatorsCode_runRpc_('proposalBuildingCustomizeProposalDeck', function () {
+    return ProposalBuilding_customizeProposalDeck(
+      presentationId,
+      industryKey,
+      briefJson,
+      understandingJson,
+      successCasesJson,
+      deckOptionsJson,
+    );
   });
 }
 

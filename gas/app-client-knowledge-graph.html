@@ -18,6 +18,7 @@
   var resetBtn = document.getElementById('kg-reset-btn');
   var focusBtn = document.getElementById('kg-focus-btn');
   var rebuildBtn = document.getElementById('kg-rebuild-btn');
+  var rebuildScratchBtn = document.getElementById('kg-rebuild-scratch-btn');
   var syncToolbar = document.getElementById('kg-sync-toolbar');
   var detailLabel = document.getElementById('kg-detail-label');
   var detailType = document.getElementById('kg-detail-type');
@@ -57,6 +58,10 @@
   var graphLoaderEta = document.getElementById('kg-graph-loader-eta');
   var pendingSyncBanner = document.getElementById('kg-pending-sync-banner');
   var pendingSyncMsg = document.getElementById('kg-pending-sync-msg');
+  var pendingSyncDetail = document.getElementById('kg-pending-sync-detail');
+  var kgPendingSyncPollTimer = null;
+  var kgAutoContinueCooldownUntil = 0;
+  var kgAutoContinueBootstrapped = false;
   var pendingSyncResumeBtn = document.getElementById('kg-pending-sync-resume-btn');
   var pendingSyncDiscardBtn = document.getElementById('kg-pending-sync-discard-btn');
   var sidePanel = document.getElementById('kg-side-panel');
@@ -733,6 +738,7 @@
     if (resetBtn) resetBtn.disabled = d;
     if (focusBtn) focusBtn.disabled = d;
     if (rebuildBtn) rebuildBtn.disabled = d;
+    if (rebuildScratchBtn) rebuildScratchBtn.disabled = d;
     if (filterSearch) filterSearch.disabled = d;
     if (filterType) filterType.disabled = d;
     if (filterIndustry) filterIndustry.disabled = d;
@@ -1886,9 +1892,124 @@
     kgRebuildStep_('contents', 0, acc, !!reset);
   }
 
+  function kgStopPendingSyncPoll_() {
+    if (kgPendingSyncPollTimer) {
+      clearInterval(kgPendingSyncPollTimer);
+      kgPendingSyncPollTimer = null;
+    }
+  }
+
+  function kgStartPendingSyncPoll_() {
+    kgStopPendingSyncPoll_();
+    if (!S.get('canRebuildKnowledgeGraph')) return;
+    kgPendingSyncPollTimer = setInterval(function () {
+      if (pendingSyncBanner && !pendingSyncBanner.classList.contains('hidden')) {
+        kgCheckPendingSyncBanner_(function (prog) {
+          kgMaybeAutoContinueBackgroundSync_(prog);
+        });
+      } else {
+        kgStopPendingSyncPoll_();
+      }
+    }, 30000);
+  }
+
+  function kgContinuationTriggerLabel_(prog) {
+    if (!prog) return i18n('kg_bg_sync_trigger_no');
+    if (prog.continuationMode === 'client_rpc') {
+      return i18n('kg_bg_sync_trigger_client');
+    }
+    if (prog.triggerScheduled) {
+      return i18n('kg_bg_sync_trigger_yes');
+    }
+    return i18n('kg_bg_sync_trigger_no');
+  }
+
+  function kgContinueBackgroundSyncSilent_() {
+    if (rebuilding) return;
+    rebuilding = true;
+    kgAutoContinueCooldownUntil = Date.now() + 45000;
+    if (pendingSyncDetail) {
+      pendingSyncDetail.textContent = i18n('kg_bg_sync_auto_resuming');
+      pendingSyncDetail.classList.remove('hidden');
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        rebuilding = false;
+        if (!res || !res.ok) return;
+        if (res.aligned) {
+          kgHidePendingSyncBanner_();
+          kgSetStatus(i18n('kg_bg_sync_aligned'));
+          kgInvalidateSnapshots_();
+          kgLoad({ skipCache: true });
+          return;
+        }
+        kgCheckPendingSyncBanner_(function (prog) {
+          kgMaybeAutoContinueBackgroundSync_(prog);
+        });
+      })
+      .withFailureHandler(function () {
+        rebuilding = false;
+        kgAutoContinueCooldownUntil = Date.now() + 120000;
+      })
+      .adminKnowledgeGraphEnqueueBackgroundSync(false);
+  }
+
+  function kgMaybeAutoContinueBackgroundSync_(prog) {
+    if (!prog || !prog.inProgress || rebuilding) return;
+    if (!S.get('canRebuildKnowledgeGraph')) return;
+    if (Date.now() < kgAutoContinueCooldownUntil) return;
+    if (prog.continuationMode === 'client_rpc') {
+      kgContinueBackgroundSyncSilent_();
+      return;
+    }
+    if (prog.triggerScheduled) return;
+    var p = prog.progress;
+    var now = Date.now();
+    var stale = true;
+    if (p && p.last_batch && p.last_batch.at) {
+      stale = now - new Date(p.last_batch.at).getTime() > 75000;
+    } else if (p && p.from_scratch && p.started_at) {
+      stale = now - new Date(p.started_at).getTime() > 75000;
+    }
+    if (!stale) return;
+    kgContinueBackgroundSyncSilent_();
+  }
+
+  function kgFormatProgressDetail_(p) {
+    if (!p) return '';
+    if (p.last_error && p.last_error.detail) {
+      return i18nFmt('kg_pending_sync_last_error', {
+        phase: i18n('kg_phase_' + (p.last_error.phase || p.phase || 'contents')),
+        detail: String(p.last_error.detail),
+      });
+    }
+    if (p.from_scratch && !p.last_batch && (Number(p.skip) || 0) === 0) {
+      return i18nFmt('kg_pending_sync_scratch_queued', {
+        minutes: String(p.trigger_minutes != null ? p.trigger_minutes : 1),
+      });
+    }
+    if (p.last_batch) {
+      var lb = p.last_batch;
+      return i18nFmt('kg_pending_sync_batch_detail', {
+        phase: i18n('kg_phase_' + (lb.phase || p.phase || 'contents')),
+        done: String(lb.done || 0),
+        failed: String(lb.failed || 0),
+        skip: String(lb.skip != null ? lb.skip : 0),
+        total: String(lb.total || 0),
+      });
+    }
+    return '';
+  }
+
   function kgHidePendingSyncBanner_() {
     kgPendingSyncProgress = null;
+    kgAutoContinueBootstrapped = false;
+    kgStopPendingSyncPoll_();
     if (pendingSyncBanner) pendingSyncBanner.classList.add('hidden');
+    if (pendingSyncDetail) {
+      pendingSyncDetail.textContent = '';
+      pendingSyncDetail.classList.add('hidden');
+    }
   }
 
   function kgShowPendingSyncBanner_(prog) {
@@ -1905,12 +2026,21 @@
       phase: i18n('kg_phase_' + meta.phase),
       done: String(acc.doneTotal),
       failed: String(acc.failedTotal),
-      trigger: prog.triggerScheduled
-        ? i18n('kg_bg_sync_trigger_yes')
-        : i18n('kg_bg_sync_trigger_no'),
+      trigger: kgContinuationTriggerLabel_(prog),
     });
+    var detail = kgFormatProgressDetail_(p);
+    if (pendingSyncDetail) {
+      if (detail) {
+        pendingSyncDetail.textContent = detail;
+        pendingSyncDetail.classList.remove('hidden');
+      } else {
+        pendingSyncDetail.textContent = '';
+        pendingSyncDetail.classList.add('hidden');
+      }
+    }
     kgPendingSyncProgress = p;
     pendingSyncBanner.classList.remove('hidden');
+    kgStartPendingSyncPoll_();
   }
 
   function kgCheckPendingSyncBanner_(onDone) {
@@ -1929,13 +2059,22 @@
           prog.progress.phase !== 'done'
         ) {
           kgShowPendingSyncBanner_(prog);
-        } else {
-          kgHidePendingSyncBanner_();
+          if (!kgAutoContinueBootstrapped) {
+            kgAutoContinueBootstrapped = true;
+            setTimeout(function () {
+              kgMaybeAutoContinueBackgroundSync_(prog);
+            }, 4000);
+          }
+          if (typeof onDone === 'function') onDone(prog);
+          return;
         }
-        if (typeof onDone === 'function') onDone();
+        kgHidePendingSyncBanner_();
+        kgAutoContinueBootstrapped = false;
+        if (typeof onDone === 'function') onDone(prog);
       })
       .withFailureHandler(function () {
         kgHidePendingSyncBanner_();
+        kgAutoContinueBootstrapped = false;
         if (typeof onDone === 'function') onDone();
       })
       .getKnowledgeGraphBackgroundSyncStatus();
@@ -2526,9 +2665,12 @@
       if (syncToolbar) {
         syncToolbar.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
       }
-      if (rebuildBtn) {
-        rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
-      }
+    if (rebuildBtn) {
+      rebuildBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
+    }
+    if (rebuildScratchBtn) {
+      rebuildScratchBtn.classList.toggle('hidden', !S.get('canRebuildKnowledgeGraph'));
+    }
       kgApplyLimitsToFilters_();
       kgBuildLegend();
       kgPopulateFilterOptions();
@@ -2588,12 +2730,73 @@
       kgLoad({ focus: true });
     });
   }
+  function kgRebuildFromScratch_() {
+    if (!S.get('canRebuildKnowledgeGraph') || rebuilding) return;
+    A.confirmDialog({
+      title: i18n('kg_rebuild_scratch_confirm_title'),
+      message: i18n('kg_rebuild_scratch_confirm'),
+      danger: true,
+      requirePhrase: i18n('kg_rebuild_scratch_confirm_phrase'),
+      confirmLabel: i18n('kg_btn_rebuild_scratch'),
+    }).then(function (ok) {
+      if (!ok) return;
+      rebuilding = true;
+      kgSetControlsDisabled(true);
+      A.showBlockingModal(i18n('kg_rebuild_scratch_busy'));
+      google.script.run
+        .withSuccessHandler(function (res) {
+          A.hideBlockingModal();
+          rebuilding = false;
+          kgSetControlsDisabled(false);
+          if (!res || !res.ok) {
+            kgSetStatus(i18n('kg_rebuild_scratch_error'), true);
+            return;
+          }
+          kgInvalidateSnapshots_();
+          var phaseKey = 'kg_phase_' + String(res.phase || 'contents');
+          if (res.queued) {
+            kgSetStatus(
+              i18nFmt('kg_rebuild_scratch_queued', {
+                minutes: String(res.triggerMinutes != null ? res.triggerMinutes : 1),
+              }),
+            );
+          } else {
+            kgSetStatus(
+              i18nFmt('kg_rebuild_scratch_done', {
+                phase: i18n(phaseKey),
+              }),
+            );
+          }
+          kgCheckPendingSyncBanner_(function () {
+            kgLoad({ skipCache: true });
+          });
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          rebuilding = false;
+          kgSetControlsDisabled(false);
+          A.reportRpcError(e, {
+            scope: 'knowledgeGraph.rebuildFromScratch',
+            fallbackKey: 'kg_rebuild_scratch_error',
+            modal: true,
+            setStatus: function (m) {
+              kgSetStatus(m, true);
+            },
+          });
+        })
+        .adminKnowledgeGraphRebuildFromScratch();
+    });
+  }
+
   if (rebuildBtn) {
     rebuildBtn.addEventListener('click', function () {
       kgEnqueueBackgroundSync_(true, function () {
         kgLoad({ skipCache: true });
       });
     });
+  }
+  if (rebuildScratchBtn) {
+    rebuildScratchBtn.addEventListener('click', kgRebuildFromScratch_);
   }
   if (openContentBtn) {
     openContentBtn.addEventListener('click', function () {

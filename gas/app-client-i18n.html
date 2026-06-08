@@ -4,6 +4,7 @@
   var I18N_RELOADING = false;
   var I18N_READY_WAITERS = [];
   var I18N_LOAD_TIMEOUT_MS = 90000;
+  var I18N_LS_SCHEMA_ = 'v1';
   var i18nLoadTimeoutId = null;
 
   function i18nClearLoadTimeout_() {
@@ -20,8 +21,131 @@
     return loc === 'en' ? fallbackEn : fallbackEs;
   }
 
+  function i18nStartupLocale_(locale) {
+    return locale === 'en' ? 'en' : 'es';
+  }
+
+  function i18nStartupSub_(loc, partIndex) {
+    var ci = S.get('cachedI18n');
+    var keys = [
+      'app_startup_i18n_sub_meta',
+      'app_startup_i18n_sub1',
+      'app_startup_i18n_sub2',
+      'app_startup_i18n_sub3',
+    ];
+    var idx = Math.max(0, Math.min(keys.length - 1, Number(partIndex) || 0));
+    if (ci && ci[keys[idx]]) return ci[keys[idx]];
+    var fallbacks = {
+      es: [
+        'Torre de control: autorizando plan de vuelo lingüístico…',
+        'Compartimiento 1: menús y navegación a bordo…',
+        'Compartimiento 2: formularios y estados vacíos…',
+        'Compartimiento 3: mensajes de error y pistas técnicas…',
+      ],
+      en: [
+        'Control tower: clearing the linguistic flight plan…',
+        'Cargo bay 1: menus and navigation aboard…',
+        'Cargo bay 2: forms and empty states…',
+        'Cargo bay 3: errors and technical hints…',
+      ],
+    };
+    var pack = fallbacks[i18nStartupLocale_(loc)] || fallbacks.es;
+    return pack[idx] || pack[0];
+  }
+
   function i18nResolveLocale_(locale) {
     return locale === 'en' ? 'en' : 'es';
+  }
+
+  function i18nPreferredLocale_() {
+    try {
+      var st = localStorage.getItem('aviators_locale');
+      if (st === 'en') return 'en';
+    } catch (eLocPref) {}
+    return 'es';
+  }
+
+  function i18nStorageKey_(locale) {
+    return 'aviators_i18n_' + I18N_LS_SCHEMA_ + '_' + i18nResolveLocale_(locale);
+  }
+
+  /**
+   * Bypass de caché local: ?i18n_refresh=1 (equivale a forzar descarga completa).
+   * @return {boolean}
+   */
+  function i18nShouldBypassLocalCache_() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('i18n_refresh') === '1') return true;
+    } catch (eQ) {}
+    return false;
+  }
+
+  /**
+   * @param {'es'|'en'} locale
+   * @return {{revision:string,pack:Object,savedAt:number}|null}
+   */
+  function i18nReadLocalPack_(locale) {
+    try {
+      var raw = localStorage.getItem(i18nStorageKey_(locale));
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || typeof data !== 'object' || !data.pack || !data.revision) return null;
+      if (!A.i18nPackLooksValid(data.pack)) return null;
+      if (data.pack._locale !== i18nResolveLocale_(locale)) return null;
+      return {
+        revision: String(data.revision),
+        pack: data.pack,
+        savedAt: Number(data.savedAt) || 0,
+      };
+    } catch (eRead) {
+      return null;
+    }
+  }
+
+  /**
+   * @param {'es'|'en'} locale
+   * @param {string} revision
+   * @param {Object} pack
+   */
+  function i18nWriteLocalPack_(locale, revision, pack) {
+    if (!pack || !A.i18nPackLooksValid(pack)) return;
+    try {
+      localStorage.setItem(
+        i18nStorageKey_(locale),
+        JSON.stringify({
+          revision: String(revision || ''),
+          savedAt: Date.now(),
+          pack: pack,
+        }),
+      );
+    } catch (eWrite) {
+      if (window.console && console.warn) {
+        console.warn('[Aviators i18n] localStorage write failed', eWrite);
+      }
+    }
+  }
+
+  function i18nClearLocalPack_(locale) {
+    try {
+      if (locale) {
+        localStorage.removeItem(i18nStorageKey_(locale));
+        return;
+      }
+      localStorage.removeItem(i18nStorageKey_('es'));
+      localStorage.removeItem(i18nStorageKey_('en'));
+    } catch (eClr) {}
+  }
+
+  function i18nTryHydrateFromLocalStorage_() {
+    if (i18nShouldBypassLocalCache_()) return;
+    var loc = i18nPreferredLocale_();
+    var ci = S.get('cachedI18n');
+    if (A.i18nPackLooksValid(ci) && ci._locale === loc) return;
+    var cached = i18nReadLocalPack_(loc);
+    if (cached && cached.pack) {
+      S.set('cachedI18n', cached.pack);
+    }
   }
 
   function i18nFlushReadyWaiters_() {
@@ -107,53 +231,39 @@
   };
 
   /**
-   * Carga el pack i18n en partes (<60 KB por RPC de google.script.run).
-   * @param {'es'|'en'} locale
-   * @param {function(Object)=} onDone
-   * @param {function(*)=} onFail
+   * Descarga el pack en partes desde el servidor.
+   * @param {'es'|'en'} loc
+   * @param {{silent?:boolean,attempt?:number,onDone?:function(Object,string),onFail?:function(*)}} opts
    */
-  A.loadClientI18nPack = function (locale, onDone, onFail) {
-    var loc = i18nResolveLocale_(locale);
-    if (I18N_RELOADING) {
-      if (typeof onDone === 'function') {
-        A.whenClientI18nReady(onDone);
-      }
-      return;
-    }
-    I18N_RELOADING = true;
-    if (A.showStartupLoader) {
-      A.showStartupLoader(
-        i18nStartupMessage_('app_startup_i18n', 'Cargando textos…', 'Loading labels…')
-      );
-    }
-    i18nClearLoadTimeout_();
-    i18nLoadTimeoutId = setTimeout(function () {
-      if (!I18N_RELOADING) return;
-      finishFail(new Error('i18n_timeout'));
-    }, I18N_LOAD_TIMEOUT_MS);
+  function i18nFetchPackFromServer_(loc, opts) {
+    var o = opts || {};
+    var silent = !!o.silent;
+    var attempt = Number(o.attempt) || 0;
 
-    function finishOk(merged) {
+    function finishOk(merged, revision) {
       I18N_RELOADING = false;
       i18nClearLoadTimeout_();
+      if (revision) i18nWriteLocalPack_(loc, revision, merged);
       A.applyClientI18n(merged);
       i18nFlushReadyWaiters_();
-      if (typeof onDone === 'function') onDone(merged);
+      if (typeof o.onDone === 'function') o.onDone(merged, revision || '');
     }
 
     function finishFail(err) {
       I18N_RELOADING = false;
       i18nClearLoadTimeout_();
-      if (typeof onFail === 'function') onFail(err);
+      if (typeof o.onFail === 'function') o.onFail(err);
       i18nFlushReadyWaiters_();
     }
 
-    function loadOnce_(attempt) {
+    function loadOnce_(tryNo) {
       google.script.run
         .withSuccessHandler(function (meta) {
           var parts = meta && meta.parts ? Number(meta.parts) : 0;
+          var revision = meta && meta.revision ? String(meta.revision) : '';
           if (!parts || parts < 1) {
-            if (attempt < 1) {
-              loadOnce_(attempt + 1);
+            if (tryNo < 1) {
+              loadOnce_(tryNo + 1);
               return;
             }
             finishFail(new Error('i18n_meta_invalid'));
@@ -166,18 +276,27 @@
           function loadPart() {
             if (nextPart >= parts) {
               if (!A.i18nPackLooksValid(merged)) {
-                if (attempt < 1) {
-                  loadOnce_(attempt + 1);
+                if (tryNo < 1) {
+                  loadOnce_(tryNo + 1);
                   return;
                 }
                 finishFail(new Error('i18n_merge_invalid'));
                 return;
               }
-              finishOk(merged);
+              if (!silent && A.setStartupLoaderI18nProgress) {
+                A.setStartupLoaderI18nProgress(3, i18nStartupSub_(loc, 3));
+              }
+              finishOk(merged, revision);
               return;
             }
             var partIdx = nextPart;
             nextPart++;
+            if (!silent && A.setStartupLoaderI18nProgress) {
+              A.setStartupLoaderI18nProgress(
+                partIdx + 1,
+                i18nStartupSub_(loc, partIdx + 1),
+              );
+            }
             google.script.run
               .withSuccessHandler(function (chunk) {
                 if (chunk && typeof chunk === 'object') {
@@ -189,8 +308,8 @@
                 loadPart();
               })
               .withFailureHandler(function (err) {
-                if (attempt < 1) {
-                  loadOnce_(attempt + 1);
+                if (tryNo < 1) {
+                  loadOnce_(tryNo + 1);
                   return;
                 }
                 finishFail(err);
@@ -201,8 +320,8 @@
           loadPart();
         })
         .withFailureHandler(function (err) {
-          if (attempt < 1) {
-            loadOnce_(attempt + 1);
+          if (tryNo < 1) {
+            loadOnce_(tryNo + 1);
             return;
           }
           finishFail(err);
@@ -210,7 +329,99 @@
         .getI18nPackMeta(loc);
     }
 
-    loadOnce_(0);
+    loadOnce_(attempt);
+  }
+
+  /**
+   * Valida la revisión en servidor; si cambió, recarga el pack en silencio.
+   * @param {'es'|'en'} loc
+   */
+  function i18nRefreshPackIfStale_(loc) {
+    var cached = i18nReadLocalPack_(loc);
+    google.script.run
+      .withSuccessHandler(function (meta) {
+        var revision = meta && meta.revision ? String(meta.revision) : '';
+        if (!revision) return;
+        if (cached && cached.revision === revision) return;
+        if (I18N_RELOADING) return;
+        I18N_RELOADING = true;
+        i18nFetchPackFromServer_(loc, {
+          silent: true,
+          attempt: 0,
+          onDone: function (merged, rev) {
+            i18nWriteLocalPack_(loc, rev || revision, merged);
+          },
+          onFail: function () {},
+        });
+      })
+      .withFailureHandler(function () {})
+      .getI18nPackMeta(loc);
+  }
+
+  /**
+   * Carga el pack i18n en partes (<60 KB por RPC de google.script.run).
+   * Usa localStorage entre recargas; solo 1 RPC liviano si la caché sigue vigente.
+   * @param {'es'|'en'} locale
+   * @param {function(Object)=} onDone
+   * @param {function(*)=} onFail
+   * @param {{force?:boolean,silent?:boolean}=} opts
+   */
+  A.loadClientI18nPack = function (locale, onDone, onFail, opts) {
+    var loc = i18nResolveLocale_(locale);
+    var options = opts || {};
+    var force = !!options.force;
+
+    if (I18N_RELOADING) {
+      if (typeof onDone === 'function') {
+        A.whenClientI18nReady(onDone, loc);
+      }
+      return;
+    }
+
+    if (!force && !i18nShouldBypassLocalCache_()) {
+      var cached = i18nReadLocalPack_(loc);
+      if (cached && A.i18nPackLooksValid(cached.pack) && cached.pack._locale === loc) {
+        A.applyClientI18n(cached.pack);
+        i18nFlushReadyWaiters_();
+        if (typeof onDone === 'function') onDone(cached.pack);
+        i18nRefreshPackIfStale_(loc);
+        return;
+      }
+    }
+
+    I18N_RELOADING = true;
+    var silent = !!options.silent;
+    if (!silent && A.showStartupLoader) {
+      A.showStartupLoader(
+        i18nStartupMessage_('app_startup_i18n', 'Cargando textos…', 'Loading labels…'),
+        { variant: 'i18n', subtitle: i18nStartupSub_(loc, 0) },
+      );
+    }
+    if (!silent && A.setStartupLoaderI18nProgress) {
+      A.setStartupLoaderI18nProgress(0, i18nStartupSub_(loc, 0));
+    }
+    i18nClearLoadTimeout_();
+    i18nLoadTimeoutId = setTimeout(function () {
+      if (!I18N_RELOADING) return;
+      I18N_RELOADING = false;
+      i18nClearLoadTimeout_();
+      if (typeof onFail === 'function') onFail(new Error('i18n_timeout'));
+      i18nFlushReadyWaiters_();
+    }, I18N_LOAD_TIMEOUT_MS);
+
+    i18nFetchPackFromServer_(loc, {
+      silent: silent,
+      attempt: 0,
+      onDone: function (merged) {
+        if (typeof onDone === 'function') onDone(merged);
+      },
+      onFail: onFail,
+    });
+  };
+
+  /** Borra la caché local de textos (p. ej. tras ?i18n_refresh=1). */
+  A.clearClientI18nCache = function (locale) {
+    i18nClearLocalPack_(locale);
   };
 
   /**
@@ -220,10 +431,11 @@
    */
   A.whenClientI18nReady = function (onReady, locale) {
     if (typeof onReady !== 'function') return;
-    var loc = i18nResolveLocale_(locale);
+    var loc = i18nResolveLocale_(locale || i18nPreferredLocale_());
     var ci = S.get('cachedI18n');
     if (A.i18nPackLooksValid(ci) && ci._locale === loc) {
       onReady();
+      i18nRefreshPackIfStale_(loc);
       return;
     }
     I18N_READY_WAITERS.push(onReady);
@@ -338,6 +550,10 @@
     return msg;
   };
 
+  if (i18nShouldBypassLocalCache_()) {
+    i18nClearLocalPack_();
+  }
+  i18nTryHydrateFromLocalStorage_();
   i18nSanitizeCachedPack_();
 })(window.Aviators);
 </script>

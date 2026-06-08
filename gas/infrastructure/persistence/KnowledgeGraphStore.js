@@ -252,6 +252,22 @@ function KnowledgeGraphStore_upsertNode(row) {
 }
 
 /**
+ * Borra todo el grafo persistido (aristas primero, luego nodos). Solo operaciones admin.
+ * @return {{ok:boolean,edgesRemoved:boolean,nodesRemoved:boolean}}
+ */
+function KnowledgeGraphStore_purgeAll_() {
+  SupabaseRest_delete(
+    SUPABASE_TABLE.KNOWLEDGE_GRAPH_EDGES,
+    'edge_id=not.is.null',
+  );
+  SupabaseRest_delete(
+    SUPABASE_TABLE.KNOWLEDGE_GRAPH_NODES,
+    'node_id=not.is.null',
+  );
+  return { ok: true, edgesRemoved: true, nodesRemoved: true };
+}
+
+/**
  * @param {string} nodeId
  */
 function KnowledgeGraphStore_deleteNode(nodeId) {

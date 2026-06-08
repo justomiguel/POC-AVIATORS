@@ -80,7 +80,9 @@ No commitear secretos. Configuración mínima típica:
 | `GLOBANT_RAG_BASE_URL` | Base URL (ej. `https://api.clients.geai.globant.com`) |
 | `GEMINI_API_KEY` | Opcional, si se usa proveedor Gemini |
 | `LLM_PROVIDER` | Opcional: `globant` o `gemini` |
-| `DRIVE_ROOT_FOLDER_ID` | Carpeta raíz de Drive para PDFs del proyecto |
+| `DRIVE_ROOT_FOLDER_ID` | Carpeta raíz de Drive para PDFs del proyecto, onboarding, catálogo de propuestas y decks armados (`Propuestas/`) |
+| `PROPOSAL_DECK_AIRLINES_ID` | ID de la plantilla **Google Slides** (aerolíneas, español) para Armado de propuestas — ver [docs/PROPOSAL_BUILDING.md](docs/PROPOSAL_BUILDING.md) |
+| `PROPOSAL_DECK_LOGISTICS_ID` | ID de la plantilla Google Slides (logística) para Armado de propuestas |
 | `SALESFORCE_ACCOUNTS_SPREADSHEET_ID` | Planilla Airlines Accounts (sync diario a Supabase) — ver [docs/SALESFORCE_ACCOUNTS_SYNC.md](docs/SALESFORCE_ACCOUNTS_SYNC.md) |
 
 Detalle de propiedades admin, corpus Drive y Globant: comentarios en `gas/application/LlmConfig.js`.

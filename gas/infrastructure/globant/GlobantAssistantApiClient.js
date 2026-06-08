@@ -121,6 +121,39 @@ function GlobantAssistantApiClient_create(config) {
     return body.indexOf('not in Project') >= 0 || body.indexOf('"id":2031') >= 0;
   }
 
+  /**
+   * POST /v1/assistant devuelve 409 cuando el nombre ya existe en el proyecto.
+   * @param {number} code
+   * @param {string} text
+   * @return {boolean}
+   */
+  function assistantNameConflictHttp_(code, text) {
+    if (code !== 409) return false;
+    var body = String(text || '');
+    return (
+      body.indexOf('already exists') >= 0 ||
+      body.indexOf('"id":2030') >= 0 ||
+      body.indexOf('Assistant name already exists') >= 0
+    );
+  }
+
+  /**
+   * Tras 409 o carrera concurrente: reutilizar assistant existente por nombre.
+   * @param {string} name
+   * @return {Object|null}
+   */
+  function resolveExistingChatAssistant_(name) {
+    var target = String(name || '').trim();
+    if (!target) return null;
+    var found = getAssistant(target);
+    if (found) return found;
+    return {
+      assistantName: target,
+      name: target,
+      existed: true,
+    };
+  }
+
   function fetchAccessIds() {
     var r = BearerHttp_fetch(
       baseUrl + '/v1/accessControl/apitoken/validate',
@@ -384,6 +417,10 @@ function GlobantAssistantApiClient_create(config) {
     var code = r.getResponseCode();
     var text = r.getContentText() || '';
     if (!BearerHttp_isSuccess(code)) {
+      if (assistantNameConflictHttp_(code, text)) {
+        var existing = resolveExistingChatAssistant_(body.name);
+        if (existing) return existing;
+      }
       throw new Error(
         UiStrings_fmt_('err_globant_api_http', {
           path: '/v1/assistant',

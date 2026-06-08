@@ -41,3 +41,11 @@ Confiable · claro · operativo (no “startup hype”). Tono profesional B2B, c
 - Google Apps Script + HtmlService (sin bundler en runtime).
 - Tailwind compilado en local; CSS inyectado vía `tailwind-include.html`.
 - Sin `npm install` en servidor; despliegue con clasp.
+
+## Armado de propuestas
+
+Pantalla **Armado de propuestas** (`view_proposal_building`): brief validado → industria (Aerolíneas / Logística) → copia automática de una plantilla Google Slides en `DRIVE_ROOT_FOLDER_ID/Propuestas/` con nombre `Cliente - Alcance`.
+
+La plantilla debe incluir placeholders `{CLIENTE}`, `{OUR_UNDERSTANDING}` y, en la **slide 17**, `{Casos_de_Exito}` / `{CASO_EXITO_CONTENTS}` para clonar una slide por cada success case relevante del catálogo.
+
+Configuración operativa (Script Properties, permisos Slides API, checklist): **[docs/PROPOSAL_BUILDING.md](docs/PROPOSAL_BUILDING.md)**.

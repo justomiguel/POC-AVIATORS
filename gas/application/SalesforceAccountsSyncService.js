@@ -792,10 +792,10 @@ function SalesforceAccounts_scheduleEmbeddingsContinuation_() {
     return;
   }
   SalesforceAccounts_deleteEmbeddingsContinuationTriggers_();
-  ScriptApp.newTrigger(SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_)
-    .timeBased()
-    .afterMinutes(SALESFORCE_ACCOUNTS_EMBEDDING_CONTINUATION_MINUTES_)
-    .create();
+  ScriptAppSchedule_afterMinutes_(
+    SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_,
+    SALESFORCE_ACCOUNTS_EMBEDDING_CONTINUATION_MINUTES_,
+  );
 }
 
 /**

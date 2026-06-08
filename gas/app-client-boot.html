@@ -762,7 +762,7 @@
     } catch (eLoc2) {}
     A.loadClientI18nPack(next, function () {
       refreshUiAfterLocaleChange();
-    });
+    }, null, { force: false });
   }
 
   // --- Event listeners ---
@@ -985,7 +985,10 @@
     loginBtn.disabled = true;
     loginStatus.textContent = '\u00a0';
     if (A.showStartupLoader) {
-      A.showStartupLoader(i18n('app_startup_session'));
+      A.showStartupLoader(i18n('app_startup_session'), {
+        variant: 'session',
+        subtitle: i18n('app_startup_session_sub'),
+      });
     }
     google.script.run
       .withSuccessHandler(function (bootstrap) {

@@ -2494,7 +2494,7 @@ function AgentOrchestrator_analyzeEphemeralDocument(question, payloadJson, histo
 
   return {
     answer: answer,
-    model: GlobantDocumentChat_getAssistantName_(),
+    model: session.folder,
     providerLabel: UiStrings_t(UiStrings_activeLocale_(), 'meta_provider_globant_assistant'),
     rawJson: rawA,
     agentName: orchestrator.profileName,
