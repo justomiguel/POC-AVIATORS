@@ -72,13 +72,7 @@ function GlobantRagDefaults_mergeSearchLlm_(remoteLlm) {
 
 /** @return {string} plantilla por defecto con marcadores RAG */
 function GlobantRagDefaults_defaultSearchPrompt_() {
-  return (
-    'Sos un asistente en español. Si abajo hay contexto documental útil, desarrollá la respuesta con detalle, ' +
-    'explicando y citando lo relevante del contexto (no te limites a un resumen de una línea). ' +
-    'Priorizá respuestas completas y estructuradas cuando haya material útil. ' +
-    'Si el contexto está vacío o la pregunta es solo un saludo o algo trivial (fecha, etc.), respondé de forma clara y breve; en cualquier otro caso priorizá extensión y detalle sobre brevedad.\n\n' +
-    'Contexto:\n{context}\n\nPregunta: {question}\n'
-  );
+  return PromptCatalog_getTemplate('rag.default_search_prompt');
 }
 
 /**
@@ -95,10 +89,7 @@ function GlobantRagDefaults_coerceSearchPromptTemplate(instructions) {
   var hasContext = t.indexOf('{context}') >= 0;
   var hasQuestion = t.indexOf('{question}') >= 0;
   if (hasContext && hasQuestion) return t;
-  return (
-    t +
-    '\n\nContexto recuperado:\n{context}\n\nPregunta del usuario: {question}\n'
-  );
+  return t + PromptCatalog_getTemplate('rag.coerce_suffix');
 }
 
 /**

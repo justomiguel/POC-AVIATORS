@@ -118,7 +118,10 @@ function LlmProviderGlobant_consult(cmd) {
       }
     }
     if (histContext.length > 0) {
-      q = '[Previous conversation]\n' + histContext.join('\n') + '\n[/Previous conversation]\n\nCurrent question: ' + q;
+      q = PromptCatalog_render('globant.consult.history_wrapper', {
+        historyLines: histContext.join('\n'),
+        question: q,
+      });
     }
   }
 
@@ -394,21 +397,15 @@ function LlmProviderGlobant_consultPromptWithAgent(
   var finalPrompt = q;
   if (sp) {
     if (useRagExecute) {
-      // Instrucciones base del agente viven en searchOptions.search.prompt del perfil (sync Admin).
-      // En execute solo va la pregunta del turno + restricciones efímeras (idioma, rol, orquestador).
-      finalPrompt =
-        q +
-        '\n\n[CONSTRAINTS FOR THIS TURN]\n' +
-        sp +
-        '\n[/CONSTRAINTS FOR THIS TURN]';
+      finalPrompt = PromptCatalog_render('globant.rag.constraints_wrapper', {
+        question: q,
+        constraints: sp,
+      });
     } else {
-      finalPrompt =
-        '[QUERY]\n' +
-        q +
-        '\n[/QUERY]\n\n' +
-        '[INSTRUCTIONS]\n' +
-        sp +
-        '\n[/INSTRUCTIONS]';
+      finalPrompt = PromptCatalog_render('globant.assistant.query_wrapper', {
+        question: q,
+        instructions: sp,
+      });
     }
   }
 

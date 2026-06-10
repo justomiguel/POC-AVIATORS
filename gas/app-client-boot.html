@@ -22,8 +22,10 @@
   var navGroupChatModes = document.getElementById('nav-group-chat-modes');
   var navGroupKnowledge = document.getElementById('nav-group-knowledge');
   var navGroupAdmin = document.getElementById('nav-group-admin');
+  var navGroupProposals = document.getElementById('nav-group-proposals');
   var navPageOnboarding = document.getElementById('nav-page-onboarding');
   var navPageProposalBuilding = document.getElementById('nav-page-proposal-building');
+  var navPageMyProposals = document.getElementById('nav-page-my-proposals');
   var navPageGlobantOffering = document.getElementById('nav-page-globant-offering');
   var navPageContents = document.getElementById('nav-page-contents');
   var navPageTags = document.getElementById('nav-page-tags');
@@ -152,10 +154,18 @@
     }
   }
 
+  function canAccessProposalsSection_() {
+    return !!(
+      S.get('canViewProposalBuilding') ||
+      S.get('canBuildProposals') ||
+      S.get('canSaveProposals')
+    );
+  }
+
   function syncChatModeTabs_(pg) {
     if (!chatModeBar) return;
     var canOb = !!S.get('canViewOnboarding');
-    var canPb = !!S.get('canViewProposalBuilding');
+    var canPb = canAccessProposalsSection_();
     var modeCount = 1 + (canOb ? 1 : 0) + (canPb ? 1 : 0);
     chatModeBar.classList.toggle('hidden', !isChatPage_(pg) || modeCount < 2);
     if (chatModeOnboarding) {
@@ -184,6 +194,10 @@
     var o = opts || {};
     var canViewOnboarding = !!o.canViewOnboarding;
     var canViewProposalBuilding = !!o.canViewProposalBuilding;
+    var canBuildProposals = !!o.canBuildProposals;
+    var canSaveProposals = !!o.canSaveProposals;
+    var canAccessProposals =
+      canViewProposalBuilding || canBuildProposals || canSaveProposals;
     var canViewCatalog = !!o.canViewCatalog;
     var canViewTags = !!o.canViewTags;
     var canViewClients = !!o.canViewClients;
@@ -203,11 +217,20 @@
     if (navPageOnboarding) {
       navPageOnboarding.classList.toggle('hidden', !canViewOnboarding);
     }
+    if (navGroupProposals) {
+      navGroupProposals.classList.toggle('hidden', !canAccessProposals);
+    }
     if (navPageProposalBuilding) {
-      navPageProposalBuilding.classList.toggle('hidden', !canViewProposalBuilding);
+      navPageProposalBuilding.classList.toggle('hidden', !canBuildProposals);
+    }
+    if (navPageMyProposals) {
+      navPageMyProposals.classList.toggle('hidden', !canAccessProposals);
     }
     if (navPageGlobantOffering) {
-      navPageGlobantOffering.classList.toggle('hidden', !canViewProposalBuilding);
+      navPageGlobantOffering.classList.toggle(
+        'hidden',
+        !(canViewProposalBuilding || canBuildProposals),
+      );
     }
     if (navPageContents) navPageContents.classList.toggle('hidden', !canViewCatalog);
     if (navPageTags) navPageTags.classList.toggle('hidden', !canViewTags);
@@ -252,6 +275,7 @@
 
   function restoreNavGroupState_() {
     bindNavGroupToggle_(navGroupChatModes, 'aviators_nav_chat_modes_open', true);
+    bindNavGroupToggle_(navGroupProposals, 'aviators_nav_proposals_open', true);
     bindNavGroupToggle_(navGroupKnowledge, 'aviators_nav_knowledge_open');
     bindNavGroupToggle_(navGroupAdmin, 'aviators_nav_admin_open');
   }
@@ -291,10 +315,20 @@
     if (pg === 'onboarding' && !S.get('canViewOnboarding')) {
       pg = 'home';
     }
-    if (pg === 'proposal-building' && !S.get('canViewProposalBuilding')) {
+    if (pg === 'proposal-building' && !S.get('canBuildProposals')) {
       pg = 'home';
     }
-    if (pg === 'globant-offering' && !S.get('canViewProposalBuilding')) {
+    if (pg === 'my-proposals' && !canAccessProposalsSection_()) {
+      pg = 'home';
+    }
+    if (pg === 'proposal-view' && !canAccessProposalsSection_()) {
+      pg = 'home';
+    }
+    if (
+      pg === 'globant-offering' &&
+      !S.get('canViewProposalBuilding') &&
+      !S.get('canBuildProposals')
+    ) {
       pg = 'home';
     }
     if (pg === 'request-access' && !S.get('isVisitor')) {
@@ -318,6 +352,8 @@
         (pg === 'onboarding' && id === 'page-onboarding') ||
         (pg === 'globant-offering' && id === 'page-globant-offering') ||
         (pg === 'proposal-building' && id === 'page-proposal-building') ||
+        (pg === 'my-proposals' && id === 'page-my-proposals') ||
+        (pg === 'proposal-view' && id === 'page-proposal-view') ||
         (pg === 'contents' && id === 'page-contents') ||
         (pg === 'tags' && id === 'page-tags') ||
         (pg === 'clients' && id === 'page-clients') ||
@@ -351,6 +387,12 @@
     }
     if (pg === 'proposal-building' && A.proposalBuilding && typeof A.proposalBuilding.onEnterPage === 'function') {
       A.proposalBuilding.onEnterPage();
+    }
+    if (pg === 'my-proposals' && A.myProposals && typeof A.myProposals.onEnterPage === 'function') {
+      A.myProposals.onEnterPage();
+    }
+    if (pg === 'proposal-view' && A.proposalView && typeof A.proposalView.onEnterPage === 'function') {
+      A.proposalView.onEnterPage();
     }
     var viewApp = document.getElementById('view-app');
     if (viewApp) viewApp.setAttribute('data-active-page', pg || '');
@@ -438,6 +480,41 @@
   }
 
   A.setAppPage = setAppPage;
+
+  function revealLoginScreen_(opts) {
+    var o = opts || {};
+    if (!viewLogin || !A.i18nPackLooksValid(S.get('cachedI18n'))) return;
+    viewLogin.classList.remove('hidden');
+    viewLogin.removeAttribute('hidden');
+    viewLogin.setAttribute('aria-hidden', 'false');
+    if (A.hideStartupLoader) A.hideStartupLoader();
+    if (loginBtn) loginBtn.disabled = false;
+    if (loginStatus) {
+      var msg = o.statusMessage != null ? o.statusMessage : '\u00a0';
+      loginStatus.textContent = msg;
+      loginStatus.classList.toggle('err', !!o.statusError || !!(msg && String(msg).trim()));
+    }
+  }
+
+  function hideLoginScreenForLoading_() {
+    if (!viewLogin) return;
+    viewLogin.classList.add('hidden');
+    viewLogin.setAttribute('hidden', 'hidden');
+    viewLogin.setAttribute('aria-hidden', 'true');
+    if (loginBtn) loginBtn.disabled = true;
+    if (loginStatus) {
+      loginStatus.textContent = '\u00a0';
+      loginStatus.classList.remove('err');
+    }
+  }
+
+  function showI18nLoadFailure_() {
+    hideLoginScreenForLoading_();
+    if (loginBtn) loginBtn.disabled = true;
+    if (A.showStartupLoader) {
+      A.showStartupLoader(A.i18nStartupText('app_startup_failed'), { variant: 'default' });
+    }
+  }
 
   function refreshUiAfterLocaleChange() {
     var llm = S.get('lastLlmCfg');
@@ -535,7 +612,6 @@
   }
 
   function showApp(bootstrap) {
-    if (A.hideStartupLoader) A.hideStartupLoader();
     var wantLocale = null;
     try {
       var st = localStorage.getItem('aviators_locale');
@@ -548,10 +624,15 @@
         (S.get('cachedI18n') && S.get('cachedI18n')._locale) ||
         'es';
       A.ensureClientI18n(bootLocale, function () {
+      if (A.hideStartupLoader) A.hideStartupLoader();
       // Keep sidebar logo in sync with embedded login logo data URL.
       if (A.syncSidebarBrandLogo) A.syncSidebarBrandLogo();
       loginStatus.textContent = '\u00a0';
-      viewLogin.classList.add('hidden');
+      if (viewLogin) {
+        viewLogin.classList.add('hidden');
+        viewLogin.setAttribute('hidden', 'hidden');
+        viewLogin.setAttribute('aria-hidden', 'true');
+      }
       viewApp.classList.remove('hidden');
 
       var data = bootstrap.session || {};
@@ -637,6 +718,8 @@
       var canManageUnansweredQueue = !!perms.canManageUnansweredQueue;
       var canViewOnboarding = !!perms.canViewOnboarding;
       var canViewProposalBuilding = !!perms.canViewProposalBuilding;
+      var canBuildProposals = !!perms.canBuildProposals;
+      var canSaveProposals = !!perms.canSaveProposals;
       var canViewKnowledgeGraph = !!perms.canViewKnowledgeGraph;
       var canRebuildKnowledgeGraph = !!perms.canRebuildKnowledgeGraph;
       var canViewSettings =
@@ -646,7 +729,9 @@
         canManageUsers ||
         canManageRoleConfig ||
         canSyncSalesforceAccounts ||
-        canRebuildKnowledgeGraph;
+        canRebuildKnowledgeGraph ||
+        !!(bootstrap.admin && bootstrap.admin.isAdmin);
+      S.set('isAdmin', !!(bootstrap.admin && bootstrap.admin.isAdmin));
       S.set('canManageAgents', canManageAgents);
       S.set('canWriteContents', canWriteCatalog);
       S.set('canViewAgents', canViewAgents);
@@ -661,6 +746,8 @@
       S.set('canManageUnansweredQueue', canManageUnansweredQueue);
       S.set('canViewOnboarding', canViewOnboarding);
       S.set('canViewProposalBuilding', canViewProposalBuilding);
+      S.set('canBuildProposals', canBuildProposals);
+      S.set('canSaveProposals', canSaveProposals);
       S.set('canViewKnowledgeGraph', canViewKnowledgeGraph);
       S.set('canRebuildKnowledgeGraph', canRebuildKnowledgeGraph);
       S.set('canViewSettings', canViewSettings);
@@ -703,6 +790,8 @@
       syncSidebarNav_({
         canViewOnboarding: canViewOnboarding,
         canViewProposalBuilding: canViewProposalBuilding,
+        canBuildProposals: canBuildProposals,
+        canSaveProposals: canSaveProposals,
         canViewCatalog: canViewCatalog,
         canViewTags: canViewTags,
         canViewClients: canViewClients,
@@ -760,12 +849,23 @@
 
   function resetToLogin(message) {
     viewApp.classList.add('hidden');
-    viewLogin.classList.remove('hidden');
-    loginBtn.disabled = false;
+    hideLoginScreenForLoading_();
+    if (A.showStartupLoader) {
+      A.showStartupLoader(i18n('app_startup_session'), {
+        variant: 'session',
+        subtitle: i18n('app_startup_session_sub'),
+      });
+    }
     A.whenClientI18nReady(function () {
+      if (!A.i18nPackLooksValid(S.get('cachedI18n'))) {
+        showI18nLoadFailure_();
+        return;
+      }
       A.applyClientI18n(S.get('cachedI18n'));
-      loginStatus.textContent = message || '\u00a0';
-      loginStatus.classList.toggle('err', !!message);
+      revealLoginScreen_({
+        statusMessage: message || '\u00a0',
+        statusError: !!message,
+      });
     });
   }
 
@@ -778,9 +878,32 @@
     try {
       localStorage.setItem('aviators_locale', next);
     } catch (eLoc2) {}
-    A.loadClientI18nPack(next, function () {
-      refreshUiAfterLocaleChange();
-    }, null, { force: false });
+    var onLoginScreen =
+      viewLogin &&
+      !viewLogin.classList.contains('hidden') &&
+      viewApp &&
+      viewApp.classList.contains('hidden');
+    if (onLoginScreen) {
+      hideLoginScreenForLoading_();
+      if (A.showStartupLoader) {
+        A.showStartupLoader(i18n('app_startup_i18n'), {
+          variant: 'i18n',
+          subtitle: i18n('app_startup_i18n_sub_meta'),
+        });
+      }
+    }
+    A.loadClientI18nPack(
+      next,
+      function () {
+        A.applyClientI18n(S.get('cachedI18n'));
+        refreshUiAfterLocaleChange();
+        if (onLoginScreen) revealLoginScreen_();
+      },
+      function () {
+        if (onLoginScreen) showI18nLoadFailure_();
+      },
+      { force: false },
+    );
   }
 
   // --- Event listeners ---
@@ -808,6 +931,9 @@
   }
   if (navPageProposalBuilding) {
     navPageProposalBuilding.addEventListener('click', function () { setAppPage('proposal-building'); });
+  }
+  if (navPageMyProposals) {
+    navPageMyProposals.addEventListener('click', function () { setAppPage('my-proposals'); });
   }
   if (chatModeGeneral) {
     chatModeGeneral.addEventListener('click', function () { setAppPage('home'); });
@@ -1013,18 +1139,15 @@
     }
     google.script.run
       .withSuccessHandler(function (bootstrap) {
-        if (A.hideStartupLoader) A.hideStartupLoader();
-        loginBtn.disabled = false;
-        loginStatus.textContent = '\u00a0';
         var s = bootstrap.session || {};
         if (s.email) {
           showApp(bootstrap);
+          return;
         }
+        revealLoginScreen_();
       })
       .withFailureHandler(function () {
-        if (A.hideStartupLoader) A.hideStartupLoader();
-        loginBtn.disabled = false;
-        loginStatus.textContent = '\u00a0';
+        revealLoginScreen_();
       })
       .getBootstrap();
   }
@@ -1037,15 +1160,10 @@
 
   loginBtn.disabled = true;
   loginStatus.textContent = '\u00a0';
+  hideLoginScreenForLoading_();
   A.whenClientI18nReady(function () {
     if (!A.i18nPackLooksValid(S.get('cachedI18n'))) {
-      if (A.hideStartupLoader) A.hideStartupLoader();
-      loginBtn.disabled = false;
-      loginStatus.textContent =
-        wantLocale === 'en'
-          ? 'Could not load labels. Please reload the page.'
-          : 'No se pudieron cargar los textos. Recargá la página.';
-      loginStatus.classList.add('err');
+      showI18nLoadFailure_();
       return;
     }
     A.applyClientI18n(S.get('cachedI18n'));

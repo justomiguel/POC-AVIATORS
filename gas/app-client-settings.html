@@ -840,6 +840,9 @@
     if (pending === 'settings-tab-agents') {
       settingsOnAgentsTabShow_();
     }
+    if (pending === 'settings-tab-prompts' && A.prompts && A.prompts.onTabShow) {
+      A.prompts.onTabShow();
+    }
   }
 
   function settingsBindTabHooks_() {
@@ -847,6 +850,12 @@
     if (agentsTab) {
       agentsTab.addEventListener('click', function () {
         settingsOnAgentsTabShow_();
+      });
+    }
+    var promptsTab = document.getElementById('settings-tab-prompts');
+    if (promptsTab) {
+      promptsTab.addEventListener('click', function () {
+        if (A.prompts && A.prompts.onTabShow) A.prompts.onTabShow();
       });
     }
   }
@@ -858,6 +867,7 @@
       { tabId: 'settings-tab-roles', perm: 'canManageRoleConfig' },
       { tabId: 'settings-tab-users', perm: 'canManageUsers' },
       { tabId: 'settings-tab-agents', perm: 'canViewAgents' },
+      { tabId: 'settings-tab-prompts', perm: 'isAdmin' },
       { tabId: 'settings-tab-chat', perm: 'canManageAgents' },
       { tabId: 'settings-tab-salesforce', perm: 'canSyncSalesforceAccounts' },
       {

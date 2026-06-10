@@ -489,17 +489,40 @@ function GlobantAssistantApiClient_create(config) {
    * @param {string} mimeType e.g. "application/pdf"
    * @return {{text:string, parsed:Object}}
    */
-  function chatWithFileInline(model, systemPrompt, userText, fileBase64, mimeType) {
+  function chatWithFileInline(model, systemPrompt, userText, fileBase64, mimeType, fileName) {
     var messages = [];
     if (systemPrompt) {
       messages.push({ role: 'system', content: systemPrompt });
     }
+    var mime = String(mimeType || 'application/pdf').trim().toLowerCase();
+    var fname = String(fileName || 'document.pdf').trim() || 'document.pdf';
+    /** @type {Array<Object>} */
+    var contentParts = [{ type: 'text', text: userText }];
+    if (mime === 'application/pdf') {
+      contentParts.push({
+        type: 'file',
+        file: {
+          filename: fname,
+          file_data: 'data:application/pdf;base64,' + fileBase64,
+        },
+      });
+    } else if (mime.indexOf('image/') === 0) {
+      contentParts.push({
+        type: 'image_url',
+        image_url: { url: 'data:' + mime + ';base64,' + fileBase64 },
+      });
+    } else {
+      contentParts.push({
+        type: 'file',
+        file: {
+          filename: fname,
+          file_data: 'data:' + mime + ';base64,' + fileBase64,
+        },
+      });
+    }
     messages.push({
       role: 'user',
-      content: [
-        { type: 'text', text: userText },
-        { type: 'image_url', image_url: 'data:' + mimeType + ';base64,' + fileBase64 },
-      ],
+      content: contentParts,
     });
     var payload = JSON.stringify({
       model: model,

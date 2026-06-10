@@ -22,7 +22,16 @@ function doGet(e) {
   tpl.clientScriptToast = HtmlService.createHtmlOutputFromFile('app-client-toast').getContent();
   tpl.clientScriptDrive = HtmlService.createHtmlOutputFromFile('app-client-drive').getContent();
   tpl.clientScriptChat = HtmlService.createHtmlOutputFromFile('app-client-chat').getContent();
+  tpl.clientScriptProposalStudiosRender = HtmlService.createHtmlOutputFromFile(
+    'app-client-proposal-studios-render',
+  ).getContent();
+  tpl.clientScriptProposalStudiosOrchestrator = HtmlService.createHtmlOutputFromFile(
+    'app-client-proposal-studios-orchestrator',
+  ).getContent();
   tpl.clientScriptProposalBuilding = HtmlService.createHtmlOutputFromFile('app-client-proposal-building')
+    .getContent();
+  tpl.clientScriptMyProposals = HtmlService.createHtmlOutputFromFile('app-client-my-proposals').getContent();
+  tpl.clientScriptProposalView = HtmlService.createHtmlOutputFromFile('app-client-proposal-view')
     .getContent();
   tpl.clientScriptAgents = HtmlService.createHtmlOutputFromFile('app-client-agents').getContent();
   tpl.clientScriptContents = HtmlService.createHtmlOutputFromFile('app-client-contents').getContent();
@@ -35,6 +44,7 @@ function doGet(e) {
   tpl.clientScriptDashboard = HtmlService.createHtmlOutputFromFile('app-client-dashboard').getContent();
   tpl.clientScriptMetrics = HtmlService.createHtmlOutputFromFile('app-client-metrics').getContent();
   tpl.clientScriptSettings = HtmlService.createHtmlOutputFromFile('app-client-settings').getContent();
+  tpl.clientScriptPrompts = HtmlService.createHtmlOutputFromFile('app-client-prompts').getContent();
   tpl.clientScriptAccessRequest = HtmlService.createHtmlOutputFromFile('app-client-access-request').getContent();
   tpl.clientScriptBoot = HtmlService.createHtmlOutputFromFile('app-client-boot').getContent();
   return tpl
@@ -79,6 +89,8 @@ function getBootstrap() {
     canSyncSalesforceAccounts: false,
     canViewOnboarding: false,
     canViewProposalBuilding: false,
+    canBuildProposals: false,
+    canSaveProposals: false,
     canViewKnowledgeGraph: false,
     canRebuildKnowledgeGraph: false,
   };
@@ -99,6 +111,8 @@ function getBootstrap() {
       perms.canSyncSalesforceAccounts = AdminAuth_emailCanSyncSalesforce(email);
       perms.canViewOnboarding = AdminAuth_emailCanViewOnboarding(email);
       perms.canViewProposalBuilding = AdminAuth_emailCanViewProposalBuilding(email);
+      perms.canBuildProposals = AdminAuth_emailCanBuildProposals(email);
+      perms.canSaveProposals = AdminAuth_emailCanSaveProposals(email);
       perms.canViewKnowledgeGraph = AdminAuth_emailCanViewKnowledgeGraph(email);
       perms.canRebuildKnowledgeGraph = AdminAuth_emailIsAdmin(email);
     }
@@ -864,7 +878,7 @@ function globantAnalyzeEphemeralDocument(prompt, payloadJson, historyJson) {
  * @param {string} prompt
  * @param {string} agentId
  */
-function globantAnswerWithAgent(prompt, agentId, historyJson) {
+function globantAnswerWithAgent(prompt, agentId, historyJson, trackMode) {
   return AviatorsCode_runRpc_('globantAnswerWithAgent', function () {
     var aid = String(agentId || '').trim().toLowerCase();
     if (aid === 'onboarding') {
@@ -873,8 +887,12 @@ function globantAnswerWithAgent(prompt, agentId, historyJson) {
     var history = [];
     try { if (historyJson) history = JSON.parse(historyJson); } catch (e) {}
     var r = AgentOrchestrator_answerWith(prompt, agentId, history);
+    var mode = String(trackMode || '').trim();
+    if (!mode) {
+      mode = aid === 'onboarding' ? 'onboarding' : 'globant_agent';
+    }
     var tracked = MetricsService_trackQuestionEvent({
-      mode: 'globant_agent',
+      mode: mode,
       agentId: agentId,
       agentName: r.agentName || '',
       questionText: prompt,
@@ -1057,6 +1075,34 @@ function adminAgentsDelete(agentId) {
 function adminAgentsSync(agentId) {
   return AviatorsCode_runRpc_('adminAgentsSync', function () {
     return AdminAgents_sync(agentId);
+  });
+}
+
+/** Solo admin · listado agrupado del catálogo de prompts LLM. */
+function promptCatalogList() {
+  return AviatorsCode_runRpc_('promptCatalogList', function () {
+    return PromptCatalog_list();
+  });
+}
+
+/** Solo admin · detalle de un prompt del catálogo. */
+function promptCatalogGet(promptId) {
+  return AviatorsCode_runRpc_('promptCatalogGet', function () {
+    return PromptCatalog_getEntry(promptId);
+  });
+}
+
+/** Solo admin · guardar plantilla de prompt (aplica de inmediato). */
+function promptCatalogSave(promptId, template) {
+  return AviatorsCode_runRpc_('promptCatalogSave', function () {
+    return PromptCatalog_saveEntry(promptId, template);
+  });
+}
+
+/** Solo admin · restaurar prompt a la versión original de fábrica. */
+function promptCatalogReset(promptId) {
+  return AviatorsCode_runRpc_('promptCatalogReset', function () {
+    return PromptCatalog_resetEntry(promptId);
   });
 }
 
@@ -1873,9 +1919,9 @@ function proposalBuildingExtractBrief(payloadJson) {
  * Fusiona varios briefs extraídos (multi-documento).
  * @param {string} briefsJson
  */
-function proposalBuildingMergeExtractedBriefs(briefsJson) {
+function proposalBuildingMergeExtractedBriefs(briefsJson, sessionId) {
   return AviatorsCode_runRpc_('proposalBuildingMergeExtractedBriefs', function () {
-    return ProposalBuilding_mergeExtractedBriefs(briefsJson);
+    return ProposalBuilding_mergeExtractedBriefs(briefsJson, sessionId);
   });
 }
 
@@ -1884,9 +1930,59 @@ function proposalBuildingMergeExtractedBriefs(briefsJson) {
  * @param {string} briefJson
  * @param {string=} industryKey
  */
-function proposalBuildingRecommendStudios(briefJson, industryKey) {
+function proposalBuildingRecommendStudios(briefJson, industryKey, sessionId) {
   return AviatorsCode_runRpc_('proposalBuildingRecommendStudios', function () {
-    return ProposalBuilding_recommendStudios(briefJson, industryKey);
+    return ProposalBuilding_recommendStudios(briefJson, industryKey, sessionId);
+  });
+}
+
+/**
+ * Ejecuta una lane de recomendación de studios (AI-PODs, digital, AI vertical o enterprise).
+ * @param {string} lane
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ */
+function proposalBuildingRecommendStudiosLane(lane, briefJson, industryKey) {
+  return AviatorsCode_runRpc_('proposalBuildingRecommendStudiosLane', function () {
+    return ProposalBuilding_recommendStudiosLane(lane, briefJson, industryKey);
+  });
+}
+
+/**
+ * Fusiona lanes paralelas, enriquece catálogo y persiste recomendaciones.
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @param {string} lanesJson
+ * @param {string=} sessionId
+ */
+function proposalBuildingFinalizeStudioRecommendations(briefJson, industryKey, lanesJson, sessionId) {
+  return AviatorsCode_runRpc_('proposalBuildingFinalizeStudioRecommendations', function () {
+    return ProposalBuilding_finalizeStudioRecommendations(briefJson, industryKey, lanesJson, sessionId);
+  });
+}
+
+/**
+ * Regenera una lane y fusiona con studios existentes (vista propuesta / edición).
+ * @param {string} sessionId
+ * @param {string} lane
+ * @param {string=} briefJson
+ * @param {string=} studiosJson
+ */
+function proposalBuildingRefreshStudiosLane(sessionId, lane, briefJson, studiosJson) {
+  return AviatorsCode_runRpc_('proposalBuildingRefreshStudiosLane', function () {
+    return ProposalBuilding_refreshStudiosLane(sessionId, lane, briefJson, studiosJson);
+  });
+}
+
+/**
+ * Regenera el pitch AI-PODs de presale para una propuesta guardada (vista detalle).
+ * @param {string} sessionId
+ * @param {string=} briefJson
+ * @param {string=} studiosJson
+ */
+function proposalBuildingRefreshAiPodsPitch(sessionId, briefJson, studiosJson) {
+  return AviatorsCode_runRpc_('proposalBuildingRefreshAiPodsPitch', function () {
+    return ProposalBuilding_refreshAiPodsPitch(sessionId, briefJson, studiosJson);
   });
 }
 
@@ -1900,7 +1996,7 @@ function proposalBuildingAnswer(question, historyJson, contextJson) {
   return AviatorsCode_runRpc_('proposalBuildingAnswer', function () {
     var r = ProposalBuilding_answerWithContext(question, historyJson, contextJson);
     var tracked = MetricsService_trackQuestionEvent({
-      mode: 'globant_agent',
+      mode: 'proposal_building',
       agentId: 'proposals',
       agentName: r.agentName || 'proposals',
       questionText: question,
@@ -1931,9 +2027,9 @@ function proposalBuildingResolveDeck(industryKey, briefJson) {
  * @param {string} briefJson
  * @param {string=} industryKey
  */
-function proposalBuildingComposeUnderstanding(briefJson, industryKey) {
+function proposalBuildingComposeUnderstanding(briefJson, industryKey, sessionId) {
   return AviatorsCode_runRpc_('proposalBuildingComposeUnderstanding', function () {
-    return ProposalBuilding_composeUnderstanding(briefJson, industryKey);
+    return ProposalBuilding_composeUnderstanding(briefJson, industryKey, sessionId);
   });
 }
 
@@ -1942,9 +2038,9 @@ function proposalBuildingComposeUnderstanding(briefJson, industryKey) {
  * @param {string} industryKey
  * @param {string} briefJson
  */
-function proposalBuildingCopyProposalDeck(industryKey, briefJson) {
+function proposalBuildingCopyProposalDeck(industryKey, briefJson, sessionId) {
   return AviatorsCode_runRpc_('proposalBuildingCopyProposalDeck', function () {
-    return ProposalBuilding_copyProposalDeck(industryKey, briefJson);
+    return ProposalBuilding_copyProposalDeck(industryKey, briefJson, sessionId);
   });
 }
 
@@ -1953,9 +2049,32 @@ function proposalBuildingCopyProposalDeck(industryKey, briefJson) {
  * @param {string} briefJson
  * @param {string=} industryKey
  */
-function proposalBuildingComposeSuccessCaseRationales(briefJson, industryKey) {
+function proposalBuildingComposeSuccessCaseRationales(briefJson, industryKey, sessionId, casesJson) {
   return AviatorsCode_runRpc_('proposalBuildingComposeSuccessCaseRationales', function () {
-    return ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey);
+    return ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey, sessionId, casesJson);
+  });
+}
+
+/**
+ * Propone casos de éxito para el paso presale (mín. 5 candidatos + rationales).
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @param {string=} sessionId
+ */
+function proposalBuildingRecommendSuccessCases(briefJson, industryKey, sessionId) {
+  return AviatorsCode_runRpc_('proposalBuildingRecommendSuccessCases', function () {
+    return ProposalBuilding_recommendSuccessCases(briefJson, industryKey, sessionId);
+  });
+}
+
+/**
+ * Guarda qué casos de éxito incluir en la propuesta.
+ * @param {string} sessionId
+ * @param {string} selectionsJson
+ */
+function proposalBuildingSaveSuccessCaseSelections(sessionId, selectionsJson) {
+  return AviatorsCode_runRpc_('proposalBuildingSaveSuccessCaseSelections', function () {
+    return ProposalBuilding_saveSuccessCaseSelections(sessionId, selectionsJson);
   });
 }
 
@@ -1974,6 +2093,7 @@ function proposalBuildingCustomizeProposalDeck(
   understandingJson,
   successCasesJson,
   deckOptionsJson,
+  sessionId,
 ) {
   return AviatorsCode_runRpc_('proposalBuildingCustomizeProposalDeck', function () {
     return ProposalBuilding_customizeProposalDeck(
@@ -1983,7 +2103,69 @@ function proposalBuildingCustomizeProposalDeck(
       understandingJson,
       successCasesJson,
       deckOptionsJson,
+      sessionId,
     );
+  });
+}
+
+/**
+ * Lista paginada de propuestas del usuario autenticado.
+ * @param {number} skip
+ * @param {number} limit
+ * @param {string=} sortBy
+ * @param {string=} sortDir
+ * @param {string=} statusFilter
+ * @param {string=} filtersJson JSON: { industry?, builderStep?, deliverables?, query? }
+ */
+function proposalBuildingSessionsList(skip, limit, sortBy, sortDir, statusFilter, filtersJson) {
+  return AviatorsCode_runRpc_('proposalBuildingSessionsList', function () {
+    return ProposalBuildingPersistence_listMySessions(skip, limit, sortBy, sortDir, statusFilter, filtersJson);
+  });
+}
+
+/**
+ * Detalle de una propuesta del usuario autenticado.
+ * @param {string} sessionId
+ */
+function proposalBuildingSessionGet(sessionId) {
+  return AviatorsCode_runRpc_('proposalBuildingSessionGet', function () {
+    return ProposalBuildingPersistence_getMySession(sessionId);
+  });
+}
+
+/**
+ * Agrega un material a una propuesta (subida o enlace Drive existente).
+ * @param {string} sessionId
+ * @param {string} payloadJson JSON: { driveUrl?, attachment?: { name, mimeType, dataBase64?, textContent? } }
+ */
+function proposalBuildingSessionAddMaterial(sessionId, payloadJson) {
+  return AviatorsCode_runRpc_('proposalBuildingSessionAddMaterial', function () {
+    var payload =
+      typeof payloadJson === 'string' && payloadJson ? JSON.parse(payloadJson) : payloadJson || {};
+    return ProposalBuildingPersistence_addMaterial_(sessionId, payload);
+  });
+}
+
+/**
+ * Actualiza campos editables de una propuesta (hero, brief, recordatorios).
+ * @param {string} sessionId
+ * @param {string} payloadJson JSON parcial: clientName, proposalName, brief, context.viewReminders, …
+ */
+function proposalBuildingSessionUpdate(sessionId, payloadJson) {
+  return AviatorsCode_runRpc_('proposalBuildingSessionUpdate', function () {
+    var payload =
+      typeof payloadJson === 'string' && payloadJson ? JSON.parse(payloadJson) : payloadJson || {};
+    return ProposalBuildingPersistence_updateMySession_(sessionId, payload);
+  });
+}
+
+/**
+ * Elimina una propuesta del listado del usuario (no borra archivos en Drive).
+ * @param {string} sessionId
+ */
+function proposalBuildingSessionDelete(sessionId) {
+  return AviatorsCode_runRpc_('proposalBuildingSessionDelete', function () {
+    return ProposalBuildingPersistence_deleteMySession(sessionId);
   });
 }
 

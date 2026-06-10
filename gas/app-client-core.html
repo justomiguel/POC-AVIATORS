@@ -68,6 +68,8 @@ window.Aviators = window.Aviators || {};
     canManageUnansweredQueue: false,
     canViewOnboarding: false,
     canViewProposalBuilding: false,
+    canBuildProposals: false,
+    canSaveProposals: false,
     webAppUrl: '',
     driveExpStack: [],
     driveExpNextToken: '',
@@ -110,6 +112,7 @@ window.Aviators = window.Aviators || {};
   var blockingModalStep = document.getElementById('blocking-modal-step');
   var blockingModalDetail = document.getElementById('blocking-modal-detail');
   var blockingModalFilename = document.getElementById('blocking-modal-filename');
+  var blockingModalHint = document.getElementById('blocking-modal-hint');
   var startupLoader = document.getElementById('app-startup-loader');
   var startupLoaderCard = document.getElementById('app-startup-loader-card');
   var startupLoaderMsg = document.getElementById('app-startup-loader-msg');
@@ -213,11 +216,15 @@ window.Aviators = window.Aviators || {};
           barPct = Math.round((analyzed / total) * 100);
           if (analyzed < total && barPct < 4) barPct = 4;
         }
-        if (blockingModalCounter && A.i18nFmt) {
-          blockingModalCounter.textContent = A.i18nFmt('contents_batch_counter_analyzed', {
-            analyzed: analyzed,
-            total: total,
-          });
+        if (blockingModalCounter) {
+          if (msgOrOpts.counterText) {
+            blockingModalCounter.textContent = msgOrOpts.counterText;
+          } else if (A.i18nFmt) {
+            blockingModalCounter.textContent = A.i18nFmt('contents_batch_counter_analyzed', {
+              analyzed: analyzed,
+              total: total,
+            });
+          }
         }
         if (blockingModalFileIdx && A.i18nFmt) {
           blockingModalFileIdx.textContent = A.i18nFmt('contents_batch_counter_file', {
@@ -240,6 +247,9 @@ window.Aviators = window.Aviators || {};
               ? A.i18nFmt('contents_batch_file_label', { name: msgOrOpts.fileName })
               : msgOrOpts.fileName
             : '';
+        }
+        if (blockingModalHint) {
+          blockingModalHint.textContent = msgOrOpts.hint || '';
         }
         if (completed > 0 && blockingModalCounter && A.i18nFmt) {
           blockingModalCounter.textContent = A.i18nFmt('contents_batch_counter_analyzed_saved', {
@@ -272,6 +282,7 @@ window.Aviators = window.Aviators || {};
     if (blockingModalStep) blockingModalStep.textContent = '';
     if (blockingModalDetail) blockingModalDetail.textContent = '';
     if (blockingModalFilename) blockingModalFilename.textContent = '';
+    if (blockingModalHint) blockingModalHint.textContent = '';
   };
 
   A.positionFloatingPanel = function (anchorEl, panelEl, opts) {

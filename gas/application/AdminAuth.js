@@ -193,10 +193,59 @@ function AdminAuth_emailCanViewProposalBuilding(email) {
   return AdminAuth_roleHasPermission_(k, 'view_proposal_building');
 }
 
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanBuildProposals(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'build_proposals');
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanSaveProposals(email) {
+  var k = AdminAuth_roleKeyForEmail_(email);
+  if (!k) return false;
+  return AdminAuth_roleHasPermission_(k, 'save_proposals');
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function AdminAuth_emailCanAccessProposalBuilding(email) {
+  return (
+    AdminAuth_emailCanViewProposalBuilding(email) ||
+    AdminAuth_emailCanBuildProposals(email) ||
+    AdminAuth_emailCanSaveProposals(email)
+  );
+}
+
 function AdminAuth_requireProposalBuildingView() {
   var email = Session.getActiveUser().getEmail();
-  if (!AdminAuth_emailCanViewProposalBuilding(email)) {
+  if (!AdminAuth_emailCanAccessProposalBuilding(email)) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_forbidden'));
+  }
+}
+
+function AdminAuth_requireProposalBuildingBuild() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanBuildProposals(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_build_forbidden'));
+  }
+  if (!AdminAuth_emailCanSaveProposals(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_save_forbidden'));
+  }
+}
+
+function AdminAuth_requireProposalBuildingSave() {
+  var email = Session.getActiveUser().getEmail();
+  if (!AdminAuth_emailCanSaveProposals(email)) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_save_forbidden'));
   }
 }
 

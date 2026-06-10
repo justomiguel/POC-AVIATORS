@@ -1,7 +1,8 @@
 /**
  * @fileoverview Armado de propuestas: extracción de brief (RFP/chat) y construcción asistida.
  *
- * Decks: copia plantilla Slides → Propuestas/ en DRIVE_ROOT_FOLDER_ID.
+ * Decks: copia plantilla Slides → Propuestas/{cliente}/{propuesta}/ en DRIVE_ROOT_FOLDER_ID.
+ * Sesiones por usuario en Supabase (proposal_building_sessions).
  * Propiedades: PROPOSAL_DECK_AIRLINES_ID, PROPOSAL_DECK_LOGISTICS_ID.
  * Ver docs/PROPOSAL_BUILDING.md (placeholders, slide 17, permisos).
  */
@@ -15,6 +16,161 @@ var PROPOSAL_BUILDING_COMMERCIAL_MODELS = [
 ];
 
 var PROPOSAL_BUILDING_INDUSTRY_KEYS = ['Aerolineas', 'Logistica'];
+
+/** Tokens de archivo/industria que no deben usarse como nombre de cliente. */
+var PROPOSAL_BUILDING_GENERIC_CLIENT_TOKENS_ = {
+  aerolineas: true,
+  aerolneas: true,
+  airlines: true,
+  airline: true,
+  aviacion: true,
+  aviation: true,
+  logistica: true,
+  logistics: true,
+  globant: true,
+  propuesta: true,
+  proposal: true,
+  propuestas: true,
+  rfp: true,
+  rfq: true,
+  brief: true,
+  cliente: true,
+  client: true,
+  customer: true,
+  empresa: true,
+  company: true,
+  documento: true,
+  document: true,
+  anexo: true,
+  annex: true,
+  draft: true,
+  final: true,
+  copy: true,
+  copia: true,
+};
+
+/** Palabras geográficas que no convierten «Aerolíneas + país» en nombre de cliente. */
+var PROPOSAL_BUILDING_GEO_CLIENT_TOKENS_ = {
+  argentinas: true,
+  argentina: true,
+  brasil: true,
+  brazil: true,
+  chile: true,
+  mexico: true,
+  colombia: true,
+  peru: true,
+  uruguay: true,
+  paraguay: true,
+  espana: true,
+  spain: true,
+  usa: true,
+};
+
+/**
+ * @param {string} name
+ * @return {boolean}
+ */
+function ProposalBuilding_isWeakClientName_(name) {
+  var raw = String(name || '').trim();
+  if (!raw || raw.length < 2) return true;
+  var tokens = ClientsMaster_extractNameTokens_(raw);
+  if (!tokens.length) return true;
+  if (
+    tokens.length === 2 &&
+    PROPOSAL_BUILDING_GENERIC_CLIENT_TOKENS_[tokens[0]] &&
+    PROPOSAL_BUILDING_GEO_CLIENT_TOKENS_[tokens[1]]
+  ) {
+    return true;
+  }
+  var ti;
+  for (ti = 0; ti < tokens.length; ti++) {
+    if (!PROPOSAL_BUILDING_GENERIC_CLIENT_TOKENS_[tokens[ti]]) return false;
+  }
+  return true;
+}
+
+/**
+ * @param {string} name
+ * @return {string}
+ */
+function ProposalBuilding_sanitizeExtractedClientName_(name) {
+  var raw = String(name || '').trim();
+  if (!raw) return '';
+  if (ProposalBuilding_isPlaceholderBriefText_(raw)) return '';
+  if (ProposalBuilding_isWeakClientName_(raw)) return '';
+  return raw;
+}
+
+/**
+ * @param {string} extracted
+ * @param {string} catalogName
+ * @param {number} matchScore
+ * @return {boolean}
+ */
+function ProposalBuilding_catalogClientMatchAllowed_(extracted, catalogName, matchScore) {
+  var ex = ClientsMaster_normalizeName_(extracted);
+  var cat = ClientsMaster_normalizeName_(catalogName);
+  if (!ex || !cat) return false;
+  if (ex === cat) return true;
+  if (ProposalBuilding_isWeakClientName_(extracted)) return false;
+  if (cat.indexOf(ex) >= 0 && ex.length < cat.length * 0.65) return false;
+  if (ex.indexOf(cat) >= 0 && cat.length < ex.length * 0.65) return false;
+  return Number(matchScore) >= 0.92 && ex.length >= 6;
+}
+
+/** Nombre canónico del studio digital para offering AI Pods (no usar «Globant AI»). */
+var PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_ = 'Globant AI-PODs';
+
+/** @type {Object<string, Array<string>>} */
+var PROPOSAL_BUILDING_STUDIO_TAXONOMY_ = {
+  digital: [
+    'Globant AI-PODs',
+    'Globant Data',
+    'Globant Immersive Experiences',
+    'Globant Cybersecurity',
+    'Quality Engineering',
+    'Globant Igniting Robotics',
+    'Globant Engineering',
+    'Globant CloudOps',
+    'Globant Blockchain',
+    'Globant Business Hacking',
+    'Globant Cultural Hacking & Agility',
+    'Globant Fast Code',
+    'Globant Internet of Things',
+    'Globant Digital Twins',
+    'Globant Payments',
+    'Globant Legal AI',
+    'Globant Sustainable Business',
+    'Globant Loyalty Studio',
+    'Globant Private Equity',
+  ],
+  ai: [
+    'Globant Automotive',
+    'Globant Media & Entertainment',
+    'Globant Healthcare & Life Sciences',
+    'Globant Finance',
+    'Globant Airlines',
+    'Globant Hospitality & Leisure',
+    'Globant Games',
+    'Globant Education',
+    'Globant Sports Studio',
+    'Globant Retail',
+    'Globant Consumer Goods & Manufacturing',
+    'Globant Energy',
+    'Globant High Tech',
+  ],
+  enterprise: [
+    'Globant SAP',
+    'Globant ServiceNow',
+    'Globant Salesforce',
+    'Globant Oracle',
+    'Globant AWS Studio',
+    'Globant Adobe Studio',
+    'Globant Google Cloud',
+    'Globant Microsoft',
+    'Globant Process Optimization',
+  ],
+};
 
 var PROPOSAL_BUILDING_IMAGE_MIMES_ = [
   'image/png',
@@ -52,8 +208,14 @@ var PROPOSAL_BUILDING_CLIENT_FALLBACK_ = 'Sin cliente';
 /** @type {string} */
 var PROPOSAL_BUILDING_SUBJECT_FALLBACK_ = 'Propuesta';
 
+/** @type {number} Mínimo de casos propuestos en el paso de selección presale. */
+var PROPOSAL_BUILDING_SUCCESS_CASE_MIN_CANDIDATES_ = 5;
+
+/** @type {number} Máximo de casos propuestos para elegir en presale. */
+var PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_ = 8;
+
 /** @type {number} Máximo de casos de éxito insertados en el deck. */
-var PROPOSAL_BUILDING_SUCCESS_CASE_MAX_ = 6;
+var PROPOSAL_BUILDING_SUCCESS_CASE_MAX_ = 8;
 
 /** @type {number} Umbral semántico para casos de éxito en propuestas. */
 var PROPOSAL_BUILDING_SUCCESS_CASE_SEMANTIC_MIN_ = 0.62;
@@ -142,6 +304,115 @@ function ProposalBuilding_normalizeAttachment_(attachment) {
 }
 
 /**
+ * @param {string} sessionId
+ * @param {string} driveFileId
+ */
+function ProposalBuilding_assertSessionMaterialDriveId_(sessionId, driveFileId) {
+  var sid = String(sessionId || '').trim();
+  var id = ChatReferences_extractDriveFileId_(driveFileId) || String(driveFileId || '').trim();
+  if (!sid || !id) {
+    AviatorsError_throw_('ERR_PROPOSAL_MATERIAL_DRIVE', 'ProposalBuilding_assertSessionMaterialDriveId_', id);
+  }
+  var email = String(Session.getActiveUser().getEmail() || '').trim();
+  if (!email) {
+    AviatorsError_throw_('ERR_AUTH', 'ProposalBuilding_assertSessionMaterialDriveId_', sid);
+  }
+  var row = ProposalBuildingStore_getByIdForUser(sid, email);
+  if (!row) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_not_found'));
+  }
+  var materials = Array.isArray(row.materials) ? row.materials : [];
+  var i;
+  for (i = 0; i < materials.length; i++) {
+    var matId = ChatReferences_extractDriveFileId_(materials[i].driveFileId) || String(materials[i].driveFileId || '');
+    if (matId === id) return;
+  }
+  AviatorsError_throw_('ERR_PROPOSAL_MATERIAL_DRIVE', 'ProposalBuilding_assertSessionMaterialDriveId_', id);
+}
+
+/**
+ * @param {string} driveFileId
+ * @param {string=} nameHint
+ * @return {{name:string,mimeType:string,dataBase64:string,textContent:string}}
+ */
+function ProposalBuilding_attachmentFromDriveFile_(driveFileId, nameHint) {
+  var id = ChatReferences_extractDriveFileId_(driveFileId) || String(driveFileId || '').trim();
+  if (!id) {
+    AviatorsError_throw_('ERR_PROPOSAL_MATERIAL_DRIVE', 'ProposalBuilding_attachmentFromDriveFile_', driveFileId);
+  }
+  var file;
+  try {
+    file = DriveApp.getFileById(id);
+  } catch (eDrive) {
+    AviatorsError_throw_(
+      'ERR_PROPOSAL_MATERIAL_DRIVE',
+      'ProposalBuilding_attachmentFromDriveFile_',
+      String(eDrive && eDrive.message),
+    );
+  }
+  var name = String(nameHint || file.getName() || 'material').trim() || 'material';
+  var mime = String(file.getMimeType() || '').trim().toLowerCase();
+  if (!mime && /\.pdf$/i.test(name)) mime = 'application/pdf';
+  if (!mime && /\.(txt|md|csv)$/i.test(name)) mime = 'text/plain';
+  if (!mime && /\.docx$/i.test(name)) mime = PROPOSAL_BUILDING_DOCX_MIME_;
+  var bytes = file.getBlob().getBytes();
+  if (!bytes || bytes.length === 0) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_empty'));
+  }
+  var maxBytes = ProposalBuilding_maxAttachmentBytes_();
+  if (bytes.length > maxBytes) {
+    throw new Error(
+      UiStrings_fmt_('err_ephemeral_doc_too_large', {
+        max_mb: String(Math.floor(maxBytes / (1024 * 1024))),
+      }),
+    );
+  }
+  if (ProposalBuilding_isTextMime_(mime)) {
+    return {
+      name: name,
+      mimeType: mime,
+      dataBase64: '',
+      textContent: Utilities.newBlob(bytes).getDataAsString('UTF-8'),
+    };
+  }
+  if (
+    mime !== 'application/pdf' &&
+    mime !== PROPOSAL_BUILDING_DOCX_MIME_ &&
+    ProposalBuilding_isImageMime_(mime) === false
+  ) {
+    throw new Error(
+      UiStrings_fmt_('pb_err_attachment_mime', {
+        name: name,
+        mime: mime || UiStrings_t(UiStrings_activeLocale_(), 'label_em_dash'),
+      }),
+    );
+  }
+  return {
+    name: name,
+    mimeType: mime,
+    dataBase64: Utilities.base64Encode(bytes),
+    textContent: '',
+  };
+}
+
+/**
+ * @param {Object} payload
+ * @return {{name:string,mimeType:string,dataBase64:string,textContent:string}}
+ */
+function ProposalBuilding_resolveExtractAttachment_(payload) {
+  payload = payload && typeof payload === 'object' ? payload : {};
+  var attachment = ProposalBuilding_normalizeAttachment_(payload.attachment || null);
+  if (attachment.dataBase64 || attachment.textContent) return attachment;
+  var driveFileId = String(payload.driveFileId || '').trim();
+  if (!driveFileId) return attachment;
+  var sessionId = String(payload.sessionId || '').trim();
+  if (sessionId) {
+    ProposalBuilding_assertSessionMaterialDriveId_(sessionId, driveFileId);
+  }
+  return ProposalBuilding_attachmentFromDriveFile_(driveFileId, payload.materialName);
+}
+
+/**
  * @param {string} mime
  * @return {boolean}
  */
@@ -203,6 +474,190 @@ function ProposalBuilding_normalizeCommercialModel_(model) {
 }
 
 /**
+ * @param {string} text
+ * @return {boolean}
+ */
+function ProposalBuilding_isPlaceholderBriefText_(text) {
+  var t = String(text || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!t) return true;
+  var exact = {
+    nombre: true,
+    name: true,
+    cargo: true,
+    role: true,
+    'cargo / rol': true,
+    empresa: true,
+    organization: true,
+    'empresa/área': true,
+    'empresa o área': true,
+    opcional: true,
+    optional: true,
+    contacto: true,
+    contact: true,
+    hito: true,
+    milestone: true,
+    'sin nombre': true,
+    'no indicado': true,
+    'not specified': true,
+    n: true,
+    na: true,
+    'n/a': true,
+    tbd: true,
+    '—': true,
+    '-': true,
+    vacío: true,
+    empty: true,
+    ejemplo: true,
+    example: true,
+    'e.g.': true,
+    'ej.': true,
+  };
+  if (exact[t]) return true;
+  if (/^(nombre|name|cargo|role|contacto|contact|hito|milestone)(\s|$)/.test(t)) return true;
+  return false;
+}
+
+/**
+ * @param {string} email
+ * @return {boolean}
+ */
+function ProposalBuilding_isValidBriefEmail_(email) {
+  email = String(email || '').trim();
+  if (!email || ProposalBuilding_isPlaceholderBriefText_(email)) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * @param {Object=} brief
+ * @return {'es'|'en'}
+ */
+function ProposalBuilding_stakeholderLangCode_(brief) {
+  brief = brief || {};
+  if (String(brief.outputLocale || '').trim()) {
+    return ProposalBuilding_outputLangCode_(brief);
+  }
+  var detected = String(brief.detectedLanguage || '').trim();
+  if (detected) return ProposalBuilding_resolveLangCode_(detected);
+  return UiStrings_activeLocale_();
+}
+
+/**
+ * @param {{name:string,role:string,organization:string,email:string}} row
+ * @param {'es'|'en'} langCode
+ * @return {{name:string,role:string,organization:string,email:string}}
+ */
+function ProposalBuilding_finalizeStakeholderRow_(row, langCode) {
+  row = row || {};
+  var name = String(row.name || row.fullName || row.contact || '').trim();
+  var role = String(row.role || row.title || row.position || '').trim();
+  var org = String(row.organization || row.company || row.department || '').trim();
+  var email = String(row.email || row.mail || '').trim();
+  if ((!name || ProposalBuilding_isPlaceholderBriefText_(name)) && ProposalBuilding_isValidBriefEmail_(email)) {
+    name = UiStrings_t(langCode || 'es', 'pb_stakeholder_email_only_fallback');
+  }
+  return {
+    name: name,
+    role: role,
+    organization: org,
+    email: email,
+  };
+}
+
+/**
+ * @param {Array<Object>} rows
+ * @param {'es'|'en'} langCode
+ * @return {Array<{name:string,role:string,organization:string,email:string}>}
+ */
+function ProposalBuilding_finalizeStakeholdersList_(rows, langCode) {
+  var out = [];
+  if (!Array.isArray(rows)) return out;
+  var ri;
+  for (ri = 0; ri < rows.length; ri++) {
+    var row = ProposalBuilding_finalizeStakeholderRow_(rows[ri], langCode);
+    if (ProposalBuilding_stakeholderHasEvidence_(row)) out.push(row);
+  }
+  return out;
+}
+
+/**
+ * @param {{name:string,role:string,organization:string,email:string}} row
+ * @return {boolean}
+ */
+function ProposalBuilding_stakeholderHasEvidence_(row) {
+  row = row || {};
+  var name = String(row.name || '').trim();
+  if (name && !ProposalBuilding_isPlaceholderBriefText_(name)) return true;
+  return ProposalBuilding_isValidBriefEmail_(row.email);
+}
+
+/**
+ * @param {{amount:string,currency:string,notes:string}} budget
+ * @return {boolean}
+ */
+function ProposalBuilding_budgetHasEvidence_(budget) {
+  budget = budget || ProposalBuilding_normalizeBudget_(null);
+  var amount = String(budget.amount || '').trim();
+  var notes = String(budget.notes || '').trim();
+  if (ProposalBuilding_isPlaceholderBriefText_(amount)) amount = '';
+  if (ProposalBuilding_isPlaceholderBriefText_(notes)) notes = '';
+  return !!(amount || notes);
+}
+
+/**
+ * Elimina campos que el LLM suele rellenar con placeholders del esquema JSON.
+ * @param {Object} brief
+ * @return {Object}
+ */
+function ProposalBuilding_sanitizeInventedBriefFields_(brief) {
+  brief = brief && typeof brief === 'object' ? brief : {};
+  var out = {};
+  var k;
+  for (k in brief) {
+    if (Object.prototype.hasOwnProperty.call(brief, k)) out[k] = brief[k];
+  }
+
+  out.stakeholders = ProposalBuilding_finalizeStakeholdersList_(
+    out.stakeholders,
+    ProposalBuilding_stakeholderLangCode_(out),
+  );
+
+  if (!ProposalBuilding_budgetHasEvidence_(out.budget)) {
+    out.budget = { amount: '', currency: '', notes: '' };
+  }
+
+  var milestones = [];
+  var msRows = Array.isArray(out.milestones) ? out.milestones : [];
+  for (si = 0; si < msRows.length; si++) {
+    var ms = msRows[si];
+    if (!ms || typeof ms !== 'object') continue;
+    var label = String(ms.label || '').trim();
+    var date = String(ms.date || '').trim();
+    var notes = String(ms.notes || '').trim();
+    if (ProposalBuilding_isPlaceholderBriefText_(label)) label = '';
+    if (!label && !date && !notes) continue;
+    if (!label && date) label = date;
+    milestones.push({ label: label, date: date, notes: notes });
+  }
+  out.milestones = milestones;
+
+  if (ProposalBuilding_isPlaceholderBriefText_(out.rfpDeadline)) {
+    out.rfpDeadline = '';
+  }
+
+  out.businessObjectives = ProposalBuilding_normalizeStringList_(out.businessObjectives).filter(function (row) {
+    return !ProposalBuilding_isPlaceholderBriefText_(row);
+  });
+  out.constraints = ProposalBuilding_normalizeStringList_(out.constraints).filter(function (row) {
+    return !ProposalBuilding_isPlaceholderBriefText_(row);
+  });
+
+  return out;
+}
+
+/**
  * @param {Object} parsed
  * @return {Object}
  */
@@ -240,6 +695,11 @@ function ProposalBuilding_normalizeBrief_(parsed) {
   else if (lang.indexOf('es') === 0) lang = 'es';
   else lang = '';
 
+  var outputLocale = String(o.outputLocale || o.outputLanguage || '').trim().toLowerCase();
+  if (outputLocale.indexOf('en') === 0) outputLocale = 'en';
+  else if (outputLocale.indexOf('es') === 0) outputLocale = 'es';
+  else outputLocale = '';
+
   var techHints = [];
   if (Array.isArray(o.technologyHints)) {
     for (var ti = 0; ti < o.technologyHints.length; ti++) {
@@ -248,8 +708,10 @@ function ProposalBuilding_normalizeBrief_(parsed) {
     }
   }
 
-  return {
-    clientName: String(o.clientName || o.client_name || '').trim(),
+  var brief = {
+    clientName: ProposalBuilding_sanitizeExtractedClientName_(
+      String(o.clientName || o.client_name || '').trim(),
+    ),
     projectSummary: String(o.projectSummary || o.summary || o.overview || '').trim(),
     scopeItems: scopeItems,
     commercialModel: ProposalBuilding_normalizeCommercialModel_(o.commercialModel || o.pricing_model),
@@ -259,8 +721,12 @@ function ProposalBuilding_normalizeBrief_(parsed) {
     budget: ProposalBuilding_normalizeBudget_(o.budget || o.budgetNotes),
     businessObjectives: ProposalBuilding_normalizeStringList_(o.businessObjectives || o.objectives),
     constraints: ProposalBuilding_normalizeStringList_(o.constraints || o.risks),
+    submissionDeliverables: ProposalBuilding_normalizeSubmissionDeliverables_(
+      o.submissionDeliverables || o.deliverables || o.submissionRequirements,
+    ),
     rfpDeadline: String(o.rfpDeadline || o.proposalDeadline || o.submissionDeadline || '').trim(),
     detectedLanguage: lang,
+    outputLocale: outputLocale,
     confidence: String(o.confidence || 'medium').trim().toLowerCase(),
     warnings: Array.isArray(o.warnings)
       ? o.warnings.map(function (w) {
@@ -270,6 +736,7 @@ function ProposalBuilding_normalizeBrief_(parsed) {
         })
       : [],
   };
+  return ProposalBuilding_sanitizeInventedBriefFields_(brief);
 }
 
 /**
@@ -368,6 +835,9 @@ function ProposalBuilding_mergeBriefs_(base, incoming) {
   if (!base.detectedLanguage && incoming.detectedLanguage) {
     base.detectedLanguage = incoming.detectedLanguage;
   }
+  if (incoming.outputLocale) {
+    base.outputLocale = incoming.outputLocale;
+  }
   if (!base.rfpDeadline && incoming.rfpDeadline) {
     base.rfpDeadline = incoming.rfpDeadline;
   }
@@ -422,8 +892,26 @@ function ProposalBuilding_mergeBriefs_(base, incoming) {
     var scopeRow = incoming.scopeItems[si];
     var sk = scopeKey(scopeRow);
     if (!scopeSeen[sk]) {
-      base.scopeItems.push(scopeRow);
-      scopeSeen[sk] = true;
+      var mergedScope = false;
+      var sj;
+      for (sj = 0; sj < base.scopeItems.length; sj++) {
+        var baseTitle = String(base.scopeItems[sj].title || '').trim().toLowerCase();
+        var incTitle = String(scopeRow.title || '').trim().toLowerCase();
+        if (!baseTitle || !incTitle || baseTitle !== incTitle) continue;
+        var baseDesc = String(base.scopeItems[sj].description || '').trim();
+        var incDesc = String(scopeRow.description || '').trim();
+        if (incDesc && baseDesc.indexOf(incDesc) < 0 && incDesc.indexOf(baseDesc) < 0) {
+          base.scopeItems[sj].description = baseDesc ? baseDesc + '\n\n' + incDesc : incDesc;
+        } else if (incDesc && !baseDesc) {
+          base.scopeItems[sj].description = incDesc;
+        }
+        mergedScope = true;
+        break;
+      }
+      if (!mergedScope) {
+        base.scopeItems.push(scopeRow);
+        scopeSeen[sk] = true;
+      }
     }
   }
   var msKey = function (m) {
@@ -472,6 +960,28 @@ function ProposalBuilding_mergeBriefs_(base, incoming) {
       warnSeen[wRow] = true;
     }
   }
+  var deliverableKey = function (d) {
+    return (
+      String(d.item || '').trim().toLowerCase() +
+      '|' +
+      String(d.dueDate || '').trim().toLowerCase() +
+      '|' +
+      String(d.category || '').trim().toLowerCase()
+    );
+  };
+  var deliverableSeen = {};
+  var di;
+  for (di = 0; di < base.submissionDeliverables.length; di++) {
+    deliverableSeen[deliverableKey(base.submissionDeliverables[di])] = true;
+  }
+  for (di = 0; di < incoming.submissionDeliverables.length; di++) {
+    var deliverableRow = incoming.submissionDeliverables[di];
+    var dk = deliverableKey(deliverableRow);
+    if (!deliverableSeen[dk]) {
+      base.submissionDeliverables.push(deliverableRow);
+      deliverableSeen[dk] = true;
+    }
+  }
   return base;
 }
 
@@ -482,6 +992,423 @@ function ProposalBuilding_mergeBriefs_(base, incoming) {
  */
 function ProposalBuilding_mergeStringLists_(a, b) {
   return ProposalBuilding_normalizeStringList_((a || []).concat(b || []));
+}
+
+function ProposalBuilding_isAiPodsStudioName_(name) {
+  var n = String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return n === 'globant ai' || n === 'globant ai-pods' || n === 'globant ai pods';
+}
+
+/**
+ * @param {string} name
+ * @return {string}
+ */
+function ProposalBuilding_normalizeStudioName_(name) {
+  if (ProposalBuilding_isAiPodsStudioName_(name)) {
+    return PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_;
+  }
+  return String(name || '').trim();
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_normalizeStudioRecommendationNames_(studios) {
+  var out = [];
+  var seenAiPods = false;
+  var i;
+  for (i = 0; i < studios.length; i++) {
+    var st = studios[i];
+    if (!st || typeof st !== 'object') continue;
+    var name = ProposalBuilding_normalizeStudioName_(st.studioName);
+    if (name === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      if (seenAiPods) continue;
+      seenAiPods = true;
+    }
+    var row = {};
+    var k;
+    for (k in st) {
+      if (Object.prototype.hasOwnProperty.call(st, k)) row[k] = st[k];
+    }
+    row.studioName = name;
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * @param {Array<string>} offerings
+ * @return {Array<string>}
+ */
+function ProposalBuilding_ensureOfferingsIncludeAiPods_(offerings) {
+  var out = Array.isArray(offerings) ? offerings.slice() : [];
+  var has = false;
+  var i;
+  for (i = 0; i < out.length; i++) {
+    if (String(out[i] || '').trim().toUpperCase() === 'AI_PODS') {
+      has = true;
+      break;
+    }
+  }
+  if (!has) out.unshift('AI_PODS');
+  return out;
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {Object} pitch normalizado
+ */
+function ProposalBuilding_buildAiPodsPitch_(brief, industryKey) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var industry = String(industryKey || '').trim();
+  var prompt = PromptCatalog_render('pb.ai_pods_pitch.user', {
+    briefJson: JSON.stringify(brief).slice(0, 80000),
+    industry: industry || '(not specified)',
+    outputLanguage: ProposalBuilding_briefOutputLanguageLabel_(brief),
+  });
+  var r = AgentOrchestrator_answerWith(prompt, _ADMIN_AGENT_ID_PROPOSALS, []);
+  var text = String(r.answer || '').trim();
+  if (!text || r.isUnanswered || text.indexOf('[[NO_RELEVANT_CONTENT]]') >= 0) {
+    return ProposalBuilding_defaultAiPodsPitch_(brief);
+  }
+  var parsed = ContentExtraction_parseLooseJson_(text);
+  return ProposalBuilding_normalizeAiPodsPitch_(parsed, brief);
+}
+
+function ProposalBuilding_resolveLangCode_(raw) {
+  var lang = String(raw || '').trim().toLowerCase();
+  if (lang.indexOf('en') === 0) return 'en';
+  return 'es';
+}
+
+/**
+ * Idioma de salida del LLM (UI del usuario / elección explícita). No usa el idioma del documento.
+ * @param {Object=} brief
+ * @return {'es'|'en'}
+ */
+function ProposalBuilding_outputLangCode_(brief) {
+  brief = brief || {};
+  var fromBrief = String(brief.outputLocale || brief.outputLanguage || '').trim();
+  if (fromBrief) return ProposalBuilding_resolveLangCode_(fromBrief);
+  return UiStrings_activeLocale_();
+}
+
+/**
+ * @param {Object=} brief
+ * @return {'es'|'en'}
+ */
+function ProposalBuilding_briefLangCode_(brief) {
+  return ProposalBuilding_outputLangCode_(brief);
+}
+
+/**
+ * @param {Object=} brief
+ * @return {string}
+ */
+function ProposalBuilding_briefOutputLanguageLabel_(brief) {
+  return ProposalBuilding_briefLangCode_(brief) === 'en' ? 'English' : 'Spanish';
+}
+
+/**
+ * @param {Object} brief
+ * @return {Object}
+ */
+function ProposalBuilding_defaultAiPodsPitch_(brief) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var lang = ProposalBuilding_briefLangCode_(brief);
+  return {
+    summary: UiStrings_t(lang, 'pb_studio_ai_pods_fallback_rationale'),
+    whyReasons: [],
+    slideHooks: [],
+    vsTraditional: [],
+    sellerTechniques: [],
+  };
+}
+
+/**
+ * @param {*} raw
+ * @param {Object=} brief
+ * @return {Object}
+ */
+function ProposalBuilding_normalizeAiPodsPitch_(raw, brief) {
+  var o = raw && typeof raw === 'object' ? raw : {};
+  var out = ProposalBuilding_defaultAiPodsPitch_(brief || {});
+  out.summary = String(o.summary || out.summary || '').trim() || out.summary;
+
+  function mapList(src, mapper, maxItems) {
+    var list = Array.isArray(src) ? src : [];
+    var items = [];
+    var i;
+    for (i = 0; i < list.length && items.length < maxItems; i++) {
+      var row = mapper(list[i]);
+      if (row) items.push(row);
+    }
+    return items;
+  }
+
+  out.whyReasons = mapList(
+    o.whyReasons,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var title = String(row.title || row.headline || '').trim();
+      var detail = String(row.detail || row.reason || row.description || '').trim();
+      if (!title && !detail) return null;
+      return {
+        title: title || detail.slice(0, 80),
+        detail: detail || title,
+        briefAnchor: String(row.briefAnchor || row.anchor || row.brief_link || '').trim(),
+      };
+    },
+    10,
+  );
+
+  out.slideHooks = mapList(
+    o.slideHooks || o.hooks,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var headline = String(row.headline || row.title || '').trim();
+      var talkTrack = String(row.talkTrack || row.talk_track || row.script || '').trim();
+      if (!headline && !talkTrack) return null;
+      return {
+        headline: headline || talkTrack.slice(0, 80),
+        talkTrack: talkTrack || headline,
+        slideHint: String(row.slideHint || row.slide_hint || row.visual || '').trim(),
+      };
+    },
+    7,
+  );
+
+  out.vsTraditional = mapList(
+    o.vsTraditional || o.comparisons || o.vs_traditional,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var traditional = String(row.traditional || row.legacy || row.before || '').trim();
+      var aiPods = String(row.aiPods || row.ai_pods || row.after || '').trim();
+      if (!traditional && !aiPods) return null;
+      return {
+        traditional: traditional || UiStrings_t(UiStrings_activeLocale_(), 'label_em_dash'),
+        aiPods: aiPods || UiStrings_t(UiStrings_activeLocale_(), 'label_em_dash'),
+        sellerAngle: String(row.sellerAngle || row.seller_angle || row.angle || '').trim(),
+      };
+    },
+    6,
+  );
+
+  out.sellerTechniques = mapList(
+    o.sellerTechniques || o.techniques || o.seller_techniques,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var technique = String(row.technique || row.name || '').trim();
+      if (!technique) return null;
+      return {
+        technique: technique,
+        whenToUse: String(row.whenToUse || row.when_to_use || row.when || '').trim(),
+        examplePhrase: String(row.examplePhrase || row.example_phrase || row.phrase || '').trim(),
+      };
+    },
+    6,
+  );
+
+  return out;
+}
+
+/**
+ * Texto plano del pitch para rationale / contexto del asesor.
+ * @param {Object} pitch
+ * @return {string}
+ */
+function ProposalBuilding_formatAiPodsPitchAsText_(pitch) {
+  pitch = pitch && typeof pitch === 'object' ? pitch : {};
+  var lines = [];
+  var summary = String(pitch.summary || '').trim();
+  if (summary) lines.push(summary);
+
+  var wi;
+  var why = Array.isArray(pitch.whyReasons) ? pitch.whyReasons : [];
+  if (why.length) {
+    lines.push('');
+    lines.push(UiStrings_t(UiStrings_activeLocale_(), 'pb_ai_pods_pitch_why_heading') + ':');
+    for (wi = 0; wi < why.length; wi++) {
+      var w = why[wi];
+      if (!w) continue;
+      lines.push(
+        String(wi + 1) +
+          '. ' +
+          String(w.title || '').trim() +
+          (w.detail ? ' — ' + String(w.detail).trim() : ''),
+      );
+    }
+  }
+
+  var hi;
+  var hooks = Array.isArray(pitch.slideHooks) ? pitch.slideHooks : [];
+  if (hooks.length) {
+    lines.push('');
+    lines.push(UiStrings_t(UiStrings_activeLocale_(), 'pb_ai_pods_pitch_hooks_heading') + ':');
+    for (hi = 0; hi < hooks.length; hi++) {
+      var h = hooks[hi];
+      if (!h) continue;
+      lines.push('- ' + String(h.headline || '').trim() + ': ' + String(h.talkTrack || '').trim());
+    }
+  }
+
+  return lines.join('\n').trim();
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {string}
+ * @deprecated Usar ProposalBuilding_buildAiPodsPitch_ + formatAiPodsPitchAsText_.
+ */
+function ProposalBuilding_buildAiPodsRationale_(brief, industryKey) {
+  var pitch = ProposalBuilding_buildAiPodsPitch_(brief, industryKey);
+  return ProposalBuilding_formatAiPodsPitchAsText_(pitch);
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_enrichAiPodsStudioRationale_(studios, brief, industryKey) {
+  var out = Array.isArray(studios) ? studios.slice() : [];
+  var pitch = ProposalBuilding_buildAiPodsPitch_(brief, industryKey);
+  var rationale = ProposalBuilding_formatAiPodsPitchAsText_(pitch);
+  var i;
+  for (i = 0; i < out.length; i++) {
+    if (ProposalBuilding_normalizeStudioName_(out[i].studioName) !== PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      continue;
+    }
+    out[i].studioName = PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_;
+    out[i].offerings = ProposalBuilding_ensureOfferingsIncludeAiPods_(out[i].offerings);
+    out[i].rationale = rationale;
+    out[i].aiPodsPitch = pitch;
+    out[i].priority = 'high';
+    out[i].studioType = 'digital';
+    break;
+  }
+  return out;
+}
+
+/**
+ * @param {Object} brief
+ * @param {Array<string>} excludeLower
+ * @return {string}
+ */
+function ProposalBuilding_pickSecondDigitalStudio_(brief, excludeLower) {
+  var exclude = {};
+  var i;
+  for (i = 0; i < excludeLower.length; i++) {
+    exclude[String(excludeLower[i] || '').trim().toLowerCase()] = true;
+  }
+  var candidates = [
+    ProposalBuilding_defaultDigitalStudioForBrief_(brief, ''),
+    'Globant Engineering',
+    'Globant Data',
+    'Globant CloudOps',
+    'Quality Engineering',
+    'Globant Cybersecurity',
+  ];
+  for (i = 0; i < candidates.length; i++) {
+    var name = ProposalBuilding_normalizeStudioName_(candidates[i]);
+    var key = name.toLowerCase();
+    if (!name || exclude[key]) continue;
+    if (name === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_ && exclude[key]) continue;
+    return name;
+  }
+  return 'Globant Engineering';
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_applyStudioRecommendationPolicy_(studios, brief, industryKey) {
+  var out = ProposalBuilding_normalizeStudioRecommendationNames_(
+    Array.isArray(studios) ? studios : [],
+  );
+  var i;
+  var aiPodsIdx = -1;
+  for (i = 0; i < out.length; i++) {
+    out[i].studioName = ProposalBuilding_normalizeStudioName_(out[i].studioName);
+    out[i].studioType = ProposalBuilding_normalizeStudioType_(out[i].studioType, out[i].studioName);
+    out[i].priority = String(out[i].priority || 'medium').trim().toLowerCase();
+    if (out[i].studioName === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      aiPodsIdx = i;
+    }
+  }
+  if (aiPodsIdx < 0) {
+    out.unshift({
+      studioName: PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_,
+      studioType: 'digital',
+      offerings: ['AI_PODS'],
+      rationale: '',
+      priority: 'high',
+      contentId: '',
+    });
+  } else {
+    out[aiPodsIdx].offerings = ProposalBuilding_ensureOfferingsIncludeAiPods_(out[aiPodsIdx].offerings);
+    out[aiPodsIdx].priority = 'high';
+    out[aiPodsIdx].studioType = 'digital';
+  }
+
+  var digitalNames = [];
+  var aiCount = 0;
+  for (i = 0; i < out.length; i++) {
+    if (out[i].studioType === 'digital') {
+      digitalNames.push(String(out[i].studioName || '').trim().toLowerCase());
+    }
+    if (out[i].studioType === 'ai') aiCount++;
+  }
+  if (digitalNames.length < 2) {
+    out.push({
+      studioName: ProposalBuilding_pickSecondDigitalStudio_(brief, digitalNames),
+      studioType: 'digital',
+      offerings: [],
+      rationale: UiStrings_t(ProposalBuilding_briefLangCode_(brief), 'pb_studio_taxonomy_fallback_rationale'),
+      priority: 'medium',
+      contentId: '',
+    });
+  }
+  if (aiCount < 1) {
+    var aiDefault = ProposalBuilding_defaultAiStudioForBrief_(brief, industryKey);
+    if (aiDefault) {
+      out.push({
+        studioName: aiDefault,
+        studioType: 'ai',
+        offerings: [],
+        rationale: UiStrings_t(ProposalBuilding_briefLangCode_(brief), 'pb_studio_taxonomy_fallback_rationale'),
+        priority: 'high',
+        contentId: '',
+      });
+    }
+  }
+
+  var aiSeen = 0;
+  for (i = 0; i < out.length; i++) {
+    var row = out[i];
+    if (row.studioName === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      row.priority = 'high';
+      row.studioType = 'digital';
+      continue;
+    }
+    if (row.studioType === 'digital') {
+      row.priority = 'medium';
+      continue;
+    }
+    if (row.studioType === 'ai') {
+      row.priority = aiSeen === 0 ? 'high' : 'medium';
+      aiSeen++;
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -500,7 +1427,11 @@ function ProposalBuilding_studioKgNodeId_(studioName) {
  * @return {Object|null}
  */
 function ProposalBuilding_findCatalogStudio_(name, catalogStudios) {
-  var target = String(name || '').trim().toLowerCase();
+  var lookupName = String(name || '').trim();
+  if (ProposalBuilding_normalizeStudioName_(lookupName) === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+    lookupName = 'Globant AI';
+  }
+  var target = lookupName.toLowerCase();
   if (!target) return null;
   var list = Array.isArray(catalogStudios) ? catalogStudios : [];
   var i;
@@ -518,6 +1449,26 @@ function ProposalBuilding_findCatalogStudio_(name, catalogStudios) {
 }
 
 /**
+ * Resuelve título y URL Drive del PDF de catálogo vinculado a un content_id.
+ * @param {string} contentId
+ * @return {{title:string,driveFileUrl:string}}
+ */
+function ProposalBuilding_resolveStudioDocumentFromCatalog_(contentId) {
+  var id = String(contentId || '').trim();
+  if (!id) return { title: '', driveFileUrl: '' };
+  try {
+    var got = ContentCatalog_get(id);
+    var common = got && got.item && got.item.common ? got.item.common : {};
+    return {
+      title: String(common.title || '').trim(),
+      driveFileUrl: String(common.drive_file_url || '').trim(),
+    };
+  } catch (eResolve) {
+    return { title: '', driveFileUrl: '' };
+  }
+}
+
+/**
  * @param {Array<Object>} studios
  * @param {Array<Object>} catalogStudios
  * @return {Array<Object>}
@@ -528,17 +1479,33 @@ function ProposalBuilding_enrichStudioRecommendations_(studios, catalogStudios) 
   for (i = 0; i < studios.length; i++) {
     var st = studios[i];
     if (!st || typeof st !== 'object') continue;
+    var studioType = ProposalBuilding_normalizeStudioType_(
+      st.studioType || st.studio_type || st.type,
+      st.studioName,
+    );
+    var normalizedName = ProposalBuilding_normalizeStudioName_(String(st.studioName || '').trim());
     var enriched = {
-      studioName: String(st.studioName || '').trim(),
+      studioName: normalizedName,
+      studioType: studioType,
       offerings: Array.isArray(st.offerings) ? st.offerings.slice() : [],
       rationale: String(st.rationale || '').trim(),
       priority: String(st.priority || 'medium').trim().toLowerCase(),
       contentId: String(st.contentId || '').trim(),
       catalogTitle: '',
       driveFileUrl: '',
-      kgNodeId: ProposalBuilding_studioKgNodeId_(st.studioName),
+      kgNodeId: ProposalBuilding_studioKgNodeId_(
+        normalizedName === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_ ? 'Globant AI' : normalizedName,
+      ),
       contentIds: [],
     };
+    if (st.aiPodsPitch && typeof st.aiPodsPitch === 'object') {
+      enriched.aiPodsPitch = st.aiPodsPitch;
+    }
+    var whyFit = ProposalBuilding_normalizeWhyFit_(st.whyFit || st.why_fit);
+    if (whyFit) {
+      enriched.whyFit = whyFit;
+      if (!enriched.rationale && whyFit.summary) enriched.rationale = whyFit.summary;
+    }
     var cat = ProposalBuilding_findCatalogStudio_(enriched.studioName, catalogStudios);
     if (cat) {
       enriched.contentIds = Array.isArray(cat.contentIds) ? cat.contentIds.slice() : [];
@@ -565,6 +1532,13 @@ function ProposalBuilding_enrichStudioRecommendations_(studios, catalogStudios) 
     }
     if (enriched.contentId && enriched.contentIds.indexOf(enriched.contentId) < 0) {
       enriched.contentIds.unshift(enriched.contentId);
+    }
+    if (enriched.contentId) {
+      var docRef = ProposalBuilding_resolveStudioDocumentFromCatalog_(enriched.contentId);
+      if (docRef.title && !enriched.catalogTitle) enriched.catalogTitle = docRef.title;
+      if (docRef.driveFileUrl && !enriched.driveFileUrl) {
+        enriched.driveFileUrl = docRef.driveFileUrl;
+      }
     }
     out.push(enriched);
   }
@@ -624,26 +1598,39 @@ function ProposalBuilding_listClientSuggestions_(rawName, fileHint, limit) {
  */
 function ProposalBuilding_enrichBriefWithClientMatch_(brief, sourceFileNames) {
   brief = ProposalBuilding_normalizeBrief_(brief || {});
-  var names = Array.isArray(sourceFileNames) ? sourceFileNames : [];
-  var fileHint = names.join(' ');
   var extracted = String(brief.clientName || '').trim();
-  var match = ClientsMaster_matchFromHints_(extracted, fileHint);
   brief.clientMatch = {
     extractedName: extracted,
-    matched: !!match.matched,
-    catalogClientName: match.matched ? String(match.client_name || '').trim() : '',
-    industry: String(match.industry || '').trim(),
-    subIndustry: String(match.sub_industry || '').trim(),
-    matchScore: Number(match.matchScore) || (match.matched ? 1 : 0),
-    suggestions: match.matched
-      ? []
-      : ProposalBuilding_listClientSuggestions_(extracted, fileHint, 3),
+    matched: false,
+    catalogClientName: '',
+    industry: '',
+    subIndustry: '',
+    matchScore: 0,
+    suggestions: [],
   };
-  if (match.matched && match.client_name) {
-    brief.suggestedClientName = String(match.client_name || '').trim();
-    if (!brief.clientName) brief.clientName = brief.suggestedClientName;
+  brief.suggestedClientName = extracted;
+
+  if (!extracted || ProposalBuilding_isWeakClientName_(extracted)) {
+    return brief;
+  }
+
+  var match = ClientsMaster_matchFromHints_(extracted, '');
+  if (
+    match.matched &&
+    match.client_name &&
+    ProposalBuilding_catalogClientMatchAllowed_(extracted, match.client_name, match.matchScore)
+  ) {
+    brief.clientMatch = {
+      extractedName: extracted,
+      matched: true,
+      catalogClientName: String(match.client_name || '').trim(),
+      industry: String(match.industry || '').trim(),
+      subIndustry: String(match.sub_industry || '').trim(),
+      matchScore: Number(match.matchScore) || 1,
+      suggestions: [],
+    };
   } else {
-    brief.suggestedClientName = extracted || String(match.client_name || '').trim();
+    brief.clientMatch.suggestions = ProposalBuilding_listClientSuggestions_(extracted, '', 3);
   }
   return brief;
 }
@@ -707,6 +1694,97 @@ function ProposalBuilding_listStudiosFromCatalog_() {
 }
 
 /**
+ * @param {*} raw
+ * @return {Object|null}
+ */
+function ProposalBuilding_normalizeWhyFit_(raw) {
+  var o = raw && typeof raw === 'object' ? raw : {};
+  var out = {
+    summary: String(o.summary || o.overview || o.executiveSummary || '').trim(),
+    fitScore: null,
+    keyPoints: [],
+    comparisons: [],
+    briefLinks: [],
+  };
+  var scoreRaw = o.fitScore != null ? o.fitScore : o.fit_score != null ? o.fit_score : o.score;
+  var score = parseInt(scoreRaw, 10);
+  if (!isNaN(score)) {
+    if (score > 0 && score <= 10) score = score * 10;
+    if (score >= 0 && score <= 100) out.fitScore = score;
+  }
+
+  function mapList(src, mapper, maxItems) {
+    var list = Array.isArray(src) ? src : [];
+    var items = [];
+    var i;
+    for (i = 0; i < list.length && items.length < maxItems; i++) {
+      var row = mapper(list[i]);
+      if (row) items.push(row);
+    }
+    return items;
+  }
+
+  out.keyPoints = mapList(
+    o.keyPoints || o.key_points || o.reasons || o.points,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var title = String(row.title || row.headline || row.label || '').trim();
+      var detail = String(row.detail || row.reason || row.description || row.text || '').trim();
+      if (!title && !detail) return null;
+      return {
+        title: title || detail.slice(0, 80),
+        detail: detail || title,
+        briefAnchor: String(row.briefAnchor || row.anchor || row.brief_link || row.briefNeed || '').trim(),
+      };
+    },
+    6,
+  );
+
+  out.comparisons = mapList(
+    o.comparisons || o.comparison || o.vs || o.tradeoffs,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var aspect = String(row.aspect || row.dimension || row.topic || row.label || '').trim();
+      var withoutStudio = String(
+        row.withoutStudio || row.without || row.before || row.traditional || row.legacy || '',
+      ).trim();
+      var withStudio = String(
+        row.withStudio || row.with || row.after || row.studio || row.modern || '',
+      ).trim();
+      if (!aspect && !withoutStudio && !withStudio) return null;
+      return {
+        aspect: aspect || withoutStudio.slice(0, 60) || withStudio.slice(0, 60),
+        withoutStudio: withoutStudio,
+        withStudio: withStudio,
+      };
+    },
+    5,
+  );
+
+  out.briefLinks = mapList(
+    o.briefLinks || o.brief_links || o.links || o.anchors,
+    function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var briefNeed = String(row.briefNeed || row.brief_need || row.need || row.brief || '').trim();
+      var studioOffer = String(
+        row.studioOffer || row.studio_offer || row.offer || row.capability || row.studio || '',
+      ).trim();
+      if (!briefNeed && !studioOffer) return null;
+      return { briefNeed: briefNeed, studioOffer: studioOffer };
+    },
+    6,
+  );
+
+  var hasStructured =
+    !!out.summary ||
+    out.fitScore != null ||
+    out.keyPoints.length ||
+    out.comparisons.length ||
+    out.briefLinks.length;
+  return hasStructured ? out : null;
+}
+
+/**
  * @param {string} answerText
  * @return {Array<Object>}
  */
@@ -734,13 +1812,180 @@ function ProposalBuilding_parseStudioRecommendations_(answerText) {
         if (off) offerings.push(off);
       }
     }
-    out.push({
+    var whyFit = ProposalBuilding_normalizeWhyFit_(row.whyFit || row.why_fit);
+    var rationale = String(row.rationale || row.reason || row.why || '').trim();
+    if (!rationale && whyFit && whyFit.summary) rationale = whyFit.summary;
+    var entry = {
       studioName: name,
+      studioType: ProposalBuilding_normalizeStudioType_(
+        row.studioType || row.studio_type || row.type,
+        name,
+      ),
       offerings: offerings,
-      rationale: String(row.rationale || row.reason || row.why || '').trim(),
+      rationale: rationale,
       priority: String(row.priority || 'medium').trim().toLowerCase(),
       contentId: String(row.contentId || row.content_id || '').trim(),
+    };
+    if (whyFit) entry.whyFit = whyFit;
+    out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * @param {string} rawType
+ * @param {string=} studioName
+ * @return {'digital'|'ai'|'enterprise'}
+ */
+function ProposalBuilding_normalizeStudioType_(rawType, studioName) {
+  var t = String(rawType || '').trim().toLowerCase();
+  if (t === 'digital' || t === 'ai' || t === 'enterprise') return t;
+  return ProposalBuilding_inferStudioType_(studioName);
+}
+
+/**
+ * @param {string} studioName
+ * @return {'digital'|'ai'|'enterprise'}
+ */
+function ProposalBuilding_inferStudioType_(studioName) {
+  var name = String(studioName || '').trim().toLowerCase();
+  if (!name) return 'digital';
+  var tax = PROPOSAL_BUILDING_STUDIO_TAXONOMY_;
+  var k;
+  for (k = 0; k < tax.ai.length; k++) {
+    if (name.indexOf(String(tax.ai[k]).toLowerCase()) >= 0) return 'ai';
+  }
+  for (k = 0; k < tax.enterprise.length; k++) {
+    if (name.indexOf(String(tax.enterprise[k]).toLowerCase()) >= 0) return 'enterprise';
+  }
+  for (k = 0; k < tax.digital.length; k++) {
+    if (name.indexOf(String(tax.digital[k]).toLowerCase()) >= 0) return 'digital';
+  }
+  return 'digital';
+}
+
+/**
+ * @return {string}
+ */
+function ProposalBuilding_formatStudioTaxonomyForPrompt_() {
+  var tax = PROPOSAL_BUILDING_STUDIO_TAXONOMY_;
+  var lines = [
+    'Studios digitales (capacidades transversales; elegí al menos uno):',
+    tax.digital.join(', '),
+    '',
+    'Studios AI (verticales de industria; elegí si el brief/industria/cliente lo justifica):',
+    tax.ai.join(', '),
+    '',
+    'Studios Enterprise (plataformas y partners; elegí si el brief menciona SAP, Salesforce, cloud, etc.):',
+    tax.enterprise.join(', '),
+  ];
+  return lines.join('\n');
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {string}
+ */
+function ProposalBuilding_defaultDigitalStudioForBrief_(brief, industryKey) {
+  brief = brief || {};
+  var hints = ProposalBuilding_normalizeStringList_(brief.technologyHints || []);
+  var blob = (hints.join(' ') + ' ' + String(brief.projectSummary || '')).toLowerCase();
+  if (/data|analytics|bi\b|warehouse|lake/.test(blob)) return 'Globant Data';
+  if (/\bai\b|machine learning|ml\b|genai|llm/.test(blob)) return PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_;
+  if (/security|cyber|soc\b|pentest/.test(blob)) return 'Globant Cybersecurity';
+  if (/robot|rpa|automation/.test(blob)) return 'Globant Igniting Robotics';
+  if (/cloud|devops|sre\b|kubernetes/.test(blob)) return 'Globant CloudOps';
+  if (/blockchain|web3|crypto/.test(blob)) return 'Globant Blockchain';
+  if (/iot|internet of things|sensor/.test(blob)) return 'Globant Internet of Things';
+  if (/payment|fintech|billing/.test(blob)) return 'Globant Payments';
+  if (/quality|qa\b|testing/.test(blob)) return 'Quality Engineering';
+  return 'Globant Engineering';
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {string}
+ */
+function ProposalBuilding_defaultAiStudioForBrief_(brief, industryKey) {
+  var industry = String(industryKey || '').trim();
+  if (industry === 'Aerolineas') return 'Globant Airlines';
+  if (industry === 'Logistica') return 'Globant Consumer Goods & Manufacturing';
+  var clientIndustry = String((brief.clientMatch && brief.clientMatch.industry) || '').toLowerCase();
+  if (/airline|aviation|aerol/.test(clientIndustry)) return 'Globant Airlines';
+  if (/health|pharma|life science/.test(clientIndustry)) return 'Globant Healthcare & Life Sciences';
+  if (/finance|bank|insurance/.test(clientIndustry)) return 'Globant Finance';
+  if (/retail|commerce/.test(clientIndustry)) return 'Globant Retail';
+  if (/media|entertain/.test(clientIndustry)) return 'Globant Media & Entertainment';
+  return '';
+}
+
+/**
+ * @param {Object} brief
+ * @return {string}
+ */
+function ProposalBuilding_defaultEnterpriseStudioForBrief_(brief) {
+  brief = brief || {};
+  var hints = ProposalBuilding_normalizeStringList_(brief.technologyHints || []);
+  var blob = (hints.join(' ') + ' ' + String(brief.projectSummary || '')).toLowerCase();
+  if (/sap\b/.test(blob)) return 'Globant SAP';
+  if (/servicenow/.test(blob)) return 'Globant ServiceNow';
+  if (/salesforce/.test(blob)) return 'Globant Salesforce';
+  if (/oracle\b/.test(blob)) return 'Globant Oracle';
+  if (/\baws\b|amazon web/.test(blob)) return 'Globant AWS Studio';
+  if (/adobe\b/.test(blob)) return 'Globant Adobe Studio';
+  if (/google cloud|\bgcp\b/.test(blob)) return 'Globant Google Cloud';
+  if (/microsoft|azure|dynamics/.test(blob)) return 'Globant Microsoft';
+  return '';
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_ensureStudioTaxonomyCoverage_(studios, brief, industryKey) {
+  var out = Array.isArray(studios) ? studios.slice() : [];
+  var hasType = { digital: false, ai: false, enterprise: false };
+  var i;
+  for (i = 0; i < out.length; i++) {
+    var t = ProposalBuilding_normalizeStudioType_(out[i].studioType, out[i].studioName);
+    out[i].studioType = t;
+    hasType[t] = true;
+  }
+  function pushDefault_(name, type, priority) {
+    if (!name) return;
+    var exists = false;
+    for (var j = 0; j < out.length; j++) {
+      if (
+        String(out[j].studioName || '').toLowerCase() === String(name).toLowerCase()
+      ) {
+        exists = true;
+        break;
+      }
+    }
+    if (exists) return;
+    out.push({
+      studioName: name,
+      studioType: type,
+      offerings: [],
+      rationale: UiStrings_t(ProposalBuilding_briefLangCode_(brief), 'pb_studio_taxonomy_fallback_rationale'),
+      priority: priority || 'medium',
+      contentId: '',
     });
+  }
+  if (!hasType.digital) {
+    pushDefault_(ProposalBuilding_defaultDigitalStudioForBrief_(brief, industryKey), 'digital', 'high');
+  }
+  var aiDefault = ProposalBuilding_defaultAiStudioForBrief_(brief, industryKey);
+  if (!hasType.ai && aiDefault) {
+    pushDefault_(aiDefault, 'ai', 'medium');
+  }
+  var entDefault = ProposalBuilding_defaultEnterpriseStudioForBrief_(brief);
+  if (!hasType.enterprise && entDefault) {
+    pushDefault_(entDefault, 'enterprise', 'medium');
   }
   return out;
 }
@@ -750,69 +1995,62 @@ function ProposalBuilding_parseStudioRecommendations_(answerText) {
  * @param {string} userPrompt
  * @param {string} chatBlock
  * @param {{name:string,mimeType:string,dataBase64:string,textContent:string}} attachment
+ * @param {{multiDocIndex?:number,multiDocTotal?:number}=} opts
  * @return {string}
  */
-function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachment) {
+function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachment, opts) {
+  var options = opts || {};
+  var multiDocIndex = Number(options.multiDocIndex || 0);
+  var multiDocTotal = Number(options.multiDocTotal || 0);
   var models = PROPOSAL_BUILDING_COMMERCIAL_MODELS.join(', ');
-  var extractPrompt = [
-    'Analizá el material (chat, documento o imagen) y extraé un brief comercial para armar una propuesta.',
-    'Respondé SOLO con JSON válido (sin markdown):',
-    '{',
-    '  "clientName": "nombre del cliente si aparece, o vacío",',
-    '  "projectSummary": "resumen ejecutivo del pedido en 2-4 oraciones",',
-    '  "scopeItems": [{"title":"ítem corto","description":"qué pide el cliente / nuestro entendimiento"}],',
-    '  "commercialModel": "uno de: ' + models + ', o vacío si no está claro",',
-    '  "milestones": [{"label":"hito","date":"fecha o rango","notes":"detalle opcional"}],',
-    '  "technologyHints": ["tecnologías, plataformas o dominios mencionados"],',
-    '  "stakeholders": [{"name":"nombre","role":"cargo","organization":"empresa/área","email":"opcional"}],',
-    '  "budget": {"amount":"monto numérico o rango","currency":"USD|EUR|ARS|…","notes":"detalle de presupuesto"},',
-    '  "businessObjectives": ["objetivos de negocio del cliente"],',
-    '  "constraints": ["restricciones, riesgos o condiciones del RFP"],',
-    '  "rfpDeadline": "fecha límite de entrega de propuesta si aparece",',
-    '  "detectedLanguage": "es o en según el idioma dominante del material",',
-    '  "confidence": "high|medium|low",',
-    '  "warnings": ["notas sobre ambigüedades"]',
-    '}',
-    '',
-    'Reglas:',
-    '- scopeItems: si hay varios pedidos o workstreams, un ítem por cada uno.',
-    '- commercialModel: elegí el más cercano al RFP; no inventes si no hay señal.',
-    '- milestones: fechas límite, go-live, entregas o fases con fecha cuando existan.',
-    '- stakeholders: contactos o sponsors mencionados; no inventes emails.',
-    '- budget: solo si hay cifra o rango explícito; currency vacío si no está claro.',
-    '- businessObjectives y constraints: ítems cortos con evidencia en el material.',
-    '- rfpDeadline: fecha de cierre del RFP / entrega de propuesta, no hitos de proyecto.',
-    '- detectedLanguage: idioma en el que debería redactarse la propuesta.',
-    '- Sé conservador: no inventes cliente, presupuesto, fechas ni modelo comercial sin evidencia.',
-  ].join('\n');
+  var hasBinaryAttachment = !!(attachment.dataBase64 && attachment.mimeType);
+  var attachmentMode = hasBinaryAttachment
+    ? 'Analyze ONLY the attached document indicated in [ATTACHED DOCUMENT] (and user notes below if present).'
+    : 'Analyze only the user notes below (no PDF attached in this turn).';
 
-  if (chatBlock) {
-    extractPrompt += '\n\n--- Historial de chat ---\n' + chatBlock;
+  var multiDocContext = '';
+  if (multiDocTotal > 1 && multiDocIndex > 0) {
+    multiDocContext = PromptCatalog_render('pb.extract.multi_doc_context', {
+      multiDocIndex: String(multiDocIndex),
+      multiDocTotal: String(multiDocTotal),
+    });
   }
-  if (userPrompt) {
-    extractPrompt += '\n\n--- Último mensaje del usuario ---\n' + userPrompt;
-  }
+
+  var chatBlockParam = chatBlock
+    ? PromptCatalog_render('pb.extract.chat_history_block', { chatHistory: chatBlock })
+    : '';
+  var userPromptParam = userPrompt
+    ? PromptCatalog_render('pb.extract.user_message_block', { userMessage: userPrompt })
+    : '';
+  var attachmentContent = '';
   if (attachment.textContent) {
-    extractPrompt +=
-      '\n\n--- Contenido del archivo "' +
-      attachment.name +
-      '" ---\n' +
-      attachment.textContent.slice(0, 120000);
+    attachmentContent = PromptCatalog_render('pb.extract.attachment_content_block', {
+      fileName: attachment.name,
+      fileContent: attachment.textContent.slice(0, 120000),
+    });
+  }
+  var imageHint = '';
+  if (hasBinaryAttachment && ProposalBuilding_isImageMime_(attachment.mimeType)) {
+    imageHint = PromptCatalog_getTemplate('pb.extract.image_hint');
   }
 
-  var systemPrompt =
-    'Sos un analista de preventa. Devolvé únicamente JSON válido según el esquema pedido.';
+  var extractPrompt = PromptCatalog_render('pb.extract_brief.user', {
+    attachmentMode: attachmentMode,
+    commercialModels: models,
+    multiDocContext: multiDocContext,
+    chatBlock: chatBlockParam,
+    userPrompt: userPromptParam,
+    attachmentContent: attachmentContent,
+    imageHint: imageHint,
+  });
+
+  var systemPrompt = PromptCatalog_getTemplate('pb.extract_brief.system');
 
   var result;
   if (attachment.dataBase64 && attachment.mimeType) {
-    var userText = extractPrompt;
-    if (ProposalBuilding_isImageMime_(attachment.mimeType)) {
-      userText +=
-        '\n\nLa imagen adjunta puede ser una foto de pizarra, slide o documento escaneado. Transcribí el contenido relevante antes de extraer el brief.';
-    }
     var fileBytes = Utilities.base64Decode(attachment.dataBase64);
     var fileBlob = Utilities.newBlob(fileBytes, attachment.mimeType, attachment.name || 'attachment');
-    result = GlobantDocumentChat_chatWithBlob_(client, fileBlob, systemPrompt, userText);
+    result = GlobantDocumentChat_chatWithBlob_(client, fileBlob, systemPrompt, extractPrompt);
   } else {
     result = client.chatSimple(systemPrompt, extractPrompt, ContentExtraction_resolveChatModel_());
   }
@@ -824,7 +2062,7 @@ function ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachme
  * @return {{ok:boolean, brief:Object}}
  */
 function ProposalBuilding_extractBrief(payloadJson) {
-  AdminAuth_requireProposalBuildingView();
+  AdminAuth_requireProposalBuildingBuild();
   AgentOrchestrator_requireGlobant_();
 
   var payload = {};
@@ -837,18 +2075,29 @@ function ProposalBuilding_extractBrief(payloadJson) {
   var userPrompt = String(payload.userPrompt || '').trim();
   var history = Array.isArray(payload.chatHistory) ? payload.chatHistory : [];
   var chatBlock = ProposalBuilding_formatChatHistory_(history);
-  if (!userPrompt && !chatBlock && !payload.attachment) {
+  var attachment = ProposalBuilding_resolveExtractAttachment_(payload);
+  if (!userPrompt && !chatBlock && !attachment.dataBase64 && !attachment.textContent) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_extract_empty'));
   }
 
-  var attachment = ProposalBuilding_normalizeAttachment_(payload.attachment || null);
   var client = ProposalBuilding_createLlmClient_();
-  var raw = ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachment);
+  var raw = ProposalBuilding_runExtraction_(client, userPrompt, chatBlock, attachment, {
+    multiDocIndex: Number(payload.multiDocIndex || 0),
+    multiDocTotal: Number(payload.multiDocTotal || 0),
+  });
   var parsed = ContentExtraction_parseLooseJson_(raw);
   var brief = ProposalBuilding_normalizeBrief_(parsed);
   if (!brief.detectedLanguage) {
-    brief.detectedLanguage = UiStrings_activeLocale_() === 'en' ? 'en' : 'es';
+    brief.detectedLanguage = 'es';
   }
+  var requestedOutput = String(payload.outputLocale || payload.requestLocale || '').trim();
+  if (requestedOutput) {
+    brief.outputLocale = ProposalBuilding_resolveLangCode_(requestedOutput);
+  }
+  brief.stakeholders = ProposalBuilding_finalizeStakeholdersList_(
+    brief.stakeholders,
+    ProposalBuilding_outputLangCode_(brief),
+  );
   if (
     !brief.scopeItems.length &&
     !brief.clientName &&
@@ -862,25 +2111,70 @@ function ProposalBuilding_extractBrief(payloadJson) {
   }
 
   var sourceFiles = [];
-  if (Array.isArray(payload.sourceFileNames)) {
-    for (var sf = 0; sf < payload.sourceFileNames.length; sf++) {
-      var fn = String(payload.sourceFileNames[sf] || '').trim();
-      if (fn) sourceFiles.push(fn);
-    }
-  } else if (attachment.name) {
-    sourceFiles.push(attachment.name);
+  if (attachment.name) {
+    sourceFiles.push(String(attachment.name).trim());
+  }
+  if (sourceFiles.length) {
+    brief.sourceFileNames = sourceFiles.slice();
   }
   brief = ProposalBuilding_enrichBriefWithClientMatch_(brief, sourceFiles);
 
-  return { ok: true, brief: brief };
+  var sessionId = '';
+  try {
+    sessionId = ProposalBuildingPersistence_recordBriefStep_(payload.sessionId, brief, {
+      attachment: attachment.name || attachment.textContent || attachment.dataBase64 ? attachment : null,
+      resetMaterials: !!payload.extractBatchStart,
+      step: 'extract_brief',
+      aiPayload: { brief: brief, sourceFileNames: sourceFiles },
+      isDraft: true,
+      builderStep: 'brief',
+    });
+  } catch (ePersist) {
+    AviatorsError_log_('ProposalBuilding_extractBrief_persist', String(ePersist && ePersist.message));
+  }
+
+  return { ok: true, brief: brief, sessionId: sessionId };
+}
+
+/**
+ * Unifica briefs parciales con LLM conservando el máximo detalle de cada documento.
+ * @param {Array<Object>} briefList
+ * @param {Array<string>} fileNames
+ * @return {Object}
+ */
+function ProposalBuilding_mergeBriefsWithLlm_(briefList, fileNames) {
+  AgentOrchestrator_requireGlobant_();
+  if (!Array.isArray(briefList) || briefList.length < 2) {
+    return ProposalBuilding_normalizeBrief_(briefList && briefList[0]);
+  }
+  var client = ProposalBuilding_createLlmClient_();
+  var models = PROPOSAL_BUILDING_COMMERCIAL_MODELS.join(', ');
+  var labeled = [];
+  var i;
+  for (i = 0; i < briefList.length; i++) {
+    var sourceName = String((fileNames && fileNames[i]) || briefList[i].__sourceFile || '').trim();
+    if (!sourceName) sourceName = 'documento_' + String(i + 1);
+    var row = ProposalBuilding_normalizeBrief_(briefList[i]);
+    delete row.__sourceFile;
+    labeled.push({ sourceFile: sourceName, brief: row });
+  }
+  var mergePrompt = PromptCatalog_render('pb.merge_briefs.user', {
+    briefCount: String(briefList.length),
+    commercialModels: models,
+    partialBriefsJson: JSON.stringify(labeled).slice(0, 110000),
+  });
+  var systemPrompt = PromptCatalog_getTemplate('pb.merge_briefs.system');
+  var result = client.chatSimple(systemPrompt, mergePrompt, ContentExtraction_resolveChatModel_());
+  var parsed = ContentExtraction_parseLooseJson_(String(result.text || '').trim());
+  return ProposalBuilding_normalizeBrief_(parsed);
 }
 
 /**
  * @param {string} briefsJson
  * @return {{ok:boolean, brief:Object}}
  */
-function ProposalBuilding_mergeExtractedBriefs(briefsJson) {
-  AdminAuth_requireProposalBuildingView();
+function ProposalBuilding_mergeExtractedBriefs(briefsJson, sessionId) {
+  AdminAuth_requireProposalBuildingBuild();
   var list = [];
   try {
     list = JSON.parse(String(briefsJson || '[]'));
@@ -890,37 +2184,516 @@ function ProposalBuilding_mergeExtractedBriefs(briefsJson) {
   if (!Array.isArray(list) || !list.length) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_extract_empty'));
   }
-  var merged = {};
   var fileNames = [];
-  var fileSeen = {};
+  var normalizedList = [];
   var li;
   for (li = 0; li < list.length; li++) {
     var row = list[li];
-    if (row && Array.isArray(row.__sourceFiles)) {
-      var fi;
-      for (fi = 0; fi < row.__sourceFiles.length; fi++) {
-        var fn = String(row.__sourceFiles[fi] || '').trim();
-        if (fn && !fileSeen[fn]) {
-          fileNames.push(fn);
-          fileSeen[fn] = true;
-        }
-      }
-      delete row.__sourceFiles;
+    if (!row || typeof row !== 'object') continue;
+    var sourceName = String(row.__sourceFile || '').trim();
+    if (!sourceName && Array.isArray(row.__sourceFiles) && row.__sourceFiles.length) {
+      sourceName = String(row.__sourceFiles[row.__sourceFiles.length - 1] || '').trim();
     }
-    merged = ProposalBuilding_mergeBriefs_(merged, row);
+    if (sourceName) fileNames.push(sourceName);
+    delete row.__sourceFile;
+    delete row.__sourceFiles;
+    normalizedList.push(ProposalBuilding_normalizeBrief_(row));
+  }
+  if (!normalizedList.length) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_extract_empty'));
+  }
+  var merged;
+  if (normalizedList.length === 1) {
+    merged = normalizedList[0];
+  } else {
+    try {
+      merged = ProposalBuilding_mergeBriefsWithLlm_(normalizedList, fileNames);
+    } catch (eMergeLlm) {
+      AviatorsError_log_('ProposalBuilding_mergeBriefs_llm', String(eMergeLlm && eMergeLlm.message));
+      merged = {};
+      for (li = 0; li < normalizedList.length; li++) {
+        merged = ProposalBuilding_mergeBriefs_(merged, normalizedList[li]);
+      }
+    }
   }
   merged = ProposalBuilding_enrichBriefWithClientMatch_(merged, fileNames);
-  return { ok: true, brief: merged };
+  if (fileNames.length) {
+    merged.sourceFileNames = fileNames.slice();
+  }
+  var sid = '';
+  try {
+    sid = ProposalBuildingPersistence_recordBriefStep_(sessionId, merged, {
+      step: 'merge_briefs',
+      aiPayload: { brief: merged, sourceFileNames: fileNames },
+      isDraft: true,
+      builderStep: 'brief',
+    });
+  } catch (ePersistMerge) {
+    AviatorsError_log_('ProposalBuilding_mergeBriefs_persist', String(ePersistMerge && ePersistMerge.message));
+  }
+  return { ok: true, brief: merged, sessionId: sid };
+}
+
+/** @type {Array<string>} */
+var PROPOSAL_BUILDING_STUDIO_LANE_ORDER_ = ['ai_pods', 'digital', 'ai_vertical', 'enterprise'];
+
+/**
+ * @param {Array<Object>} catalogStudios
+ * @param {string} lane
+ * @return {Array<string>}
+ */
+function ProposalBuilding_formatStudioCatalogLinesForLane_(catalogStudios, lane) {
+  var list = Array.isArray(catalogStudios) ? catalogStudios : [];
+  var lines = [];
+  var ci;
+  for (ci = 0; ci < list.length; ci++) {
+    var st = list[ci];
+    var name = ProposalBuilding_normalizeStudioName_(st.studioName);
+    if (!name) continue;
+    if (lane === 'digital' && name === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) continue;
+    var studioType = ProposalBuilding_inferStudioType_(name);
+    if (lane === 'digital' && studioType !== 'digital') continue;
+    if (lane === 'ai_vertical' && studioType !== 'ai') continue;
+    if (lane === 'enterprise' && studioType !== 'enterprise') continue;
+    var line = '- ' + name;
+    if (st.contentIds && st.contentIds.length) line += ' · contentId=' + st.contentIds[0];
+    if (st.kgNodeId) line += ' · kgNodeId=' + st.kgNodeId;
+    if (st.offerings && st.offerings.length) line += ' · offerings: ' + st.offerings.join(', ');
+    if (st.summaries && st.summaries.length) line += ' · ' + st.summaries[0];
+    lines.push(line);
+  }
+  return lines;
+}
+
+/**
+ * @param {string} lane
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @param {Array<Object>} catalogStudios
+ * @return {string}
+ */
+function ProposalBuilding_buildStudioLanePrompt_(lane, brief, industryKey, catalogStudios) {
+  var industry = String(industryKey || '').trim();
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var outputLanguage = ProposalBuilding_briefOutputLanguageLabel_(brief);
+  var langRule =
+    'Output language: ' +
+    outputLanguage +
+    '. The validated brief JSON may be written in another language; write ALL text fields (rationale, whyFit, summaries) in ' +
+    outputLanguage +
+    ' only.\n';
+  var tax = PROPOSAL_BUILDING_STUDIO_TAXONOMY_;
+  var studioLines = ProposalBuilding_formatStudioCatalogLinesForLane_(catalogStudios, lane);
+  var catalogBlock =
+    studioLines.length ? studioLines.join('\n') : '(no indexed studios; rely on official taxonomy)';
+  var commonTail = [
+    'Proposal industry: ' + (industry || '(not specified)'),
+    'Validated brief:',
+    JSON.stringify(brief),
+    '',
+    'Studios in Aviators catalog (indexed material):',
+    catalogBlock,
+  ].join('\n');
+  var whyFitRules =
+    '- whyFit.fitScore: integer 0-100 for brief-studio fit.\n' +
+    '- whyFit.keyPoints: 3-5 items with title, detail and briefAnchor tied to the brief.\n' +
+    '- whyFit.comparisons: 2-4 rows (aspect, withoutStudio, withStudio).\n' +
+    '- whyFit.briefLinks: 2-4 rows mapping briefNeed to studioOffer.\n' +
+    '- rationale: 1-2 sentence plain summary (same language as whyFit).';
+
+  if (lane === 'digital') {
+    var digitalNames = tax.digital.filter(function (n) {
+      return n !== PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_;
+    });
+    return PromptCatalog_render('pb.studio_lane.digital.user', {
+      laneRules:
+        langRule +
+        'Recommend ONLY transversal digital Globant Studios (studioType=digital) for this proposal.\n' +
+        'Do NOT include Globant AI-PODs (generated in a separate call).\n' +
+        'Rules:\n' +
+        '- Recommend 1-3 distinct digital studios, prioritizing brief relevance.\n' +
+        '- Use canonical taxonomy names; do not invent studios.\n' +
+        '- Include Aviators catalog contentId when there is a match.\n' +
+        whyFitRules,
+      digitalTaxonomy: digitalNames.join(', '),
+      outputLanguage: outputLanguage,
+      commonTail: commonTail,
+    });
+  }
+  if (lane === 'ai_vertical') {
+    return PromptCatalog_render('pb.studio_lane.ai_vertical.user', {
+      laneRules:
+        langRule +
+        'Recommend ONLY industry-vertical AI Globant Studios (studioType=ai) for this proposal.\n' +
+        'Rules:\n' +
+        '- Recommend 1-2 AI studios that fit the brief industry/client.\n' +
+        '- The first must have priority=high; the rest medium.\n' +
+        '- Use canonical names; include catalog contentId when applicable.\n' +
+        whyFitRules,
+      aiTaxonomy: tax.ai.join(', '),
+      outputLanguage: outputLanguage,
+      commonTail: commonTail,
+    });
+  }
+  if (lane === 'enterprise') {
+    return PromptCatalog_render('pb.studio_lane.enterprise.user', {
+      laneRules:
+        langRule +
+        'Recommend ONLY Globant Enterprise studios (studioType=enterprise) if the brief justifies it.\n' +
+        'Rules:\n' +
+        '- Include studios ONLY if the brief mentions SAP, ServiceNow, Salesforce, Oracle, AWS, Adobe, Google Cloud, Microsoft or process optimization.\n' +
+        '- If no enterprise applies, respond {"studios":[]}.\n' +
+        '- Maximum 2 enterprise studios.\n' +
+        whyFitRules,
+      enterpriseTaxonomy: tax.enterprise.join(', '),
+      outputLanguage: outputLanguage,
+      commonTail: commonTail,
+    });
+  }
+  return '';
+}
+
+/**
+ * @param {string} lane
+ * @param {Array<Object>} studios
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_filterStudiosForLane_(lane, studios) {
+  var out = [];
+  var i;
+  for (i = 0; i < studios.length; i++) {
+    var st = studios[i];
+    if (!st || typeof st !== 'object') continue;
+    var name = ProposalBuilding_normalizeStudioName_(st.studioName);
+    if (!name) continue;
+    var type = ProposalBuilding_normalizeStudioType_(st.studioType, name);
+    if (lane === 'digital') {
+      if (name === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) continue;
+      if (type !== 'digital') continue;
+      st.studioType = 'digital';
+    } else if (lane === 'ai_vertical') {
+      if (type !== 'ai') continue;
+      st.studioType = 'ai';
+    } else if (lane === 'enterprise') {
+      if (type !== 'enterprise') continue;
+      st.studioType = 'enterprise';
+    } else {
+      continue;
+    }
+    st.studioName = name;
+    out.push(st);
+  }
+  return out;
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_normalizeStudioPriorities_(studios) {
+  var out = Array.isArray(studios) ? studios.slice() : [];
+  var aiSeen = 0;
+  var i;
+  for (i = 0; i < out.length; i++) {
+    var row = out[i];
+    row.studioName = ProposalBuilding_normalizeStudioName_(row.studioName);
+    row.studioType = ProposalBuilding_normalizeStudioType_(row.studioType, row.studioName);
+    row.priority = String(row.priority || 'medium').trim().toLowerCase();
+    if (row.studioName === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      row.priority = 'high';
+      row.studioType = 'digital';
+      row.offerings = ProposalBuilding_ensureOfferingsIncludeAiPods_(row.offerings);
+      continue;
+    }
+    if (row.studioType === 'digital') {
+      row.priority = 'medium';
+      continue;
+    }
+    if (row.studioType === 'ai') {
+      row.priority = aiSeen === 0 ? 'high' : 'medium';
+      aiSeen++;
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {Array<Object>} studios
+ * @return {Object<string, Array<Object>>}
+ */
+function ProposalBuilding_splitStudiosIntoLanes_(studios) {
+  var out = { ai_pods: [], digital: [], ai_vertical: [], enterprise: [] };
+  var list = Array.isArray(studios) ? studios : [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var st = list[i];
+    if (!st || typeof st !== 'object') continue;
+    var name = ProposalBuilding_normalizeStudioName_(st.studioName);
+    if (!name) continue;
+    if (name === PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_) {
+      out.ai_pods.push(st);
+      continue;
+    }
+    var type = ProposalBuilding_normalizeStudioType_(st.studioType, name);
+    if (type === 'ai') out.ai_vertical.push(st);
+    else if (type === 'enterprise') out.enterprise.push(st);
+    else out.digital.push(st);
+  }
+  return out;
+}
+
+/**
+ * @param {Object<string, Array<Object>>} lanesPayload
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_mergeStudioLanes_(lanesPayload, brief, industryKey) {
+  lanesPayload = lanesPayload && typeof lanesPayload === 'object' ? lanesPayload : {};
+  var seen = {};
+  var out = [];
+  var li;
+  var i;
+  for (li = 0; li < PROPOSAL_BUILDING_STUDIO_LANE_ORDER_.length; li++) {
+    var lane = PROPOSAL_BUILDING_STUDIO_LANE_ORDER_[li];
+    var list = Array.isArray(lanesPayload[lane]) ? lanesPayload[lane] : [];
+    for (i = 0; i < list.length; i++) {
+      var st = list[i];
+      if (!st || typeof st !== 'object') continue;
+      var key = ProposalBuilding_normalizeStudioName_(st.studioName).toLowerCase();
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      out.push(st);
+    }
+  }
+  out = ProposalBuilding_ensureStudioTaxonomyCoverage_(out, brief, industryKey);
+  return ProposalBuilding_normalizeStudioPriorities_(out);
+}
+
+/**
+ * @param {string} lane ai_pods|digital|ai_vertical|enterprise
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @return {{studios:Array<Object>}}
+ */
+function ProposalBuilding_runStudioRecommendationLane_(lane, brief, industryKey) {
+  lane = String(lane || '').trim().toLowerCase();
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var industry = String(industryKey || '').trim();
+
+  if (lane === 'ai_pods') {
+    AgentOrchestrator_requireGlobant_();
+    var pitch = ProposalBuilding_buildAiPodsPitch_(brief, industry);
+    var rationale = ProposalBuilding_formatAiPodsPitchAsText_(pitch);
+    return {
+      studios: [
+        {
+          studioName: PROPOSAL_BUILDING_AI_PODS_STUDIO_NAME_,
+          studioType: 'digital',
+          offerings: ['AI_PODS'],
+          rationale: rationale,
+          priority: 'high',
+          contentId: '',
+          aiPodsPitch: pitch,
+        },
+      ],
+    };
+  }
+
+  if (lane !== 'digital' && lane !== 'ai_vertical' && lane !== 'enterprise') {
+    throw new Error('ERR_PB_STUDIO_LANE_INVALID');
+  }
+
+  AgentOrchestrator_requireGlobant_();
+  var catalogStudios = ProposalBuilding_listStudiosFromCatalog_();
+  var prompt = ProposalBuilding_buildStudioLanePrompt_(lane, brief, industry, catalogStudios);
+  var r = AgentOrchestrator_answerWith(prompt, _ADMIN_AGENT_ID_PROPOSALS, []);
+  var studios = ProposalBuilding_parseStudioRecommendations_(r.answer || '');
+  studios = ProposalBuilding_filterStudiosForLane_(lane, studios);
+  return { studios: studios };
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @param {Object<string, Array<Object>>} lanesPayload
+ * @param {string=} sessionId
+ * @param {{persist?:boolean, returnSession?:boolean, aiEvent?:string}=} opts
+ * @return {{ok:boolean, studios:Array<Object>, catalogStudios:Array<Object>, session?:Object}}
+ */
+function ProposalBuilding_finalizeStudioRecommendations_(
+  brief,
+  industryKey,
+  lanesPayload,
+  sessionId,
+  opts,
+) {
+  opts = opts || {};
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  var industry = String(industryKey || '').trim();
+  var merged = ProposalBuilding_mergeStudioLanes_(lanesPayload, brief, industry);
+  var catalogStudios = ProposalBuilding_listStudiosFromCatalog_();
+  merged = ProposalBuilding_enrichStudioRecommendations_(merged, catalogStudios);
+  merged = ProposalBuildingPersistence_normalizeStudiosPatch_(merged);
+  var result = { ok: true, studios: merged, catalogStudios: catalogStudios };
+  var sid = String(sessionId || '').trim();
+  var shouldPersist = opts.persist !== false;
+  if (!shouldPersist) return result;
+
+  var aiEvent = String(opts.aiEvent || 'studios_lanes_finalize').trim();
+  try {
+    if (sid && AviatorsDataBackend_supabaseConfigured_()) {
+      var email = ProposalBuildingPersistence_requireEmail_();
+      var row = ProposalBuildingStore_getByIdForUser(sid, email) || {};
+      ProposalBuildingPersistence_patchSession_(sid, {
+        validatedBrief: brief,
+        industryKey: industry,
+        studioRecommendations: merged,
+        aiResponses: ProposalBuildingPersistence_appendAiEvent_(row.aiResponses, aiEvent, {
+          industry: industry,
+          lanes: lanesPayload,
+          studios: merged,
+        }),
+      });
+      if (opts.returnSession) {
+        result.session = ProposalBuildingStore_getByIdForUser(sid, email);
+      }
+    } else {
+      ProposalBuildingPersistence_recordStudiosStep_(sid, brief, industry, result);
+    }
+  } catch (ePersist) {
+    AviatorsError_log_('ProposalBuilding_studios_finalize', String(ePersist && ePersist.message));
+  }
+  return result;
+}
+
+/**
+ * Ejecuta una lane de recomendación de studios (llamada IA específica).
+ * @param {string} lane ai_pods|digital|ai_vertical|enterprise
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @return {{ok:boolean, lane:string, studios:Array<Object>}}
+ */
+function ProposalBuilding_recommendStudiosLane(lane, briefJson, industryKey) {
+  AdminAuth_requireProposalBuildingBuild();
+  var brief = {};
+  try {
+    brief = JSON.parse(String(briefJson || '{}'));
+  } catch (eBrief) {
+    brief = {};
+  }
+  brief = ProposalBuilding_normalizeBrief_(brief);
+  var laneResult = ProposalBuilding_runStudioRecommendationLane_(lane, brief, industryKey);
+  return {
+    ok: true,
+    lane: String(lane || '').trim().toLowerCase(),
+    studios: laneResult.studios || [],
+  };
+}
+
+/**
+ * Fusiona lanes, enriquece catálogo y persiste recomendaciones de studios.
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @param {string} lanesJson
+ * @param {string=} sessionId
+ * @return {{ok:boolean, studios:Array<Object>, catalogStudios:Array<Object>, session?:Object}}
+ */
+function ProposalBuilding_finalizeStudioRecommendations(briefJson, industryKey, lanesJson, sessionId) {
+  var sid = String(sessionId || '').trim();
+  if (sid) AdminAuth_requireProposalBuildingSave();
+  else AdminAuth_requireProposalBuildingBuild();
+  var brief = {};
+  try {
+    brief = JSON.parse(String(briefJson || '{}'));
+  } catch (eBrief) {
+    brief = {};
+  }
+  brief = ProposalBuilding_normalizeBrief_(brief);
+  var lanesPayload = {};
+  try {
+    lanesPayload = JSON.parse(String(lanesJson || '{}'));
+  } catch (eLanes) {
+    lanesPayload = {};
+  }
+  return ProposalBuilding_finalizeStudioRecommendations_(
+    brief,
+    industryKey,
+    lanesPayload,
+    sessionId,
+    { persist: true, returnSession: !!String(sessionId || '').trim(), aiEvent: 'studios_lanes_finalize' },
+  );
+}
+
+/**
+ * Regenera una lane y fusiona con el resto de studios existentes.
+ * @param {string} sessionId
+ * @param {string} lane
+ * @param {string=} briefJson
+ * @param {string=} studiosJson
+ * @return {{ok:boolean, lane:string, studios:Array<Object>, session?:Object}}
+ */
+function ProposalBuilding_refreshStudiosLane(sessionId, lane, briefJson, studiosJson) {
+  AdminAuth_requireProposalBuildingSave();
+  AviatorsDataBackend_requireSupabase_();
+  var email = ProposalBuildingPersistence_requireEmail_();
+  var sid = String(sessionId || '').trim();
+  if (!sid) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_missing'));
+  }
+  var row = ProposalBuildingStore_getByIdForUser(sid, email);
+  if (!row) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_not_found'));
+  }
+
+  var brief = {};
+  try {
+    brief = JSON.parse(String(briefJson || '{}'));
+  } catch (eBrief) {
+    brief = {};
+  }
+  if (!brief || typeof brief !== 'object' || !Object.keys(brief).length) {
+    brief = row.validatedBrief || row.draftBrief || {};
+  }
+  brief = ProposalBuilding_normalizeBrief_(brief);
+  var industry = String(row.industryKey || '').trim();
+
+  var current = [];
+  try {
+    current = JSON.parse(String(studiosJson || '[]'));
+  } catch (eStudios) {
+    current = [];
+  }
+  if (!Array.isArray(current) || !current.length) {
+    current = Array.isArray(row.studioRecommendations) ? row.studioRecommendations.slice() : [];
+  }
+
+  var lanesPayload = ProposalBuilding_splitStudiosIntoLanes_(current);
+  var laneKey = String(lane || '').trim().toLowerCase();
+  var laneResult = ProposalBuilding_runStudioRecommendationLane_(laneKey, brief, industry);
+  lanesPayload[laneKey] = laneResult.studios || [];
+
+  var finalized = ProposalBuilding_finalizeStudioRecommendations_(brief, industry, lanesPayload, sid, {
+    persist: true,
+    returnSession: true,
+    aiEvent: 'studios_lane_refresh_' + laneKey,
+  });
+  return {
+    ok: true,
+    lane: laneKey,
+    studios: finalized.studios || [],
+    session: finalized.session,
+  };
 }
 
 /**
  * @param {string} briefJson
  * @param {string=} industryKey
+ * @param {string=} sessionId
  * @return {{ok:boolean, studios:Array<Object>, catalogStudios:Array<Object>}}
  */
-function ProposalBuilding_recommendStudios(briefJson, industryKey) {
-  AdminAuth_requireProposalBuildingView();
-  AgentOrchestrator_requireGlobant_();
+function ProposalBuilding_recommendStudios(briefJson, industryKey, sessionId) {
+  AdminAuth_requireProposalBuildingBuild();
   var brief = {};
   try {
     brief = JSON.parse(String(briefJson || '{}'));
@@ -929,87 +2702,68 @@ function ProposalBuilding_recommendStudios(briefJson, industryKey) {
   }
   brief = ProposalBuilding_normalizeBrief_(brief);
   var industry = String(industryKey || '').trim();
-  var catalogStudios = ProposalBuilding_listStudiosFromCatalog_();
-  var studioLines = [];
-  var ci;
-  for (ci = 0; ci < catalogStudios.length; ci++) {
-    var st = catalogStudios[ci];
-    var line = '- ' + st.studioName;
-    if (st.contentIds && st.contentIds.length) {
-      line += ' · contentId=' + st.contentIds[0];
-    }
-    if (st.kgNodeId) {
-      line += ' · kgNodeId=' + st.kgNodeId;
-    }
-    if (st.offerings && st.offerings.length) {
-      line += ' · offerings: ' + st.offerings.join(', ');
-    }
-    if (st.summaries && st.summaries.length) {
-      line += ' · ' + st.summaries[0];
-    }
-    studioLines.push(line);
+  var lanesPayload = {};
+  var li;
+  for (li = 0; li < PROPOSAL_BUILDING_STUDIO_LANE_ORDER_.length; li++) {
+    var lane = PROPOSAL_BUILDING_STUDIO_LANE_ORDER_[li];
+    lanesPayload[lane] = ProposalBuilding_runStudioRecommendationLane_(lane, brief, industry).studios || [];
   }
-  var prompt = [
-    'Recomendá hasta 5 Globant Studios que deberían acoplarse a esta propuesta comercial.',
-    'Usá el catálogo indexado cuando sea posible; no inventes studios que no estén listados salvo que el brief lo exija explícitamente.',
-    'Cuando elijas un studio del catálogo, incluí su contentId (y kgNodeId si está en la lista).',
-    'Respondé SOLO con JSON válido (sin markdown):',
-    '{"studios":[{"studioName":"nombre","offerings":["AI_PODS"],"rationale":"por qué encaja con el brief","priority":"high|medium|low","contentId":"id catálogo si aplica"}]}',
-    '',
-    'Industria propuesta: ' + (industry || '(no indicada)'),
-    'Brief validado:',
-    JSON.stringify(brief),
-    '',
-    'Studios en catálogo Aviators:',
-    studioLines.length ? studioLines.join('\n') : '(sin studios indexados; sugerí según expertise Globant documentada)',
-  ].join('\n');
+  return ProposalBuilding_finalizeStudioRecommendations_(brief, industry, lanesPayload, sessionId, {
+    persist: true,
+    returnSession: false,
+    aiEvent: 'studios',
+  });
+}
 
-  var r = AgentOrchestrator_answerWith(prompt, _ADMIN_AGENT_ID_PROPOSALS, []);
-  var studios = ProposalBuilding_parseStudioRecommendations_(r.answer || '');
-  if (!studios.length && catalogStudios.length) {
-    var fb;
-    for (fb = 0; fb < Math.min(3, catalogStudios.length); fb++) {
-      studios.push({
-        studioName: catalogStudios[fb].studioName,
-        offerings: catalogStudios[fb].offerings || [],
-        rationale: UiStrings_t(UiStrings_activeLocale_(), 'pb_studio_fallback_rationale'),
-        priority: 'medium',
-        contentId: catalogStudios[fb].contentIds && catalogStudios[fb].contentIds[0]
-          ? catalogStudios[fb].contentIds[0]
-          : '',
-      });
-    }
-  }
-  studios = ProposalBuilding_enrichStudioRecommendations_(studios, catalogStudios);
-  return { ok: true, studios: studios, catalogStudios: catalogStudios };
+/**
+ * Regenera el pitch AI-PODs (presale) para una sesión guardada sin re-recomendar todos los studios.
+ * @param {string} sessionId
+ * @param {string=} briefJson Brief opcional (p. ej. edits locales en vista propuesta).
+ * @param {string=} studiosJson Lista actual de studios opcional (conserva filas manuales).
+ * @return {{ok:boolean,studios:Array<Object>,session:Object}}
+ */
+function ProposalBuilding_refreshAiPodsPitch(sessionId, briefJson, studiosJson) {
+  return ProposalBuilding_refreshStudiosLane(sessionId, 'ai_pods', briefJson, studiosJson);
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} parent
+ * @param {string} name
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ProposalBuilding_getOrCreateChildFolder_(parent, name) {
+  var it = parent.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  return parent.createFolder(name);
 }
 
 /**
  * @return {GoogleAppsScript.Drive.Folder}
  */
 function ProposalBuilding_getProposalsDriveFolder_() {
-  function getOrCreateChildFolder_(parent, name) {
-    var it = parent.getFoldersByName(name);
-    if (it.hasNext()) return it.next();
-    return parent.createFolder(name);
-  }
   var projectRoot = DriveApp.getFolderById(AviatorsConfig_requireDriveRootFolderId_());
-  return getOrCreateChildFolder_(projectRoot, PROPOSAL_BUILDING_DRIVE_FOLDER_NAME);
+  return ProposalBuilding_getOrCreateChildFolder_(projectRoot, PROPOSAL_BUILDING_DRIVE_FOLDER_NAME);
 }
 
 /**
  * @param {Object} brief
  * @return {string}
  */
-function ProposalBuilding_buildProposalFileName_(brief) {
+function ProposalBuilding_buildClientFolderName_(brief) {
   brief = brief || {};
-  var clientPart = ContentIngestion_safeDriveFolderName_(
-    brief.clientName,
-    PROPOSAL_BUILDING_CLIENT_FALLBACK_,
-  );
+  return ContentIngestion_safeDriveFolderName_(brief.clientName, PROPOSAL_BUILDING_CLIENT_FALLBACK_);
+}
+
+/**
+ * @param {Object} brief
+ * @return {string}
+ */
+function ProposalBuilding_buildProposalSubjectName_(brief) {
+  brief = brief || {};
   var items = Array.isArray(brief.scopeItems) ? brief.scopeItems : [];
   var subjectParts = [];
-  for (var i = 0; i < items.length; i++) {
+  var i;
+  for (i = 0; i < items.length; i++) {
     var it = items[i];
     if (!it || typeof it !== 'object') continue;
     var chunk = String(it.title || '').trim();
@@ -1017,14 +2771,288 @@ function ProposalBuilding_buildProposalFileName_(brief) {
     if (chunk) subjectParts.push(chunk);
   }
   var subjectRaw = subjectParts.join('; ');
+  if (!subjectRaw && brief.projectSummary) subjectRaw = String(brief.projectSummary || '').trim();
   if (!subjectRaw) subjectRaw = PROPOSAL_BUILDING_SUBJECT_FALLBACK_;
-  var subjectPart = ContentIngestion_safeDriveFolderName_(
-    subjectRaw,
-    PROPOSAL_BUILDING_SUBJECT_FALLBACK_,
+  return ContentIngestion_safeDriveFolderName_(subjectRaw, PROPOSAL_BUILDING_SUBJECT_FALLBACK_);
+}
+
+/**
+ * Carpeta Propuestas/{cliente}/{propuesta}/ para deck y checklist.
+ * @param {Object} brief
+ * @return {{folder:GoogleAppsScript.Drive.Folder,id:string,url:string,name:string,clientName:string,proposalName:string}}
+ */
+function ProposalBuilding_getProposalPackageFolder_(brief) {
+  brief = brief || {};
+  var proposalsRoot = ProposalBuilding_getProposalsDriveFolder_();
+  var clientName = ProposalBuilding_buildClientFolderName_(brief);
+  var proposalName = ProposalBuilding_buildProposalSubjectName_(brief);
+  var clientFolder = ProposalBuilding_getOrCreateChildFolder_(proposalsRoot, clientName);
+  var packageFolder = ProposalBuilding_getOrCreateChildFolder_(clientFolder, proposalName);
+  return {
+    folder: packageFolder,
+    id: String(packageFolder.getId() || ''),
+    url: String(packageFolder.getUrl() || ''),
+    name: String(packageFolder.getName() || proposalName),
+    clientName: clientName,
+    proposalName: proposalName,
+  };
+}
+
+/**
+ * @param {string} raw
+ * @return {string}
+ */
+function ProposalBuilding_normalizeSubmissionDeliverableCategory_(raw) {
+  var c = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (c === 'doc' || c === 'docs' || c === 'documento' || c === 'documentos') c = 'document';
+  if (c === 'admin' || c === 'administrativo') c = 'administrative';
+  if (c === 'fecha' || c === 'deadline' || c === 'due_date') c = 'deadline';
+  if (c === 'contenido' || c === 'content' || c === 'scope') c = 'content';
+  var allowed = {
+    document: true,
+    format: true,
+    administrative: true,
+    deadline: true,
+    content: true,
+    other: true,
+  };
+  return allowed[c] ? c : 'other';
+}
+
+/**
+ * @param {*} value
+ * @return {Array<{item:string,dueDate:string,notes:string,category:string}>}
+ */
+function ProposalBuilding_normalizeSubmissionDeliverables_(value) {
+  var out = [];
+  var seen = {};
+  var rows = Array.isArray(value) ? value : [];
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row) continue;
+    var item = '';
+    var dueDate = '';
+    var notes = '';
+    var category = 'other';
+    if (typeof row === 'string') {
+      item = String(row || '').trim();
+    } else if (typeof row === 'object') {
+      item = String(row.item || row.title || row.label || row.name || '').trim();
+      dueDate = String(row.dueDate || row.date || row.deadline || '').trim();
+      notes = String(row.notes || row.description || row.detail || '').trim();
+      category = ProposalBuilding_normalizeSubmissionDeliverableCategory_(row.category || row.type);
+    }
+    if (!item) continue;
+    var key = item.toLowerCase() + '|' + dueDate.toLowerCase() + '|' + category;
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push({ item: item, dueDate: dueDate, notes: notes, category: category });
+  }
+  return out;
+}
+
+/**
+ * @param {string} category
+ * @return {string}
+ */
+function ProposalBuilding_checklistCategoryLabel_(category) {
+  var key = 'pb_checklist_cat_' + ProposalBuilding_normalizeSubmissionDeliverableCategory_(category);
+  var label = UiStrings_t(UiStrings_activeLocale_(), key);
+  if (label === key) {
+    return UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_cat_other');
+  }
+  return label;
+}
+
+/**
+ * @param {Object} brief
+ * @param {{deckName:string,deckUrl:string}=} deckMeta
+ * @return {Array<{item:string,dueDate:string,notes:string,category:string,status:string}>}
+ */
+function ProposalBuilding_buildChecklistItemsFromBrief_(brief, deckMeta) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  deckMeta = deckMeta || {};
+  var items = [];
+  var seen = {};
+  function push_(item, dueDate, notes, category, status) {
+    var text = String(item || '').trim();
+    if (!text) return;
+    var key = text.toLowerCase() + '|' + String(dueDate || '').trim().toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    items.push({
+      item: text,
+      dueDate: String(dueDate || '').trim(),
+      notes: String(notes || '').trim(),
+      category: ProposalBuilding_normalizeSubmissionDeliverableCategory_(category),
+      status: String(status || '').trim() || UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_pending'),
+    });
+  }
+
+  var subs = Array.isArray(brief.submissionDeliverables) ? brief.submissionDeliverables : [];
+  var si;
+  for (si = 0; si < subs.length; si++) {
+    var sub = subs[si];
+    push_(sub.item, sub.dueDate, sub.notes, sub.category, '');
+  }
+  if (brief.rfpDeadline) {
+    push_(
+      UiStrings_fmt_('pb_checklist_item_rfp_deadline', { date: brief.rfpDeadline }),
+      brief.rfpDeadline,
+      '',
+      'deadline',
+      '',
+    );
+  }
+  var milestones = Array.isArray(brief.milestones) ? brief.milestones : [];
+  for (si = 0; si < milestones.length; si++) {
+    var ms = milestones[si];
+    if (!ms || typeof ms !== 'object') continue;
+    var msLabel = String(ms.label || '').trim();
+    if (!msLabel || ProposalBuilding_isPlaceholderBriefText_(msLabel)) continue;
+    push_(msLabel, String(ms.date || '').trim(), String(ms.notes || '').trim(), 'deadline', '');
+  }
+  if (ProposalBuilding_budgetHasEvidence_(brief.budget)) {
+    var budget = brief.budget || ProposalBuilding_normalizeBudget_(null);
+    var budgetLabel = UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_item_pricing');
+    var budgetNotes = String(budget.amount || '').trim();
+    if (budget.currency) budgetNotes += (budgetNotes ? ' ' : '') + budget.currency;
+    if (budget.notes) budgetNotes += (budgetNotes ? ' — ' : '') + budget.notes;
+    push_(budgetLabel, '', budgetNotes, 'content', '');
+  }
+  push_(
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_item_deck'),
+    '',
+    deckMeta.deckUrl ? deckMeta.deckUrl : deckMeta.deckName || '',
+    'document',
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_done'),
   );
-  var fileName = clientPart + ' - ' + subjectPart;
-  if (fileName.length > 200) fileName = fileName.slice(0, 200).trim();
-  return fileName;
+  return items;
+}
+
+/**
+ * @param {Object} brief
+ * @return {string}
+ */
+function ProposalBuilding_buildProposalDeckFileName_(brief) {
+  return UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_deck_file_name');
+}
+
+/**
+ * @param {Object} brief
+ * @return {string}
+ */
+function ProposalBuilding_buildChecklistFileName_(brief) {
+  return UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_file_name');
+}
+
+/**
+ * @param {Object} brief
+ * @return {string}
+ */
+function ProposalBuilding_buildProposalFileName_(brief) {
+  return ProposalBuilding_buildProposalDeckFileName_(brief);
+}
+
+/**
+ * @param {Object} brief
+ * @param {GoogleAppsScript.Drive.Folder} packageFolder
+ * @param {{deckName:string,deckUrl:string}=} deckMeta
+ * @return {{id:string,url:string,name:string,itemCount:number}}
+ */
+function ProposalBuilding_createDeliveryChecklistSpreadsheet_(brief, packageFolder, deckMeta) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  deckMeta = deckMeta || {};
+  if (!packageFolder) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_checklist_folder_missing'));
+  }
+  var desiredName = ProposalBuilding_buildChecklistFileName_(brief);
+  var fileName = ProposalBuilding_uniqueFileNameInFolder_(packageFolder, desiredName);
+  var checklistItems = ProposalBuilding_buildChecklistItemsFromBrief_(brief, deckMeta);
+  var ss = SpreadsheetApp.create(fileName);
+  var ssId = String(ss.getId() || '');
+  var ssFile = DriveApp.getFileById(ssId);
+  ssFile.moveTo(packageFolder);
+
+  var sheet = ss.getSheets()[0];
+  sheet.setName(UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_sheet_name'));
+  sheet.getRange(1, 1).setValue(
+    UiStrings_fmt_('pb_checklist_meta_client', {
+      client:
+        String(brief.clientName || '').trim() ||
+        UiStrings_t(UiStrings_activeLocale_(), 'pb_client_fallback_label'),
+    }),
+  );
+  sheet.getRange(2, 1).setValue(
+    UiStrings_fmt_('pb_checklist_meta_proposal', {
+      proposal: ProposalBuilding_buildProposalSubjectName_(brief),
+    }),
+  );
+
+  var headerRow = 4;
+  var headers = [
+    '#',
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_col_item'),
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_col_due_date'),
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_col_status'),
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_col_notes'),
+    UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_col_category'),
+  ];
+  sheet.getRange(headerRow, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(headerRow, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(headerRow);
+
+  var rows = [];
+  var ri;
+  for (ri = 0; ri < checklistItems.length; ri++) {
+    var row = checklistItems[ri];
+    rows.push([
+      ri + 1,
+      row.item,
+      row.dueDate,
+      row.status,
+      row.notes,
+      ProposalBuilding_checklistCategoryLabel_(row.category),
+    ]);
+  }
+  if (rows.length) {
+    sheet.getRange(headerRow + 1, 1, rows.length, headers.length).setValues(rows);
+  }
+
+  var statusCol = 4;
+  var statusRange = sheet.getRange(headerRow + 1, statusCol, headerRow + rows.length, statusCol);
+  var statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(
+      [
+        UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_pending'),
+        UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_in_progress'),
+        UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_done'),
+        UiStrings_t(UiStrings_activeLocale_(), 'pb_checklist_status_na'),
+      ],
+      true,
+    )
+    .setAllowInvalid(false)
+    .build();
+  if (rows.length) statusRange.setDataValidation(statusRule);
+
+  sheet.setColumnWidth(1, 42);
+  sheet.setColumnWidth(2, 340);
+  sheet.setColumnWidth(3, 120);
+  sheet.setColumnWidth(4, 120);
+  sheet.setColumnWidth(5, 220);
+  sheet.setColumnWidth(6, 140);
+
+  SpreadsheetApp.flush();
+  return {
+    id: ssId,
+    url: String(ss.getUrl() || ''),
+    name: String(ss.getName() || fileName),
+    itemCount: checklistItems.length,
+  };
 }
 
 /**
@@ -1179,9 +3207,7 @@ function ProposalBuilding_runUnderstandingComposition_(brief, industryKey) {
   brief = brief || {};
   try {
     var client = ProposalBuilding_createLlmClient_();
-    var lang = String(brief.detectedLanguage || '').trim();
-    if (lang.indexOf('en') === 0) lang = 'en';
-    else lang = 'es';
+    var lang = ProposalBuilding_outputLangCode_(brief);
 
     var scopeBlock = [];
     var items = Array.isArray(brief.scopeItems) ? brief.scopeItems : [];
@@ -1194,39 +3220,18 @@ function ProposalBuilding_runUnderstandingComposition_(brief, industryKey) {
       if (row !== '- ') scopeBlock.push(row);
     }
     if (!scopeBlock.length) {
-      scopeBlock.push('- (sin ítems detallados en el brief)');
+      scopeBlock.push('- (no detailed scope items in brief)');
     }
 
-    var prompt = [
-      'Redactá el título del deck y el bloque «Nuestro entendimiento» para una propuesta comercial de preventa.',
-      'Respondé SOLO con JSON válido (sin markdown ni texto extra):',
-      '{"deckTitle":"título muy resumido del alcance","intro":"oración de apertura","items":[{"title":"título corto del pedido","description":"qué se solicita en tono profesional"}]}',
-      '',
-      'Reglas:',
-      '- deckTitle: UNA frase nominal corta (máx. ~10 palabras) que sintetice todo el alcance para la portada del slide {Titulo}.',
-      lang === 'en'
-        ? '- deckTitle example: "Logistics management platform development"'
-        : '- deckTitle ejemplo: «Desarrollo de plataforma de gestión logística»',
-      '- No uses viñetas ni «·» en deckTitle; no listes ítems sueltos.',
-      '- intro: debe mencionar al cliente y dejar claro que se resume lo solicitado.',
-      lang === 'en'
-        ? '- intro example tone: "Our client {name} is requesting the following:"'
-        : '- intro ejemplo de tono: "Nuestro cliente {nombre} está solicitando lo siguiente:"',
-      '- items: un ítem por cada pedido del brief; no inventes alcance fuera del brief.',
-      '- items.title: frase corta tipo entregable (ej. «Desarrollo plataforma de gestión»).',
-      '- items.description: 1-3 oraciones claras para slide comercial.',
-      '- Idioma de salida: ' + (lang === 'en' ? 'English' : 'Español'),
-      '',
-      'Industria: ' + String(industryKey || '').trim(),
-      'Cliente: ' + String(brief.clientName || '').trim(),
-      'Modelo comercial: ' + String(brief.commercialModel || '').trim(),
-      'Alcance validado:',
-    ]
-      .concat(scopeBlock)
-      .join('\n');
+    var prompt = PromptCatalog_render('pb.understanding.user', {
+      outputLanguage: lang === 'en' ? 'English' : 'Spanish',
+      industry: String(industryKey || '').trim(),
+      clientName: String(brief.clientName || '').trim(),
+      commercialModel: String(brief.commercialModel || '').trim(),
+      scopeBlock: scopeBlock.join('\n'),
+    });
 
-    var systemPrompt =
-      'Sos redactor de propuestas comerciales B2B. Devolvé únicamente JSON válido según el esquema pedido.';
+    var systemPrompt = PromptCatalog_getTemplate('pb.understanding.system');
 
     var result = client.chatSimple(systemPrompt, prompt, ContentExtraction_resolveChatModel_());
     var raw = String(result.text || '').trim();
@@ -1242,8 +3247,8 @@ function ProposalBuilding_runUnderstandingComposition_(brief, industryKey) {
  * @param {string=} industryKey
  * @return {{ok:boolean, understanding:Object}}
  */
-function ProposalBuilding_composeUnderstanding(briefJson, industryKey) {
-  AdminAuth_requireProposalBuildingView();
+function ProposalBuilding_composeUnderstanding(briefJson, industryKey, sessionId) {
+  AdminAuth_requireProposalBuildingBuild();
   AgentOrchestrator_requireGlobant_();
   var brief = {};
   try {
@@ -1252,7 +3257,20 @@ function ProposalBuilding_composeUnderstanding(briefJson, industryKey) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_payload'));
   }
   brief = ProposalBuilding_normalizeBrief_(brief);
+  var industry = String(industryKey || '').trim();
+  try {
+    ProposalBuildingPersistence_recordConfigureStep_(sessionId, brief, industry);
+  } catch (eCfgPersist) {
+    AviatorsError_log_('ProposalBuilding_configure_persist', String(eCfgPersist && eCfgPersist.message));
+  }
   var understanding = ProposalBuilding_runUnderstandingComposition_(brief, industryKey);
+  try {
+    ProposalBuildingPersistence_recordDeckAiStep_(sessionId, 'compose_understanding', {
+      understanding: understanding,
+    });
+  } catch (eUndPersist) {
+    AviatorsError_log_('ProposalBuilding_understanding_persist', String(eUndPersist && eUndPersist.message));
+  }
   return { ok: true, understanding: understanding };
 }
 
@@ -1361,7 +3379,7 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
   }
 
   var semHits = ContentCatalog_findRowsSemantic_(query, {
-    limit: PROPOSAL_BUILDING_SUCCESS_CASE_MAX_ + 2,
+    limit: PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_ + 2,
     threshold: PROPOSAL_BUILDING_SUCCESS_CASE_SEMANTIC_MIN_,
   });
   var si;
@@ -1389,13 +3407,13 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
   ranked.sort(function (a, b) {
     return Number(b.similarity || 0) - Number(a.similarity || 0);
   });
-  if (ranked.length > PROPOSAL_BUILDING_SUCCESS_CASE_MAX_) {
-    ranked = ranked.slice(0, PROPOSAL_BUILDING_SUCCESS_CASE_MAX_);
+  if (ranked.length > PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_) {
+    ranked = ranked.slice(0, PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_);
   }
 
   if (!ranked.length) {
     var fallback = [];
-    for (ri = 0; ri < rows.length && fallback.length < 3; ri++) {
+    for (ri = 0; ri < rows.length && fallback.length < PROPOSAL_BUILDING_SUCCESS_CASE_MIN_CANDIDATES_; ri++) {
       var fbRow = rows[ri];
       if (String(fbRow.content_type || '').trim() !== 'success_case') continue;
       var fbIndustry = String(fbRow.industry || '').trim();
@@ -1406,6 +3424,53 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
     ranked = fallback;
   }
 
+  return ProposalBuilding_padSuccessCaseCandidates_(
+    ranked,
+    allow,
+    PROPOSAL_BUILDING_SUCCESS_CASE_MIN_CANDIDATES_,
+    PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_,
+  );
+}
+
+/**
+ * Completa candidatos hasta un mínimo con casos del catálogo (misma industria permitida).
+ * @param {Array<Object>} ranked
+ * @param {Object<string, boolean>} allow
+ * @param {number} minCount
+ * @param {number} maxCount
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_padSuccessCaseCandidates_(ranked, allow, minCount, maxCount) {
+  ranked = Array.isArray(ranked) ? ranked.slice() : [];
+  allow = allow && typeof allow === 'object' ? allow : {};
+  minCount = Math.max(0, Number(minCount) || 0);
+  maxCount = Math.max(minCount, Number(maxCount) || minCount);
+
+  var seen = {};
+  var i;
+  for (i = 0; i < ranked.length; i++) {
+    seen[String(ranked[i].contentId || '').trim()] = true;
+  }
+
+  if (ranked.length < minCount) {
+    var rows = ContentCatalogStore_listAll();
+    var ri;
+    for (ri = 0; ri < rows.length && ranked.length < minCount; ri++) {
+      var row = rows[ri];
+      if (String(row.content_type || '').trim() !== 'success_case') continue;
+      var rid = String(row.content_id || '').trim();
+      if (!rid || seen[rid]) continue;
+      var rowIndustry = String(row.industry || '').trim();
+      if (rowIndustry && !allow[rowIndustry]) continue;
+      var card = ProposalBuilding_loadSuccessCaseForDeck_(rid);
+      if (!card) continue;
+      card.similarity = Number(card.similarity || 0);
+      ranked.push(card);
+      seen[rid] = true;
+    }
+  }
+
+  if (ranked.length > maxCount) ranked = ranked.slice(0, maxCount);
   return ranked;
 }
 
@@ -1414,10 +3479,10 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
  * @param {Object} parsed
  * @return {Array<Object>}
  */
-function ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed) {
+function ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed, brief) {
   cases = Array.isArray(cases) ? cases : [];
   parsed = parsed && typeof parsed === 'object' ? parsed : {};
-  var fallback = UiStrings_t(UiStrings_activeLocale_(), 'pb_success_case_rationale_fallback');
+  var fallback = UiStrings_t(ProposalBuilding_briefLangCode_(brief), 'pb_success_case_rationale_fallback');
   var rationales = [];
   if (Array.isArray(parsed.rationales)) rationales = parsed.rationales;
   else if (Array.isArray(parsed.items)) rationales = parsed.items;
@@ -1444,7 +3509,8 @@ function ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed) {
         rationales[ci].rationale || rationales[ci].reason || rationales[ci].explanation || '',
       ).trim();
     }
-    var rationale = (contentId && byId[contentId]) || idxText || fallback;
+    var existing = String(c.rationale || '').trim();
+    var rationale = (contentId && byId[contentId]) || idxText || existing || fallback;
     out.push({
       contentId: contentId,
       title: c.title,
@@ -1456,9 +3522,64 @@ function ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed) {
       client_name: c.client_name,
       similarity: c.similarity,
       rationale: rationale,
+      included: c.included !== false,
     });
   }
   return out;
+}
+
+/**
+ * @param {Object} brief
+ * @param {string=} industryKey
+ * @param {Array<Object>} cases
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_buildSuccessCaseRationalesPrompt_(brief, industryKey, cases) {
+  brief = ProposalBuilding_normalizeBrief_(brief || {});
+  cases = Array.isArray(cases) ? cases : [];
+
+  var scopeBlock = [];
+  var items = Array.isArray(brief.scopeItems) ? brief.scopeItems : [];
+  var i;
+  for (i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it || typeof it !== 'object') continue;
+    var row = '- ' + String(it.title || '').trim();
+    if (it.description) row += ': ' + String(it.description || '').trim();
+    if (row !== '- ') scopeBlock.push(row);
+  }
+  if (!scopeBlock.length) {
+    scopeBlock.push('- (no detailed scope items in brief)');
+  }
+
+  var caseBlocks = [];
+  for (i = 0; i < cases.length; i++) {
+    var c = cases[i] || {};
+    caseBlocks.push(
+      String(i + 1) +
+        '. contentId=' +
+        String(c.contentId || '').trim() +
+        ' | title=' +
+        String(c.title || '').trim() +
+        ' | client=' +
+        String(c.client_name || '').trim() +
+        ' | industry=' +
+        String(c.industry || '').trim() +
+        ' | summary=' +
+        String(c.summary || '').trim().slice(0, 420) +
+        (c.challenge ? ' | challenge=' + String(c.challenge).trim().slice(0, 280) : '') +
+        (c.solution ? ' | solution=' + String(c.solution).trim().slice(0, 280) : ''),
+    );
+  }
+
+  return PromptCatalog_render('pb.success_rationales.user', {
+    outputLanguage: ProposalBuilding_briefOutputLanguageLabel_(brief),
+    industry: String(industryKey || '').trim(),
+    clientName: String(brief.clientName || '').trim(),
+    commercialModel: String(brief.commercialModel || '').trim(),
+    scopeBlock: scopeBlock.join('\n'),
+    caseBlocks: caseBlocks.join('\n'),
+  });
 }
 
 /**
@@ -1471,85 +3592,32 @@ function ProposalBuilding_runSuccessCaseRationalesComposition_(brief, industryKe
   cases = Array.isArray(cases) ? cases : [];
   if (!cases.length) return [];
   try {
-    var client = ProposalBuilding_createLlmClient_();
-    var lang = String((brief || {}).detectedLanguage || '').trim();
-    if (lang.indexOf('en') === 0) lang = 'en';
-    else lang = 'es';
-
-    var scopeBlock = [];
-    var items = Array.isArray(brief.scopeItems) ? brief.scopeItems : [];
-    var i;
-    for (i = 0; i < items.length; i++) {
-      var it = items[i];
-      if (!it || typeof it !== 'object') continue;
-      var row = '- ' + String(it.title || '').trim();
-      if (it.description) row += ': ' + String(it.description || '').trim();
-      if (row !== '- ') scopeBlock.push(row);
+    var prompt = ProposalBuilding_buildSuccessCaseRationalesPrompt_(brief, industryKey, cases);
+    var r = AgentOrchestrator_answerWith(prompt, _ADMIN_AGENT_ID_SUCCESS_CASES, []);
+    var raw = String(r.answer || '').trim();
+    if (!raw || r.isUnanswered || raw.indexOf('[[NO_RELEVANT_CONTENT]]') >= 0) {
+      return ProposalBuilding_mergeSuccessCaseRationales_(cases, {}, brief);
     }
-    if (!scopeBlock.length) {
-      scopeBlock.push('- (sin ítems detallados en el brief)');
-    }
-
-    var caseBlocks = [];
-    for (i = 0; i < cases.length; i++) {
-      var c = cases[i] || {};
-      caseBlocks.push(
-        String(i + 1) +
-          '. contentId=' +
-          String(c.contentId || '').trim() +
-          ' | título=' +
-          String(c.title || '').trim() +
-          ' | cliente=' +
-          String(c.client_name || '').trim() +
-          ' | industria=' +
-          String(c.industry || '').trim() +
-          ' | resumen=' +
-          String(c.summary || '').trim().slice(0, 420) +
-          (c.challenge ? ' | desafío=' + String(c.challenge).trim().slice(0, 280) : '') +
-          (c.solution ? ' | solución=' + String(c.solution).trim().slice(0, 280) : ''),
-      );
-    }
-
-    var prompt = [
-      'Para cada caso de éxito listado, redactá por qué conviene incluirlo en esta propuesta comercial.',
-      'Respondé SOLO con JSON válido (sin markdown ni texto extra):',
-      '{"rationales":[{"contentId":"id del caso","rationale":"2-4 oraciones explicando el vínculo con el brief"}]}',
-      '',
-      'Reglas:',
-      '- rationale: explica el encaje concreto (industria, desafío similar, outcome útil para el cliente).',
-      '- No inventes datos del caso que no estén en el listado.',
-      '- Un rationale por cada caso, en el mismo orden.',
-      '- Idioma de salida: ' + (lang === 'en' ? 'English' : 'Español'),
-      '',
-      'Industria de la propuesta: ' + String(industryKey || '').trim(),
-      'Cliente: ' + String(brief.clientName || '').trim(),
-      'Modelo comercial: ' + String(brief.commercialModel || '').trim(),
-      'Alcance validado:',
-    ]
-      .concat(scopeBlock)
-      .concat(['', 'Casos de éxito candidatos:'])
-      .concat(caseBlocks)
-      .join('\n');
-
-    var systemPrompt =
-      'Sos consultor de preventa B2B. Devolvé únicamente JSON válido según el esquema pedido.';
-
-    var result = client.chatSimple(systemPrompt, prompt, ContentExtraction_resolveChatModel_());
-    var raw = String(result.text || '').trim();
     var parsed = ContentExtraction_parseLooseJson_(raw);
-    return ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed);
+    return ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed, brief);
   } catch (eRationales) {
-    return ProposalBuilding_mergeSuccessCaseRationales_(cases, {});
+    AviatorsError_log_(
+      'ProposalBuilding_success_rationales',
+      String(eRationales && eRationales.message),
+    );
+    return ProposalBuilding_mergeSuccessCaseRationales_(cases, {}, brief);
   }
 }
 
 /**
  * @param {string} briefJson
  * @param {string=} industryKey
+ * @param {string=} sessionId
+ * @param {string=} casesJson Candidatos opcionales (p. ej. selección del paso presale).
  * @return {{ok:boolean, successCases:Array<Object>, count:number}}
  */
-function ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey) {
-  AdminAuth_requireProposalBuildingView();
+function ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey, sessionId, casesJson) {
+  AdminAuth_requireProposalBuildingBuild();
   AgentOrchestrator_requireGlobant_();
   var brief = {};
   try {
@@ -1558,8 +3626,32 @@ function ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_ephemeral_doc_payload'));
   }
   brief = ProposalBuilding_normalizeBrief_(brief);
-  var cases = ProposalBuilding_findRelevantSuccessCases_(brief, industryKey);
+  var cases = [];
+  try {
+    cases = JSON.parse(String(casesJson || '[]'));
+  } catch (eCases) {
+    cases = [];
+  }
+  if (!Array.isArray(cases) || !cases.length) {
+    cases = ProposalBuilding_findRelevantSuccessCases_(brief, industryKey);
+  } else {
+    cases = ProposalBuilding_normalizeSuccessCaseSelections_(cases);
+    var includedOnly = [];
+    var pi;
+    for (pi = 0; pi < cases.length; pi++) {
+      if (cases[pi].included !== false) includedOnly.push(cases[pi]);
+    }
+    cases = includedOnly;
+  }
   if (!cases.length) {
+    try {
+      ProposalBuildingPersistence_recordDeckAiStep_(sessionId, 'compose_success_rationales', {
+        successCases: [],
+        count: 0,
+      });
+    } catch (eCasesEmptyPersist) {
+      AviatorsError_log_('ProposalBuilding_cases_persist', String(eCasesEmptyPersist && eCasesEmptyPersist.message));
+    }
     return { ok: true, successCases: [], count: 0 };
   }
   var withRationales = ProposalBuilding_runSuccessCaseRationalesComposition_(
@@ -1567,7 +3659,129 @@ function ProposalBuilding_composeSuccessCaseRationales(briefJson, industryKey) {
     industryKey,
     cases,
   );
+  try {
+    ProposalBuildingPersistence_recordDeckAiStep_(sessionId, 'compose_success_rationales', {
+      successCases: withRationales,
+      count: withRationales.length,
+    });
+  } catch (eCasesPersist) {
+    AviatorsError_log_('ProposalBuilding_cases_persist', String(eCasesPersist && eCasesPersist.message));
+  }
   return { ok: true, successCases: withRationales, count: withRationales.length };
+}
+
+/**
+ * @param {Array<Object>} selections
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_normalizeSuccessCaseSelections_(selections) {
+  var list = Array.isArray(selections) ? selections : [];
+  var out = [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var c = list[i] || {};
+    var contentId = String(c.contentId || c.content_id || '').trim();
+    if (!contentId) continue;
+    out.push({
+      contentId: contentId,
+      title: String(c.title || '').trim(),
+      summary: String(c.summary || '').trim(),
+      challenge: String(c.challenge || '').trim(),
+      solution: String(c.solution || '').trim(),
+      url: String(c.url || c.driveFileUrl || '').trim(),
+      industry: String(c.industry || '').trim(),
+      client_name: String(c.client_name || c.clientName || '').trim(),
+      similarity: Number(c.similarity || 0),
+      rationale: String(c.rationale || '').trim(),
+      included: c.included !== false,
+    });
+  }
+  return out;
+}
+
+/**
+ * Propone casos de éxito para presale (mín. 5 candidatos) con rationale por agente.
+ * @param {string} briefJson
+ * @param {string=} industryKey
+ * @param {string=} sessionId
+ * @return {{ok:boolean,successCases:Array<Object>,count:number}}
+ */
+function ProposalBuilding_recommendSuccessCases(briefJson, industryKey, sessionId) {
+  AdminAuth_requireProposalBuildingBuild();
+  AgentOrchestrator_requireGlobant_();
+  var brief = {};
+  try {
+    brief = JSON.parse(String(briefJson || '{}'));
+  } catch (eBriefJson) {
+    brief = {};
+  }
+  brief = ProposalBuilding_normalizeBrief_(brief);
+  var industry = String(industryKey || '').trim();
+  var cases = ProposalBuilding_findRelevantSuccessCases_(brief, industry);
+  if (!cases.length) {
+    try {
+      ProposalBuildingPersistence_recordSuccessCasesStep_(sessionId, brief, industry, []);
+    } catch (eEmpty) {
+      AviatorsError_log_('ProposalBuilding_success_cases_persist', String(eEmpty && eEmpty.message));
+    }
+    return { ok: true, successCases: [], count: 0 };
+  }
+  var withRationales = ProposalBuilding_runSuccessCaseRationalesComposition_(brief, industry, cases);
+  var selections = [];
+  var si;
+  for (si = 0; si < withRationales.length; si++) {
+    var row = withRationales[si] || {};
+    selections.push({
+      contentId: row.contentId,
+      title: row.title,
+      summary: row.summary,
+      challenge: row.challenge,
+      solution: row.solution,
+      url: row.url,
+      industry: row.industry,
+      client_name: row.client_name,
+      similarity: row.similarity,
+      rationale: row.rationale,
+      included: true,
+    });
+  }
+  try {
+    ProposalBuildingPersistence_recordSuccessCasesStep_(sessionId, brief, industry, selections);
+  } catch (ePersist) {
+    AviatorsError_log_('ProposalBuilding_success_cases_persist', String(ePersist && ePersist.message));
+  }
+  return { ok: true, successCases: selections, count: selections.length };
+}
+
+/**
+ * Persiste la selección de casos de éxito (incluidos/excluidos) antes de configurar el deck.
+ * @param {string} sessionId
+ * @param {string} selectionsJson
+ * @return {{ok:boolean,successCases:Array<Object>,count:number}}
+ */
+function ProposalBuilding_saveSuccessCaseSelections(sessionId, selectionsJson) {
+  AdminAuth_requireProposalBuildingBuild();
+  AviatorsDataBackend_requireSupabase_();
+  var email = ProposalBuildingPersistence_requireEmail_();
+  var sid = String(sessionId || '').trim();
+  if (!sid) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_missing'));
+  }
+  var row = ProposalBuildingStore_getByIdForUser(sid, email);
+  if (!row) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_not_found'));
+  }
+  var selections = [];
+  try {
+    selections = JSON.parse(String(selectionsJson || '[]'));
+  } catch (eSel) {
+    selections = [];
+  }
+  selections = ProposalBuilding_normalizeSuccessCaseSelections_(selections);
+  var brief = row.validatedBrief || row.draftBrief || {};
+  var industry = String(row.industryKey || '').trim();
+  ProposalBuildingPersistence_recordSuccessCasesStep_(sid, brief, industry, selections);
+  return { ok: true, successCases: selections, count: selections.length };
 }
 
 /**
@@ -1592,7 +3806,17 @@ function ProposalBuilding_customizeDeckContent_(
       ? successCases
       : ProposalBuilding_findRelevantSuccessCases_(brief, industryKey);
   if (Array.isArray(successCases) && successCases.length) {
-    cases = ProposalBuilding_mergeSuccessCaseRationales_(cases, {});
+    var missingRationale = false;
+    var mi;
+    for (mi = 0; mi < cases.length; mi++) {
+      if (!String(cases[mi].rationale || '').trim()) {
+        missingRationale = true;
+        break;
+      }
+    }
+    if (missingRationale) {
+      cases = ProposalBuilding_runSuccessCaseRationalesComposition_(brief, industryKey, cases);
+    }
   } else if (cases.length) {
     cases = ProposalBuilding_runSuccessCaseRationalesComposition_(brief, industryKey, cases);
   }
@@ -1644,8 +3868,9 @@ function ProposalBuilding_copyProposalDeckToDrive_(baseDeckFileId, brief) {
   if (!templateId) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_deck_template_missing'));
   }
-  var targetFolder = ProposalBuilding_getProposalsDriveFolder_();
-  var desiredName = ProposalBuilding_buildProposalFileName_(brief);
+  var packageInfo = ProposalBuilding_getProposalPackageFolder_(brief);
+  var targetFolder = packageInfo.folder;
+  var desiredName = ProposalBuilding_buildProposalDeckFileName_(brief);
   var copyName = ProposalBuilding_uniqueFileNameInFolder_(targetFolder, desiredName);
   var templateFile;
   try {
@@ -1659,10 +3884,23 @@ function ProposalBuilding_copyProposalDeckToDrive_(baseDeckFileId, brief) {
   }
 
   var copy = templateFile.makeCopy(copyName, targetFolder);
+  var deckMeta = {
+    deckName: String(copy.getName() || copyName),
+    deckUrl: String(copy.getUrl() || ''),
+  };
+  var checklist = ProposalBuilding_createDeliveryChecklistSpreadsheet_(brief, targetFolder, deckMeta);
   return {
     id: String(copy.getId() || ''),
     url: String(copy.getUrl() || ''),
     name: String(copy.getName() || copyName),
+    packageFolderId: packageInfo.id,
+    packageFolderUrl: packageInfo.url,
+    packageFolderName: packageInfo.name,
+    clientFolderName: packageInfo.clientName,
+    checklistFileId: checklist.id,
+    checklistFileUrl: checklist.url,
+    checklistFileName: checklist.name,
+    checklistItemCount: checklist.itemCount,
   };
 }
 
@@ -1671,8 +3909,8 @@ function ProposalBuilding_copyProposalDeckToDrive_(baseDeckFileId, brief) {
  * @param {string} briefJson
  * @return {Object}
  */
-function ProposalBuilding_copyProposalDeck(industryKey, briefJson) {
-  AdminAuth_requireProposalBuildingView();
+function ProposalBuilding_copyProposalDeck(industryKey, briefJson, sessionId) {
+  AdminAuth_requireProposalBuildingBuild();
   var industry = String(industryKey || '').trim();
   var valid = false;
   var vi;
@@ -1691,6 +3929,34 @@ function ProposalBuilding_copyProposalDeck(industryKey, briefJson) {
   brief = ProposalBuilding_normalizeBrief_(brief);
   var deck = ProposalBuilding_resolveDeckForIndustry_(industry);
   var copied = ProposalBuilding_copyProposalDeckToDrive_(deck.deckDriveId, brief);
+  var deckPayload = {
+    proposalDeckFileId: copied.id,
+    proposalDeckFileUrl: copied.url,
+    proposalDeckFileName: copied.name,
+    proposalPackageFolderId: copied.packageFolderId || '',
+    proposalPackageFolderUrl: copied.packageFolderUrl || '',
+    proposalPackageFolderName: copied.packageFolderName || '',
+    checklistFileId: copied.checklistFileId || '',
+    checklistFileUrl: copied.checklistFileUrl || '',
+    checklistFileName: copied.checklistFileName || '',
+    checklistItemCount: copied.checklistItemCount || 0,
+  };
+  try {
+    ProposalBuildingPersistence_recordDeckAiStep_(sessionId, 'copy_deck', deckPayload);
+    ProposalBuildingPersistence_patchSession_(sessionId, {
+      deckFileId: copied.id,
+      deckFileUrl: copied.url,
+      deckFileName: copied.name,
+      checklistFileId: copied.checklistFileId || '',
+      checklistFileUrl: copied.checklistFileUrl || '',
+      checklistFileName: copied.checklistFileName || '',
+      packageFolderId: copied.packageFolderId || '',
+      packageFolderUrl: copied.packageFolderUrl || '',
+      packageFolderName: copied.packageFolderName || '',
+    });
+  } catch (eCopyPersist) {
+    AviatorsError_log_('ProposalBuilding_copy_deck_persist', String(eCopyPersist && eCopyPersist.message));
+  }
   return {
     ok: true,
     industry: industry,
@@ -1700,6 +3966,13 @@ function ProposalBuilding_copyProposalDeck(industryKey, briefJson) {
     proposalDeckFileId: copied.id,
     proposalDeckFileUrl: copied.url,
     proposalDeckFileName: copied.name,
+    proposalPackageFolderId: copied.packageFolderId || '',
+    proposalPackageFolderUrl: copied.packageFolderUrl || '',
+    proposalPackageFolderName: copied.packageFolderName || '',
+    checklistFileId: copied.checklistFileId || '',
+    checklistFileUrl: copied.checklistFileUrl || '',
+    checklistFileName: copied.checklistFileName || '',
+    checklistItemCount: copied.checklistItemCount || 0,
   };
 }
 
@@ -1717,8 +3990,9 @@ function ProposalBuilding_customizeProposalDeck(
   understandingJson,
   successCasesJson,
   deckOptionsJson,
+  sessionId,
 ) {
-  AdminAuth_requireProposalBuildingView();
+  AdminAuth_requireProposalBuildingBuild();
   var fileId = String(presentationId || '').trim();
   if (!fileId) {
     throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_deck_template_missing'));
@@ -1762,7 +4036,7 @@ function ProposalBuilding_customizeProposalDeck(
     deckOptions,
   );
   var normalizedDeckOptions = ProposalBuilding_normalizeDeckOptions_(deckOptions, industry);
-  return {
+  var customResult = {
     ok: true,
     proposalDeckFileId: fileId,
     deckOptions: normalizedDeckOptions,
@@ -1776,6 +4050,22 @@ function ProposalBuilding_customizeProposalDeck(
       }),
     customizationWarnings: customization.warnings || [],
   };
+  try {
+    ProposalBuildingPersistence_recordDeckAiStep_(sessionId, 'customize_deck', customResult);
+    ProposalBuildingPersistence_recordDeckComplete_(sessionId, brief, industry, {
+      proposalDeckFileId: fileId,
+    }, {
+      composedUnderstanding: understanding,
+      deckOptions: normalizedDeckOptions,
+      successCases: successCases || [],
+      successCasesApplied: customResult.successCasesApplied,
+      successCaseTitles: customResult.successCaseTitles,
+      customizationWarnings: customResult.customizationWarnings,
+    });
+  } catch (eCustomPersist) {
+    AviatorsError_log_('ProposalBuilding_customize_persist', String(eCustomPersist && eCustomPersist.message));
+  }
+  return customResult;
 }
 
 /**
@@ -1850,11 +4140,21 @@ function ProposalBuilding_buildSystemContext_(context) {
   var brief = context.validatedBrief || {};
   var industry = String(context.industry || '').trim();
   var deck = ProposalBuilding_resolveDeckForIndustry_(industry);
-  var lang = String(context.language || brief.detectedLanguage || 'es').trim();
+  var lang = ProposalBuilding_outputLangCode_(brief);
   var workingDeck = context.proposalDeckFileName
     ? context.proposalDeckFileName +
       (context.proposalDeckFileUrl ? ' · ' + context.proposalDeckFileUrl : '')
     : deck.deckLabel + (deck.deckDriveId ? ' (plantilla: ' + deck.deckDriveId + ')' : '');
+  var packageFolderLine = context.proposalPackageFolderUrl
+    ? 'Carpeta de la propuesta en Drive: ' + context.proposalPackageFolderUrl + '.'
+    : '';
+  var checklistLine = context.checklistFileUrl
+    ? 'Checklist de entregables: ' +
+      (context.checklistFileName || 'checklist') +
+      ' · ' +
+      context.checklistFileUrl +
+      '.'
+    : '';
   var deckOpts = ProposalBuilding_normalizeDeckOptions_(context.deckOptions, industry);
   var deletedForAgenda = ProposalBuildingSlides_collectDeletedSlideIndices_(deckOpts);
   var agendaPreview = ProposalBuildingSlides_buildAgendaText_(deckOpts, deletedForAgenda);
@@ -1887,6 +4187,10 @@ function ProposalBuilding_buildSystemContext_(context) {
     'Idioma de redacción: ' + (lang === 'en' ? 'English' : 'Español') + '.',
     'Industria: ' + industry + '.',
     'Presentación de trabajo en Drive: ' + workingDeck + '.',
+  ];
+  if (packageFolderLine) lines.push(packageFolderLine);
+  if (checklistLine) lines.push(checklistLine);
+  lines.push(
     deckOptionsLine,
     'Agenda ({ITEMS_AGENDA}):\n' + agendaPreview,
     successCasesLine || 'Casos de éxito en deck: (ninguno automático o slide plantilla omitida).',
@@ -1903,7 +4207,7 @@ function ProposalBuilding_buildSystemContext_(context) {
       ).plain,
     'Modelo comercial: ' + (String(brief.commercialModel || '').trim() || '(no indicado)'),
     'Alcance validado:',
-  ];
+  );
   var items = Array.isArray(brief.scopeItems) ? brief.scopeItems : [];
   if (!items.length) {
     lines.push('- (sin ítems detallados)');
@@ -1933,22 +4237,22 @@ function ProposalBuilding_buildSystemContext_(context) {
   if (brief.rfpDeadline) {
     lines.push('Fecha límite RFP / entrega propuesta: ' + brief.rfpDeadline);
   }
-  var budget = brief.budget || ProposalBuilding_normalizeBudget_(null);
-  var budgetLine = '';
-  if (budget.amount) budgetLine += budget.amount;
-  if (budget.currency) budgetLine += (budgetLine ? ' ' : '') + budget.currency;
-  if (budget.notes) budgetLine += (budgetLine ? ' — ' : '') + budget.notes;
-  lines.push('Presupuesto / budget: ' + (budgetLine || '(no indicado)'));
-  lines.push('Stakeholders:');
+  if (ProposalBuilding_budgetHasEvidence_(brief.budget)) {
+    var budget = brief.budget || ProposalBuilding_normalizeBudget_(null);
+    var budgetLine = '';
+    if (budget.amount) budgetLine += budget.amount;
+    if (budget.currency) budgetLine += (budgetLine ? ' ' : '') + budget.currency;
+    if (budget.notes) budgetLine += (budgetLine ? ' — ' : '') + budget.notes;
+    lines.push('Presupuesto / budget: ' + budgetLine);
+  }
   var stks = Array.isArray(brief.stakeholders) ? brief.stakeholders : [];
-  if (!stks.length) {
-    lines.push('- (sin contactos explícitos)');
-  } else {
+  if (stks.length) {
+    lines.push('Stakeholders:');
     for (var sk = 0; sk < stks.length; sk++) {
       var stk = stks[sk];
       lines.push(
         '- ' +
-          String(stk.name || '(sin nombre)').trim() +
+          String(stk.name || '').trim() +
           (stk.role ? ' · ' + stk.role : '') +
           (stk.organization ? ' · ' + stk.organization : '') +
           (stk.email ? ' · ' + stk.email : ''),
@@ -1981,15 +4285,21 @@ function ProposalBuilding_buildSystemContext_(context) {
       if (!st || typeof st !== 'object') continue;
       studioLine +=
         '\n- ' +
-        String(st.studioName || '').trim() +
-        (st.rationale ? ': ' + String(st.rationale).trim() : '');
+        String(st.studioName || '').trim();
+      if (st.aiPodsPitch && typeof st.aiPodsPitch === 'object') {
+        studioLine += ':\n' + ProposalBuilding_formatAiPodsPitchAsText_(st.aiPodsPitch);
+      } else if (st.rationale) {
+        studioLine += ': ' + String(st.rationale).trim();
+      }
     }
   }
   if (studioLine) lines.push(studioLine);
   lines.push(
-    'Objetivo: ayudar a redactar la propuesta comercial usando el deck base de la industria, manteniendo coherencia con el brief validado y el repositorio indexado de propuestas.',
+    'Goal: help draft the commercial proposal using the industry deck base, keeping coherence with the validated brief and indexed proposal repository.',
   );
-  return lines.join('\n');
+  return PromptCatalog_render('pb.chat_context.user', {
+    contextBody: lines.join('\n'),
+  });
 }
 
 /**
@@ -1999,7 +4309,7 @@ function ProposalBuilding_buildSystemContext_(context) {
  * @return {Object}
  */
 function ProposalBuilding_answerWithContext(question, historyJson, contextJson) {
-  AdminAuth_requireProposalBuildingView();
+  AdminAuth_requireProposalBuildingBuild();
   var context = {};
   try {
     if (contextJson) context = JSON.parse(contextJson);
@@ -2040,7 +4350,7 @@ function ProposalBuilding_answerWithContext(question, historyJson, contextJson) 
  * @return {{ok:boolean, industry:string, deckKey:string, deckLabel:string, deckDriveId:string, proposalDeckFileId:string, proposalDeckFileUrl:string, proposalDeckFileName:string}}
  */
 function ProposalBuilding_resolveDeck(industryKey, briefJson) {
-  AdminAuth_requireProposalBuildingView();
+  AdminAuth_requireProposalBuildingBuild();
   var industry = String(industryKey || '').trim();
   var valid = false;
   for (var i = 0; i < PROPOSAL_BUILDING_INDUSTRY_KEYS.length; i++) {
@@ -2082,6 +4392,13 @@ function ProposalBuilding_resolveDeck(industryKey, briefJson) {
     proposalDeckFileId: copied.id,
     proposalDeckFileUrl: copied.url,
     proposalDeckFileName: copied.name,
+    proposalPackageFolderId: copied.packageFolderId || '',
+    proposalPackageFolderUrl: copied.packageFolderUrl || '',
+    proposalPackageFolderName: copied.packageFolderName || '',
+    checklistFileId: copied.checklistFileId || '',
+    checklistFileUrl: copied.checklistFileUrl || '',
+    checklistFileName: copied.checklistFileName || '',
+    checklistItemCount: copied.checklistItemCount || 0,
     composedUnderstanding: understanding,
     successCases: successCases,
     successCasesApplied: customization.successCasesApplied || 0,

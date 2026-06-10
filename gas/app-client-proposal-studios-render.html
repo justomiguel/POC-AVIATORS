@@ -1,0 +1,884 @@
+<script>
+(function (A) {
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatInlineEmphasis(escaped) {
+    return String(escaped || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  }
+
+  function tryParseStructuredWhyFit_(raw) {
+    var text = String(raw || '').trim();
+    if (!text) return null;
+    if (text.charAt(0) === '{' || text.charAt(0) === '[') {
+      try {
+        var parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.whyFit && typeof parsed.whyFit === 'object') return normalizeWhyFitClient_(parsed.whyFit);
+          return normalizeWhyFitClient_(parsed);
+        }
+      } catch (eJson) {
+        /* fall through */
+      }
+    }
+    return null;
+  }
+
+  function normalizeWhyFitClient_(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var out = {
+      summary: String(raw.summary || raw.overview || '').trim(),
+      fitScore: null,
+      keyPoints: [],
+      comparisons: [],
+      briefLinks: [],
+    };
+    var score = parseInt(raw.fitScore != null ? raw.fitScore : raw.fit_score, 10);
+    if (!isNaN(score)) {
+      if (score > 0 && score <= 10) score = score * 10;
+      if (score >= 0 && score <= 100) out.fitScore = score;
+    }
+    var lists = [
+      ['keyPoints', raw.keyPoints || raw.key_points || raw.reasons],
+      ['comparisons', raw.comparisons || raw.comparison],
+      ['briefLinks', raw.briefLinks || raw.brief_links || raw.links],
+    ];
+    var li;
+    for (li = 0; li < lists.length; li++) {
+      var key = lists[li][0];
+      var src = lists[li][1];
+      if (!Array.isArray(src)) continue;
+      var i;
+      for (i = 0; i < src.length; i++) {
+        var row = src[i];
+        if (!row || typeof row !== 'object') continue;
+        if (key === 'keyPoints') {
+          var title = String(row.title || row.headline || '').trim();
+          var detail = String(row.detail || row.reason || row.description || '').trim();
+          if (!title && !detail) continue;
+          out.keyPoints.push({
+            title: title || detail.slice(0, 80),
+            detail: detail || title,
+            briefAnchor: String(row.briefAnchor || row.anchor || '').trim(),
+          });
+        } else if (key === 'comparisons') {
+          var aspect = String(row.aspect || row.dimension || row.topic || '').trim();
+          var withoutStudio = String(row.withoutStudio || row.without || row.before || '').trim();
+          var withStudio = String(row.withStudio || row.with || row.after || '').trim();
+          if (!aspect && !withoutStudio && !withStudio) continue;
+          out.comparisons.push({ aspect: aspect, withoutStudio: withoutStudio, withStudio: withStudio });
+        } else if (key === 'briefLinks') {
+          var briefNeed = String(row.briefNeed || row.brief_need || row.need || '').trim();
+          var studioOffer = String(row.studioOffer || row.studio_offer || row.offer || '').trim();
+          if (!briefNeed && !studioOffer) continue;
+          out.briefLinks.push({ briefNeed: briefNeed, studioOffer: studioOffer });
+        }
+      }
+    }
+    if (
+      !out.summary &&
+      out.fitScore == null &&
+      !out.keyPoints.length &&
+      !out.comparisons.length &&
+      !out.briefLinks.length
+    ) {
+      return null;
+    }
+    return out;
+  }
+
+  function detectFitScoreFromText_(text) {
+    var raw = String(text || '');
+    var match = raw.match(
+      /(?:fit(?:\s*score)?|encaje|ajuste|nivel(?:\s*de\s*encaje)?)\s*[:=]?\s*(\d{1,3})\s*(?:%|\/)?\s*(?:10|100)?/i,
+    );
+    if (!match) return null;
+    var score = parseInt(match[1], 10);
+    if (isNaN(score)) return null;
+    if (score > 0 && score <= 10) score = score * 10;
+    if (score < 0 || score > 100) return null;
+    return score;
+  }
+
+  function isMarkdownTableRow_(line) {
+    return /^\|(.+)\|$/.test(String(line || '').trim());
+  }
+
+  function isMarkdownTableSep_(line) {
+    return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(String(line || '').trim());
+  }
+
+  function parseMarkdownTableCells_(line) {
+    return String(line || '')
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(function (cell) {
+        return String(cell || '').trim();
+      });
+  }
+
+  function appendFitScoreBar_(parent, fitScore) {
+    if (fitScore == null || !parent) return;
+    var score = Math.max(0, Math.min(100, parseInt(fitScore, 10)));
+    if (isNaN(score)) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-why-fit-score';
+    wrap.innerHTML =
+      '<div class="pb-why-fit-score-head">' +
+      '<span class="pb-why-fit-score-label"></span>' +
+      '<span class="pb-why-fit-score-value" aria-hidden="true"></span>' +
+      '</div>' +
+      '<div class="pb-why-fit-score-track" role="img">' +
+      '<span class="pb-why-fit-score-fill"></span>' +
+      '</div>';
+    wrap.querySelector('.pb-why-fit-score-label').textContent = i18n('pb_why_fit_score_label');
+    wrap.querySelector('.pb-why-fit-score-value').textContent = String(score) + '%';
+    wrap.querySelector('.pb-why-fit-score-track').setAttribute(
+      'aria-label',
+      i18nFmt('pb_why_fit_score_aria_fmt', { score: String(score) }),
+    );
+    wrap.querySelector('.pb-why-fit-score-fill').style.width = String(score) + '%';
+    parent.appendChild(wrap);
+  }
+
+  function appendWhyFitTable_(parent, headingKey, colKeys, rows, mapper, tableClass) {
+    if (!rows || !rows.length || !parent) return;
+    var section = document.createElement('section');
+    section.className = 'pb-why-fit-section pb-why-fit-section--table';
+    var head = document.createElement('h5');
+    head.className = 'pb-why-fit-heading';
+    head.innerHTML = '<i class="fa-solid fa-table" aria-hidden="true"></i><span></span>';
+    head.querySelector('span').textContent = i18n(headingKey);
+    section.appendChild(head);
+    var tableWrap = document.createElement('div');
+    tableWrap.className = 'pb-why-fit-table-wrap';
+    var table = document.createElement('table');
+    table.className = tableClass || 'pb-why-fit-table';
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+    var ci;
+    for (ci = 0; ci < colKeys.length; ci++) {
+      var th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = i18n(colKeys[ci]);
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    var ri;
+    for (ri = 0; ri < rows.length; ri++) {
+      var cells = mapper(rows[ri] || {});
+      if (!cells || !cells.length) continue;
+      var tr = document.createElement('tr');
+      var ti;
+      for (ti = 0; ti < cells.length; ti++) {
+        var td = document.createElement('td');
+        td.textContent = String(cells[ti] || '—');
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    if (!tbody.children.length) return;
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    section.appendChild(tableWrap);
+    parent.appendChild(section);
+  }
+
+  function renderWhyFit(parent, whyFit, opts) {
+    opts = opts || {};
+    if (!parent || !whyFit || typeof whyFit !== 'object') return false;
+    var normalized = normalizeWhyFitClient_(whyFit);
+    if (!normalized) return false;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-why-fit';
+
+    if (normalized.summary && !opts.skipSummary) {
+      var hero = document.createElement('div');
+      hero.className = 'pb-why-fit-summary';
+      renderRichTextBlock(hero, normalized.summary, 'pb-why-fit-summary-text');
+      wrap.appendChild(hero);
+    }
+
+    if (normalized.fitScore != null) appendFitScoreBar_(wrap, normalized.fitScore);
+
+    if (normalized.keyPoints.length) {
+      var pointsSection = document.createElement('section');
+      pointsSection.className = 'pb-why-fit-section pb-why-fit-section--points';
+      var pointsHead = document.createElement('h5');
+      pointsHead.className = 'pb-why-fit-heading';
+      pointsHead.innerHTML = '<i class="fa-solid fa-list-check" aria-hidden="true"></i><span></span>';
+      pointsHead.querySelector('span').textContent = i18n('pb_why_fit_key_points_heading');
+      pointsSection.appendChild(pointsHead);
+      var pointsGrid = document.createElement('div');
+      pointsGrid.className = 'pb-why-fit-points-grid';
+      var pi;
+      for (pi = 0; pi < normalized.keyPoints.length; pi++) {
+        var point = normalized.keyPoints[pi] || {};
+        var pointCard = document.createElement('article');
+        pointCard.className = 'pb-why-fit-point-card';
+        if (point.title) {
+          var pTitle = document.createElement('strong');
+          pTitle.className = 'pb-why-fit-point-title';
+          pTitle.textContent = String(point.title);
+          pointCard.appendChild(pTitle);
+        }
+        if (point.detail) {
+          var pDetail = document.createElement('p');
+          pDetail.className = 'pb-why-fit-point-detail';
+          pDetail.textContent = String(point.detail);
+          pointCard.appendChild(pDetail);
+        }
+        if (point.briefAnchor) {
+          var pAnchor = document.createElement('p');
+          pAnchor.className = 'pb-why-fit-point-anchor';
+          pAnchor.innerHTML =
+            '<i class="fa-solid fa-anchor" aria-hidden="true"></i> ' +
+            escapeHtml(i18n('pb_ai_pods_pitch_brief_anchor')) +
+            ': ' +
+            formatInlineEmphasis(escapeHtml(String(point.briefAnchor)));
+          pointCard.appendChild(pAnchor);
+        }
+        pointsGrid.appendChild(pointCard);
+      }
+      pointsSection.appendChild(pointsGrid);
+      wrap.appendChild(pointsSection);
+    }
+
+    appendWhyFitTable_(
+      wrap,
+      'pb_why_fit_comparisons_heading',
+      ['pb_why_fit_col_aspect', 'pb_why_fit_col_without', 'pb_why_fit_col_with'],
+      normalized.comparisons,
+      function (row) {
+        return [row.aspect, row.withoutStudio, row.withStudio];
+      },
+      'pb-why-fit-table pb-why-fit-table--compare',
+    );
+
+    appendWhyFitTable_(
+      wrap,
+      'pb_why_fit_brief_links_heading',
+      ['pb_why_fit_col_brief_need', 'pb_why_fit_col_studio_offer'],
+      normalized.briefLinks,
+      function (row) {
+        return [row.briefNeed, row.studioOffer];
+      },
+      'pb-why-fit-table pb-why-fit-table--links',
+    );
+
+    if (!wrap.childNodes.length) return false;
+    parent.appendChild(wrap);
+    return true;
+  }
+
+  function renderRichTextBlock(parent, text, className) {
+    var raw = String(text || '').trim();
+    if (!raw || !parent) return;
+    var wrap = document.createElement('div');
+    wrap.className = className || 'pb-studio-rationale-rich';
+    var lines = raw.split(/\r?\n+/);
+    var htmlParts = [];
+    var inList = false;
+    var fitScore = detectFitScoreFromText_(raw);
+    var li;
+    for (li = 0; li < lines.length; li++) {
+      var line = String(lines[li] || '').trim();
+      if (!line) continue;
+
+      if (isMarkdownTableRow_(line) && li + 1 < lines.length && isMarkdownTableSep_(lines[li + 1])) {
+        if (inList) {
+          htmlParts.push('</ul>');
+          inList = false;
+        }
+        var headers = parseMarkdownTableCells_(line);
+        li += 1;
+        htmlParts.push('<div class="pb-why-fit-table-wrap"><table class="pb-why-fit-table pb-why-fit-table--inline"><thead><tr>');
+        var hi;
+        for (hi = 0; hi < headers.length; hi++) {
+          htmlParts.push('<th scope="col">' + formatInlineEmphasis(escapeHtml(headers[hi])) + '</th>');
+        }
+        htmlParts.push('</tr></thead><tbody>');
+        while (li + 1 < lines.length && isMarkdownTableRow_(lines[li + 1])) {
+          li += 1;
+          var cells = parseMarkdownTableCells_(lines[li]);
+          htmlParts.push('<tr>');
+          var ci;
+          for (ci = 0; ci < cells.length; ci++) {
+            htmlParts.push('<td>' + formatInlineEmphasis(escapeHtml(cells[ci])) + '</td>');
+          }
+          htmlParts.push('</tr>');
+        }
+        htmlParts.push('</tbody></table></div>');
+        continue;
+      }
+
+      var bulletMatch = line.match(/^[-•*]\s+(.*)$/);
+      if (bulletMatch) {
+        if (!inList) {
+          htmlParts.push('<ul class="pb-rich-list">');
+          inList = true;
+        }
+        htmlParts.push('<li>' + formatInlineEmphasis(escapeHtml(bulletMatch[1])) + '</li>');
+        continue;
+      }
+      if (inList) {
+        htmlParts.push('</ul>');
+        inList = false;
+      }
+      var headingMatch = line.match(/^#{1,3}\s+(.*)$/);
+      if (headingMatch) {
+        htmlParts.push('<h6 class="pb-rich-subheading">' + formatInlineEmphasis(escapeHtml(headingMatch[1])) + '</h6>');
+        continue;
+      }
+      htmlParts.push('<p>' + formatInlineEmphasis(escapeHtml(line)) + '</p>');
+    }
+    if (inList) htmlParts.push('</ul>');
+    wrap.innerHTML = htmlParts.join('');
+    if (fitScore != null) appendFitScoreBar_(wrap, fitScore);
+    parent.appendChild(wrap);
+  }
+
+  function appendPitchSubcard_(parent, opts) {
+    opts = opts || {};
+    if (!parent) return null;
+    var section = document.createElement('section');
+    section.className = 'pb-pitch-subcard pb-pitch-subcard--' + (opts.variant || 'default');
+    var head = document.createElement('header');
+    head.className = 'pb-pitch-subcard-head';
+    head.innerHTML =
+      '<span class="pb-pitch-subcard-icon" aria-hidden="true"><i class="fa-solid ' +
+      (opts.icon || 'fa-layer-group') +
+      '"></i></span>' +
+      '<div class="pb-pitch-subcard-head-copy min-w-0 flex-1">' +
+      '<h5 class="pb-pitch-subcard-title"></h5>' +
+      (opts.detailKey ? '<p class="pb-pitch-subcard-detail"></p>' : '') +
+      '</div>' +
+      (opts.count != null ? '<span class="pb-pitch-subcard-count" aria-hidden="true"></span>' : '');
+    head.querySelector('.pb-pitch-subcard-title').textContent = i18n(opts.titleKey || 'label_em_dash');
+    if (opts.detailKey) head.querySelector('.pb-pitch-subcard-detail').textContent = i18n(opts.detailKey);
+    if (opts.count != null) head.querySelector('.pb-pitch-subcard-count').textContent = String(opts.count);
+    section.appendChild(head);
+    var body = document.createElement('div');
+    body.className = 'pb-pitch-subcard-body';
+    section.appendChild(body);
+    parent.appendChild(section);
+    return body;
+  }
+
+  function appendPitchReasonItem_(grid, row, index) {
+    var reasonCard = document.createElement('article');
+    reasonCard.className = 'pb-pitch-subcard-item pb-pitch-subcard-item--reason';
+    reasonCard.innerHTML =
+      '<span class="pb-pitch-subcard-item-index" aria-hidden="true"></span><div class="pb-pitch-subcard-item-body"></div>';
+    reasonCard.querySelector('.pb-pitch-subcard-item-index').textContent = String(index);
+    var reasonBody = reasonCard.querySelector('.pb-pitch-subcard-item-body');
+    if (row.title) {
+      var rTitle = document.createElement('strong');
+      rTitle.className = 'pb-pitch-subcard-item-title';
+      rTitle.textContent = String(row.title);
+      reasonBody.appendChild(rTitle);
+    }
+    if (row.detail) {
+      var rDetail = document.createElement('p');
+      rDetail.className = 'pb-pitch-subcard-item-detail';
+      rDetail.textContent = String(row.detail);
+      reasonBody.appendChild(rDetail);
+    }
+    if (row.briefAnchor) {
+      var rAnchor = document.createElement('p');
+      rAnchor.className = 'pb-pitch-subcard-item-meta';
+      rAnchor.innerHTML =
+        '<i class="fa-solid fa-anchor" aria-hidden="true"></i> ' +
+        escapeHtml(i18n('pb_ai_pods_pitch_brief_anchor')) +
+        ': ' +
+        formatInlineEmphasis(escapeHtml(String(row.briefAnchor)));
+      reasonBody.appendChild(rAnchor);
+    }
+    grid.appendChild(reasonCard);
+  }
+
+  function renderAiPodsPitch(parent, pitch, opts) {
+    opts = opts || {};
+    if (!parent || !pitch || typeof pitch !== 'object') return false;
+    var hasStructured =
+      (Array.isArray(pitch.whyReasons) && pitch.whyReasons.length) ||
+      (Array.isArray(pitch.slideHooks) && pitch.slideHooks.length) ||
+      (Array.isArray(pitch.vsTraditional) && pitch.vsTraditional.length) ||
+      (Array.isArray(pitch.sellerTechniques) && pitch.sellerTechniques.length);
+    if (!hasStructured) return false;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-ai-pods-pitch pb-pitch-subcards-stack';
+
+    var summary = String(pitch.summary || '').trim();
+    if (summary && !opts.skipSummary) {
+      var summaryBody = appendPitchSubcard_(wrap, {
+        icon: 'fa-bolt',
+        titleKey: 'pb_ai_pods_pitch_summary_heading',
+        detailKey: 'pb_studios_lane_ai_pods_detail',
+        variant: 'summary',
+      });
+      if (summaryBody) renderRichTextBlock(summaryBody, summary, 'pb-ai-pods-pitch-summary');
+    }
+
+    if (Array.isArray(pitch.whyReasons) && pitch.whyReasons.length) {
+      var whyBody = appendPitchSubcard_(wrap, {
+        icon: 'fa-list-ol',
+        titleKey: 'pb_ai_pods_pitch_why_heading',
+        variant: 'why',
+        count: pitch.whyReasons.length,
+      });
+      if (whyBody) {
+        var primaryGrid = document.createElement('div');
+        primaryGrid.className = 'pb-pitch-subcard-items-grid pb-pitch-subcard-items-grid--reasons';
+        var previewCount = Math.min(4, pitch.whyReasons.length);
+        var wi;
+        for (wi = 0; wi < previewCount; wi++) {
+          appendPitchReasonItem_(primaryGrid, pitch.whyReasons[wi] || {}, wi + 1);
+        }
+        whyBody.appendChild(primaryGrid);
+
+        if (pitch.whyReasons.length > previewCount) {
+          var moreWrap = document.createElement('details');
+          moreWrap.className = 'pb-pitch-subcard-more';
+          var moreSummary = document.createElement('summary');
+          moreSummary.className = 'pb-pitch-subcard-more-toggle';
+          moreSummary.innerHTML = '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i><span></span>';
+          moreSummary.querySelector('span').textContent = i18nFmt('pb_ai_pods_pitch_why_more_fmt', {
+            count: String(pitch.whyReasons.length - previewCount),
+          });
+          moreWrap.appendChild(moreSummary);
+          var moreGrid = document.createElement('div');
+          moreGrid.className = 'pb-pitch-subcard-items-grid pb-pitch-subcard-items-grid--reasons mt-3';
+          for (wi = previewCount; wi < pitch.whyReasons.length; wi++) {
+            appendPitchReasonItem_(moreGrid, pitch.whyReasons[wi] || {}, wi + 1);
+          }
+          moreWrap.appendChild(moreGrid);
+          whyBody.appendChild(moreWrap);
+        }
+      }
+    }
+
+    if (Array.isArray(pitch.slideHooks) && pitch.slideHooks.length) {
+      var hooksBody = appendPitchSubcard_(wrap, {
+        icon: 'fa-display',
+        titleKey: 'pb_ai_pods_pitch_hooks_heading',
+        variant: 'hooks',
+        count: pitch.slideHooks.length,
+      });
+      if (hooksBody) {
+        var hooksGrid = document.createElement('div');
+        hooksGrid.className = 'pb-pitch-subcard-items-grid pb-pitch-subcard-items-grid--hooks';
+        var hi;
+        for (hi = 0; hi < pitch.slideHooks.length; hi++) {
+          var hookRow = pitch.slideHooks[hi] || {};
+          var hookCard = document.createElement('article');
+          hookCard.className = 'pb-pitch-subcard-item pb-pitch-subcard-item--hook';
+          if (hookRow.headline) {
+            var hTitle = document.createElement('strong');
+            hTitle.className = 'pb-pitch-subcard-item-title';
+            hTitle.textContent = String(hookRow.headline);
+            hookCard.appendChild(hTitle);
+          }
+          if (hookRow.talkTrack) {
+            var hTalk = document.createElement('p');
+            hTalk.className = 'pb-pitch-subcard-item-detail';
+            hTalk.textContent = String(hookRow.talkTrack);
+            hookCard.appendChild(hTalk);
+          }
+          if (hookRow.slideHint) {
+            var hHint = document.createElement('p');
+            hHint.className = 'pb-pitch-subcard-item-meta';
+            hHint.innerHTML =
+              '<i class="fa-solid fa-lightbulb" aria-hidden="true"></i> ' +
+              formatInlineEmphasis(escapeHtml(String(hookRow.slideHint)));
+            hookCard.appendChild(hHint);
+          }
+          hooksGrid.appendChild(hookCard);
+        }
+        hooksBody.appendChild(hooksGrid);
+      }
+    }
+
+    if (Array.isArray(pitch.vsTraditional) && pitch.vsTraditional.length) {
+      var vsBody = appendPitchSubcard_(wrap, {
+        icon: 'fa-scale-balanced',
+        titleKey: 'pb_ai_pods_pitch_vs_heading',
+        variant: 'vs',
+        count: pitch.vsTraditional.length,
+      });
+      if (vsBody) {
+        var tableWrap = document.createElement('div');
+        tableWrap.className = 'pb-why-fit-table-wrap pb-pitch-subcard-table-wrap';
+        var table = document.createElement('table');
+        table.className = 'pb-why-fit-table pb-why-fit-table--compare pb-ai-pods-vs-table';
+        table.innerHTML =
+          '<thead><tr><th scope="col"></th><th scope="col"></th><th scope="col"></th></tr></thead><tbody></tbody>';
+        var ths = table.querySelectorAll('thead th');
+        ths[0].textContent = i18n('pb_ai_pods_vs_col_traditional');
+        ths[1].textContent = i18n('pb_ai_pods_vs_col_aipods');
+        ths[2].textContent = i18n('pb_ai_pods_vs_col_seller');
+        var tbody = table.querySelector('tbody');
+        var vi;
+        for (vi = 0; vi < pitch.vsTraditional.length; vi++) {
+          var vsRow = pitch.vsTraditional[vi] || {};
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td></td><td></td><td></td>';
+          tr.children[0].textContent = String(vsRow.traditional || '—');
+          tr.children[1].textContent = String(vsRow.aiPods || '—');
+          tr.children[2].textContent = String(vsRow.sellerAngle || '—');
+          tbody.appendChild(tr);
+        }
+        tableWrap.appendChild(table);
+        vsBody.appendChild(tableWrap);
+      }
+    }
+
+    if (Array.isArray(pitch.sellerTechniques) && pitch.sellerTechniques.length) {
+      var techBody = appendPitchSubcard_(wrap, {
+        icon: 'fa-user-tie',
+        titleKey: 'pb_ai_pods_pitch_techniques_heading',
+        variant: 'tech',
+        count: pitch.sellerTechniques.length,
+      });
+      if (techBody) {
+        var techGrid = document.createElement('div');
+        techGrid.className = 'pb-pitch-subcard-items-grid pb-pitch-subcard-items-grid--tech';
+        var ti;
+        for (ti = 0; ti < pitch.sellerTechniques.length; ti++) {
+          var techRow = pitch.sellerTechniques[ti] || {};
+          var techCard = document.createElement('article');
+          techCard.className = 'pb-pitch-subcard-item pb-pitch-subcard-item--tech';
+          if (techRow.technique) {
+            var techBadge = document.createElement('span');
+            techBadge.className = 'pb-pitch-subcard-item-badge';
+            techBadge.textContent = String(techRow.technique);
+            techCard.appendChild(techBadge);
+          }
+          if (techRow.whenToUse) {
+            var when = document.createElement('p');
+            when.className = 'pb-pitch-subcard-item-detail';
+            when.innerHTML =
+              '<strong>' +
+              escapeHtml(i18n('pb_ai_pods_technique_when')) +
+              ':</strong> ' +
+              formatInlineEmphasis(escapeHtml(String(techRow.whenToUse)));
+            techCard.appendChild(when);
+          }
+          if (techRow.examplePhrase) {
+            var phrase = document.createElement('blockquote');
+            phrase.className = 'pb-pitch-subcard-item-quote';
+            phrase.textContent = '\u201C' + String(techRow.examplePhrase) + '\u201D';
+            techCard.appendChild(phrase);
+          }
+          techGrid.appendChild(techCard);
+        }
+        techBody.appendChild(techGrid);
+      }
+    }
+
+    parent.appendChild(wrap);
+    return true;
+  }
+
+  function appendOfferingsChips(parent, offerings) {
+    var list = Array.isArray(offerings) ? offerings : [];
+    if (!list.length || !parent) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-studio-offerings-wrap';
+    var label = document.createElement('p');
+    label.className = 'pb-studio-offerings-label';
+    label.innerHTML = '<i class="fa-solid fa-puzzle-piece" aria-hidden="true"></i><span></span>';
+    label.querySelector('span').textContent = i18n('pb_studio_offerings_heading');
+    wrap.appendChild(label);
+    var chips = document.createElement('div');
+    chips.className = 'pb-studio-offering-chips';
+    var oi;
+    for (oi = 0; oi < list.length; oi++) {
+      var chip = document.createElement('span');
+      chip.className = 'pb-studio-offering-chip';
+      chip.textContent = String(list[oi]);
+      chips.appendChild(chip);
+    }
+    wrap.appendChild(chips);
+    parent.appendChild(wrap);
+  }
+
+  function extractPlainSummary_(text) {
+    var raw = String(text || '').trim();
+    if (!raw) return '';
+    var parts = raw.split(/\r?\n+/);
+    var first = String(parts[0] || '').trim();
+    if (first.length > 320) return first.slice(0, 317) + '\u2026';
+    return first;
+  }
+
+  function hasAiPodsPitchDetail_(pitch) {
+    if (!pitch || typeof pitch !== 'object') return false;
+    return (
+      (Array.isArray(pitch.whyReasons) && pitch.whyReasons.length) ||
+      (Array.isArray(pitch.slideHooks) && pitch.slideHooks.length) ||
+      (Array.isArray(pitch.vsTraditional) && pitch.vsTraditional.length) ||
+      (Array.isArray(pitch.sellerTechniques) && pitch.sellerTechniques.length)
+    );
+  }
+
+  function hasWhyFitDetail_(whyFit) {
+    var normalized = normalizeWhyFitClient_(whyFit);
+    if (!normalized) return false;
+    return (
+      normalized.fitScore != null ||
+      normalized.keyPoints.length > 0 ||
+      normalized.comparisons.length > 0 ||
+      normalized.briefLinks.length > 0
+    );
+  }
+
+  function extractStudioRationaleSummary_(st) {
+    st = st || {};
+    if (st.aiPodsPitch && st.aiPodsPitch.summary) {
+      return String(st.aiPodsPitch.summary).trim();
+    }
+    var whyFit = normalizeWhyFitClient_(st.whyFit);
+    if (whyFit && whyFit.summary) return whyFit.summary;
+    var rationale = String(st.rationale || '').trim();
+    var parsed = tryParseStructuredWhyFit_(rationale);
+    if (parsed && parsed.summary) return parsed.summary;
+    if (rationale) return extractPlainSummary_(rationale);
+    return '';
+  }
+
+  function hasStudioRationaleDetail_(st) {
+    st = st || {};
+    if (hasAiPodsPitchDetail_(st.aiPodsPitch)) return true;
+    if (hasWhyFitDetail_(st.whyFit)) return true;
+    var rationale = String(st.rationale || '').trim();
+    if (!rationale) return false;
+    var parsed = tryParseStructuredWhyFit_(rationale);
+    if (parsed && hasWhyFitDetail_(parsed)) return true;
+    if (parsed) return false;
+    if (/\r?\n/.test(rationale)) return true;
+    if (/^\|(.+)\|$/.test(rationale)) return true;
+    var preview = extractPlainSummary_(rationale);
+    return rationale.length > preview.length + 40;
+  }
+
+  function renderStudioRationaleDetail_(parent, st) {
+    if (!parent) return false;
+    st = st || {};
+    if (st.aiPodsPitch && renderAiPodsPitch(parent, st.aiPodsPitch, { skipSummary: true })) return true;
+    if (st.whyFit && renderWhyFit(parent, st.whyFit, { skipSummary: true })) return true;
+    var rationale = String(st.rationale || '').trim();
+    if (!rationale) return false;
+    var parsedWhyFit = tryParseStructuredWhyFit_(rationale);
+    if (parsedWhyFit && renderWhyFit(parent, parsedWhyFit, { skipSummary: true })) return true;
+    renderRichTextBlock(parent, rationale, 'pb-studio-rationale-rich');
+    return true;
+  }
+
+  function renderStudioRationale(parent, st) {
+    if (!parent) return false;
+    st = st || {};
+    var summary = extractStudioRationaleSummary_(st);
+    var hasDetail = hasStudioRationaleDetail_(st);
+    if (!summary && !hasDetail) return false;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-studio-rationale-collapsed';
+
+    var rationaleLabel = document.createElement('p');
+    rationaleLabel.className = 'pb-studio-rationale-label';
+    rationaleLabel.innerHTML = '<i class="fa-solid fa-quote-left" aria-hidden="true"></i><span></span>';
+    rationaleLabel.querySelector('span').textContent = i18n('pb_studio_rationale_heading');
+    wrap.appendChild(rationaleLabel);
+
+    var previewText = summary;
+    if (!previewText && hasDetail) {
+      previewText = i18n('pb_studio_rationale_collapsed_fallback');
+    }
+    if (previewText) {
+      var preview = document.createElement('div');
+      preview.className = 'pb-studio-rationale-summary-preview';
+      renderRichTextBlock(preview, previewText, 'pb-studio-rationale-summary-text');
+      wrap.appendChild(preview);
+    }
+
+    if (hasDetail) {
+      var details = document.createElement('details');
+      details.className = 'pb-studio-rationale-details';
+      var toggle = document.createElement('summary');
+      toggle.className = 'pb-studio-rationale-details-toggle';
+      toggle.innerHTML =
+        '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i><span data-i18n="pb_studio_rationale_show_detail"></span>';
+      toggle.querySelector('span').textContent = i18n('pb_studio_rationale_show_detail');
+      details.appendChild(toggle);
+      var detailBody = document.createElement('div');
+      detailBody.className = 'pb-studio-rationale-details-body';
+      renderStudioRationaleDetail_(detailBody, st);
+      details.appendChild(detailBody);
+      wrap.appendChild(details);
+    }
+
+    parent.appendChild(wrap);
+    return true;
+  }
+
+  var AI_PODS_STUDIO_NAME_ = 'Globant AI-PODs';
+  var LANE_ORDER_ = ['ai_pods', 'digital', 'ai_vertical', 'enterprise'];
+
+  function isAiPodsStudioName_(name) {
+    var n = String(name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    return n === 'globant ai' || n === 'globant ai-pods' || n === 'globant ai pods';
+  }
+
+  function normalizeStudioName_(name) {
+    if (isAiPodsStudioName_(name)) return AI_PODS_STUDIO_NAME_;
+    return String(name || '').trim();
+  }
+
+  function normalizeStudioType_(rawType, studioName) {
+    var t = String(rawType || '').trim().toLowerCase();
+    if (t === 'digital' || t === 'ai' || t === 'enterprise') return t;
+    var name = String(studioName || '').toLowerCase();
+    if (/sap|servicenow|salesforce|oracle|aws|adobe|google cloud|microsoft|process optimization/.test(name)) {
+      return 'enterprise';
+    }
+    if (
+      /automotive|media|healthcare|finance|airline|hospitality|games|education|sports|retail|consumer goods|energy|high tech/.test(
+        name,
+      )
+    ) {
+      return 'ai';
+    }
+    return 'digital';
+  }
+
+  function studioPriorityRank_(priority) {
+    var p = String(priority || 'medium').trim().toLowerCase();
+    if (p === 'high') return 0;
+    if (p === 'medium') return 1;
+    return 2;
+  }
+
+  function sortStudiosByPriority_(studios) {
+    return studios.slice().sort(function (a, b) {
+      var dr = studioPriorityRank_(a.priority) - studioPriorityRank_(b.priority);
+      if (dr !== 0) return dr;
+      return String(a.studioName || a.name || '').localeCompare(String(b.studioName || b.name || ''));
+    });
+  }
+
+  function splitStudiosIntoLanes_(studios) {
+    var out = { ai_pods: [], digital: [], ai_vertical: [], enterprise: [] };
+    var list = Array.isArray(studios) ? studios : [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var st = list[i];
+      if (!st || typeof st !== 'object') continue;
+      var name = normalizeStudioName_(st.studioName || st.name);
+      if (!name) continue;
+      if (name === AI_PODS_STUDIO_NAME_) {
+        out.ai_pods.push(st);
+        continue;
+      }
+      var type = normalizeStudioType_(st.studioType, name);
+      if (type === 'ai') out.ai_vertical.push(st);
+      else if (type === 'enterprise') out.enterprise.push(st);
+      else out.digital.push(st);
+    }
+    return out;
+  }
+
+  function getLaneMeta_(laneId) {
+    if (A.proposalStudiosOrchestrator && A.proposalStudiosOrchestrator.LANE_META) {
+      return A.proposalStudiosOrchestrator.LANE_META[laneId] || null;
+    }
+    return null;
+  }
+
+  function appendLaneSection_(parent, laneId, studios, appendCardFn, opts) {
+    opts = opts || {};
+    if (!parent || !studios || !studios.length || typeof appendCardFn !== 'function') return false;
+    var meta = getLaneMeta_(laneId);
+    if (!meta) return false;
+
+    var sorted = sortStudiosByPriority_(studios);
+    var idSuffix = String(opts.idSuffix || '').trim();
+    var headingId = 'studios-lane-' + laneId + (idSuffix ? '-' + idSuffix : '');
+
+    var section = document.createElement('section');
+    section.className = 'studios-lane-block studios-lane-block--' + laneId;
+    section.setAttribute('aria-labelledby', headingId);
+
+    var head = document.createElement('header');
+    head.className = 'studios-lane-head';
+    head.innerHTML =
+      '<span class="studios-lane-icon" aria-hidden="true"><i class="fa-solid ' +
+      (meta.icon || 'fa-layer-group') +
+      '"></i></span>' +
+      '<div class="studios-lane-head-copy min-w-0 flex-1">' +
+      '<h3 class="studios-lane-title"></h3>' +
+      '<p class="studios-lane-detail"></p>' +
+      '</div>' +
+      '<span class="studios-lane-count" aria-hidden="true"></span>';
+    head.querySelector('.studios-lane-title').id = headingId;
+    head.querySelector('.studios-lane-title').textContent = i18n(meta.titleKey);
+    head.querySelector('.studios-lane-detail').textContent = i18n(meta.detailKey);
+    head.querySelector('.studios-lane-count').textContent = String(sorted.length);
+    section.appendChild(head);
+
+    var cardsWrap = document.createElement('div');
+    cardsWrap.className =
+      'studios-lane-cards' + (laneId === 'ai_pods' ? ' studios-lane-cards--wide' : '');
+    var ri;
+    for (ri = 0; ri < sorted.length; ri++) {
+      appendCardFn(cardsWrap, sorted[ri], laneId);
+    }
+    section.appendChild(cardsWrap);
+    parent.appendChild(section);
+    return true;
+  }
+
+  function renderGroupedByLane_(parent, studios, appendCardFn, opts) {
+    if (!parent || typeof appendCardFn !== 'function') return;
+    var lanes = splitStudiosIntoLanes_(studios);
+    var li;
+    for (li = 0; li < LANE_ORDER_.length; li++) {
+      appendLaneSection_(parent, LANE_ORDER_[li], lanes[LANE_ORDER_[li]], appendCardFn, opts);
+    }
+  }
+
+  A.proposalStudiosUi = {
+    escapeHtml: escapeHtml,
+    formatInlineEmphasis: formatInlineEmphasis,
+    renderRichTextBlock: renderRichTextBlock,
+    renderAiPodsPitch: renderAiPodsPitch,
+    appendOfferingsChips: appendOfferingsChips,
+    renderStudioRationale: renderStudioRationale,
+    renderWhyFit: renderWhyFit,
+    LANE_ORDER: LANE_ORDER_,
+    isAiPodsStudioName: isAiPodsStudioName_,
+    normalizeStudioName: normalizeStudioName_,
+    normalizeStudioType: normalizeStudioType_,
+    splitStudiosIntoLanes: splitStudiosIntoLanes_,
+    appendLaneSection: appendLaneSection_,
+    renderGroupedByLane: renderGroupedByLane_,
+  };
+})(window.Aviators);
+</script>

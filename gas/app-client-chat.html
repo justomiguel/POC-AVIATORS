@@ -2001,7 +2001,12 @@
           },
         });
       })
-      .globantAnswerWithAgent(gp, agentId, histJson);
+      .globantAnswerWithAgent(
+        gp,
+        agentId,
+        histJson,
+        meta.submitMode === 'agent' ? '' : meta.submitMode,
+      );
   }
 
   function homeChatRunOrchestratorQuery_(gp, skipUserAppend) {

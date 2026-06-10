@@ -1,0 +1,251 @@
+<script>
+(function (A) {
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var LANES = ['ai_pods', 'digital', 'ai_vertical', 'enterprise'];
+
+  var LANE_META = {
+    ai_pods: {
+      titleKey: 'pb_studios_lane_ai_pods_title',
+      detailKey: 'pb_studios_lane_ai_pods_detail',
+      icon: 'fa-bolt',
+      agent: true,
+      btnKey: 'pb_btn_refresh_lane_ai_pods',
+    },
+    digital: {
+      titleKey: 'pb_studios_lane_digital_title',
+      detailKey: 'pb_studios_lane_digital_detail',
+      icon: 'fa-microchip',
+      agent: true,
+      btnKey: 'pb_btn_refresh_lane_digital',
+    },
+    ai_vertical: {
+      titleKey: 'pb_studios_lane_ai_vertical_title',
+      detailKey: 'pb_studios_lane_ai_vertical_detail',
+      icon: 'fa-brain',
+      agent: true,
+      btnKey: 'pb_btn_refresh_lane_ai_vertical',
+    },
+    enterprise: {
+      titleKey: 'pb_studios_lane_enterprise_title',
+      detailKey: 'pb_studios_lane_enterprise_detail',
+      icon: 'fa-building-columns',
+      agent: true,
+      btnKey: 'pb_btn_refresh_lane_enterprise',
+    },
+  };
+
+  var MERGE_META = {
+    id: 'merge',
+    titleKey: 'pb_studios_lane_merge_title',
+    detailKey: 'pb_studios_lane_merge_detail',
+    icon: 'fa-link',
+    agent: false,
+  };
+
+  function defaultLaneState() {
+    var state = { merge: 'pending' };
+    var i;
+    for (i = 0; i < LANES.length; i++) state[LANES[i]] = 'pending';
+    return state;
+  }
+
+  function setDisabled(elements, disabled) {
+    var list = Array.isArray(elements) ? elements : [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i]) list[i].disabled = !!disabled;
+    }
+  }
+
+  function runLaneRpc(lane, briefJson, industryKey) {
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .proposalBuildingRecommendStudiosLane(lane, briefJson, industryKey);
+    });
+  }
+
+  function finalizeRpc(briefJson, industryKey, lanesPayload, sessionId) {
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .proposalBuildingFinalizeStudioRecommendations(
+          briefJson,
+          industryKey,
+          JSON.stringify(lanesPayload || {}),
+          sessionId || '',
+        );
+    });
+  }
+
+  function refreshLaneRpc(sessionId, lane, briefJson, studiosJson) {
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .proposalBuildingRefreshStudiosLane(sessionId, lane, briefJson, studiosJson);
+    });
+  }
+
+  /**
+   * Ejecuta las 4 lanes en paralelo y fusiona al finalizar.
+   * @param {Object} opts brief, industry, sessionId, onProgress, onComplete, onError, disableElements
+   */
+  function ensureBriefOutputLocale_(brief) {
+    if (A.ensureBriefOutputLocale) return A.ensureBriefOutputLocale(brief);
+    return brief && typeof brief === 'object' ? brief : {};
+  }
+
+  function runAll(opts) {
+    opts = opts || {};
+    var brief = ensureBriefOutputLocale_(opts.brief || {});
+    var industry = String(opts.industry || '').trim();
+    var sessionId = String(opts.sessionId || '').trim();
+    var briefJson = JSON.stringify(brief);
+    var lanesPayload = {};
+    var laneState = defaultLaneState();
+    var pending = LANES.length;
+    var finished = false;
+    var hadError = false;
+
+    function notifyProgress() {
+      if (typeof opts.onProgress === 'function') {
+        opts.onProgress({ lanes: laneState, lanesPayload: lanesPayload });
+      }
+    }
+
+    function fail(err, scopeLane) {
+      if (finished) return;
+      hadError = true;
+      setDisabled(opts.disableElements, false);
+      if (typeof opts.onError === 'function') opts.onError(err, scopeLane);
+    }
+
+    notifyProgress();
+    setDisabled(opts.disableElements, true);
+
+    function finishMerge() {
+      if (hadError || finished) return;
+      laneState.merge = 'running';
+      notifyProgress();
+      finalizeRpc(briefJson, industry, lanesPayload, sessionId)
+        .then(function (res) {
+          if (hadError || finished) return;
+          finished = true;
+          laneState.merge = 'done';
+          notifyProgress();
+          setDisabled(opts.disableElements, false);
+          if (typeof opts.onComplete === 'function') opts.onComplete(res);
+        })
+        .catch(function (err) {
+          laneState.merge = 'error';
+          notifyProgress();
+          fail(err, 'merge');
+        });
+    }
+
+    var li;
+    for (li = 0; li < LANES.length; li++) {
+      (function (lane) {
+        laneState[lane] = 'running';
+        notifyProgress();
+        runLaneRpc(lane, briefJson, industry)
+          .then(function (res) {
+            if (hadError || finished) return;
+            lanesPayload[lane] = (res && res.studios) || [];
+            laneState[lane] = 'done';
+            notifyProgress();
+            pending--;
+            if (pending <= 0) finishMerge();
+          })
+          .catch(function (err) {
+            laneState[lane] = 'error';
+            notifyProgress();
+            fail(err, lane);
+          });
+      })(LANES[li]);
+    }
+  }
+
+  /**
+   * Regenera una sola lane (requiere sessionId para persistir en vista/edición).
+   */
+  function runLane(opts) {
+    opts = opts || {};
+    var lane = String(opts.lane || '').trim().toLowerCase();
+    var sessionId = String(opts.sessionId || '').trim();
+    var brief = ensureBriefOutputLocale_(opts.brief || {});
+    var studios = Array.isArray(opts.studios) ? opts.studios : [];
+    var briefJson = JSON.stringify(brief);
+    var studiosJson = JSON.stringify(studios);
+    var laneState = defaultLaneState();
+    var i;
+    for (i = 0; i < LANES.length; i++) {
+      laneState[LANES[i]] = LANES[i] === lane ? 'running' : 'pending';
+    }
+    laneState.merge = 'pending';
+
+    function notifyProgress() {
+      if (typeof opts.onProgress === 'function') {
+        opts.onProgress({ lanes: laneState, lane: lane });
+      }
+    }
+
+    notifyProgress();
+    setDisabled(opts.disableElements, true);
+
+    if (sessionId) {
+      refreshLaneRpc(sessionId, lane, briefJson, studiosJson)
+        .then(function (res) {
+          laneState[lane] = 'done';
+          laneState.merge = 'done';
+          notifyProgress();
+          setDisabled(opts.disableElements, false);
+          if (typeof opts.onComplete === 'function') opts.onComplete(res);
+        })
+        .catch(function (err) {
+          laneState[lane] = 'error';
+          notifyProgress();
+          setDisabled(opts.disableElements, false);
+          if (typeof opts.onError === 'function') opts.onError(err, lane);
+        });
+      return;
+    }
+
+    runLaneRpc(lane, briefJson, String(opts.industry || '').trim())
+      .then(function (res) {
+        var lanesPayload = {};
+        lanesPayload[lane] = (res && res.studios) || [];
+        laneState[lane] = 'done';
+        laneState.merge = 'running';
+        notifyProgress();
+        return finalizeRpc(briefJson, String(opts.industry || '').trim(), lanesPayload, '');
+      })
+      .then(function (res) {
+        laneState.merge = 'done';
+        notifyProgress();
+        setDisabled(opts.disableElements, false);
+        if (typeof opts.onComplete === 'function') opts.onComplete(res);
+      })
+      .catch(function (err) {
+        laneState[lane] = 'error';
+        notifyProgress();
+        setDisabled(opts.disableElements, false);
+        if (typeof opts.onError === 'function') opts.onError(err, lane);
+      });
+  }
+
+  A.proposalStudiosOrchestrator = {
+    LANES: LANES,
+    LANE_META: LANE_META,
+    MERGE_META: MERGE_META,
+    defaultLaneState: defaultLaneState,
+    runAll: runAll,
+    runLane: runLane,
+  };
+})(window.Aviators);
+</script>

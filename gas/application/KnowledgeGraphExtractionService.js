@@ -177,37 +177,21 @@ function KnowledgeGraphExtraction_buildContextText_(row) {
 function KnowledgeGraphExtraction_systemPrompt_(row) {
   row = row || {};
   var catalogOff = KnowledgeGraphExtraction_catalogOfferingEnum_(row);
-  var lines = [
-    'You extract structured business knowledge graph entities from Aviators catalog documents.',
-    'Aviators is a B2B knowledge base for aviation, airlines, airports, logistics and related industries.',
-    'Return ONLY valid JSON. No markdown.',
-    'Entity types allowed: offering, technology, outcome, theme.',
-    'Relation types allowed (from content node to entity): delivers, uses_technology, achieved, addresses_theme.',
-    'Keep labels concise (2-8 words). Avoid duplicates and near-duplicates.',
-    'outcome: measurable business results (KPIs, % improvements). Include metric and value when explicit.',
-    'technology: platforms, tools, stacks, AI/ML methods NOT already listed in catalog field technologies.',
-    'theme: cross-cutting business problems (fraud detection, demand forecasting, etc.).',
-    'Do NOT extract Globant Studios as offering — studios are catalog metadata (from_studio), not LLM offerings.',
-  ];
+  var offeringRule;
   if (catalogOff) {
-    lines.push(
+    offeringRule =
       'Catalog already has offering enum ' +
-        catalogOff +
-        ' — do NOT emit type offering; use technology/outcome/theme only.',
-    );
+      catalogOff +
+      ' — do NOT emit type offering; use technology/outcome/theme only.';
   } else {
-    lines.push(
-      'offering: ONLY named Globant engagement models (AI Pods, T&M, Fixed Price, Managed Services) when NOT already in catalog metadata.',
-    );
+    offeringRule =
+      'offering: ONLY named Globant engagement models (AI Pods, T&M, Fixed Price, Managed Services) when NOT already in catalog metadata.';
   }
-  lines.push(
-    'Max ' + KG_EXTRACTION_MAX_ENTITIES_ + ' entities and ' + KG_EXTRACTION_MAX_RELATIONS_ + ' relations.',
-    'Schema:',
-    '{"entities":[{"type":"technology","label":"Demand Forecasting ML","metric":"","value":null}],',
-    '"relations":[{"relation":"uses_technology","entity_index":0,"confidence":0.85}]}',
-    'entity_index refers to the entities array index (0-based). confidence: 0.5-1.0.',
-  );
-  return lines.join('\n');
+  return PromptCatalog_render('kg.extract.system', {
+    offeringRule: offeringRule,
+    maxEntities: String(KG_EXTRACTION_MAX_ENTITIES_),
+    maxRelations: String(KG_EXTRACTION_MAX_RELATIONS_),
+  });
 }
 
 /**
@@ -215,13 +199,10 @@ function KnowledgeGraphExtraction_systemPrompt_(row) {
  * @return {string}
  */
 function KnowledgeGraphExtraction_userPrompt_(row) {
-  var ctx = KnowledgeGraphExtraction_buildContextText_(row);
-  return [
-    'Extract graph entities and relations for this catalog document.',
-    'Document id: ' + String(row.content_id || ''),
-    '',
-    ctx,
-  ].join('\n');
+  return PromptCatalog_render('kg.extract.user', {
+    contentId: String(row.content_id || ''),
+    contextText: KnowledgeGraphExtraction_buildContextText_(row),
+  });
 }
 
 /**

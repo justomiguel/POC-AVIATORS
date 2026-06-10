@@ -15,6 +15,26 @@ function MetricsStore_listUsageEvents() {
 /**
  * @return {Array<Object>}
  */
+function MetricsStore_listFeedbackEvents() {
+  return SupabaseRest_select(
+    SUPABASE_TABLE.FEEDBACK_EVENTS,
+    'select=*&order=ts_iso.desc',
+  );
+}
+
+/**
+ * @return {number}
+ */
+function MetricsStore_countChatConversations() {
+  return SupabaseRest_count(
+    SUPABASE_TABLE.CHAT_CONVERSATIONS,
+    SupabaseRest_query_(['select=conv_id', 'limit=0']),
+  );
+}
+
+/**
+ * @return {Array<Object>}
+ */
 function MetricsStore_listUnansweredQueue(filters) {
   var f = filters || {};
   var qParts = [

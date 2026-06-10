@@ -82,19 +82,7 @@ function ContentTagMergeSuggest_resolveDisplay_(raw, maps, cloud) {
 function ContentTagMergeSuggest_systemPrompt_(locale) {
   var loc = String(locale || '').toLowerCase();
   var reasonLang = loc.indexOf('es') === 0 ? 'Spanish' : 'English';
-  return [
-    'You are a taxonomy curator for the Aviators content catalog (Globant Aviation Studio).',
-    'Given a list of hashtags with document counts, identify EVERY group of tags that are synonyms, abbreviations, or near-duplicates and should be merged into one tag.',
-    'Respond with ONLY valid JSON (no markdown fences):',
-    '{"groups":[{"tags":["#tagA","#tagB"],"reason":"short explanation"}]}',
-    'Rules:',
-    '- Each group must have 2 or more tags copied EXACTLY from the input list (character-for-character, including #).',
-    '- Do not invent tags not present in the input.',
-    '- Include spelling variants, plural/singular, abbreviations, and semantic duplicates (e.g. #analytics and #dataAnalytics).',
-    '- When in doubt between related tags, include the group rather than omit it.',
-    '- "reason" must be one short sentence in ' + reasonLang + '.',
-    '- Tags are usually English camelCase with leading #.',
-  ].join('\n');
+  return PromptCatalog_render('tags.merge.system', { reasonLanguage: reasonLang });
 }
 
 /**
@@ -103,27 +91,29 @@ function ContentTagMergeSuggest_systemPrompt_(locale) {
  * @return {string}
  */
 function ContentTagMergeSuggest_buildUserPrompt_(slice, aliasIndex) {
-  var lines = [
-    'CATALOG TAGS (tag + document count). Propose merge groups only among these:',
-  ];
+  var tagsBodyLines = [];
   var i;
   for (i = 0; i < slice.length; i++) {
-    lines.push(String(slice[i].tag || '') + ' (' + String(slice[i].count || 0) + ')');
+    tagsBodyLines.push(String(slice[i].tag || '') + ' (' + String(slice[i].count || 0) + ')');
   }
+  var aliasesBody = '';
   var aliasKeys = [];
   var ak;
   for (ak in aliasIndex) {
     if (aliasIndex.hasOwnProperty(ak)) aliasKeys.push(ak);
   }
   if (aliasKeys.length) {
-    lines.push('');
-    lines.push('Already merged aliases (do not suggest these sources again):');
+    var aliasLines = ['Already merged aliases (do not suggest these sources again):'];
     for (i = 0; i < aliasKeys.length && i < 40; i++) {
       var key = aliasKeys[i];
-      lines.push('#' + key + ' -> ' + String(aliasIndex[key] || ''));
+      aliasLines.push('#' + key + ' -> ' + String(aliasIndex[key] || ''));
     }
+    aliasesBody = '\n' + aliasLines.join('\n');
   }
-  return lines.join('\n');
+  return PromptCatalog_render('tags.merge.user', {
+    tagsBody: tagsBodyLines.join('\n'),
+    aliasesBody: aliasesBody,
+  });
 }
 
 /**

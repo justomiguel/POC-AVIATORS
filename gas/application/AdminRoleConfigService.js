@@ -13,6 +13,8 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
   'write_catalog',
   'view_onboarding',
   'view_proposal_building',
+  'build_proposals',
+  'save_proposals',
   'view_metrics',
   'reset_metrics',
   'manage_users',
@@ -25,6 +27,8 @@ var ROLE_CONFIG_PERMISSION_KEYS = [
 var ROLE_CONFIG_PERMISSION_KEYS_V2_ADDED = [
   'view_onboarding',
   'view_proposal_building',
+  'build_proposals',
+  'save_proposals',
   'manage_unanswered_queue',
   'sync_salesforce',
   'view_tags',
@@ -40,6 +44,8 @@ var ROLE_CONFIG_PERMISSION_KIND = {
   view_clients: 'read',
   view_onboarding: 'read',
   view_proposal_building: 'read',
+  build_proposals: 'write',
+  save_proposals: 'write',
   view_metrics: 'read',
   view_knowledge_graph: 'read',
   manage_agents: 'write',
@@ -93,6 +99,8 @@ function RoleConfig_defaultRoles_() {
         write_catalog: true,
         view_onboarding: true,
         view_proposal_building: true,
+        build_proposals: true,
+        save_proposals: true,
         view_metrics: true,
         manage_unanswered_queue: true,
         view_knowledge_graph: true,
@@ -191,6 +199,13 @@ function RoleConfig_normalizeStored_(raw) {
         base.permissions[pk] &&
         RoleConfig_isNewPermissionKey_(pk) &&
         !Object.prototype.hasOwnProperty.call(permsIn, pk)
+      ) {
+        permsOut[pk] = true;
+      } else if (
+        key !== 'admin' &&
+        (pk === 'build_proposals' || pk === 'save_proposals') &&
+        !Object.prototype.hasOwnProperty.call(permsIn, pk) &&
+        (permsOut.view_proposal_building || permsIn.view_proposal_building)
       ) {
         permsOut[pk] = true;
       }

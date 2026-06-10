@@ -14,9 +14,19 @@
 
   var totalQuestionsEl = document.getElementById('metrics-total-questions');
   var totalUnansweredEl = document.getElementById('metrics-total-unanswered');
+  var answerRateEl = document.getElementById('metrics-answer-rate');
+  var uniqueUsersEl = document.getElementById('metrics-unique-users');
+  var onboardingQuestionsEl = document.getElementById('metrics-onboarding-questions');
+  var offeringQuestionsEl = document.getElementById('metrics-offering-questions');
+  var proposalsBuiltEl = document.getElementById('metrics-proposals-built');
+  var feedbackSatisfactionEl = document.getElementById('metrics-feedback-satisfaction');
 
-  var trendCanvas = document.getElementById('metrics-trend-chart');
+  var trendSectionCanvas = document.getElementById('metrics-trend-section-chart');
+  var sectionCanvas = document.getElementById('metrics-section-chart');
   var agentCanvas = document.getElementById('metrics-agent-chart');
+  var catalogCanvas = document.getElementById('metrics-catalog-chart');
+  var proposalStatusCanvas = document.getElementById('metrics-proposal-status-chart');
+  var feedbackCanvas = document.getElementById('metrics-feedback-chart');
 
   var lbUsersEl = document.getElementById('metrics-lb-users');
   var lbAgentsEl = document.getElementById('metrics-lb-agents');
@@ -24,6 +34,7 @@
   var lbSuccessIndustryEl = document.getElementById('metrics-lb-success-industry');
   var lbProposalClientEl = document.getElementById('metrics-lb-proposal-client');
   var lbProposalIndustryEl = document.getElementById('metrics-lb-proposal-industry');
+  var lbProposalBuildersEl = document.getElementById('metrics-lb-proposal-builders');
 
   var unansweredBody = document.getElementById('metrics-unanswered-body');
   var unansweredInfo = document.getElementById('metrics-unanswered-page-info');
@@ -35,9 +46,22 @@
   var queueCanManage = false;
   var queueAssignees = [];
   var queueRowBusyId = '';
-  var trendChart = null;
+  var trendSectionChart = null;
+  var sectionChart = null;
   var agentChart = null;
+  var catalogChart = null;
+  var proposalStatusChart = null;
+  var feedbackChart = null;
   var chartJsPromise = null;
+
+  var METRICS_SECTION_KEYS_ = ['home', 'onboarding', 'globant_offering', 'proposal_building', 'other'];
+  var METRICS_SECTION_COLORS_ = {
+    home: '#0ea5e9',
+    onboarding: '#8b5cf6',
+    globant_offering: '#14b8a6',
+    proposal_building: '#f59e0b',
+    other: '#64748b',
+  };
   var loadingDashboard = false;
   var loadingUnanswered = false;
   var metricsTabRoot = document.getElementById('metrics-tab-root');
@@ -47,9 +71,27 @@
 
   function metricsResizeCharts_() {
     window.setTimeout(function () {
-      if (trendChart && typeof trendChart.resize === 'function') trendChart.resize();
-      if (agentChart && typeof agentChart.resize === 'function') agentChart.resize();
+      var charts = [
+        trendSectionChart,
+        sectionChart,
+        agentChart,
+        catalogChart,
+        proposalStatusChart,
+        feedbackChart,
+      ];
+      for (var ci = 0; ci < charts.length; ci++) {
+        if (charts[ci] && typeof charts[ci].resize === 'function') charts[ci].resize();
+      }
     }, 60);
+  }
+
+  function metricsSectionLabel_(key) {
+    return i18n('metrics_section_' + String(key || 'other'));
+  }
+
+  function metricsFormatPct_(value) {
+    if (value == null || isNaN(Number(value))) return '—';
+    return String(Math.round(Number(value))) + '%';
   }
 
   if (metricsTabRoot) {
@@ -516,79 +558,172 @@
   }
 
   function destroyCharts() {
-    if (trendChart && typeof trendChart.destroy === 'function') trendChart.destroy();
-    if (agentChart && typeof agentChart.destroy === 'function') agentChart.destroy();
-    trendChart = null;
+    var charts = [
+      trendSectionChart,
+      sectionChart,
+      agentChart,
+      catalogChart,
+      proposalStatusChart,
+      feedbackChart,
+    ];
+    for (var ci = 0; ci < charts.length; ci++) {
+      if (charts[ci] && typeof charts[ci].destroy === 'function') charts[ci].destroy();
+    }
+    trendSectionChart = null;
+    sectionChart = null;
     agentChart = null;
+    catalogChart = null;
+    proposalStatusChart = null;
+    feedbackChart = null;
+  }
+
+  function metricsIsDark_() {
+    return document.documentElement.classList.contains('dark');
+  }
+
+  function metricsChartTheme_() {
+    return metricsIsDark_()
+      ? {
+          text: '#cbd5e1',
+          tick: '#94a3b8',
+          grid: 'rgba(148, 163, 184, 0.22)',
+        }
+      : {
+          text: '#334155',
+          tick: '#64748b',
+          grid: 'rgba(148, 163, 184, 0.35)',
+        };
   }
 
   function metricsChartOptions(extra) {
+    var theme = metricsChartTheme_();
     var opts = {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: true } },
-    };
-    if (document.documentElement.classList.contains('dark')) {
-      opts.plugins.legend.labels = { color: '#cbd5e1' };
-      opts.scales = {
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: theme.text, boxWidth: 12, usePointStyle: true },
+        },
+        tooltip: {
+          backgroundColor: metricsIsDark_() ? '#0f172a' : '#ffffff',
+          titleColor: theme.text,
+          bodyColor: theme.tick,
+          borderColor: metricsIsDark_() ? '#334155' : '#e2e8f0',
+          borderWidth: 1,
+          padding: 10,
+        },
+      },
+      scales: {
         x: {
-          ticks: { color: '#94a3b8' },
-          grid: { color: 'rgba(148, 163, 184, 0.22)' },
+          ticks: { color: theme.tick, maxRotation: 0, autoSkip: true },
+          grid: { color: theme.grid },
+          stacked: !!(extra && extra.stacked),
         },
         y: {
-          ticks: { color: '#94a3b8' },
-          grid: { color: 'rgba(148, 163, 184, 0.22)' },
+          ticks: { color: theme.tick, precision: 0 },
+          grid: { color: theme.grid },
+          stacked: !!(extra && extra.stacked),
+          beginAtZero: true,
         },
-      };
-    }
+      },
+    };
     if (extra) {
-      if (extra.plugins) {
-        opts.plugins = Object.assign({}, opts.plugins, extra.plugins);
-      }
-      if (extra.scales) {
+      if (extra.plugins) opts.plugins = Object.assign({}, opts.plugins, extra.plugins);
+      if (extra.scales === false) {
+        delete opts.scales;
+      } else if (extra.scales) {
         opts.scales = Object.assign({}, opts.scales || {}, extra.scales);
+      }
+      if (extra.indexAxis) opts.indexAxis = extra.indexAxis;
+      if (extra.stacked === false && opts.scales) {
+        opts.scales.x.stacked = false;
+        opts.scales.y.stacked = false;
       }
     }
     return opts;
+  }
+
+  function metricsAgentBarColors_(count) {
+    var palette = ['#2563eb', '#0ea5e9', '#8b5cf6', '#14b8a6', '#f59e0b', '#f97316', '#ec4899', '#64748b'];
+    var out = [];
+    for (var i = 0; i < count; i++) out.push(palette[i % palette.length]);
+    return out;
   }
 
   function renderCharts(data) {
     destroyCharts();
     if (typeof Chart === 'undefined') return;
 
-    var trend = (data && data.trend) || [];
+    var trendBySection = (data && data.trendBySection) || [];
     var trendLabels = [];
-    var trendQuestions = [];
-    var trendUnanswered = [];
-    for (var i = 0; i < trend.length; i++) {
-      trendLabels.push(String(trend[i].date || ''));
-      trendQuestions.push(Number(trend[i].questions || 0));
-      trendUnanswered.push(Number(trend[i].unanswered || 0));
+    var sectionDatasets = [];
+    var sk;
+    for (sk = 0; sk < METRICS_SECTION_KEYS_.length; sk++) {
+      var secKey = METRICS_SECTION_KEYS_[sk];
+      sectionDatasets.push({
+        label: metricsSectionLabel_(secKey),
+        data: [],
+        backgroundColor: METRICS_SECTION_COLORS_[secKey] + 'cc',
+        borderColor: METRICS_SECTION_COLORS_[secKey],
+        borderWidth: 1,
+        borderRadius: 4,
+        stack: 'sections',
+      });
     }
-    if (trendCanvas) {
-      trendChart = new Chart(trendCanvas, {
-        type: 'line',
+    for (var i = 0; i < trendBySection.length; i++) {
+      var row = trendBySection[i] || {};
+      trendLabels.push(String(row.date || ''));
+      for (sk = 0; sk < METRICS_SECTION_KEYS_.length; sk++) {
+        var k = METRICS_SECTION_KEYS_[sk];
+        sectionDatasets[sk].data.push(Number(row[k] || 0));
+      }
+    }
+    if (trendSectionCanvas) {
+      trendSectionChart = new Chart(trendSectionCanvas, {
+        type: 'bar',
+        data: { labels: trendLabels, datasets: sectionDatasets },
+        options: metricsChartOptions({ stacked: true }),
+      });
+    }
+
+    var sections = (data && data.sections) || {};
+    var sectionLabels = [];
+    var sectionCounts = [];
+    var sectionColors = [];
+    for (sk = 0; sk < METRICS_SECTION_KEYS_.length; sk++) {
+      var sKey = METRICS_SECTION_KEYS_[sk];
+      var sCount = Number(sections[sKey] || 0);
+      if (!sCount) continue;
+      sectionLabels.push(metricsSectionLabel_(sKey));
+      sectionCounts.push(sCount);
+      sectionColors.push(METRICS_SECTION_COLORS_[sKey]);
+    }
+    if (sectionCanvas) {
+      sectionChart = new Chart(sectionCanvas, {
+        type: 'doughnut',
         data: {
-          labels: trendLabels,
+          labels: sectionLabels.length ? sectionLabels : [i18n('metrics_empty')],
           datasets: [
             {
-              label: i18n('metrics_total_questions'),
-              data: trendQuestions,
-              borderColor: '#0ea5e9',
-              backgroundColor: 'rgba(14,165,233,0.15)',
-              tension: 0.25,
-            },
-            {
-              label: i18n('metrics_total_unanswered'),
-              data: trendUnanswered,
-              borderColor: '#f97316',
-              backgroundColor: 'rgba(249,115,22,0.12)',
-              tension: 0.25,
+              data: sectionCounts.length ? sectionCounts : [1],
+              backgroundColor: sectionColors.length ? sectionColors : ['#cbd5e1'],
+              borderWidth: 2,
+              borderColor: metricsIsDark_() ? '#1e293b' : '#ffffff',
+              hoverOffset: 6,
             },
           ],
         },
-        options: metricsChartOptions(),
+        options: metricsChartOptions({
+          plugins: { legend: { position: 'bottom' } },
+          scales: false,
+          stacked: false,
+        }),
       });
+      if (!sectionCounts.length) {
+        sectionChart.options.plugins.legend.display = false;
+      }
     }
 
     var byAgent = (data && data.leaderboard && data.leaderboard.agents) || [];
@@ -607,11 +742,111 @@
             {
               label: i18n('metrics_agent_usage_heading'),
               data: agentCounts,
-              backgroundColor: '#2563eb',
+              backgroundColor: metricsAgentBarColors_(agentCounts.length),
+              borderRadius: 6,
+              borderSkipped: false,
             },
           ],
         },
-        options: metricsChartOptions({ plugins: { legend: { display: false } } }),
+        options: metricsChartOptions({
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          stacked: false,
+        }),
+      });
+    }
+
+    var catalog = (data && data.catalog) || {};
+    var catalogLabels = [
+      i18n('metrics_catalog_success'),
+      i18n('metrics_catalog_proposals'),
+      i18n('metrics_catalog_onboarding'),
+      i18n('metrics_catalog_clients'),
+      i18n('metrics_catalog_kg_nodes'),
+    ];
+    var catalogCounts = [
+      Number(catalog.successCases || 0),
+      Number(catalog.proposals || 0),
+      Number(catalog.onboarding || 0),
+      Number(catalog.clients || 0),
+      Number(catalog.kgNodes || 0),
+    ];
+    if (catalogCanvas) {
+      catalogChart = new Chart(catalogCanvas, {
+        type: 'bar',
+        data: {
+          labels: catalogLabels,
+          datasets: [
+            {
+              label: i18n('metrics_catalog_heading'),
+              data: catalogCounts,
+              backgroundColor: ['#22c55e', '#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4'],
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: metricsChartOptions({
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          stacked: false,
+        }),
+      });
+    }
+
+    var pb = (data && data.proposalBuilding) || {};
+    if (proposalStatusCanvas) {
+      proposalStatusChart = new Chart(proposalStatusCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: [
+            i18n('metrics_proposal_status_completed'),
+            i18n('metrics_proposal_status_in_progress'),
+            i18n('metrics_proposal_status_failed'),
+          ],
+          datasets: [
+            {
+              data: [
+                Number(pb.completed || 0),
+                Number(pb.inProgress || 0),
+                Number(pb.failed || 0),
+              ],
+              backgroundColor: ['#22c55e', '#3b82f6', '#ef4444'],
+              borderWidth: 2,
+              borderColor: metricsIsDark_() ? '#1e293b' : '#ffffff',
+              hoverOffset: 6,
+            },
+          ],
+        },
+        options: metricsChartOptions({
+          plugins: { legend: { position: 'bottom' } },
+          scales: false,
+          stacked: false,
+        }),
+      });
+    }
+
+    var fb = (data && data.feedback) || {};
+    if (feedbackCanvas) {
+      feedbackChart = new Chart(feedbackCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: [i18n('chat_feedback_up'), i18n('chat_feedback_down')],
+          datasets: [
+            {
+              data: [Number(fb.up || 0), Number(fb.down || 0)],
+              backgroundColor: ['#22c55e', '#ef4444'],
+              borderWidth: 2,
+              borderColor: metricsIsDark_() ? '#1e293b' : '#ffffff',
+              hoverOffset: 6,
+            },
+          ],
+        },
+        options: metricsChartOptions({
+          plugins: { legend: { position: 'bottom' } },
+          scales: false,
+          stacked: false,
+        }),
       });
     }
   }
@@ -623,6 +858,18 @@
     var summary = (data && data.summary) || {};
     if (totalQuestionsEl) totalQuestionsEl.textContent = String(summary.questions || 0);
     if (totalUnansweredEl) totalUnansweredEl.textContent = String(summary.unanswered || 0);
+    if (answerRateEl) answerRateEl.textContent = metricsFormatPct_(summary.answerRatePct);
+    if (uniqueUsersEl) uniqueUsersEl.textContent = String(summary.uniqueUsers || 0);
+    if (onboardingQuestionsEl) {
+      onboardingQuestionsEl.textContent = String(summary.onboardingQuestions || 0);
+    }
+    if (offeringQuestionsEl) {
+      offeringQuestionsEl.textContent = String(summary.globantOfferingQuestions || 0);
+    }
+    if (proposalsBuiltEl) proposalsBuiltEl.textContent = String(summary.proposalsBuilt || 0);
+    if (feedbackSatisfactionEl) {
+      feedbackSatisfactionEl.textContent = metricsFormatPct_(summary.feedbackSatisfactionPct);
+    }
 
     var lb = (data && data.leaderboard) || {};
     renderRankList(lbUsersEl, lb.users);
@@ -631,6 +878,7 @@
     renderRankList(lbSuccessIndustryEl, lb.successByIndustry);
     renderRankList(lbProposalClientEl, lb.proposalByClient);
     renderRankList(lbProposalIndustryEl, lb.proposalByIndustry);
+    renderRankList(lbProposalBuildersEl, lb.proposalBuilders);
     ensureChartJs()
       .then(function () {
         renderCharts(data);

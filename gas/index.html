@@ -137,7 +137,7 @@
       </div>
     </div>
     <main class="h-full min-h-0">
-      <div id="view-login" class="login-root">
+      <div id="view-login" class="login-root hidden" hidden aria-hidden="true">
         <div class="login-card">
           <div class="login-logo-wrap">
           <!-- logo.png → data URL con `node scripts/embed-logo.cjs` (lo ejecuta el deploy). -->
@@ -304,15 +304,33 @@
                 </div>
               </details>
 
-              <button
-                type="button"
-                class="app-nav-item app-nav-item--standalone hidden mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
-                data-app-page="proposal-building"
-                id="nav-page-proposal-building"
-              >
-                <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-violet-600 dark:text-violet-400" aria-hidden="true"></i>
-                <span data-i18n="nav_proposal_building"></span>
-              </button>
+              <details id="nav-group-proposals" class="app-nav-group hidden mt-1">
+                <summary class="app-nav-group-summary">
+                  <i class="fa-solid fa-file-signature w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span class="min-w-0 flex-1 truncate" data-i18n="nav_group_proposals"></span>
+                  <i class="fa-solid fa-chevron-down app-nav-group-chevron shrink-0 text-[10px] text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
+                </summary>
+                <div class="app-nav-group-items">
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="proposal-building"
+                    id="nav-page-proposal-building"
+                  >
+                    <i class="fa-solid fa-wand-magic-sparkles w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_proposal_building"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="app-nav-item app-nav-item--child hidden w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-sky-100 hover:text-sky-950 dark:text-slate-200 dark:hover:bg-sky-900/35 dark:hover:text-sky-100"
+                    data-app-page="my-proposals"
+                    id="nav-page-my-proposals"
+                  >
+                    <i class="fa-solid fa-folder-open w-5 shrink-0 text-center text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="nav_my_proposals"></span>
+                  </button>
+                </div>
+              </details>
 
               <details id="nav-group-knowledge" class="app-nav-group hidden">
                 <summary class="app-nav-group-summary">
@@ -666,8 +684,16 @@
                   <span class="pb-stepper-label" data-i18n="pb_step_materials"></span>
                 </button>
                 <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="brief" id="pb-tab-brief" aria-selected="false" disabled>
-                  <span class="pb-stepper-icon pb-stepper-icon-violet"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-icon pb-stepper-icon-sky"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>
                   <span class="pb-stepper-label" data-i18n="pb_step_brief"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="studios" id="pb-tab-studios" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-rose"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_studios"></span>
+                </button>
+                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="success_cases" id="pb-tab-success-cases" aria-selected="false" disabled>
+                  <span class="pb-stepper-icon pb-stepper-icon-emerald"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span>
+                  <span class="pb-stepper-label" data-i18n="pb_step_success_cases"></span>
                 </button>
                 <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="configure" id="pb-tab-configure" aria-selected="false" disabled>
                   <span class="pb-stepper-icon pb-stepper-icon-amber"><i class="fa-solid fa-sliders" aria-hidden="true"></i></span>
@@ -677,202 +703,403 @@
                   <span class="pb-stepper-icon pb-stepper-icon-emerald"><i class="fa-solid fa-file-powerpoint" aria-hidden="true"></i></span>
                   <span class="pb-stepper-label" data-i18n="pb_step_deck"></span>
                 </button>
-                <button type="button" role="tab" class="pb-stepper-tab" data-pb-step="studios" id="pb-tab-studios" aria-selected="false" disabled>
-                  <span class="pb-stepper-icon pb-stepper-icon-rose"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
-                  <span class="pb-stepper-label" data-i18n="pb_step_studios"></span>
-                </button>
               </nav>
               <div id="pb-builder" class="pb-builder space-y-6">
                 <section id="pb-panel-materials" class="pb-panel dashboard-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="materials" aria-labelledby="pb-materials-heading">
-                  <h2 id="pb-materials-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_materials_heading"></h2>
-                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_materials_lead"></p>
-                  <div class="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 p-4 dark:border-sky-800 dark:bg-sky-950/20">
-                    <label class="block text-sm" for="pb-materials-input">
-                      <span class="mb-2 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_materials_files"></span>
-                      <input type="file" id="pb-materials-input" class="aviators-field w-full text-sm" multiple accept=".pdf,.txt,.md,.csv,.docx,image/*,application/pdf,text/*" />
-                    </label>
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_materials_formats"></p>
+                  <header class="pb-materials-page-head">
+                    <span class="pb-materials-page-badge" aria-hidden="true"><i class="fa-solid fa-folder-open"></i></span>
+                    <div class="min-w-0 flex-1">
+                      <h2 id="pb-materials-heading" class="pb-materials-page-title" data-i18n="pb_materials_heading"></h2>
+                      <p class="pb-materials-page-lead" data-i18n="pb_materials_lead"></p>
+                    </div>
+                  </header>
+                  <div
+                    id="pb-materials-dropzone"
+                    class="pb-materials-dropzone"
+                    tabindex="0"
+                    data-i18n-aria-label="pb_materials_dropzone_aria"
+                    aria-label=""
+                  >
+                    <div class="pb-materials-dropzone-inner">
+                      <span class="pb-materials-dropzone-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+                      <p class="pb-materials-dropzone-title" data-i18n="pb_materials_dropzone_title"></p>
+                      <p class="pb-materials-dropzone-hint" data-i18n="pb_materials_dropzone_hint"></p>
+                      <span class="pb-materials-multi-badge inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                        <span data-i18n="pb_materials_multi_badge"></span>
+                      </span>
+                      <ul class="pb-materials-format-row" aria-hidden="true">
+                        <li class="pb-materials-format-chip pb-materials-format-chip--pdf"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></li>
+                        <li class="pb-materials-format-chip pb-materials-format-chip--word"><i class="fa-solid fa-file-word"></i><span>Word</span></li>
+                        <li class="pb-materials-format-chip pb-materials-format-chip--text"><i class="fa-solid fa-file-lines"></i><span>TXT</span></li>
+                        <li class="pb-materials-format-chip pb-materials-format-chip--csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></li>
+                        <li class="pb-materials-format-chip pb-materials-format-chip--image"><i class="fa-solid fa-file-image"></i><span>IMG</span></li>
+                      </ul>
+                      <button type="button" id="pb-materials-browse-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                        <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+                        <span id="pb-materials-browse-label" data-i18n="pb_materials_btn_pick_files"></span>
+                      </button>
+                      <input type="file" id="pb-materials-input" class="label-sr-only" multiple accept=".pdf,.txt,.md,.csv,.docx,image/*,application/pdf,text/*" />
+                    </div>
                   </div>
-                  <label class="mt-4 block text-sm" for="pb-materials-notes">
-                    <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_materials_notes"></span>
-                    <textarea id="pb-materials-notes" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_materials_notes"></textarea>
-                  </label>
-                  <ul id="pb-materials-list" class="mt-4 space-y-2" role="list"></ul>
-                  <p id="pb-materials-status" class="mt-3 text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
-                  <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                  <div id="pb-materials-list-wrap" class="pb-materials-list-wrap hidden" aria-labelledby="pb-materials-list-heading">
+                    <h3 id="pb-materials-list-heading" class="pb-materials-list-heading">
+                      <i class="fa-solid fa-list-check text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="pb_materials_list_heading"></span>
+                    </h3>
+                    <ul id="pb-materials-list" class="pb-materials-list" role="list"></ul>
+                  </div>
+                  <p id="pb-materials-empty" class="pb-materials-empty-hint mt-3 inline-flex items-center gap-2 text-sm" role="status">
+                    <i class="fa-regular fa-circle-question text-sky-500 dark:text-sky-400" aria-hidden="true"></i>
+                    <span data-i18n="pb_materials_empty_list"></span>
+                  </p>
+                  <p id="pb-materials-status" class="pb-materials-status mt-3 hidden inline-flex items-center gap-2 text-sm font-medium" role="status" aria-live="polite"></p>
+                  <section class="pb-materials-notes-section mt-5" aria-labelledby="pb-materials-notes-label">
+                    <label class="block text-sm" for="pb-materials-notes">
+                      <span id="pb-materials-notes-label" class="pb-materials-notes-label inline-flex items-center gap-2">
+                        <i class="fa-solid fa-note-sticky text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                        <span data-i18n="pb_lbl_materials_notes"></span>
+                      </span>
+                      <textarea id="pb-materials-notes" rows="3" class="aviators-field mt-2 w-full text-sm" data-i18n-placeholder="pb_ph_materials_notes"></textarea>
+                    </label>
+                  </section>
+                  <div class="pb-materials-footer mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
                     <button type="button" id="pb-analyze-materials-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
                       <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
                       <span data-i18n="pb_btn_analyze_materials"></span>
                     </button>
                   </div>
                 </section>
-                <section id="pb-panel-brief" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="brief" aria-labelledby="pb-brief-story-heading">
-                  <div id="pb-client-story" class="pb-client-story mb-6"></div>
-                  <section id="pb-step-validate" class="space-y-4">
-                    <div>
-                      <h2 id="pb-wizard-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_validation_heading"></h2>
-                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_validation_lead"></p>
-                    </div>
-                    <label class="block text-sm" for="pb-field-project-summary">
-                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_project_summary"></span>
-                      <textarea id="pb-field-project-summary" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_project_summary"></textarea>
-                    </label>
-                    <label class="block text-sm" for="pb-field-client">
-                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_client"></span>
-                      <input type="text" id="pb-field-client" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_client" />
-                    </label>
-                    <div id="pb-tech-hints-wrap" class="hidden">
-                      <h3 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_technology_hints"></h3>
-                      <ul id="pb-tech-hints-list" class="flex flex-wrap gap-2 text-sm"></ul>
-                    </div>
-                    <div>
-                      <div class="mb-2 flex items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_scope_items"></h3>
-                        <button type="button" id="pb-add-scope-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
-                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                          <span data-i18n="pb_btn_add_scope_item"></span>
-                        </button>
-                      </div>
-                      <div id="pb-scope-list" class="space-y-3"></div>
-                    </div>
-                    <label class="block text-sm" for="pb-field-commercial-model">
-                      <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_commercial_model"></span>
-                      <select id="pb-field-commercial-model" class="aviators-field w-full text-sm">
-                        <option value="">—</option>
-                        <option value="TIME_AND_MATERIALS" data-i18n="pb_pricing_time_and_materials"></option>
-                        <option value="STAFF_AUGMENTATION" data-i18n="pb_pricing_staff_augmentation"></option>
-                        <option value="FIXED_PRICE" data-i18n="pb_pricing_fixed_price"></option>
-                        <option value="SUBSCRIPTION" data-i18n="pb_pricing_subscription"></option>
-                        <option value="AI_PODS" data-i18n="pb_pricing_ai_pods"></option>
-                      </select>
-                    </label>
-                    <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-600 dark:bg-slate-900/30" aria-labelledby="pb-business-heading">
-                      <h3 id="pb-business-heading" class="text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_business_context_heading"></h3>
-                      <p class="mt-1 mb-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_business_context_lead"></p>
-                      <label class="mb-3 block text-sm" for="pb-field-rfp-deadline">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_rfp_deadline"></span>
-                        <input type="text" id="pb-field-rfp-deadline" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_rfp_deadline" />
-                      </label>
-                      <div class="mb-3 grid gap-3 md:grid-cols-3">
-                        <label class="block text-sm md:col-span-1" for="pb-field-budget-amount">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_amount"></span>
-                          <input type="text" id="pb-field-budget-amount" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_amount" />
-                        </label>
-                        <label class="block text-sm md:col-span-1" for="pb-field-budget-currency">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_currency"></span>
-                          <input type="text" id="pb-field-budget-currency" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_currency" />
-                        </label>
-                        <label class="block text-sm md:col-span-1" for="pb-field-budget-notes">
-                          <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_budget_notes"></span>
-                          <input type="text" id="pb-field-budget-notes" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_notes" />
+                <section id="pb-panel-brief" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="brief" aria-labelledby="pb-wizard-heading">
+                  <section id="pb-step-validate" class="pb-brief-wizard">
+                    <header class="pb-brief-page-head">
+                      <h2 id="pb-wizard-heading" class="pb-brief-page-title" data-i18n="pb_validation_heading"></h2>
+                      <p class="pb-brief-page-lead" data-i18n="pb_validation_lead"></p>
+                    </header>
+
+                    <section class="pb-brief-group pb-brief-group--sky" aria-labelledby="pb-brief-sec-client-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-building-user"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-brief-sec-client-h" class="pb-brief-group-title" data-i18n="pb_brief_sec_client_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_brief_sec_client_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <div id="pb-client-story" class="pb-client-story"></div>
+                        <label class="pb-brief-field block text-sm" for="pb-field-client">
+                          <span class="pb-brief-field-label" data-i18n="pb_lbl_client"></span>
+                          <input type="text" id="pb-field-client" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_client" />
                         </label>
                       </div>
-                      <div class="mb-3">
-                        <div class="mb-2 flex items-center justify-between gap-2">
-                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_stakeholders"></span>
-                          <button type="button" id="pb-add-stakeholder-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                    </section>
+
+                    <section class="pb-brief-group pb-brief-group--sky" aria-labelledby="pb-brief-sec-ask-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-bullseye"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-brief-sec-ask-h" class="pb-brief-group-title" data-i18n="pb_brief_sec_ask_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_brief_sec_ask_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <label class="pb-brief-field block text-sm" for="pb-field-project-summary">
+                          <span class="pb-brief-field-label" data-i18n="pb_lbl_project_summary"></span>
+                          <textarea id="pb-field-project-summary" rows="4" class="aviators-field pb-brief-textarea w-full text-sm" data-i18n-placeholder="pb_ph_project_summary"></textarea>
+                        </label>
+                        <div id="pb-tech-hints-wrap" class="pb-brief-nested hidden" aria-labelledby="pb-tech-hints-heading">
+                          <h4 id="pb-tech-hints-heading" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-microchip text-sky-600 dark:text-sky-400" aria-hidden="true"></i><span data-i18n="pb_lbl_technology_hints"></span></h4>
+                          <ul id="pb-tech-hints-list" class="pb-brief-tags"></ul>
+                        </div>
+                        <div class="pb-brief-subsection" aria-labelledby="pb-brief-subsec-scope-h">
+                          <h4 id="pb-brief-subsec-scope-h" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-list-check text-sky-600 dark:text-sky-400" aria-hidden="true"></i><span data-i18n="pb_lbl_scope_items"></span></h4>
+                          <p class="pb-brief-sublead" data-i18n="pb_brief_subsec_scope_lead"></p>
+                          <div id="pb-scope-list" class="pb-brief-item-list"></div>
+                          <button type="button" id="pb-add-scope-btn" class="pb-brief-add-btn inline-flex items-center gap-2">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                            <span data-i18n="pb_btn_add_scope_item"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="pb-brief-group pb-brief-group--amber" aria-labelledby="pb-brief-sec-commercial-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-handshake"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-brief-sec-commercial-h" class="pb-brief-group-title" data-i18n="pb_brief_sec_commercial_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_brief_sec_commercial_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <label class="pb-brief-field block text-sm" for="pb-field-commercial-model">
+                          <span class="pb-brief-field-label" data-i18n="pb_lbl_commercial_model"></span>
+                          <select id="pb-field-commercial-model" class="aviators-field w-full text-sm">
+                            <option value="">—</option>
+                            <option value="TIME_AND_MATERIALS" data-i18n="pb_pricing_time_and_materials"></option>
+                            <option value="STAFF_AUGMENTATION" data-i18n="pb_pricing_staff_augmentation"></option>
+                            <option value="FIXED_PRICE" data-i18n="pb_pricing_fixed_price"></option>
+                            <option value="SUBSCRIPTION" data-i18n="pb_pricing_subscription"></option>
+                            <option value="AI_PODS" data-i18n="pb_pricing_ai_pods"></option>
+                          </select>
+                        </label>
+                        <div class="pb-brief-nested">
+                          <label class="pb-brief-field block text-sm" for="pb-field-rfp-deadline">
+                            <span class="pb-brief-field-label" data-i18n="pb_lbl_rfp_deadline"></span>
+                            <input type="text" id="pb-field-rfp-deadline" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_rfp_deadline" />
+                          </label>
+                          <fieldset class="pb-brief-budget-grid">
+                            <legend class="pb-brief-field-label mb-2 block" data-i18n="pb_brief_budget_group_label"></legend>
+                            <label class="block text-sm" for="pb-field-budget-amount">
+                              <span class="pb-brief-field-label pb-brief-field-label-sm" data-i18n="pb_lbl_budget_amount"></span>
+                              <input type="text" id="pb-field-budget-amount" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_amount" />
+                            </label>
+                            <label class="block text-sm" for="pb-field-budget-currency">
+                              <span class="pb-brief-field-label pb-brief-field-label-sm" data-i18n="pb_lbl_budget_currency"></span>
+                              <input type="text" id="pb-field-budget-currency" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_currency" />
+                            </label>
+                            <label class="block text-sm md:col-span-2" for="pb-field-budget-notes">
+                              <span class="pb-brief-field-label pb-brief-field-label-sm" data-i18n="pb_lbl_budget_notes"></span>
+                              <input type="text" id="pb-field-budget-notes" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_budget_notes" />
+                            </label>
+                          </fieldset>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="pb-brief-group pb-brief-group--emerald" aria-labelledby="pb-brief-sec-people-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-users"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-brief-sec-people-h" class="pb-brief-group-title" data-i18n="pb_brief_sec_people_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_brief_sec_people_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <div class="pb-brief-subsection" aria-labelledby="pb-brief-subsec-stakeholders-h">
+                          <h4 id="pb-brief-subsec-stakeholders-h" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-address-card text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i><span data-i18n="pb_lbl_stakeholders"></span></h4>
+                          <p class="pb-brief-sublead" data-i18n="pb_brief_subsec_stakeholders_lead"></p>
+                          <p id="pb-stakeholders-empty" class="pb-brief-empty-hint hidden" data-i18n="pb_brief_empty_stakeholders"></p>
+                          <div id="pb-stakeholders-list" class="pb-brief-item-list"></div>
+                          <button type="button" id="pb-add-stakeholder-btn" class="pb-brief-add-btn inline-flex items-center gap-2">
                             <i class="fa-solid fa-plus" aria-hidden="true"></i>
                             <span data-i18n="pb_btn_add_stakeholder"></span>
                           </button>
                         </div>
-                        <div id="pb-stakeholders-list" class="space-y-3"></div>
+                        <div class="pb-brief-subsection" aria-labelledby="pb-brief-subsec-milestones-h">
+                          <h4 id="pb-brief-subsec-milestones-h" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-calendar-days text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i><span data-i18n="pb_lbl_milestones"></span></h4>
+                          <p class="pb-brief-sublead" data-i18n="pb_brief_subsec_milestones_lead"></p>
+                          <div id="pb-milestone-list" class="pb-brief-item-list"></div>
+                          <button type="button" id="pb-add-milestone-btn" class="pb-brief-add-btn inline-flex items-center gap-2">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                            <span data-i18n="pb_btn_add_milestone"></span>
+                          </button>
+                        </div>
                       </div>
-                      <label class="mb-3 block text-sm" for="pb-field-objectives">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_business_objectives"></span>
-                        <textarea id="pb-field-objectives" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_business_objectives"></textarea>
-                      </label>
-                      <label class="block text-sm" for="pb-field-constraints">
-                        <span class="mb-1 block font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_constraints"></span>
-                        <textarea id="pb-field-constraints" rows="3" class="aviators-field w-full text-sm" data-i18n-placeholder="pb_ph_constraints"></textarea>
-                      </label>
                     </section>
-                    <div>
-                      <div class="mb-2 flex items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_milestones"></h3>
-                        <button type="button" id="pb-add-milestone-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
-                          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                          <span data-i18n="pb_btn_add_milestone"></span>
-                        </button>
+
+                    <section class="pb-brief-group pb-brief-group--rose" aria-labelledby="pb-brief-sec-goals-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-flag"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-brief-sec-goals-h" class="pb-brief-group-title" data-i18n="pb_brief_sec_goals_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_brief_sec_goals_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <label class="pb-brief-field block text-sm" for="pb-field-objectives">
+                          <span class="pb-brief-field-label" data-i18n="pb_lbl_business_objectives"></span>
+                          <textarea id="pb-field-objectives" rows="4" class="aviators-field pb-brief-textarea w-full text-sm" data-i18n-placeholder="pb_ph_business_objectives"></textarea>
+                        </label>
+                        <label class="pb-brief-field block text-sm" for="pb-field-constraints">
+                          <span class="pb-brief-field-label" data-i18n="pb_lbl_constraints"></span>
+                          <textarea id="pb-field-constraints" rows="4" class="aviators-field pb-brief-textarea w-full text-sm" data-i18n-placeholder="pb_ph_constraints"></textarea>
+                        </label>
                       </div>
-                      <div id="pb-milestone-list" class="space-y-3"></div>
-                    </div>
-                    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                    </section>
+
+                    <footer class="pb-brief-footer">
                       <button type="button" id="pb-confirm-brief-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
                         <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
                         <span data-i18n="pb_btn_confirm_brief"></span>
                       </button>
-                    </div>
+                    </footer>
                   </section>
                 </section>
-                <section id="pb-panel-configure" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="configure">
-                  <section id="pb-step-industry" class="space-y-4">
-                    <div>
-                      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_industry_heading"></h2>
-                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_industry_lead"></p>
+                <section id="pb-panel-studios" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="studios" aria-labelledby="pb-studios-heading">
+                  <header class="pb-brief-page-head mb-5">
+                    <h2 id="pb-studios-heading" class="pb-brief-page-title" data-i18n="pb_studios_heading"></h2>
+                    <p class="pb-brief-page-lead" data-i18n="pb_studios_lead"></p>
+                  </header>
+                  <div id="pb-studios-priority-legend" class="pb-studios-priority-legend mb-4" aria-label="">
+                    <span class="pb-studios-legend-item pb-studios-legend-high"><i class="fa-solid fa-circle" aria-hidden="true"></i><span data-i18n="pb_studio_priority_high"></span></span>
+                    <span class="pb-studios-legend-item pb-studios-legend-medium"><i class="fa-solid fa-circle" aria-hidden="true"></i><span data-i18n="pb_studio_priority_medium"></span></span>
+                    <span class="pb-studios-legend-item pb-studios-legend-low"><i class="fa-solid fa-circle" aria-hidden="true"></i><span data-i18n="pb_studio_priority_low"></span></span>
+                  </div>
+                  <div id="pb-studios-busy" class="pb-studios-pipeline hidden" role="status" aria-live="polite">
+                    <div class="pb-studios-pipeline-head">
+                      <span class="pb-studios-pipeline-spinner" aria-hidden="true">
+                        <i class="fa-solid fa-spinner fa-spin text-sky-600 dark:text-sky-400"></i>
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <p id="pb-studios-busy-title" class="pb-studios-pipeline-title"></p>
+                        <p id="pb-studios-busy-subtitle" class="pb-studios-pipeline-subtitle"></p>
+                      </div>
                     </div>
-                    <fieldset class="space-y-2">
-                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_industry"></legend>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" checked />
-                        <span data-i18n="pb_industry_airlines"></span>
-                      </label>
-                      <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
-                        <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" disabled />
-                        <span data-i18n="pb_industry_logistics"></span>
-                        <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
-                      </label>
-                    </fieldset>
-                    <fieldset class="space-y-2">
-                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_proposal_language"></legend>
-                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_proposal_language_lead"></p>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-proposal-language" value="es" class="h-4 w-4" checked />
-                        <span data-i18n="pb_lang_es"></span>
-                      </label>
-                      <label class="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm opacity-50 dark:border-slate-600">
-                        <input type="radio" name="pb-proposal-language" value="en" class="h-4 w-4" disabled />
-                        <span data-i18n="pb_lang_en"></span>
-                        <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
-                      </label>
-                    </fieldset>
-                    <p id="pb-deck-preview" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
-                  </section>
-                  <section id="pb-step-deck-options" class="mt-6 space-y-4 border-t border-slate-200 pt-6 dark:border-slate-600">
-                    <div>
-                      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_deck_options_heading"></h2>
-                      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_deck_options_lead"></p>
+                    <ol id="pb-studios-pipeline-list" class="pb-studios-pipeline-list"></ol>
+                    <p id="pb-studios-busy-hint" class="pb-inline-loader-hint"></p>
+                  </div>
+                  <div id="pb-studios-actions" class="mb-4 hidden flex flex-wrap gap-2" aria-label=""></div>
+                  <div id="pb-studios-list" class="space-y-4"></div>
+                  <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_studios_next_hint"></p>
+                  <footer class="pb-brief-footer mt-6">
+                    <button type="button" id="pb-studios-continue-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                      <span data-i18n="pb_btn_continue_success_cases"></span>
+                    </button>
+                  </footer>
+                </section>
+                <section id="pb-panel-success-cases" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="success_cases" aria-labelledby="pb-success-cases-heading">
+                  <header class="pb-brief-page-head mb-4">
+                    <h2 id="pb-success-cases-heading" class="pb-brief-page-title" data-i18n="pb_success_cases_heading"></h2>
+                    <p class="pb-brief-page-lead" data-i18n="pb_success_cases_lead"></p>
+                  </header>
+                  <div id="pb-success-cases-summary" class="pb-success-cases-summary mb-4 hidden" role="status" aria-live="polite"></div>
+                  <div id="pb-success-cases-busy" class="pb-inline-loader hidden" role="status" aria-live="polite">
+                    <div class="pb-inline-loader-head">
+                      <i class="fa-solid fa-spinner fa-spin text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i>
+                      <span id="pb-success-cases-busy-title" class="text-sm font-medium text-slate-800 dark:text-slate-200"></span>
                     </div>
-                    <fieldset class="space-y-2">
-                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_globant"></legend>
-                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_globant_lead"></p>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-include-globant" value="yes" class="h-4 w-4" checked />
-                        <span data-i18n="pb_option_yes"></span>
-                      </label>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-include-globant" value="no" class="h-4 w-4" />
-                        <span data-i18n="pb_option_no"></span>
-                      </label>
-                    </fieldset>
-                    <fieldset id="pb-airlines-studio-fieldset" class="space-y-2">
-                      <legend class="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200" data-i18n="pb_lbl_include_airlines_studio"></legend>
-                      <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_include_airlines_studio_lead"></p>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-include-airlines-studio" value="yes" class="h-4 w-4" checked />
-                        <span data-i18n="pb_option_yes"></span>
-                      </label>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600">
-                        <input type="radio" name="pb-include-airlines-studio" value="no" class="h-4 w-4" />
-                        <span data-i18n="pb_option_no"></span>
-                      </label>
-                    </fieldset>
-                    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                    <div class="pb-inline-loader-bar" aria-hidden="true">
+                      <div id="pb-success-cases-busy-bar" class="pb-inline-loader-bar-fill"></div>
+                    </div>
+                    <p id="pb-success-cases-busy-step" class="pb-inline-loader-step"></p>
+                    <p id="pb-success-cases-busy-phase" class="pb-inline-loader-phase"></p>
+                    <p id="pb-success-cases-busy-hint" class="pb-inline-loader-hint"></p>
+                  </div>
+                  <div id="pb-success-cases-list" class="space-y-3"></div>
+                  <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_success_cases_next_hint"></p>
+                  <footer class="pb-brief-footer mt-6">
+                    <button type="button" id="pb-success-cases-continue-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                      <span data-i18n="pb_btn_continue_configure"></span>
+                    </button>
+                  </footer>
+                </section>
+                <section id="pb-panel-configure" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="configure" aria-labelledby="pb-configure-heading">
+                  <section id="pb-step-configure" class="pb-brief-wizard">
+                    <header class="pb-brief-page-head">
+                      <h2 id="pb-configure-heading" class="pb-brief-page-title" data-i18n="pb_configure_heading"></h2>
+                      <p class="pb-brief-page-lead" data-i18n="pb_configure_lead"></p>
+                    </header>
+
+                    <section class="pb-brief-group pb-brief-group--amber" aria-labelledby="pb-configure-sec-industry-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-plane"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-configure-sec-industry-h" class="pb-brief-group-title" data-i18n="pb_configure_sec_industry_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_configure_sec_industry_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <fieldset class="pb-brief-field border-0 p-0">
+                          <legend class="pb-brief-field-label" data-i18n="pb_lbl_industry"></legend>
+                          <div class="pb-brief-choices">
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-plane"></i></span>
+                              <input type="radio" name="pb-industry" value="Aerolineas" class="h-4 w-4" checked />
+                              <span data-i18n="pb_industry_airlines"></span>
+                            </label>
+                            <label class="pb-brief-choice is-disabled">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-truck"></i></span>
+                              <input type="radio" name="pb-industry" value="Logistica" class="h-4 w-4" disabled />
+                              <span data-i18n="pb_industry_logistics"></span>
+                              <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="pb_option_unavailable"></span>
+                            </label>
+                          </div>
+                        </fieldset>
+                        <p id="pb-deck-preview" class="pb-brief-deck-preview" role="status" aria-live="polite"></p>
+                      </div>
+                    </section>
+
+                    <section class="pb-brief-group pb-brief-group--sky" aria-labelledby="pb-configure-sec-language-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-language"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-configure-sec-language-h" class="pb-brief-group-title" data-i18n="pb_configure_sec_language_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_configure_sec_language_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <fieldset class="pb-brief-field border-0 p-0">
+                          <legend class="sr-only" data-i18n="pb_lbl_proposal_language"></legend>
+                          <div class="pb-brief-choices">
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-a"></i></span>
+                              <input type="radio" name="pb-proposal-language" value="es" class="h-4 w-4" checked />
+                              <span data-i18n="pb_lang_es"></span>
+                            </label>
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-globe"></i></span>
+                              <input type="radio" name="pb-proposal-language" value="en" class="h-4 w-4" />
+                              <span data-i18n="pb_lang_en"></span>
+                            </label>
+                          </div>
+                        </fieldset>
+                      </div>
+                    </section>
+
+                    <section class="pb-brief-group pb-brief-group--emerald" aria-labelledby="pb-configure-sec-deck-h">
+                      <header class="pb-brief-group-head">
+                        <span class="pb-brief-step-badge" aria-hidden="true"><i class="fa-solid fa-layer-group"></i></span>
+                        <div class="min-w-0 flex-1">
+                          <h3 id="pb-configure-sec-deck-h" class="pb-brief-group-title" data-i18n="pb_configure_sec_deck_heading"></h3>
+                          <p class="pb-brief-group-lead" data-i18n="pb_configure_sec_deck_lead"></p>
+                        </div>
+                      </header>
+                      <div class="pb-brief-group-body">
+                        <div class="pb-brief-subsection" aria-labelledby="pb-configure-subsec-globant-h">
+                          <h4 id="pb-configure-subsec-globant-h" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-building text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i><span data-i18n="pb_lbl_include_globant"></span></h4>
+                          <p class="pb-brief-sublead" data-i18n="pb_include_globant_lead"></p>
+                          <div class="pb-brief-choices">
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+                              <input type="radio" name="pb-include-globant" value="yes" class="h-4 w-4" checked />
+                              <span data-i18n="pb_option_yes"></span>
+                            </label>
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-circle-xmark"></i></span>
+                              <input type="radio" name="pb-include-globant" value="no" class="h-4 w-4" />
+                              <span data-i18n="pb_option_no"></span>
+                            </label>
+                          </div>
+                        </div>
+                        <fieldset id="pb-airlines-studio-fieldset" class="pb-brief-subsection border-0 p-0" aria-labelledby="pb-configure-subsec-studio-h">
+                          <h4 id="pb-configure-subsec-studio-h" class="pb-brief-subtitle inline-flex items-center gap-2"><i class="fa-solid fa-plane-circle-check text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i><span data-i18n="pb_lbl_include_airlines_studio"></span></h4>
+                          <p class="pb-brief-sublead" data-i18n="pb_include_airlines_studio_lead"></p>
+                          <div class="pb-brief-choices">
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+                              <input type="radio" name="pb-include-airlines-studio" value="yes" class="h-4 w-4" checked />
+                              <span data-i18n="pb_option_yes"></span>
+                            </label>
+                            <label class="pb-brief-choice">
+                              <span class="pb-brief-choice-icon" aria-hidden="true"><i class="fa-solid fa-circle-xmark"></i></span>
+                              <input type="radio" name="pb-include-airlines-studio" value="no" class="h-4 w-4" />
+                              <span data-i18n="pb_option_no"></span>
+                            </label>
+                          </div>
+                        </fieldset>
+                      </div>
+                    </section>
+
+                    <footer class="pb-brief-footer">
                       <button type="button" id="pb-industry-continue-btn" class="hidden" aria-hidden="true"></button>
                       <button type="button" id="pb-start-building-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
                         <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
                         <span data-i18n="pb_btn_start_building"></span>
                       </button>
-                    </div>
+                    </footer>
                   </section>
                 </section>
                 <section id="pb-panel-building" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="building" aria-labelledby="pb-building-heading">
@@ -880,26 +1107,26 @@
                   <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_building_lead"></p>
                   <div id="pb-building-status-card" class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
                     <p id="pb-building-status-text" class="text-sm text-slate-700 dark:text-slate-300" role="status" aria-live="polite"></p>
-                    <a id="pb-building-deck-link" class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-300 hidden" href="#" target="_blank" rel="noopener noreferrer">
-                      <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-                      <span data-i18n="pb_btn_open_deck"></span>
-                    </a>
-                  </div>
-                </section>
-                <section id="pb-panel-studios" class="pb-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pb-panel="studios" aria-labelledby="pb-studios-heading">
-                  <h2 id="pb-studios-heading" class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pb_studios_heading"></h2>
-                  <p class="mt-1 mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_studios_lead"></p>
-                  <p id="pb-studios-busy" class="hidden text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite">
-                    <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
-                    <span data-i18n="pb_busy_recommend_studios"></span>
-                  </p>
-                  <div id="pb-studios-list" class="space-y-3"></div>
-                  <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_studios_next_hint"></p>
-                  <div class="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
-                    <button type="button" id="pb-open-globant-offering-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
-                      <i class="fa-solid fa-building" aria-hidden="true"></i>
-                      <span data-i18n="pb_btn_open_globant_offering"></span>
-                    </button>
+                    <div id="pb-building-links" class="mt-3 flex flex-col gap-2">
+                      <a id="pb-building-folder-link" class="pb-building-link pb-building-link--folder inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline dark:text-emerald-300 hidden" href="#" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                        <span data-i18n="pb_btn_open_proposal_folder"></span>
+                      </a>
+                      <div id="pb-building-links-nested" class="pb-building-links-nested hidden">
+                        <a id="pb-building-deck-link" class="pb-building-link pb-building-link--nested inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-300 hidden" href="#" target="_blank" rel="noopener noreferrer">
+                          <i class="fa-solid fa-file-powerpoint" aria-hidden="true"></i>
+                          <span data-i18n="pb_btn_open_deck"></span>
+                        </a>
+                        <a id="pb-building-checklist-link" class="pb-building-link pb-building-link--nested inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-300 hidden" href="#" target="_blank" rel="noopener noreferrer">
+                          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                          <span data-i18n="pb_btn_open_checklist"></span>
+                        </a>
+                      </div>
+                      <button type="button" id="pb-building-view-proposal-btn" class="btn btn-md btn-primary mt-3 hidden inline-flex items-center gap-2">
+                        <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_btn_view"></span>
+                      </button>
+                    </div>
                   </div>
                 </section>
               </div>
@@ -910,6 +1137,477 @@
                 aria-live="polite"
                 data-i18n="pb_status_materials"
               ></p>
+            </div>
+
+            <div
+              id="page-my-proposals"
+              class="app-page app-page-my-proposals hidden mx-auto max-w-6xl space-y-6"
+              data-app-page="my-proposals"
+            >
+              <header class="my-proposals-page-head">
+                <span class="my-proposals-page-badge" aria-hidden="true"><i class="fa-solid fa-folder-tree"></i></span>
+                <div class="min-w-0 flex-1 text-center md:text-left">
+                  <h1 class="my-proposals-page-title" data-i18n="page_my_proposals_title"></h1>
+                  <p class="my-proposals-page-lead" data-i18n="page_my_proposals_lead"></p>
+                </div>
+              </header>
+              <section class="my-proposals-panel dashboard-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" aria-labelledby="my-proposals-list-heading">
+                <header class="my-proposals-panel-head">
+                  <div class="min-w-0 flex-1">
+                    <h2 id="my-proposals-list-heading" class="my-proposals-panel-title" data-i18n="my_proposals_sec_list_heading"></h2>
+                    <p class="my-proposals-panel-lead" data-i18n="my_proposals_sec_list_lead"></p>
+                  </div>
+                  <button type="button" id="my-proposals-new-btn" class="btn btn-md btn-primary inline-flex shrink-0 items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span data-i18n="my_proposals_btn_new"></span>
+                  </button>
+                </header>
+                <div id="my-proposals-toolbar" class="my-proposals-toolbar">
+                  <section class="my-proposals-filter-block" aria-labelledby="my-proposals-filter-status-heading">
+                    <h3 id="my-proposals-filter-status-heading" class="my-proposals-filter-block-title">
+                      <i class="fa-solid fa-signal text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="my_proposals_filter_status_label"></span>
+                    </h3>
+                    <div
+                      id="my-proposals-status-filters"
+                      class="my-proposals-status-filters"
+                      role="group"
+                      data-i18n-aria-label="my_proposals_filter_status_aria"
+                      aria-label=""
+                    >
+                      <button type="button" class="my-proposals-filter-chip my-proposals-filter-chip--all" data-mp-status="all">
+                        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_filter_all"></span>
+                      </button>
+                      <button type="button" class="my-proposals-filter-chip my-proposals-filter-chip--progress" data-mp-status="in_progress">
+                        <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_status_in_progress"></span>
+                      </button>
+                      <button type="button" class="my-proposals-filter-chip my-proposals-filter-chip--completed" data-mp-status="completed">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_status_completed"></span>
+                      </button>
+                      <button type="button" class="my-proposals-filter-chip my-proposals-filter-chip--failed" data-mp-status="failed">
+                        <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_status_failed"></span>
+                      </button>
+                    </div>
+                  </section>
+                  <div class="my-proposals-filters-grid">
+                    <label class="my-proposals-filter-field" for="my-proposals-industry-filter">
+                      <span class="my-proposals-filter-field-label">
+                        <i class="fa-solid fa-industry text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_filter_industry_label"></span>
+                      </span>
+                      <select id="my-proposals-industry-filter" class="aviators-field w-full text-sm">
+                        <option value=""></option>
+                        <option value="Logistica"></option>
+                        <option value="Aerolineas"></option>
+                      </select>
+                    </label>
+                    <label class="my-proposals-filter-field" for="my-proposals-step-filter">
+                      <span class="my-proposals-filter-field-label">
+                        <i class="fa-solid fa-route text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_filter_step_label"></span>
+                      </span>
+                      <select id="my-proposals-step-filter" class="aviators-field w-full text-sm">
+                        <option value=""></option>
+                        <option value="materials"></option>
+                        <option value="brief"></option>
+                        <option value="studios"></option>
+                        <option value="success_cases"></option>
+                        <option value="configure"></option>
+                        <option value="building"></option>
+                      </select>
+                    </label>
+                    <label class="my-proposals-filter-field" for="my-proposals-deliverables-filter">
+                      <span class="my-proposals-filter-field-label">
+                        <i class="fa-solid fa-box-open text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i>
+                        <span data-i18n="my_proposals_filter_deliverables_label"></span>
+                      </span>
+                      <select id="my-proposals-deliverables-filter" class="aviators-field w-full text-sm">
+                        <option value=""></option>
+                        <option value="any"></option>
+                        <option value="deck"></option>
+                        <option value="package"></option>
+                        <option value="none"></option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="my-proposals-filters-search-row">
+                    <label class="my-proposals-filter-search-wrap" for="my-proposals-search-input">
+                      <i class="fa-solid fa-magnifying-glass text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span class="label-sr-only" data-i18n="my_proposals_filter_search_label"></span>
+                      <input
+                        type="search"
+                        id="my-proposals-search-input"
+                        class="aviators-field min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+                        data-i18n-placeholder="my_proposals_filter_search_ph"
+                        placeholder=""
+                        autocomplete="off"
+                      />
+                    </label>
+                    <button type="button" id="my-proposals-clear-filter-btn" class="btn btn-sm btn-outline hidden inline-flex shrink-0 items-center gap-2">
+                      <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+                      <span data-i18n="my_proposals_filter_clear"></span>
+                    </button>
+                  </div>
+                </div>
+                <div id="my-proposals-list-loader" class="my-proposals-loader hidden" role="status" aria-live="polite">
+                  <i class="fa-solid fa-spinner fa-spin text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                  <span id="my-proposals-list-loader-msg" data-i18n="my_proposals_loading"></span>
+                </div>
+                <div id="my-proposals-list-empty" class="my-proposals-empty hidden">
+                  <span class="my-proposals-empty-icon" aria-hidden="true"><i class="fa-solid fa-file-circle-plus"></i></span>
+                  <p id="my-proposals-empty-text" class="my-proposals-empty-text" data-i18n="my_proposals_empty"></p>
+                  <button type="button" id="my-proposals-clear-filter-empty-btn" class="btn btn-sm btn-outline mt-3 hidden inline-flex items-center gap-2">
+                    <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+                    <span data-i18n="my_proposals_filter_clear"></span>
+                  </button>
+                  <button type="button" id="my-proposals-start-btn" class="btn btn-md btn-primary mt-4 inline-flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span data-i18n="my_proposals_btn_start"></span>
+                  </button>
+                </div>
+                <div id="my-proposals-table-wrap" class="my-proposals-table-wrap hidden">
+                  <table class="my-proposals-table w-full table-fixed text-sm">
+                    <colgroup>
+                      <col class="my-proposals-col-client" />
+                      <col class="my-proposals-col-proposal" />
+                      <col class="my-proposals-col-industry" />
+                      <col class="my-proposals-col-status" />
+                      <col class="my-proposals-col-deadline" />
+                      <col class="my-proposals-col-actions" />
+                    </colgroup>
+                    <thead id="my-proposals-table-head" class="my-proposals-table-head">
+                      <tr>
+                        <th class="my-proposals-th my-proposals-th-sort" data-mp-sort="client" scope="col" role="button" tabindex="0">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-building my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_client"></span>
+                            <i class="fa-solid fa-sort my-proposals-sort-icon" aria-hidden="true"></i>
+                          </span>
+                        </th>
+                        <th class="my-proposals-th my-proposals-th-sort" data-mp-sort="proposal" scope="col" role="button" tabindex="0">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-file-lines my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_proposal"></span>
+                            <i class="fa-solid fa-sort my-proposals-sort-icon" aria-hidden="true"></i>
+                          </span>
+                        </th>
+                        <th class="my-proposals-th my-proposals-th-sort" data-mp-sort="industry" scope="col" role="button" tabindex="0">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-industry my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_industry"></span>
+                            <i class="fa-solid fa-sort my-proposals-sort-icon" aria-hidden="true"></i>
+                          </span>
+                        </th>
+                        <th class="my-proposals-th my-proposals-th-sort" data-mp-sort="status" scope="col" role="button" tabindex="0">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-signal my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_status"></span>
+                            <i class="fa-solid fa-sort my-proposals-sort-icon" aria-hidden="true"></i>
+                          </span>
+                        </th>
+                        <th class="my-proposals-th my-proposals-th-sort" data-mp-sort="deadline" scope="col" role="button" tabindex="0">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-calendar-day my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_deadline"></span>
+                            <i class="fa-solid fa-sort my-proposals-sort-icon" aria-hidden="true"></i>
+                          </span>
+                        </th>
+                        <th class="my-proposals-th" scope="col">
+                          <span class="my-proposals-th-inner">
+                            <i class="fa-solid fa-bolt my-proposals-th-icon" aria-hidden="true"></i>
+                            <span data-i18n="my_proposals_col_actions"></span>
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody id="my-proposals-table-body"></tbody>
+                  </table>
+                </div>
+                <div id="my-proposals-cards" class="my-proposals-cards hidden" role="list"></div>
+                <div id="my-proposals-pagination" class="my-proposals-pagination hidden">
+                  <p id="my-proposals-page-info" class="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite"></p>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400" for="my-proposals-page-size">
+                      <span data-i18n="contents_pagination_page_size"></span>
+                      <select id="my-proposals-page-size" class="aviators-field text-sm">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                      </select>
+                    </label>
+                    <button type="button" id="my-proposals-prev-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                      <span data-i18n="pagination_prev"></span>
+                    </button>
+                    <button type="button" id="my-proposals-next-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                      <span data-i18n="pagination_next"></span>
+                      <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+                <p id="my-proposals-list-status" class="mt-3 hidden text-sm text-emerald-700 dark:text-emerald-300" role="status" aria-live="polite"></p>
+                <p id="my-proposals-list-error" class="mt-3 hidden text-sm text-rose-700 dark:text-rose-300" role="alert"></p>
+              </section>
+            </div>
+
+            <div
+              id="page-proposal-view"
+              class="app-page app-page-proposal-view hidden mx-auto max-w-6xl space-y-5"
+              data-app-page="proposal-view"
+            >
+              <div class="pv-toolbar flex flex-wrap items-center justify-between gap-3">
+                <button type="button" id="pv-back-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                  <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                  <span data-i18n="pv_btn_back"></span>
+                </button>
+                <div class="pv-toolbar-actions inline-flex flex-wrap items-center gap-2">
+                  <button type="button" id="pv-edit-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span data-i18n="pv_btn_edit"></span>
+                  </button>
+                  <button type="button" id="pv-save-btn" class="btn btn-sm btn-primary hidden inline-flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    <span data-i18n="pv_btn_save"></span>
+                  </button>
+                  <button type="button" id="pv-cancel-btn" class="btn btn-sm btn-outline hidden inline-flex items-center gap-2">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    <span data-i18n="pv_btn_cancel"></span>
+                  </button>
+                </div>
+              </div>
+              <header id="pv-hero" class="pv-hero dashboard-card overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                <div id="pv-hero-accent" class="pv-hero-accent pv-hero-accent--progress" aria-hidden="true"></div>
+                <div class="pv-hero-body p-5 md:p-6">
+                  <div class="pv-hero-head flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div class="min-w-0 flex-1">
+                      <p id="pv-hero-client" class="pv-hero-client"></p>
+                      <h1 id="pv-hero-title" class="pv-hero-title"></h1>
+                      <p id="pv-hero-summary" class="pv-hero-summary hidden"></p>
+                    </div>
+                    <span id="pv-hero-status" class="pv-hero-status pv-hero-status--progress"></span>
+                  </div>
+                  <dl id="pv-hero-meta" class="pv-hero-meta mt-5"></dl>
+                </div>
+              </header>
+              <nav
+                id="pv-tabbar"
+                class="pv-tabbar"
+                role="tablist"
+                data-i18n-aria-label="pv_tabbar_aria"
+                aria-label=""
+              >
+                <button type="button" role="tab" class="pv-tab is-active" data-pv-tab="summary" id="pv-tab-summary" aria-selected="true">
+                  <span class="pv-tab-icon pv-tab-icon-sky"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>
+                  <span class="pv-tab-label" data-i18n="pv_tab_summary"></span>
+                </button>
+                <button type="button" role="tab" class="pv-tab" data-pv-tab="materials" id="pv-tab-materials" aria-selected="false">
+                  <span class="pv-tab-icon pv-tab-icon-amber"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
+                  <span class="pv-tab-label" data-i18n="pv_tab_materials"></span>
+                </button>
+                <button type="button" role="tab" class="pv-tab" data-pv-tab="studios" id="pv-tab-studios" aria-selected="false">
+                  <span class="pv-tab-icon pv-tab-icon-rose"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
+                  <span class="pv-tab-label" data-i18n="pv_tab_studios"></span>
+                </button>
+                <button type="button" role="tab" class="pv-tab" data-pv-tab="deliverables" id="pv-tab-deliverables" aria-selected="false">
+                  <span class="pv-tab-icon pv-tab-icon-emerald"><i class="fa-solid fa-file-powerpoint" aria-hidden="true"></i></span>
+                  <span class="pv-tab-label" data-i18n="pv_tab_deliverables"></span>
+                </button>
+              </nav>
+              <div id="pv-panels" class="pv-panels space-y-5">
+                <section id="pv-panel-summary" class="pv-panel dashboard-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pv-panel="summary" aria-labelledby="pv-summary-heading">
+                  <header class="pv-panel-head">
+                    <h2 id="pv-summary-heading" class="pv-panel-title" data-i18n="pv_summary_sec_heading"></h2>
+                    <p class="pv-panel-lead" data-i18n="pv_summary_sec_lead"></p>
+                  </header>
+                  <div id="pv-overview-stats" class="pv-stats-grid"></div>
+                  <section id="pv-reminders-section" class="pv-subsection mt-6" aria-labelledby="pv-reminders-toggle">
+                    <button
+                      type="button"
+                      id="pv-reminders-toggle"
+                      class="pv-reminders-toggle inline-flex w-full items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/50 px-4 py-3 text-left shadow-sm transition hover:bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30"
+                      aria-expanded="false"
+                      aria-controls="pv-reminders-panel"
+                    >
+                      <i class="fa-solid fa-bell text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                      <span class="pv-reminders-toggle-title text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="pv_reminders_heading"></span>
+                      <span id="pv-reminders-summary" class="pv-reminders-summary ml-auto text-xs font-medium text-slate-500 dark:text-slate-400"></span>
+                      <i class="fa-solid fa-chevron-down pv-reminders-chevron shrink-0 text-slate-500 transition-transform dark:text-slate-400" aria-hidden="true"></i>
+                    </button>
+                    <div id="pv-reminders-panel" class="pv-reminders-panel mt-4 hidden" hidden>
+                      <p class="pv-subsection-lead text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pv_reminders_lead"></p>
+                      <div id="pv-reminders-root" class="pv-reminders-grid mt-4"></div>
+                      <div class="mt-4 flex flex-wrap items-center gap-2">
+                        <button type="button" id="pv-reminders-save-btn" class="btn btn-sm btn-outline inline-flex items-center gap-2">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                          <span data-i18n="pv_reminder_btn_save"></span>
+                        </button>
+                        <p id="pv-reminders-status" class="pv-reminders-status hidden text-sm" role="status" aria-live="polite"></p>
+                      </div>
+                    </div>
+                  </section>
+                  <section class="pv-subsection mt-6" aria-labelledby="pv-quick-links-heading">
+                    <h3 id="pv-quick-links-heading" class="pv-subsection-title">
+                      <i class="fa-solid fa-link text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="pv_quick_links_heading"></span>
+                    </h3>
+                    <div id="pv-quick-links" class="pv-quick-links"></div>
+                  </section>
+                  <section class="pv-subsection mt-8" aria-labelledby="pv-brief-inline-heading">
+                    <h3 id="pv-brief-inline-heading" class="pv-subsection-title">
+                      <i class="fa-solid fa-file-lines text-sky-600 dark:text-sky-400" aria-hidden="true"></i>
+                      <span data-i18n="pv_brief_sec_heading"></span>
+                    </h3>
+                    <div id="pv-brief-content" class="pv-brief-grid"></div>
+                  </section>
+                </section>
+                <section id="pv-panel-materials" class="pv-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pv-panel="materials" aria-labelledby="pv-materials-heading">
+                  <header class="pv-panel-head">
+                    <h2 id="pv-materials-heading" class="pv-panel-title" data-i18n="pv_materials_sec_heading"></h2>
+                    <p class="pv-panel-lead" data-i18n="pv_materials_sec_lead"></p>
+                  </header>
+                  <section class="pv-materials-add mb-6 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white p-4 dark:border-amber-900/50 dark:from-amber-950/25 dark:via-orange-950/15 dark:to-slate-900/40" aria-labelledby="pv-materials-add-heading">
+                    <h3 id="pv-materials-add-heading" class="pv-subsection-title mb-4">
+                      <i class="fa-solid fa-circle-plus text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                      <span data-i18n="pv_materials_add_heading"></span>
+                    </h3>
+                    <div class="grid gap-4 lg:grid-cols-2">
+                      <div class="pv-materials-upload-box rounded-xl border border-dashed border-amber-300 bg-white/80 p-4 dark:border-amber-800 dark:bg-slate-900/40">
+                        <p class="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">
+                          <i class="fa-solid fa-cloud-arrow-up mr-1.5 text-amber-600" aria-hidden="true"></i>
+                          <span data-i18n="pv_materials_upload_lead"></span>
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <button type="button" id="pv-materials-browse-btn" class="btn btn-sm btn-primary inline-flex items-center gap-2">
+                            <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+                            <span data-i18n="pv_materials_btn_pick"></span>
+                          </button>
+                          <input type="file" id="pv-materials-input" class="label-sr-only" multiple accept=".pdf,.txt,.md,.csv,.docx,image/*,application/pdf,text/*" />
+                        </div>
+                      </div>
+                      <div class="pv-materials-drive-box rounded-xl border border-sky-200 bg-white/80 p-4 dark:border-sky-800 dark:bg-slate-900/40">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" for="pv-materials-drive-url">
+                          <i class="fa-brands fa-google-drive mr-1.5 text-sky-600" aria-hidden="true"></i>
+                          <span data-i18n="pv_materials_drive_lead"></span>
+                        </label>
+                        <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <input type="url" id="pv-materials-drive-url" class="aviators-field min-w-0 flex-1 text-sm" data-i18n-placeholder="pv_materials_drive_ph" placeholder="" />
+                          <button type="button" id="pv-materials-drive-btn" class="btn btn-sm btn-outline inline-flex shrink-0 items-center gap-2">
+                            <i class="fa-solid fa-link" aria-hidden="true"></i>
+                            <span data-i18n="pv_materials_btn_add_drive"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <p id="pv-materials-add-status" class="pv-materials-add-status mt-3 hidden text-sm" role="status" aria-live="polite"></p>
+                  </section>
+                  <ul id="pv-materials-list" class="pv-materials-list" role="list"></ul>
+                  <p id="pv-materials-empty" class="pv-empty-state hidden" role="status">
+                    <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+                    <span data-i18n="pv_materials_empty"></span>
+                  </p>
+                </section>
+                <section id="pv-panel-studios" class="pv-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pv-panel="studios" aria-labelledby="pv-studios-heading">
+                  <header class="pv-panel-head">
+                    <h2 id="pv-studios-heading" class="pv-panel-title" data-i18n="pv_studios_sec_heading"></h2>
+                    <p class="pv-panel-lead" data-i18n="pv_studios_sec_lead"></p>
+                  </header>
+                  <div id="pv-studios-list" class="space-y-4"></div>
+                  <p id="pv-studios-empty" class="pv-empty-state hidden" role="status">
+                    <i class="fa-solid fa-building" aria-hidden="true"></i>
+                    <span data-i18n="pv_studios_empty"></span>
+                  </p>
+                </section>
+                <section id="pv-panel-deliverables" class="pv-panel dashboard-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-800" data-pv-panel="deliverables" aria-labelledby="pv-deliverables-heading">
+                  <header class="pv-panel-head">
+                    <h2 id="pv-deliverables-heading" class="pv-panel-title" data-i18n="pv_deliverables_sec_heading"></h2>
+                    <p class="pv-panel-lead" data-i18n="pv_deliverables_sec_lead"></p>
+                  </header>
+                  <div id="pv-deliverables-modules" class="pv-deliverables-modules mb-6" role="list"></div>
+                  <div id="pv-deliverables-hero" class="pv-deliverables-hero hidden"></div>
+                  <div id="pv-deliverables-artifacts" class="pv-artifacts-grid"></div>
+                  <section id="pv-success-cases-wrap" class="pv-subsection mt-6 hidden" aria-labelledby="pv-success-cases-heading">
+                    <h3 id="pv-success-cases-heading" class="pv-subsection-title">
+                      <i class="fa-solid fa-trophy text-emerald-600 dark:text-emerald-400" aria-hidden="true"></i>
+                      <span data-i18n="pv_lbl_success_cases"></span>
+                    </h3>
+                    <ul id="pv-success-cases-list" class="pv-success-cases-list" role="list"></ul>
+                  </section>
+                  <p id="pv-deliverables-empty" class="pv-empty-state hidden" role="status">
+                    <i class="fa-solid fa-file-circle-question" aria-hidden="true"></i>
+                    <span data-i18n="pv_deliverables_empty"></span>
+                  </p>
+                </section>
+              </div>
+              <div
+                id="pv-agenda-modal"
+                class="hidden fixed inset-0 z-modal flex items-center justify-center bg-slate-900/50 p-4 dark:bg-slate-950/60"
+                aria-hidden="true"
+              >
+                <div
+                  id="pv-agenda-dialog"
+                  class="flex w-full max-w-2xl max-h-[min(90vh,40rem)] flex-col rounded-2xl border border-amber-200 bg-white shadow-xl outline-none dark:border-amber-900/50 dark:bg-slate-800"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="pv-agenda-modal-title"
+                  tabindex="-1"
+                >
+                  <div class="flex items-start justify-between gap-3 border-b border-amber-100 px-6 py-4 dark:border-amber-900/40">
+                    <div class="min-w-0 flex-1">
+                      <h2
+                        id="pv-agenda-modal-title"
+                        class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+                        data-i18n="pv_agenda_modal_title"
+                      ></h2>
+                      <p
+                        id="pv-agenda-modal-lead"
+                        class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                        data-i18n="pv_agenda_modal_lead"
+                      ></p>
+                    </div>
+                    <button
+                      type="button"
+                      id="pv-agenda-modal-close-icon"
+                      class="btn btn-sm btn-outline inline-flex shrink-0 items-center gap-2"
+                      data-i18n-aria-label="pv_btn_close_agenda"
+                    >
+                      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                      <span data-i18n="pv_btn_close_agenda"></span>
+                    </button>
+                  </div>
+                  <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                    <section
+                      id="pv-agenda-sections-wrap"
+                      class="pv-subsection mb-6 hidden"
+                      aria-labelledby="pv-agenda-sections-heading"
+                    >
+                      <h3 id="pv-agenda-sections-heading" class="pv-subsection-title">
+                        <i class="fa-solid fa-sliders text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                        <span data-i18n="pv_lbl_deck_sections"></span>
+                      </h3>
+                      <p class="pv-subsection-lead text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pb_configure_sec_deck_lead"></p>
+                      <ul id="pv-agenda-deck-options-list" class="pv-deck-options-list mt-3" role="list"></ul>
+                    </section>
+                    <section class="pv-subsection" aria-labelledby="pv-agenda-list-heading">
+                      <h3 id="pv-agenda-list-heading" class="pv-subsection-title">
+                        <i class="fa-solid fa-list-ol text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
+                        <span data-i18n="pv_agenda_list_heading"></span>
+                      </h3>
+                      <p class="pv-subsection-lead text-sm leading-relaxed text-slate-600 dark:text-slate-400" data-i18n="pv_agenda_list_lead"></p>
+                      <ol id="pv-agenda-items-list" class="pv-agenda-items-list mt-3" role="list"></ol>
+                    </section>
+                  </div>
+                  <div class="flex justify-end border-t border-slate-200 px-6 py-4 dark:border-slate-600">
+                    <button type="button" id="pv-agenda-modal-close-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                      <i class="fa-solid fa-check" aria-hidden="true"></i>
+                      <span data-i18n="pv_btn_close_agenda"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
         <section
@@ -3512,15 +4210,78 @@
                             <p id="metrics-total-unanswered" class="metrics-stat-value">0</p>
                           </div>
                         </div>
+                        <div class="metrics-stat-card metrics-stat-card-emerald">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-percent"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_answer_rate"></p>
+                            <p id="metrics-answer-rate" class="metrics-stat-value">—</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-indigo">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-users"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_unique_users"></p>
+                            <p id="metrics-unique-users" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-violet">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_onboarding_questions"></p>
+                            <p id="metrics-onboarding-questions" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-teal">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-briefcase"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_offering_questions"></p>
+                            <p id="metrics-offering-questions" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-rose">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-file-powerpoint"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_proposals_built"></p>
+                            <p id="metrics-proposals-built" class="metrics-stat-value">0</p>
+                          </div>
+                        </div>
+                        <div class="metrics-stat-card metrics-stat-card-blue">
+                          <div class="metrics-stat-icon" aria-hidden="true">
+                            <i class="fa-solid fa-thumbs-up"></i>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="metrics-stat-label" data-i18n="metrics_feedback_satisfaction"></p>
+                            <p id="metrics-feedback-satisfaction" class="metrics-stat-value">—</p>
+                          </div>
+                        </div>
                       </div>
-                      <div class="metrics-chart-grid">
-                        <article class="metrics-chart-card" aria-labelledby="metrics-trend-heading">
+                      <div class="metrics-chart-grid metrics-chart-grid-overview">
+                        <article class="metrics-chart-card metrics-chart-card-wide" aria-labelledby="metrics-trend-section-heading">
                           <div class="metrics-chart-card-head">
-                            <h4 id="metrics-trend-heading" class="metrics-chart-card-title" data-i18n="metrics_trend_heading"></h4>
-                            <p class="metrics-chart-card-lead" data-i18n="metrics_trend_lead"></p>
+                            <h4 id="metrics-trend-section-heading" class="metrics-chart-card-title" data-i18n="metrics_trend_section_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_trend_section_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap metrics-chart-canvas-wrap-tall">
+                            <canvas id="metrics-trend-section-chart"></canvas>
+                          </div>
+                        </article>
+                        <article class="metrics-chart-card" aria-labelledby="metrics-section-mix-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-section-mix-heading" class="metrics-chart-card-title" data-i18n="metrics_section_mix_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_section_mix_lead"></p>
                           </div>
                           <div class="metrics-chart-canvas-wrap">
-                            <canvas id="metrics-trend-chart"></canvas>
+                            <canvas id="metrics-section-chart"></canvas>
                           </div>
                         </article>
                         <article class="metrics-chart-card" aria-labelledby="metrics-agent-usage-heading">
@@ -3530,6 +4291,33 @@
                           </div>
                           <div class="metrics-chart-canvas-wrap">
                             <canvas id="metrics-agent-chart"></canvas>
+                          </div>
+                        </article>
+                        <article class="metrics-chart-card" aria-labelledby="metrics-catalog-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-catalog-heading" class="metrics-chart-card-title" data-i18n="metrics_catalog_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_catalog_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap">
+                            <canvas id="metrics-catalog-chart"></canvas>
+                          </div>
+                        </article>
+                        <article class="metrics-chart-card" aria-labelledby="metrics-proposal-status-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-proposal-status-heading" class="metrics-chart-card-title" data-i18n="metrics_proposal_status_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_proposal_status_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap">
+                            <canvas id="metrics-proposal-status-chart"></canvas>
+                          </div>
+                        </article>
+                        <article class="metrics-chart-card" aria-labelledby="metrics-feedback-heading">
+                          <div class="metrics-chart-card-head">
+                            <h4 id="metrics-feedback-heading" class="metrics-chart-card-title" data-i18n="metrics_feedback_heading"></h4>
+                            <p class="metrics-chart-card-lead" data-i18n="metrics_feedback_lead"></p>
+                          </div>
+                          <div class="metrics-chart-canvas-wrap">
+                            <canvas id="metrics-feedback-chart"></canvas>
                           </div>
                         </article>
                       </div>
@@ -3637,6 +4425,10 @@
                             <div class="metrics-lb-card">
                               <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_proposal_industry"></h4>
                               <ol id="metrics-lb-proposal-industry" class="metrics-rank-list"></ol>
+                            </div>
+                            <div class="metrics-lb-card metrics-lb-card-wide">
+                              <h4 class="metrics-lb-card-title" data-i18n="metrics_lb_proposal_builders"></h4>
+                              <ol id="metrics-lb-proposal-builders" class="metrics-rank-list"></ol>
                             </div>
                           </div>
                         </div>
@@ -3775,6 +4567,19 @@
                     >
                       <i class="fa-solid fa-robot" aria-hidden="true"></i>
                       <span data-i18n="settings_tab_agents"></span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="settings-tab-prompts"
+                      class="app-tab-btn settings-tab-btn hidden"
+                      aria-controls="settings-panel-prompts"
+                      aria-selected="false"
+                      tabindex="-1"
+                      data-settings-perm="isAdmin"
+                    >
+                      <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+                      <span data-i18n="settings_tab_prompts"></span>
                     </button>
                     <button
                       type="button"
@@ -4266,6 +5071,74 @@
                     aria-labelledby="settings-tab-agents"
                     hidden
                   ></div>
+
+                  <!-- Panel: Prompts LLM -->
+                  <div
+                    role="tabpanel"
+                    id="settings-panel-prompts"
+                    class="app-tab-panel settings-tab-panel hidden"
+                    aria-labelledby="settings-tab-prompts"
+                    hidden
+                  >
+                    <div id="settings-prompts-root" class="settings-panel-inner">
+                      <div class="settings-panel-head">
+                        <h3 id="settings-prompts-heading" class="settings-panel-title flex items-center gap-2">
+                          <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+                          <span data-i18n="prompt_catalog_heading"></span>
+                        </h3>
+                        <p class="settings-panel-lead" data-i18n="prompt_catalog_lead"></p>
+                      </div>
+                      <div id="settings-prompts-loader" class="settings-inline-loader hidden" role="status" aria-live="polite">
+                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        <span data-i18n="prompt_catalog_busy_load"></span>
+                      </div>
+                      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(220px,280px)_1fr]">
+                        <aside class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-900/40" aria-labelledby="settings-prompts-nav-heading">
+                          <h4 id="settings-prompts-nav-heading" class="px-2 text-sm font-semibold text-slate-900 dark:text-slate-100" data-i18n="prompt_catalog_nav_heading"></h4>
+                          <nav id="settings-prompts-nav" class="mt-2 max-h-[min(60vh,520px)] overflow-y-auto" aria-label="Prompts"></nav>
+                        </aside>
+                        <div id="settings-prompts-empty" class="flex min-h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400" data-i18n="prompt_catalog_pick_one"></div>
+                        <div id="settings-prompts-editor" class="hidden space-y-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-slate-900/40">
+                          <header>
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <h4 id="settings-prompts-title" class="text-base font-semibold text-slate-900 dark:text-slate-100"></h4>
+                                <p id="settings-prompts-meta" class="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400"></p>
+                              </div>
+                              <span id="settings-prompts-custom-badge" class="hidden inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                                <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                <span data-i18n="prompt_catalog_customized_badge"></span>
+                              </span>
+                            </div>
+                            <p id="settings-prompts-desc" class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"></p>
+                          </header>
+                          <section aria-labelledby="settings-prompts-params-heading">
+                            <h5 id="settings-prompts-params-heading" class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="prompt_catalog_params_heading"></h5>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" data-i18n="prompt_catalog_params_lead"></p>
+                            <div id="settings-prompts-params" class="mt-2 space-y-2"></div>
+                          </section>
+                          <section aria-labelledby="settings-prompts-template-heading">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                              <h5 id="settings-prompts-template-heading" class="text-sm font-semibold text-slate-800 dark:text-slate-200" data-i18n="prompt_catalog_template_heading"></h5>
+                              <p id="settings-prompts-len" class="text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></p>
+                            </div>
+                            <textarea id="settings-prompts-template" class="aviators-field mt-2 min-h-[280px] w-full font-mono text-xs leading-relaxed" spellcheck="false" data-i18n-placeholder="prompt_catalog_template_ph"></textarea>
+                          </section>
+                          <div class="flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-slate-600">
+                            <button type="button" id="settings-prompts-save-btn" class="btn btn-md btn-primary inline-flex items-center gap-2">
+                              <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                              <span data-i18n="prompt_catalog_save_btn"></span>
+                            </button>
+                            <button type="button" id="settings-prompts-reset-btn" class="btn btn-md btn-outline inline-flex items-center gap-2">
+                              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                              <span data-i18n="prompt_catalog_reset_btn"></span>
+                            </button>
+                          </div>
+                          <p id="settings-prompts-status" class="settings-status-msg" role="status" aria-live="polite">&nbsp;</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <!-- Panel: Chat -->
                   <div
@@ -4973,6 +5846,7 @@
           <p id="blocking-modal-step" class="text-xs font-medium text-slate-800"></p>
           <p id="blocking-modal-detail" class="text-xs text-sky-800"></p>
           <p id="blocking-modal-filename" class="truncate text-center text-xs text-slate-500"></p>
+          <p id="blocking-modal-hint" class="text-center text-[11px] leading-relaxed text-slate-500"></p>
         </div>
       </div>
     </div>
@@ -4984,7 +5858,11 @@
     <?!= clientScriptToast ?>
     <?!= clientScriptDrive ?>
     <?!= clientScriptChat ?>
+    <?!= clientScriptProposalStudiosRender ?>
+    <?!= clientScriptProposalStudiosOrchestrator ?>
     <?!= clientScriptProposalBuilding ?>
+    <?!= clientScriptMyProposals ?>
+    <?!= clientScriptProposalView ?>
     <?!= clientScriptAgents ?>
     <?!= clientScriptContents ?>
     <?!= clientScriptTags ?>
@@ -4994,6 +5872,7 @@
     <?!= clientScriptDashboard ?>
     <?!= clientScriptMetrics ?>
     <?!= clientScriptSettings ?>
+    <?!= clientScriptPrompts ?>
     <?!= clientScriptAccessRequest ?>
     <?!= clientScriptBoot ?>
     <div id="toast-container"></div>

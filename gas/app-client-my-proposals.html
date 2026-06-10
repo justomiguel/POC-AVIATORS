@@ -1,0 +1,857 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var listLoader = document.getElementById('my-proposals-list-loader');
+  var listEmpty = document.getElementById('my-proposals-list-empty');
+  var tableWrap = document.getElementById('my-proposals-table-wrap');
+  var tableBody = document.getElementById('my-proposals-table-body');
+  var tableHead = document.getElementById('my-proposals-table-head');
+  var cardsRoot = document.getElementById('my-proposals-cards');
+  var pagination = document.getElementById('my-proposals-pagination');
+  var pageInfo = document.getElementById('my-proposals-page-info');
+  var prevBtn = document.getElementById('my-proposals-prev-btn');
+  var nextBtn = document.getElementById('my-proposals-next-btn');
+  var pageSizeSelect = document.getElementById('my-proposals-page-size');
+  var listStatus = document.getElementById('my-proposals-list-status');
+  var listError = document.getElementById('my-proposals-list-error');
+  var startBtn = document.getElementById('my-proposals-start-btn');
+  var newBtn = document.getElementById('my-proposals-new-btn');
+  var toolbar = document.getElementById('my-proposals-toolbar');
+  var statusFiltersRoot = document.getElementById('my-proposals-status-filters');
+  var industryFilterSelect = document.getElementById('my-proposals-industry-filter');
+  var stepFilterSelect = document.getElementById('my-proposals-step-filter');
+  var deliverablesFilterSelect = document.getElementById('my-proposals-deliverables-filter');
+  var searchInput = document.getElementById('my-proposals-search-input');
+  var emptyText = document.getElementById('my-proposals-empty-text');
+  var clearFilterBtn = document.getElementById('my-proposals-clear-filter-btn');
+  var clearFilterEmptyBtn = document.getElementById('my-proposals-clear-filter-empty-btn');
+  var mpSearchDebounceTimer_ = null;
+
+  var MP_SORT_KEYS_ = ['client', 'proposal', 'industry', 'status', 'deadline'];
+  var MP_STATUS_FILTERS_ = ['all', 'in_progress', 'completed', 'failed'];
+  var MP_INDUSTRY_FILTERS_ = ['', 'Logistica', 'Aerolineas'];
+  var MP_STEP_FILTERS_ = ['', 'materials', 'brief', 'studios', 'configure', 'building'];
+  var MP_DELIVERABLES_FILTERS_ = ['', 'any', 'deck', 'package', 'none'];
+
+  function mpCanAccessProposals_() {
+    return !!(
+      S.get('canViewProposalBuilding') ||
+      S.get('canBuildProposals') ||
+      S.get('canSaveProposals')
+    );
+  }
+
+  function mpCanSaveProposals_() {
+    return !!S.get('canSaveProposals');
+  }
+
+  function mpCanBuildProposals_() {
+    return !!S.get('canBuildProposals');
+  }
+
+  function mpSyncWriteChrome_() {
+    if (newBtn) newBtn.classList.toggle('hidden', !mpCanBuildProposals_());
+    if (startBtn) startBtn.classList.toggle('hidden', !mpCanBuildProposals_());
+  }
+
+  function mpInitFilterSelectOptions_() {
+    if (industryFilterSelect && industryFilterSelect.options.length >= 3) {
+      industryFilterSelect.options[0].textContent = i18n('my_proposals_filter_all');
+      industryFilterSelect.options[1].textContent = i18n('pb_industry_logistics');
+      industryFilterSelect.options[2].textContent = i18n('pb_industry_airlines');
+    }
+    if (stepFilterSelect && stepFilterSelect.options.length >= 6) {
+      stepFilterSelect.options[0].textContent = i18n('my_proposals_filter_all');
+      stepFilterSelect.options[1].textContent = i18n('my_proposals_step_materials');
+      stepFilterSelect.options[2].textContent = i18n('my_proposals_step_brief');
+      stepFilterSelect.options[3].textContent = i18n('my_proposals_step_studios');
+      stepFilterSelect.options[4].textContent = i18n('my_proposals_step_configure');
+      stepFilterSelect.options[5].textContent = i18n('my_proposals_step_building');
+    }
+    if (deliverablesFilterSelect && deliverablesFilterSelect.options.length >= 5) {
+      deliverablesFilterSelect.options[0].textContent = i18n('my_proposals_filter_all');
+      deliverablesFilterSelect.options[1].textContent = i18n('my_proposals_filter_deliverables_any');
+      deliverablesFilterSelect.options[2].textContent = i18n('my_proposals_filter_deliverables_deck');
+      deliverablesFilterSelect.options[3].textContent = i18n('my_proposals_filter_deliverables_package');
+      deliverablesFilterSelect.options[4].textContent = i18n('my_proposals_filter_deliverables_none');
+    }
+  }
+
+  function mpEnsureSortDefaults_() {
+    if (!S.get('myProposalsSortKey')) S.set('myProposalsSortKey', 'deadline');
+    if (!S.get('myProposalsSortDir')) S.set('myProposalsSortDir', 'desc');
+    if (!S.get('myProposalsStatusFilter')) S.set('myProposalsStatusFilter', 'all');
+    if (S.get('myProposalsIndustryFilter') == null) S.set('myProposalsIndustryFilter', '');
+    if (S.get('myProposalsStepFilter') == null) S.set('myProposalsStepFilter', '');
+    if (S.get('myProposalsDeliverablesFilter') == null) S.set('myProposalsDeliverablesFilter', '');
+    if (S.get('myProposalsQueryFilter') == null) S.set('myProposalsQueryFilter', '');
+  }
+
+  function mpGetStatusFilter_() {
+    var key = String(S.get('myProposalsStatusFilter') || 'all').trim();
+    return MP_STATUS_FILTERS_.indexOf(key) >= 0 ? key : 'all';
+  }
+
+  function mpGetIndustryFilter_() {
+    var key = String(S.get('myProposalsIndustryFilter') || '').trim();
+    return MP_INDUSTRY_FILTERS_.indexOf(key) >= 0 ? key : '';
+  }
+
+  function mpGetStepFilter_() {
+    var key = String(S.get('myProposalsStepFilter') || '').trim();
+    return MP_STEP_FILTERS_.indexOf(key) >= 0 ? key : '';
+  }
+
+  function mpGetDeliverablesFilter_() {
+    var key = String(S.get('myProposalsDeliverablesFilter') || '').trim();
+    return MP_DELIVERABLES_FILTERS_.indexOf(key) >= 0 ? key : '';
+  }
+
+  function mpGetQueryFilter_() {
+    return String(S.get('myProposalsQueryFilter') || '').trim();
+  }
+
+  function mpGetFilters_() {
+    return {
+      status: mpGetStatusFilter_(),
+      industry: mpGetIndustryFilter_(),
+      builderStep: mpGetStepFilter_(),
+      deliverables: mpGetDeliverablesFilter_(),
+      query: mpGetQueryFilter_(),
+    };
+  }
+
+  function mpHasActiveFilters_() {
+    var f = mpGetFilters_();
+    return !!(f.status !== 'all' || f.industry || f.builderStep || f.deliverables || f.query);
+  }
+
+  function mpUpdateFilterChrome_() {
+    var statusKey = mpGetStatusFilter_();
+    if (statusFiltersRoot) {
+      var chips = statusFiltersRoot.querySelectorAll('[data-mp-status]');
+      var i;
+      for (i = 0; i < chips.length; i++) {
+        var btn = chips[i];
+        btn.classList.toggle('is-active', (btn.getAttribute('data-mp-status') || '') === statusKey);
+      }
+    }
+    if (industryFilterSelect) industryFilterSelect.value = mpGetIndustryFilter_();
+    if (stepFilterSelect) stepFilterSelect.value = mpGetStepFilter_();
+    if (deliverablesFilterSelect) deliverablesFilterSelect.value = mpGetDeliverablesFilter_();
+    if (searchInput && searchInput.value !== mpGetQueryFilter_()) {
+      searchInput.value = mpGetQueryFilter_();
+    }
+    var hasFilters = mpHasActiveFilters_();
+    if (clearFilterBtn) clearFilterBtn.classList.toggle('hidden', !hasFilters);
+    if (clearFilterEmptyBtn) clearFilterEmptyBtn.classList.toggle('hidden', !hasFilters);
+  }
+
+  function mpApplyStatusFilter_(statusKey, reload) {
+    mpEnsureSortDefaults_();
+    var key = MP_STATUS_FILTERS_.indexOf(statusKey) >= 0 ? statusKey : 'all';
+    S.set('myProposalsStatusFilter', key);
+    mpUpdateFilterChrome_();
+    if (reload !== false) {
+      S.set('myProposalsListSkip', 0);
+      mpLoadList_();
+    }
+  }
+
+  function mpApplyAdvancedFilters_(reload) {
+    mpEnsureSortDefaults_();
+    var industry = industryFilterSelect ? String(industryFilterSelect.value || '').trim() : '';
+    S.set('myProposalsIndustryFilter', MP_INDUSTRY_FILTERS_.indexOf(industry) >= 0 ? industry : '');
+    var step = stepFilterSelect ? String(stepFilterSelect.value || '').trim() : '';
+    S.set('myProposalsStepFilter', MP_STEP_FILTERS_.indexOf(step) >= 0 ? step : '');
+    var deliverables = deliverablesFilterSelect ? String(deliverablesFilterSelect.value || '').trim() : '';
+    S.set(
+      'myProposalsDeliverablesFilter',
+      MP_DELIVERABLES_FILTERS_.indexOf(deliverables) >= 0 ? deliverables : '',
+    );
+    mpUpdateFilterChrome_();
+    if (reload !== false) {
+      S.set('myProposalsListSkip', 0);
+      mpLoadList_();
+    }
+  }
+
+  function mpApplyQueryFilter_(query, reload) {
+    S.set('myProposalsQueryFilter', String(query || '').trim());
+    mpUpdateFilterChrome_();
+    if (reload !== false) {
+      S.set('myProposalsListSkip', 0);
+      mpLoadList_();
+    }
+  }
+
+  function mpClearAllFilters_() {
+    S.set('myProposalsStatusFilter', 'all');
+    S.set('myProposalsIndustryFilter', '');
+    S.set('myProposalsStepFilter', '');
+    S.set('myProposalsDeliverablesFilter', '');
+    S.set('myProposalsQueryFilter', '');
+    mpUpdateFilterChrome_();
+    S.set('myProposalsListSkip', 0);
+    mpLoadList_();
+  }
+
+  function mpUpdateEmptyState_(filteredEmpty) {
+    if (emptyText) {
+      emptyText.textContent = i18n(filteredEmpty ? 'my_proposals_empty_filtered' : 'my_proposals_empty');
+    }
+    if (startBtn) startBtn.classList.toggle('hidden', !!filteredEmpty || !mpCanBuildProposals_());
+  }
+
+  function mpGetSortKey_() {
+    var key = String(S.get('myProposalsSortKey') || 'deadline').trim();
+    return MP_SORT_KEYS_.indexOf(key) >= 0 ? key : 'deadline';
+  }
+
+  function mpGetSortDir_() {
+    return String(S.get('myProposalsSortDir') || 'desc').trim() === 'asc' ? 'asc' : 'desc';
+  }
+
+  function mpUpdateSortChrome_() {
+    var sortKey = mpGetSortKey_();
+    var sortDir = mpGetSortDir_();
+    if (!tableHead) return;
+    var cols = tableHead.querySelectorAll('[data-mp-sort]');
+    var i;
+    for (i = 0; i < cols.length; i++) {
+      var th = cols[i];
+      var key = th.getAttribute('data-mp-sort') || '';
+      var iconEl = th.querySelector('.my-proposals-sort-icon');
+      var active = key === sortKey;
+      if (iconEl) {
+        iconEl.className = 'fa-solid my-proposals-sort-icon';
+        if (active) {
+          iconEl.classList.add(sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down', 'text-white');
+          th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+          th.classList.add('is-sorted');
+        } else {
+          iconEl.classList.add('fa-sort', 'text-white/50');
+          th.removeAttribute('aria-sort');
+          th.classList.remove('is-sorted');
+        }
+      }
+    }
+  }
+
+  function mpApplySort_(sortKey, sortDir, reload) {
+    mpEnsureSortDefaults_();
+    var key = MP_SORT_KEYS_.indexOf(sortKey) >= 0 ? sortKey : mpGetSortKey_();
+    var dir = sortDir === 'asc' || sortDir === 'desc' ? sortDir : mpGetSortDir_();
+    S.set('myProposalsSortKey', key);
+    S.set('myProposalsSortDir', dir);
+    mpUpdateSortChrome_();
+    if (reload !== false) {
+      S.set('myProposalsListSkip', 0);
+      mpLoadList_();
+    }
+  }
+
+  function mpHandleSortColumn_(key) {
+    var currentKey = mpGetSortKey_();
+    if (currentKey === key) {
+      mpApplySort_(key, mpGetSortDir_() === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    mpApplySort_(key, 'asc');
+  }
+
+  function mpStatusLabel_(status, builderStep) {
+    var st = String(status || '').trim();
+    if (st === 'completed') return i18n('my_proposals_status_completed');
+    if (st === 'failed') return i18n('my_proposals_status_failed');
+    var stepKey = 'my_proposals_step_' + String(builderStep || 'materials');
+    var stepLabel = i18n(stepKey);
+    if (stepLabel === stepKey) return i18n('my_proposals_status_in_progress');
+    return i18nFmt('my_proposals_status_step', { step: stepLabel });
+  }
+
+  function mpStatusKind_(status) {
+    var st = String(status || '').trim();
+    if (st === 'completed') return 'completed';
+    if (st === 'failed') return 'failed';
+    return 'progress';
+  }
+
+  function mpStatusIcon_(kind) {
+    if (kind === 'completed') return 'fa-circle-check';
+    if (kind === 'failed') return 'fa-circle-xmark';
+    return 'fa-spinner';
+  }
+
+  function mpIndustryLabel_(key) {
+    if (key === 'Logistica') return i18n('pb_industry_logistics');
+    if (key === 'Aerolineas') return i18n('pb_industry_airlines');
+    return key || i18n('label_em_dash');
+  }
+
+  function mpFormatDate_(iso) {
+    var raw = String(iso || '').trim();
+    if (!raw) return i18n('label_em_dash');
+    try {
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) return raw;
+      return new Intl.DateTimeFormat(A.getLocale ? A.getLocale() : undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(d);
+    } catch (eFmt) {
+      return raw;
+    }
+  }
+
+  function mpClearMessages_() {
+    if (listStatus) {
+      listStatus.classList.add('hidden');
+      listStatus.textContent = '';
+    }
+    if (listError) {
+      listError.classList.add('hidden');
+      listError.textContent = '';
+    }
+  }
+
+  function mpSetLoading_(busy) {
+    if (listLoader) listLoader.classList.toggle('hidden', !busy);
+    if (pagination) {
+      if (prevBtn) prevBtn.disabled = busy || !!S.get('myProposalsListBusy');
+      if (nextBtn) nextBtn.disabled = busy || !!S.get('myProposalsListBusy');
+      if (pageSizeSelect) pageSizeSelect.disabled = busy;
+    }
+    if (newBtn) newBtn.disabled = busy;
+    if (industryFilterSelect) industryFilterSelect.disabled = busy;
+    if (stepFilterSelect) stepFilterSelect.disabled = busy;
+    if (deliverablesFilterSelect) deliverablesFilterSelect.disabled = busy;
+    if (searchInput) searchInput.disabled = busy;
+    if (clearFilterBtn) clearFilterBtn.disabled = busy;
+    if (clearFilterEmptyBtn) clearFilterEmptyBtn.disabled = busy;
+    if (statusFiltersRoot) {
+      var filterBtns = statusFiltersRoot.querySelectorAll('[data-mp-status]');
+      var fi;
+      for (fi = 0; fi < filterBtns.length; fi++) {
+        filterBtns[fi].disabled = busy;
+      }
+    }
+    if (tableHead) {
+      var sortHeaders = tableHead.querySelectorAll('[data-mp-sort]');
+      var si;
+      for (si = 0; si < sortHeaders.length; si++) {
+        sortHeaders[si].setAttribute('aria-disabled', busy ? 'true' : 'false');
+        if (busy) sortHeaders[si].setAttribute('tabindex', '-1');
+        else sortHeaders[si].setAttribute('tabindex', '0');
+      }
+    }
+    S.set('myProposalsListBusy', !!busy);
+  }
+
+  function mpTruncate_(text, max) {
+    var t = String(text || '').trim();
+    if (!t) return '';
+    if (t.length <= max) return t;
+    return t.slice(0, max - 1).trim() + '…';
+  }
+
+  function mpIndustryTone_(key) {
+    if (key === 'Logistica') return 'logistics';
+    if (key === 'Aerolineas') return 'airlines';
+    return 'default';
+  }
+
+  function mpRenderTable_(items) {
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    var list = Array.isArray(items) ? items : [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var row = list[i] || {};
+      var statusKind = mpStatusKind_(row.status);
+      var tr = document.createElement('tr');
+      tr.className = 'my-proposals-row my-proposals-row--' + statusKind;
+      tr.setAttribute('data-session-id', String(row.sessionId || ''));
+
+      var tdClient = document.createElement('td');
+      tdClient.className = 'my-proposals-td-client';
+      tdClient.innerHTML =
+        '<span class="my-proposals-client-chip"><i class="fa-solid fa-building" aria-hidden="true"></i><span></span></span>';
+      tdClient.querySelector('.my-proposals-client-chip span:last-child').textContent =
+        row.clientName || i18n('my_proposals_client_unknown');
+      tr.appendChild(tdClient);
+
+      var tdProposal = document.createElement('td');
+      tdProposal.className = 'my-proposals-td-proposal';
+      var proposalWrap = document.createElement('div');
+      proposalWrap.className = 'my-proposals-proposal-cell';
+      var proposalTitle = document.createElement('p');
+      proposalTitle.className = 'my-proposals-proposal-title';
+      proposalTitle.textContent = row.proposalName || row.title || i18n('my_proposals_untitled');
+      proposalWrap.appendChild(proposalTitle);
+      if (row.projectSummary) {
+        var proposalSum = document.createElement('p');
+        proposalSum.className = 'my-proposals-proposal-summary';
+        proposalSum.textContent = mpTruncate_(row.projectSummary, 72);
+        proposalWrap.appendChild(proposalSum);
+        tdProposal.title = String(row.projectSummary);
+      }
+      tdProposal.appendChild(proposalWrap);
+      tr.appendChild(tdProposal);
+
+      var tdIndustry = document.createElement('td');
+      tdIndustry.className = 'my-proposals-td-industry';
+      var industryTone = mpIndustryTone_(row.industryKey);
+      var industryChip = document.createElement('span');
+      industryChip.className = 'my-proposals-industry-chip my-proposals-industry-chip--' + industryTone;
+      industryChip.innerHTML =
+        '<i class="fa-solid fa-industry" aria-hidden="true"></i><span></span>';
+      industryChip.querySelector('span').textContent = mpIndustryLabel_(row.industryKey);
+      tdIndustry.appendChild(industryChip);
+      tr.appendChild(tdIndustry);
+
+      var tdStatus = document.createElement('td');
+      tdStatus.className = 'my-proposals-td-status';
+      var badge = document.createElement('span');
+      badge.className = 'my-proposals-status-badge my-proposals-status-badge--' + statusKind;
+      badge.innerHTML =
+        '<i class="fa-solid ' +
+        mpStatusIcon_(statusKind) +
+        '" aria-hidden="true"></i><span></span>';
+      badge.querySelector('span').textContent = mpStatusLabel_(row.status, row.builderStep);
+      tdStatus.appendChild(badge);
+      tr.appendChild(tdStatus);
+
+      var tdDeadline = document.createElement('td');
+      tdDeadline.className = 'my-proposals-td-deadline';
+      tdDeadline.innerHTML =
+        '<span class="my-proposals-date-chip"><i class="fa-solid fa-calendar-day" aria-hidden="true"></i><span></span></span>';
+      tdDeadline.querySelector('.my-proposals-date-chip span:last-child').textContent = row.rfpDeadline
+        ? String(row.rfpDeadline)
+        : i18n('label_em_dash');
+      tr.appendChild(tdDeadline);
+
+      var tdActions = document.createElement('td');
+      tdActions.className = 'my-proposals-td-actions';
+      var actionsWrap = document.createElement('div');
+      actionsWrap.className = 'my-proposals-row-actions';
+
+      var viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'btn btn-sm btn-primary my-proposals-view-btn inline-flex items-center gap-2';
+      viewBtn.setAttribute('data-mp-view', String(row.sessionId || ''));
+      viewBtn.innerHTML =
+        '<i class="fa-solid fa-eye" aria-hidden="true"></i><span data-i18n="my_proposals_btn_view"></span>';
+      viewBtn.querySelector('span').textContent = i18n('my_proposals_btn_view');
+      actionsWrap.appendChild(viewBtn);
+
+      if (mpCanSaveProposals_()) {
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'btn btn-sm btn-outline-danger inline-flex items-center gap-2';
+        deleteBtn.setAttribute('data-mp-delete', String(row.sessionId || ''));
+        deleteBtn.innerHTML =
+          '<i class="fa-solid fa-trash" aria-hidden="true"></i><span data-i18n="my_proposals_btn_delete"></span>';
+        deleteBtn.querySelector('span').textContent = i18n('my_proposals_btn_delete');
+        actionsWrap.appendChild(deleteBtn);
+      }
+
+      tdActions.appendChild(actionsWrap);
+      tr.appendChild(tdActions);
+      tableBody.appendChild(tr);
+    }
+    mpRenderMobileCards_(list);
+    mpBindListActions_(tableBody);
+    if (cardsRoot) mpBindListActions_(cardsRoot);
+  }
+
+  function mpRenderMobileCards_(items) {
+    if (!cardsRoot) return;
+    cardsRoot.innerHTML = '';
+    var list = Array.isArray(items) ? items : [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var row = list[i] || {};
+      var statusKind = mpStatusKind_(row.status);
+      var card = document.createElement('article');
+      card.className = 'my-proposals-mobile-card my-proposals-mobile-card--' + statusKind;
+      card.setAttribute('role', 'listitem');
+      card.setAttribute('data-session-id', String(row.sessionId || ''));
+      card.innerHTML =
+        '<div class="my-proposals-mobile-accent" aria-hidden="true"></div><div class="my-proposals-mobile-body">' +
+        '<div class="my-proposals-mobile-head"><div class="min-w-0 flex-1">' +
+        '<p class="my-proposals-mobile-client"><i class="fa-solid fa-building" aria-hidden="true"></i><span></span></p>' +
+        '<h3 class="my-proposals-mobile-title"></h3></div>' +
+        '<span class="my-proposals-status-badge my-proposals-status-badge--' +
+        statusKind +
+        '"><i class="fa-solid ' +
+        mpStatusIcon_(statusKind) +
+        '" aria-hidden="true"></i><span></span></span></div>' +
+        '<dl class="my-proposals-mobile-meta"></dl>' +
+        '<div class="my-proposals-mobile-actions"></div></div>';
+      card.querySelector('.my-proposals-mobile-client span').textContent =
+        row.clientName || i18n('my_proposals_client_unknown');
+      card.querySelector('.my-proposals-mobile-title').textContent =
+        row.proposalName || row.title || i18n('my_proposals_untitled');
+      card.querySelector('.my-proposals-status-badge span').textContent = mpStatusLabel_(
+        row.status,
+        row.builderStep,
+      );
+      var meta = card.querySelector('.my-proposals-mobile-meta');
+      mpAppendMobileMeta_(meta, 'fa-industry', mpIndustryLabel_(row.industryKey));
+      if (row.rfpDeadline) {
+        mpAppendMobileMeta_(meta, 'fa-calendar-day', row.rfpDeadline);
+      }
+      var actionsWrap = card.querySelector('.my-proposals-mobile-actions');
+      var viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'btn btn-sm btn-primary my-proposals-view-btn inline-flex items-center gap-2';
+      viewBtn.setAttribute('data-mp-view', String(row.sessionId || ''));
+      viewBtn.innerHTML =
+        '<i class="fa-solid fa-eye" aria-hidden="true"></i><span></span>';
+      viewBtn.querySelector('span').textContent = i18n('my_proposals_btn_view');
+      actionsWrap.appendChild(viewBtn);
+      if (mpCanSaveProposals_()) {
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'btn btn-sm btn-outline-danger inline-flex items-center gap-2';
+        deleteBtn.setAttribute('data-mp-delete', String(row.sessionId || ''));
+        deleteBtn.innerHTML =
+          '<i class="fa-solid fa-trash" aria-hidden="true"></i><span></span>';
+        deleteBtn.querySelector('span').textContent = i18n('my_proposals_btn_delete');
+        actionsWrap.appendChild(deleteBtn);
+      }
+      cardsRoot.appendChild(card);
+    }
+  }
+
+  function mpAppendMobileMeta_(wrap, iconClass, value) {
+    if (!value || value === i18n('label_em_dash')) return;
+    var dt = document.createElement('div');
+    dt.className = 'my-proposals-mobile-meta-row';
+    dt.innerHTML =
+      '<dt><i class="fa-solid ' + iconClass + '" aria-hidden="true"></i><span></span></dt>';
+    dt.querySelector('span').textContent = String(value);
+    wrap.appendChild(dt);
+  }
+
+  function mpBindListActions_(root) {
+    if (!root) return;
+    var deleteBtns = root.querySelectorAll('[data-mp-delete]');
+    var j;
+    for (j = 0; j < deleteBtns.length; j++) {
+      deleteBtns[j].addEventListener('click', function (ev) {
+        var sid = ev.currentTarget.getAttribute('data-mp-delete') || '';
+        var rowEl =
+          ev.currentTarget.closest &&
+          (ev.currentTarget.closest('.my-proposals-row') ||
+            ev.currentTarget.closest('.my-proposals-mobile-card'));
+        mpDeleteSession_(sid, rowEl);
+      });
+    }
+    var viewBtns = root.querySelectorAll('[data-mp-view]');
+    var k;
+    for (k = 0; k < viewBtns.length; k++) {
+      viewBtns[k].addEventListener('click', function (ev) {
+        var sid = ev.currentTarget.getAttribute('data-mp-view') || '';
+        mpOpenSession_(sid);
+      });
+    }
+  }
+
+  function mpOpenSession_(sessionId) {
+    var sid = String(sessionId || '').trim();
+    if (!sid) return;
+    if (A.proposalView && typeof A.proposalView.openSession === 'function') {
+      A.proposalView.openSession(sid);
+      return;
+    }
+    A.showBlockingModal(i18n('my_proposals_busy_loading'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        A.hideBlockingModal();
+        var session = res && res.session;
+        if (!session || !session.sessionId) {
+          A.showErrorDialog({
+            title: i18n('page_my_proposals_title'),
+            message: i18n('my_proposals_err_load'),
+          });
+          return;
+        }
+        if (A.proposalBuilding && typeof A.proposalBuilding.loadSession === 'function') {
+          A.proposalBuilding.loadSession(session);
+        }
+        if (A.setAppPage) A.setAppPage('proposal-building');
+      })
+      .withFailureHandler(function (e) {
+        A.hideBlockingModal();
+        A.reportRpcError(e, {
+          scope: 'myProposalsLoad',
+          fallbackKey: 'my_proposals_err_load',
+          modal: true,
+        });
+      })
+      .proposalBuildingSessionGet(sid);
+  }
+
+  function mpDeleteSession_(sessionId, rowEl) {
+    var sid = String(sessionId || '').trim();
+    if (!sid) return;
+    A.confirmDialog({
+      message: i18n('my_proposals_confirm_delete'),
+      danger: true,
+    }).then(function (ok) {
+      if (!ok) return;
+      A.showBlockingModal(i18n('my_proposals_busy_deleting'));
+      if (rowEl) rowEl.classList.add('is-busy');
+      google.script.run
+        .withSuccessHandler(function () {
+          A.hideBlockingModal();
+          if (listStatus) {
+            listStatus.textContent = i18n('my_proposals_deleted');
+            listStatus.classList.remove('hidden');
+          }
+          var skip = Number(S.get('myProposalsListSkip') || 0);
+          var limit = Number(S.get('myProposalsListLimit') || 25);
+          var total = Number(S.get('myProposalsListTotal') || 0);
+          if (skip > 0 && skip >= total - 1) {
+            S.set('myProposalsListSkip', Math.max(0, skip - limit));
+          }
+          mpLoadList_();
+        })
+        .withFailureHandler(function (e) {
+          A.hideBlockingModal();
+          if (rowEl) rowEl.classList.remove('is-busy');
+          A.reportRpcError(e, {
+            scope: 'myProposalsDelete',
+            fallbackKey: 'my_proposals_err_delete',
+            modal: true,
+            setStatus: function (msg) {
+              if (listError) {
+                listError.textContent = msg;
+                listError.classList.remove('hidden');
+              }
+            },
+          });
+        })
+        .proposalBuildingSessionDelete(sid);
+    });
+  }
+
+  function mpUpdatePaginationChrome_(res) {
+    var total = res && typeof res.total === 'number' ? res.total : 0;
+    var skip = res && typeof res.skip === 'number' ? res.skip : 0;
+    var limit = res && typeof res.limit === 'number' ? res.limit : 25;
+    var items = (res && res.items) || [];
+    var hasMore = !!(res && res.hasMore);
+    if (pageInfo) {
+      if (!total) pageInfo.textContent = i18n('metrics_pagination_empty');
+      else {
+        pageInfo.textContent = i18nFmt('metrics_pagination_info', {
+          from: String(skip + 1),
+          to: String(skip + items.length),
+          total: String(total),
+        });
+      }
+    }
+    if (prevBtn) prevBtn.disabled = skip <= 0 || !!S.get('myProposalsListBusy');
+    if (nextBtn) nextBtn.disabled = !hasMore || !!S.get('myProposalsListBusy');
+    if (pagination) pagination.classList.toggle('hidden', total === 0);
+  }
+
+  function mpLoadList_() {
+    if (!mpCanAccessProposals_()) return;
+    var skip = Number(S.get('myProposalsListSkip') || 0);
+    var limit = Number(S.get('myProposalsListLimit') || 25);
+    mpEnsureSortDefaults_();
+    var sortKey = mpGetSortKey_();
+    var sortDir = mpGetSortDir_();
+    var filters = mpGetFilters_();
+    mpSetLoading_(true);
+    mpClearMessages_();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        mpSetLoading_(false);
+        var items = (res && res.items) || [];
+        S.set('myProposalsListHasMore', !!(res && res.hasMore));
+        S.set('myProposalsListTotal', res && res.total != null ? res.total : 0);
+        if (res && res.filters && typeof res.filters === 'object') {
+          if (res.filters.status) S.set('myProposalsStatusFilter', res.filters.status);
+          S.set('myProposalsIndustryFilter', res.filters.industry || '');
+          S.set('myProposalsStepFilter', res.filters.builderStep || '');
+          S.set('myProposalsDeliverablesFilter', res.filters.deliverables || '');
+          S.set('myProposalsQueryFilter', res.filters.query || '');
+        } else if (res && res.statusFilter) {
+          S.set('myProposalsStatusFilter', res.statusFilter);
+        }
+        if (!items.length) {
+          if (tableWrap) tableWrap.className = 'my-proposals-table-wrap hidden';
+          if (cardsRoot) cardsRoot.className = 'my-proposals-cards hidden';
+          if (listEmpty) listEmpty.classList.remove('hidden');
+          if (pagination) pagination.classList.add('hidden');
+          mpUpdateEmptyState_(mpHasActiveFilters_());
+          mpUpdateFilterChrome_();
+          return;
+        }
+        if (listEmpty) listEmpty.classList.add('hidden');
+        if (tableWrap) {
+          tableWrap.className =
+            'my-proposals-table-wrap overflow-x-auto max-md:hidden md:block rounded-2xl';
+        }
+        if (cardsRoot) {
+          cardsRoot.className = 'my-proposals-cards grid gap-3 md:hidden';
+        }
+        mpUpdateEmptyState_(false);
+        if (res && res.sortBy) S.set('myProposalsSortKey', res.sortBy);
+        if (res && res.sortDir) S.set('myProposalsSortDir', res.sortDir);
+        mpUpdateSortChrome_();
+        mpUpdateFilterChrome_();
+        mpRenderTable_(items);
+        mpUpdatePaginationChrome_(res);
+      })
+      .withFailureHandler(function (e) {
+        mpSetLoading_(false);
+        A.reportRpcError(e, {
+          scope: 'myProposalsList',
+          fallbackKey: 'my_proposals_err_list',
+          modal: true,
+          setStatus: function (msg) {
+            if (listError) {
+              listError.textContent = msg;
+              listError.classList.remove('hidden');
+            }
+          },
+        });
+      })
+      .proposalBuildingSessionsList(
+        skip,
+        limit,
+        sortKey,
+        sortDir,
+        filters.status,
+        JSON.stringify(filters),
+      );
+  }
+
+  function mpGoToNewProposal_() {
+    if (!mpCanBuildProposals_()) return;
+    if (A.proposalBuilding && typeof A.proposalBuilding.resetSession === 'function') {
+      A.proposalBuilding.resetSession();
+    }
+    if (A.setAppPage) A.setAppPage('proposal-building');
+  }
+
+  if (pageSizeSelect) {
+    pageSizeSelect.addEventListener('change', function () {
+      S.set('myProposalsListLimit', Number(pageSizeSelect.value || 25));
+      S.set('myProposalsListSkip', 0);
+      mpLoadList_();
+    });
+  }
+  if (prevBtn) {
+    prevBtn.addEventListener('click', function () {
+      var skip = Number(S.get('myProposalsListSkip') || 0);
+      var limit = Number(S.get('myProposalsListLimit') || 25);
+      S.set('myProposalsListSkip', Math.max(0, skip - limit));
+      mpLoadList_();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', function () {
+      if (!S.get('myProposalsListHasMore')) return;
+      var skip = Number(S.get('myProposalsListSkip') || 0);
+      var limit = Number(S.get('myProposalsListLimit') || 25);
+      S.set('myProposalsListSkip', skip + limit);
+      mpLoadList_();
+    });
+  }
+  if (startBtn) {
+    startBtn.addEventListener('click', mpGoToNewProposal_);
+  }
+  if (newBtn) {
+    newBtn.addEventListener('click', mpGoToNewProposal_);
+  }
+  if (tableHead) {
+    tableHead.addEventListener('click', function (ev) {
+      if (S.get('myProposalsListBusy')) return;
+      var th = ev.target && ev.target.closest ? ev.target.closest('[data-mp-sort]') : null;
+      if (!th) return;
+      mpHandleSortColumn_(th.getAttribute('data-mp-sort') || 'deadline');
+    });
+    tableHead.addEventListener('keydown', function (ev) {
+      if (S.get('myProposalsListBusy')) return;
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      var th = ev.target && ev.target.closest ? ev.target.closest('[data-mp-sort]') : null;
+      if (!th) return;
+      ev.preventDefault();
+      mpHandleSortColumn_(th.getAttribute('data-mp-sort') || 'deadline');
+    });
+  }
+  if (industryFilterSelect) {
+    industryFilterSelect.addEventListener('change', function () {
+      mpApplyAdvancedFilters_();
+    });
+  }
+  if (stepFilterSelect) {
+    stepFilterSelect.addEventListener('change', function () {
+      mpApplyAdvancedFilters_();
+    });
+  }
+  if (deliverablesFilterSelect) {
+    deliverablesFilterSelect.addEventListener('change', function () {
+      mpApplyAdvancedFilters_();
+    });
+  }
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      if (mpSearchDebounceTimer_) clearTimeout(mpSearchDebounceTimer_);
+      mpSearchDebounceTimer_ = setTimeout(function () {
+        mpApplyQueryFilter_(searchInput.value || '');
+      }, 400);
+    });
+    searchInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        if (mpSearchDebounceTimer_) clearTimeout(mpSearchDebounceTimer_);
+        mpApplyQueryFilter_(searchInput.value || '');
+      }
+    });
+  }
+  if (statusFiltersRoot) {
+    statusFiltersRoot.addEventListener('click', function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-mp-status]') : null;
+      if (!btn || btn.disabled) return;
+      mpApplyStatusFilter_(btn.getAttribute('data-mp-status') || 'all');
+    });
+  }
+  if (clearFilterBtn) {
+    clearFilterBtn.addEventListener('click', mpClearAllFilters_);
+  }
+  if (clearFilterEmptyBtn) {
+    clearFilterEmptyBtn.addEventListener('click', mpClearAllFilters_);
+  }
+
+  A.myProposals = {
+    onEnterPage: function () {
+      mpSyncWriteChrome_();
+      mpInitFilterSelectOptions_();
+      if (!S.get('myProposalsListLimit')) S.set('myProposalsListLimit', 25);
+      if (S.get('myProposalsListSkip') == null) S.set('myProposalsListSkip', 0);
+      mpEnsureSortDefaults_();
+      mpUpdateSortChrome_();
+      mpUpdateFilterChrome_();
+      mpLoadList_();
+    },
+    reload: mpLoadList_,
+  };
+
+  S.on('activePage', function (pg) {
+    if (pg === 'my-proposals' && A.myProposals && typeof A.myProposals.onEnterPage === 'function') {
+      A.myProposals.onEnterPage();
+    }
+  });
+})(window.Aviators);
+</script>

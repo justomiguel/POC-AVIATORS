@@ -453,6 +453,18 @@
     A.whenClientI18nReady(onReady, locale);
   };
 
+  /** Texto de arranque cuando el pack aún no está disponible (solo claves de bootstrap). */
+  A.i18nStartupText = function (key) {
+    var fallbacks = {
+      app_startup_failed: {
+        es: 'No se pudieron cargar los textos. Recargá la página.',
+        en: 'Could not load labels. Please reload the page.',
+      },
+    };
+    var fb = fallbacks[key] || fallbacks.app_startup_failed;
+    return i18nStartupMessage_(key, fb.es, fb.en);
+  };
+
   /** @type {Object<string, string>} */
   var SERVER_ERROR_I18N = {
     ERR_DRIVE_ROOT_NOT_CONFIGURED: 'err_drive_root_not_configured',
@@ -470,6 +482,9 @@
     ERR_PROPOSAL_RFP_NOT_CATALOG: 'contents_err_proposal_rfp_not_catalog',
     ERR_PROPOSAL_STUDIO_REQUIRED: 'contents_err_proposal_studio_required',
     ERR_PROPOSAL_OFFERING_REQUIRED: 'contents_err_proposal_offering_required',
+    ERR_PROPOSAL_MATERIAL_DRIVE: 'err_proposal_material_drive',
+    ERR_PROPOSAL_MATERIAL_INVALID: 'err_proposal_material_invalid',
+    ERR_PROPOSAL_SESSION_UPDATE: 'err_proposal_session_update',
     ERR_ACCESS_REQUEST_NOT_VISITOR: 'access_request_err_not_visitor',
     ERR_ACCESS_REQUEST_INVALID_ROLE: 'admin_users_err_role',
     ERR_ACCESS_REQUEST_REASON_REQUIRED: 'access_request_err_reason',
@@ -486,6 +501,13 @@
     ERR_PDF_DRIVE: 'err_pdf_drive',
     ERR_ADMIN_AGENT_API_MODEL_INVALID: 'err_admin_agent_api_model_invalid',
     ERR_ADMIN_AGENT_API_STRATEGY_INVALID: 'err_admin_agent_api_strategy_invalid',
+    ERR_PROMPT_NOT_FOUND: 'err_prompt_not_found',
+    ERR_PROMPT_EMPTY: 'err_prompt_empty',
+    ERR_PROMPT_TOO_LONG: 'err_prompt_too_long',
+    ERR_PROMPT_ROUTING_INVALID: 'err_prompt_routing_invalid',
+    ERR_PROMPT_JSON_INVALID: 'err_prompt_json_invalid',
+    ERR_PROMPT_RAG_MARKERS: 'err_prompt_rag_markers',
+    ERR_PROMPT_PARAM_MISSING: 'err_prompt_param_missing',
   };
 
   A.extractServerErrorCode = function (err) {
@@ -558,5 +580,30 @@
   }
   i18nTryHydrateFromLocalStorage_();
   i18nSanitizeCachedPack_();
+
+  /**
+   * Locale activo del usuario en el navegador (es/en).
+   * @return {'es'|'en'}
+   */
+  A.getLocale = function () {
+    return i18nPreferredLocale_();
+  };
+
+  /**
+   * Asegura outputLocale en el brief para respuestas del LLM (UI del usuario, no idioma del documento).
+   * @param {Object} brief
+   * @return {Object}
+   */
+  A.ensureBriefOutputLocale = function (brief) {
+    var b = brief && typeof brief === 'object' ? brief : {};
+    if (A.getLocale() === 'en') {
+      b.outputLocale = 'en';
+      return b;
+    }
+    var picked = document.querySelector('input[name="pb-proposal-language"]:checked');
+    var val = picked ? String(picked.value || '').trim() : 'es';
+    b.outputLocale = val === 'en' ? 'en' : 'es';
+    return b;
+  };
 })(window.Aviators);
 </script>

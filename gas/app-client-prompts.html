@@ -1,0 +1,282 @@
+<script>
+(function (A) {
+  var S = A.state;
+  var i18n = A.i18n;
+  var i18nFmt = A.i18nFmt;
+
+  var promptsRoot = document.getElementById('settings-prompts-root');
+  var promptsLoader = document.getElementById('settings-prompts-loader');
+  var promptsNav = document.getElementById('settings-prompts-nav');
+  var promptsEditor = document.getElementById('settings-prompts-editor');
+  var promptsEmpty = document.getElementById('settings-prompts-empty');
+  var promptsTitle = document.getElementById('settings-prompts-title');
+  var promptsMeta = document.getElementById('settings-prompts-meta');
+  var promptsDesc = document.getElementById('settings-prompts-desc');
+  var promptsRole = document.getElementById('settings-prompts-role');
+  var promptsParams = document.getElementById('settings-prompts-params');
+  var promptsTemplate = document.getElementById('settings-prompts-template');
+  var promptsLen = document.getElementById('settings-prompts-len');
+  var promptsSaveBtn = document.getElementById('settings-prompts-save-btn');
+  var promptsResetBtn = document.getElementById('settings-prompts-reset-btn');
+  var promptsStatus = document.getElementById('settings-prompts-status');
+  var promptsCustomBadge = document.getElementById('settings-prompts-custom-badge');
+
+  var promptsSections = [];
+  var promptsSelectedId = '';
+  var promptsBusy = false;
+  var promptsLoaded = false;
+
+  function promptsSetStatus(msg, isError) {
+    if (!promptsStatus) return;
+    var t = String(msg || '').trim();
+    promptsStatus.textContent = t || '\u00a0';
+    promptsStatus.classList.toggle('text-red-700', !!isError && !!t);
+    promptsStatus.classList.toggle('dark:text-red-400', !!isError && !!t);
+    promptsStatus.classList.toggle('text-emerald-700', !isError && !!t);
+    promptsStatus.classList.toggle('dark:text-emerald-400', !isError && !!t);
+    promptsStatus.classList.toggle('text-slate-600', !t);
+    promptsStatus.classList.toggle('dark:text-slate-400', !t);
+  }
+
+  function promptsSetBusy(on, modalMsg) {
+    promptsBusy = !!on;
+    if (promptsSaveBtn) promptsSaveBtn.disabled = promptsBusy;
+    if (promptsResetBtn) promptsResetBtn.disabled = promptsBusy;
+    if (promptsTemplate) promptsTemplate.disabled = promptsBusy;
+    if (on && A.showBlockingModal) A.showBlockingModal(modalMsg || i18n('prompt_catalog_busy_save'));
+    if (!on && A.hideBlockingModal) A.hideBlockingModal();
+  }
+
+  function promptsUpdateLen() {
+    if (!promptsLen || !promptsTemplate) return;
+    var len = String(promptsTemplate.value || '').length;
+    var max = Number(promptsTemplate.getAttribute('data-max-length') || 14000);
+    promptsLen.textContent = i18nFmt('prompt_catalog_len_fmt', { len: len, max: max });
+    promptsLen.classList.toggle('text-red-600', len > max);
+    promptsLen.classList.toggle('dark:text-red-400', len > max);
+  }
+
+  function promptsRenderNav() {
+    if (!promptsNav) return;
+    promptsNav.innerHTML = '';
+    var si;
+    for (si = 0; si < promptsSections.length; si++) {
+      var sec = promptsSections[si];
+      var secHead = document.createElement('p');
+      secHead.className = 'mt-3 first:mt-0 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+      secHead.textContent = i18n(sec.sectionKey || 'prompt_section_other');
+      promptsNav.appendChild(secHead);
+      var ul = document.createElement('ul');
+      ul.className = 'mt-1 space-y-0.5';
+      ul.setAttribute('role', 'list');
+      var ii;
+      for (ii = 0; ii < (sec.items || []).length; ii++) {
+        var item = sec.items[ii];
+        var li = document.createElement('li');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className =
+          'settings-prompts-nav-btn w-full rounded-lg px-2 py-1.5 text-left text-sm transition ' +
+          (item.id === promptsSelectedId
+            ? 'bg-sky-100 font-medium text-sky-950 dark:bg-sky-900/50 dark:text-sky-100'
+            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800');
+        btn.setAttribute('data-prompt-id', item.id);
+        var label = document.createElement('span');
+        label.textContent = i18n(item.labelKey || item.id);
+        btn.appendChild(label);
+        if (item.customized) {
+          var dot = document.createElement('i');
+          dot.className = 'fa-solid fa-pen-to-square ml-1 text-[10px] text-amber-600 dark:text-amber-400';
+          dot.setAttribute('aria-hidden', 'true');
+          btn.appendChild(dot);
+        }
+        btn.addEventListener('click', function () {
+          var pid = this.getAttribute('data-prompt-id');
+          if (pid) promptsSelect(pid);
+        });
+        li.appendChild(btn);
+        ul.appendChild(li);
+      }
+      promptsNav.appendChild(ul);
+    }
+  }
+
+  function promptsRenderParams(entry) {
+    if (!promptsParams) return;
+    promptsParams.innerHTML = '';
+    var params = entry && entry.params ? entry.params : [];
+    if (!params.length) {
+      var empty = document.createElement('p');
+      empty.className = 'text-sm text-slate-500 dark:text-slate-400';
+      empty.textContent = i18n('prompt_catalog_no_params');
+      promptsParams.appendChild(empty);
+      return;
+    }
+    var pi;
+    for (pi = 0; pi < params.length; pi++) {
+      var p = params[pi];
+      var row = document.createElement('div');
+      row.className = 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60';
+      var code = document.createElement('code');
+      code.className = 'font-mono text-xs text-sky-700 dark:text-sky-300';
+      code.textContent = '{{' + String(p.name || '') + '}}';
+      row.appendChild(code);
+      if (p.required) {
+        var req = document.createElement('span');
+        req.className = 'ml-2 text-xs font-medium text-amber-700 dark:text-amber-400';
+        req.textContent = i18n('prompt_catalog_param_required');
+        row.appendChild(req);
+      }
+      if (p.descriptionKey) {
+        var desc = document.createElement('p');
+        desc.className = 'mt-1 text-xs text-slate-600 dark:text-slate-400';
+        desc.textContent = i18n(p.descriptionKey);
+        row.appendChild(desc);
+      }
+      promptsParams.appendChild(row);
+    }
+  }
+
+  function promptsFillEditor(entry) {
+    if (!entry) return;
+    promptsSelectedId = entry.id;
+    if (promptsTitle) promptsTitle.textContent = i18n(entry.labelKey || entry.id);
+    if (promptsMeta) {
+      promptsMeta.textContent = entry.id + ' · ' + i18n('prompt_catalog_role_' + (entry.role || 'system'));
+    }
+    if (promptsDesc) promptsDesc.textContent = entry.descriptionKey ? i18n(entry.descriptionKey) : '';
+    if (promptsRole) promptsRole.textContent = i18n('prompt_catalog_role_' + (entry.role || 'system'));
+    if (promptsTemplate) {
+      promptsTemplate.value = entry.template || '';
+      promptsTemplate.setAttribute('data-max-length', String(entry.maxLength || 14000));
+    }
+    if (promptsCustomBadge) {
+      promptsCustomBadge.classList.toggle('hidden', !entry.customized);
+    }
+    promptsRenderParams(entry);
+    promptsUpdateLen();
+    if (promptsEditor) promptsEditor.classList.remove('hidden');
+    if (promptsEmpty) promptsEmpty.classList.add('hidden');
+    promptsRenderNav();
+  }
+
+  function promptsSelect(id) {
+    if (promptsBusy || !id) return;
+    promptsSetStatus('', false);
+    if (promptsLoader) promptsLoader.classList.remove('hidden');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (promptsLoader) promptsLoader.classList.add('hidden');
+        if (!res || !res.ok) return;
+        promptsFillEditor(res);
+      })
+      .withFailureHandler(function (err) {
+        if (promptsLoader) promptsLoader.classList.add('hidden');
+        if (A.reportRpcError) {
+          A.reportRpcError(err, {
+            scope: 'promptCatalog',
+            fallbackKey: 'prompt_catalog_err_load',
+            modal: true,
+          });
+        }
+      })
+      .promptCatalogGet(id);
+  }
+
+  function promptsLoadList(force) {
+    if (!S.get('isAdmin')) return;
+    if (promptsLoaded && !force) return;
+    if (promptsLoader) promptsLoader.classList.remove('hidden');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        promptsLoaded = true;
+        if (promptsLoader) promptsLoader.classList.add('hidden');
+        promptsSections = res && res.sections ? res.sections : [];
+        promptsRenderNav();
+        if (!promptsSelectedId && promptsSections.length && promptsSections[0].items && promptsSections[0].items.length) {
+          promptsSelect(promptsSections[0].items[0].id);
+        } else if (!promptsSelectedId) {
+          if (promptsEditor) promptsEditor.classList.add('hidden');
+          if (promptsEmpty) promptsEmpty.classList.remove('hidden');
+        }
+      })
+      .withFailureHandler(function (err) {
+        if (promptsLoader) promptsLoader.classList.add('hidden');
+        if (A.reportRpcError) {
+          A.reportRpcError(err, {
+            scope: 'promptCatalog',
+            fallbackKey: 'prompt_catalog_err_load',
+            modal: true,
+          });
+        }
+      })
+      .promptCatalogList();
+  }
+
+  function promptsSave() {
+    if (promptsBusy || !promptsSelectedId || !promptsTemplate) return;
+    promptsSetBusy(true, i18n('prompt_catalog_busy_save'));
+    google.script.run
+      .withSuccessHandler(function () {
+        promptsSetBusy(false);
+        promptsSetStatus(i18n('prompt_catalog_saved_ok'), false);
+        promptsLoadList(true);
+        promptsSelect(promptsSelectedId);
+      })
+      .withFailureHandler(function (err) {
+        promptsSetBusy(false);
+        if (A.reportRpcError) {
+          A.reportRpcError(err, {
+            scope: 'promptCatalog',
+            fallbackKey: 'prompt_catalog_err_save',
+            modal: true,
+            setStatus: promptsSetStatus,
+          });
+        }
+      })
+      .promptCatalogSave(promptsSelectedId, promptsTemplate.value);
+  }
+
+  function promptsReset() {
+    if (promptsBusy || !promptsSelectedId) return;
+    if (!window.confirm(i18n('prompt_catalog_reset_confirm'))) return;
+    promptsSetBusy(true, i18n('prompt_catalog_busy_reset'));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        promptsSetBusy(false);
+        promptsSetStatus(i18n('prompt_catalog_reset_ok'), false);
+        if (promptsTemplate && res && res.template != null) {
+          promptsTemplate.value = String(res.template);
+          promptsUpdateLen();
+        }
+        promptsLoadList(true);
+        promptsSelect(promptsSelectedId);
+      })
+      .withFailureHandler(function (err) {
+        promptsSetBusy(false);
+        if (A.reportRpcError) {
+          A.reportRpcError(err, {
+            scope: 'promptCatalog',
+            fallbackKey: 'prompt_catalog_err_reset',
+            modal: true,
+            setStatus: promptsSetStatus,
+          });
+        }
+      })
+      .promptCatalogReset(promptsSelectedId);
+  }
+
+  if (promptsTemplate) {
+    promptsTemplate.addEventListener('input', promptsUpdateLen);
+  }
+  if (promptsSaveBtn) promptsSaveBtn.addEventListener('click', promptsSave);
+  if (promptsResetBtn) promptsResetBtn.addEventListener('click', promptsReset);
+
+  A.prompts = {
+    loadList: promptsLoadList,
+    onTabShow: function () {
+      promptsLoadList(false);
+    },
+  };
+})(window.Aviators);
+</script>

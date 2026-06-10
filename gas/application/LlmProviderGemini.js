@@ -65,20 +65,13 @@ function LlmProviderGemini_consult(cmd) {
     }
   });
 
-  var preamble = UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_system_preamble');
-
-  var prompt =
-    preamble +
-    '\n\n' +
-    UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_section_question') +
-    '\n' +
-    q +
-    '\n\n' +
-    UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_section_documents') +
-    '\n' +
-    blocks.join(
-      UiStrings_t(UiStrings_activeLocale_(), 'llm_gemini_between_docs'),
-    );
+  var preamble = PromptCatalog_getTemplate('gemini.consult.preamble');
+  var documentsBody = blocks.join('\n\n---\n\n');
+  var prompt = PromptCatalog_render('gemini.consult.user_assembly', {
+    preamble: preamble,
+    question: q,
+    documentsBody: documentsBody,
+  });
 
   var modelLabel =
     p.getProperty(LLM_PROP.GEMINI_MODEL) || LLM_DEFAULTS.GEMINI_MODEL;

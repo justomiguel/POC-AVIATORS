@@ -648,10 +648,7 @@ function ContentIngestion_resolveSuccessCaseClient_(common, existing) {
  */
 function ContentIngestion_save(payloadJson) {
   var who = ContentCatalog_requireContributor_();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var payload = JSON.parse(String(payloadJson || '{}'));
+  var payload = JSON.parse(String(payloadJson || '{}'));
     var common = payload.common || {};
     var specific = payload.specific || {};
     var filePayload = payload.file || {};
@@ -853,45 +850,6 @@ function ContentIngestion_save(payloadJson) {
       onboardingDriveLayoutChanged ||
       proposalDriveLayoutChanged;
 
-    var client = ContentIngestion_createRagClient_();
-    var newDocId = '';
-    if (needReindex) {
-      if (
-        !pdfBlob &&
-        (contentType === 'onboarding' || contentType === 'proposal') &&
-        oldDriveFileId
-      ) {
-        pdfBlob = DriveDocuments_getPdfBlobForGlobant(oldDriveFileId);
-      }
-      if (!pdfBlob) {
-        throw new Error('Se requiere archivo para reindexar');
-      }
-      var docMetadata = ContentIngestion_buildMetadata_(
-        {
-          client_name: common.client_name,
-          industry: clientIndustry,
-          title: common.title,
-          file_name: common.file_name,
-        },
-        contentType,
-        specific,
-      );
-      var driveIdForMeta =
-        (newDriveFile && newDriveFile.id) || oldDriveFileId || '';
-      if (driveIdForMeta) {
-        docMetadata.drive_file_id = driveIdForMeta;
-      }
-      var driveUrlForMeta =
-        (skipDriveArchive && externalUrl) ||
-        (newDriveFile && newDriveFile.url) ||
-        oldDriveFileUrl ||
-        '';
-      if (driveUrlForMeta) {
-        docMetadata.drive_file_url = driveUrlForMeta;
-      }
-      newDocId = ContentIngestion_indexBlob_(client, targetProfile, pdfBlob, docMetadata);
-    }
-
     var savedDriveFileId = newDriveFile ? newDriveFile.id : oldDriveFileId;
     var savedDriveFileUrl = newDriveFile ? newDriveFile.url : oldDriveFileUrl;
     if (skipDriveArchive && externalUrl) {
@@ -899,69 +857,132 @@ function ContentIngestion_save(payloadJson) {
       savedDriveFileUrl = externalUrl;
     }
 
-    var toSave = {
-      common: {
-        content_id: contentId,
-        content_type: contentType,
-        title: common.title,
-        summary: common.summary,
+    var toSaveCommon = {
+      content_id: contentId,
+      content_type: contentType,
+      title: common.title,
+      summary: common.summary,
+      client_name: common.client_name,
+      industry: clientIndustry,
+      tags: common.tags || [],
+      file_name:
+        common.file_name ||
+        (existing ? existing.common.file_name : '') ||
+        ('content-' + contentType),
+      mime_type:
+        common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
+      drive_file_id: savedDriveFileId,
+      drive_file_url: savedDriveFileUrl,
+      globant_profile_name: targetProfile,
+      uploaded_by: (existing ? existing.common.uploaded_by : '') || who.email,
+    };
+
+    if (!needReindex) {
+      var toSaveNoIndex = {
+        common: Object.assign({}, toSaveCommon, { globant_document_id: oldDocId }),
+        specific: specific,
+      };
+      var savedNoIndex;
+      try {
+        savedNoIndex = ContentCatalog_upsert(toSaveNoIndex);
+      } catch (eSaveNoIndex) {
+        if (newDriveFile && newDriveFile.id) {
+          ContentIngestion_trashDriveFile_(newDriveFile.id);
+        }
+        throw eSaveNoIndex;
+      }
+      if (usesDrive && newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
+        ContentIngestion_trashDriveFile_(oldDriveFileId);
+      }
+      return {
+        ok: true,
+        item: savedNoIndex.item,
+        meta: {
+          indexed: false,
+          targetProfile: targetProfile,
+          newDocumentId: oldDocId,
+        },
+      };
+    }
+
+    if (
+      !pdfBlob &&
+      (contentType === 'onboarding' || contentType === 'proposal') &&
+      oldDriveFileId
+    ) {
+      pdfBlob = DriveDocuments_getPdfBlobForGlobant(oldDriveFileId);
+    }
+    if (!pdfBlob) {
+      throw new Error('Se requiere archivo para reindexar');
+    }
+    var docMetadata = ContentIngestion_buildMetadata_(
+      {
         client_name: common.client_name,
         industry: clientIndustry,
-        tags: common.tags || [],
-        file_name:
-          common.file_name ||
-          (existing ? existing.common.file_name : '') ||
-          ('content-' + contentType),
-        mime_type:
-          common.mime_type || (existing ? existing.common.mime_type : '') || 'application/pdf',
-        drive_file_id: savedDriveFileId,
-        drive_file_url: savedDriveFileUrl,
-        globant_profile_name: targetProfile,
-        globant_document_id: needReindex
-          ? newDocId
-          : oldDocId,
-        uploaded_by:
-          (existing ? existing.common.uploaded_by : '') || who.email,
+        title: common.title,
+        file_name: common.file_name,
       },
-      specific: specific,
-    };
-
-    var saved;
-    try {
-      saved = ContentCatalog_upsert(toSave);
-    } catch (eSave) {
-      if (newDriveFile && newDriveFile.id) {
-        ContentIngestion_trashDriveFile_(newDriveFile.id);
-      }
-      if (newDocId) {
-        try {
-          client.deleteDocument(targetProfile, newDocId);
-        } catch (ignoreRollback) {}
-      }
-      throw eSave;
+      contentType,
+      specific,
+    );
+    var driveIdForMeta = (newDriveFile && newDriveFile.id) || oldDriveFileId || '';
+    if (driveIdForMeta) {
+      docMetadata.drive_file_id = driveIdForMeta;
+    }
+    var driveUrlForMeta =
+      (skipDriveArchive && externalUrl) ||
+      (newDriveFile && newDriveFile.url) ||
+      oldDriveFileUrl ||
+      '';
+    if (driveUrlForMeta) {
+      docMetadata.drive_file_url = driveUrlForMeta;
     }
 
-    if (needReindex && oldDocId) {
+  var indexClient = ContentIngestion_createRagClient_();
+  var newDocId = ContentIngestion_indexBlob_(
+    indexClient,
+    targetProfile,
+    pdfBlob,
+    docMetadata,
+  );
+
+  var toSaveIndexed = {
+    common: Object.assign({}, toSaveCommon, { globant_document_id: newDocId }),
+    specific: specific,
+  };
+  var savedIndexed;
+  try {
+    savedIndexed = ContentCatalog_upsert(toSaveIndexed);
+  } catch (eSaveIndexed) {
+    if (newDriveFile && newDriveFile.id) {
+      ContentIngestion_trashDriveFile_(newDriveFile.id);
+    }
+    if (newDocId) {
       try {
-        client.deleteDocument(oldProfile || targetProfile, oldDocId);
-      } catch (ignoreOldDelete) {}
+        indexClient.deleteDocument(targetProfile, newDocId);
+      } catch (ignoreRollback) {}
     }
-    if (usesDrive && newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
-      ContentIngestion_trashDriveFile_(oldDriveFileId);
-    }
-
-    return {
-      ok: true,
-      item: saved.item,
-      meta: {
-        indexed: needReindex,
-        targetProfile: targetProfile,
-        newDocumentId: needReindex ? newDocId : oldDocId,
-      },
-    };
-  } finally {
-    lock.releaseLock();
+    throw eSaveIndexed;
   }
+
+  if (oldDocId) {
+    try {
+      indexClient.deleteDocument(oldProfile || targetProfile, oldDocId);
+    } catch (ignoreOldDelete) {}
+  }
+  if (usesDrive && newDriveFile && oldDriveFileId && oldDriveFileId !== newDriveFile.id) {
+    ContentIngestion_trashDriveFile_(oldDriveFileId);
+  }
+
+  return {
+    ok: true,
+    item: savedIndexed.item,
+    meta: {
+      indexed: true,
+      targetProfile: targetProfile,
+      newDocumentId: newDocId,
+    },
+  };
 }
 
 /**
@@ -970,10 +991,7 @@ function ContentIngestion_save(payloadJson) {
  */
 function ContentIngestion_delete(contentId) {
   ContentCatalog_requireContributor_();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var id = String(contentId || '').trim();
+  var id = String(contentId || '').trim();
     if (!id) throw new Error('content_id requerido');
     var item = ContentCatalog_get(id).item;
     var profile = String(item.common.globant_profile_name || '').trim();
@@ -996,19 +1014,16 @@ function ContentIngestion_delete(contentId) {
     ) {
       ContentIngestion_trashDriveFile_(driveFileId);
     }
-    return {
-      ok: true,
-      deleted: !!(deleted && deleted.deleted),
-      remoteDeleteOk: remoteDeleteError == null,
-      remoteDeleteWarning: remoteDeleteError
-        ? String(remoteDeleteError && remoteDeleteError.message
-            ? remoteDeleteError.message
-            : remoteDeleteError)
-        : '',
-    };
-  } finally {
-    lock.releaseLock();
-  }
+  return {
+    ok: true,
+    deleted: !!(deleted && deleted.deleted),
+    remoteDeleteOk: remoteDeleteError == null,
+    remoteDeleteWarning: remoteDeleteError
+      ? String(remoteDeleteError && remoteDeleteError.message
+          ? remoteDeleteError.message
+          : remoteDeleteError)
+      : '',
+  };
 }
 
 /**
@@ -1037,10 +1052,9 @@ function ContentIngestion_getLiveDriveFile_(driveFileId) {
  */
 function ContentIngestion_repairIndexFromDrive(contentId) {
   ContentCatalog_requireContributor_();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var id = String(contentId || '').trim();
+  /** @type {Object|null} */
+  var repairIndex = null;
+  var id = String(contentId || '').trim();
     if (!id) throw new Error('content_id requerido');
     var item = ContentCatalog_get(id).item;
     var common = item.common || {};
@@ -1064,7 +1078,6 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
     var targetProfile = String(agent.profileName || '').trim();
     if (!targetProfile) throw new Error('profileName vacio para agente destino');
 
-    var client = ContentIngestion_createRagClient_();
     var blob = DriveDocuments_getPdfBlobForGlobant(driveFileId);
     var docMetadata = ContentIngestion_buildMetadata_(common, contentType, item.specific || {});
     if (driveFileId) {
@@ -1073,13 +1086,42 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
     if (driveFile.getUrl()) {
       docMetadata.drive_file_url = String(driveFile.getUrl() || '');
     }
-    var newDocId = ContentIngestion_indexBlob_(client, targetProfile, blob, docMetadata);
-    var nextCommon = Object.assign({}, common, {
-      file_name: String(driveFile.getName() || common.file_name || ''),
-      mime_type: String(driveFile.getMimeType() || common.mime_type || 'application/pdf'),
-      drive_file_id: driveFileId,
-      drive_file_url: String(driveFile.getUrl() || common.drive_file_url || ''),
-      globant_profile_name: targetProfile,
+
+  repairIndex = {
+    id: id,
+    common: common,
+    specific: item.specific || {},
+    profile: profile,
+    oldDocId: oldDocId,
+    targetProfile: targetProfile,
+    driveFile: driveFile,
+    driveFileId: driveFileId,
+    blob: blob,
+    docMetadata: docMetadata,
+  };
+
+  if (!repairIndex) {
+    throw new Error('ContentIngestion_repairIndexFromDrive: estado interno inválido');
+  }
+
+  var client = ContentIngestion_createRagClient_();
+  var newDocId = ContentIngestion_indexBlob_(
+    client,
+    repairIndex.targetProfile,
+    repairIndex.blob,
+    repairIndex.docMetadata,
+  );
+
+  var nextCommon = Object.assign({}, repairIndex.common, {
+      file_name: String(repairIndex.driveFile.getName() || repairIndex.common.file_name || ''),
+      mime_type: String(
+        repairIndex.driveFile.getMimeType() || repairIndex.common.mime_type || 'application/pdf',
+      ),
+      drive_file_id: repairIndex.driveFileId,
+      drive_file_url: String(
+        repairIndex.driveFile.getUrl() || repairIndex.common.drive_file_url || '',
+      ),
+      globant_profile_name: repairIndex.targetProfile,
       globant_document_id: newDocId,
     });
 
@@ -1087,30 +1129,33 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
     try {
       saved = ContentCatalog_upsert({
         common: nextCommon,
-        specific: item.specific || {},
+        specific: repairIndex.specific,
       });
     } catch (eSave) {
       try {
-        client.deleteDocument(targetProfile, newDocId);
+        client.deleteDocument(repairIndex.targetProfile, newDocId);
       } catch (ignoreRollback) {}
       throw eSave;
     }
 
-    if (oldDocId && (oldDocId !== newDocId || profile !== targetProfile)) {
+    if (
+      repairIndex.oldDocId &&
+      (repairIndex.oldDocId !== newDocId || repairIndex.profile !== repairIndex.targetProfile)
+    ) {
       try {
-        client.deleteDocument(profile || targetProfile, oldDocId);
+        client.deleteDocument(
+          repairIndex.profile || repairIndex.targetProfile,
+          repairIndex.oldDocId,
+        );
       } catch (ignoreOldDelete) {}
     }
 
-    return {
-      ok: true,
-      action: 'reindexed',
-      item: saved.item,
-      documentId: newDocId,
-    };
-  } finally {
-    lock.releaseLock();
-  }
+  return {
+    ok: true,
+    action: 'reindexed',
+    item: saved.item,
+    documentId: newDocId,
+  };
 }
 
 /**
@@ -1122,33 +1167,27 @@ function ContentIngestion_repairIndexFromDrive(contentId) {
  */
 function ContentIngestion_reindexWithMetadata(contentId) {
   ContentCatalog_requireContributor_();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var id = String(contentId || '').trim();
-    if (!id) throw new Error('content_id requerido');
-    var item = ContentCatalog_get(id).item;
-    var common = item.common || {};
-    var profile = String(common.globant_profile_name || '').trim();
-    var docId = String(common.globant_document_id || '').trim();
+  var id = String(contentId || '').trim();
+  if (!id) throw new Error('content_id requerido');
+  var item = ContentCatalog_get(id).item;
+  var common = item.common || {};
+  var profile = String(common.globant_profile_name || '').trim();
+  var docId = String(common.globant_document_id || '').trim();
 
-    if (!profile || !docId) {
-      throw new Error('Documento no tiene profile/docId para reindexar');
-    }
-
-    var contentType = String(common.content_type || '').trim();
-    var docMetadata = ContentIngestion_buildMetadata_(common, contentType, item.specific || {});
-
-    var client = ContentIngestion_createRagClient_();
-    var result = client.reindexDocumentWithMetadata(profile, docId, docMetadata);
-
-    return {
-      ok: true,
-      action: 'metadata_updated',
-      indexStatus: result.indexStatus,
-    };
-  } finally {
-    lock.releaseLock();
+  if (!profile || !docId) {
+    throw new Error('Documento no tiene profile/docId para reindexar');
   }
+
+  var contentType = String(common.content_type || '').trim();
+  var docMetadata = ContentIngestion_buildMetadata_(common, contentType, item.specific || {});
+
+  var client = ContentIngestion_createRagClient_();
+  var result = client.reindexDocumentWithMetadata(profile, docId, docMetadata);
+
+  return {
+    ok: true,
+    action: 'metadata_updated',
+    indexStatus: result.indexStatus,
+  };
 }
 

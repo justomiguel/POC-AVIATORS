@@ -18,6 +18,7 @@ var SUPABASE_TABLE = Object.freeze({
   SALESFORCE_ACCOUNTS: 'salesforce_accounts',
   KNOWLEDGE_GRAPH_NODES: 'knowledge_graph_nodes',
   KNOWLEDGE_GRAPH_EDGES: 'knowledge_graph_edges',
+  PROPOSAL_BUILDING_SESSIONS: 'proposal_building_sessions',
 });
 
 var SUPABASE_SETTINGS_KEY = Object.freeze({

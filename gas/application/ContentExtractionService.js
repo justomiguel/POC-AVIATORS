@@ -215,27 +215,12 @@ function ContentExtraction_getTagsHintForPrompt_() {
 function ContentExtraction_buildTagPromptBlock_(contentType) {
   var minTags = contentType === 'success_case' ? 8 : 5;
   var maxTags = contentType === 'success_case' ? 14 : 10;
-  return [
-    'TAG STRATEGY — tags feed the Aviators tag cloud (search, filters, discovery). Be thoughtful and varied.',
-    'Output ' + minTags + '-' + maxTags + ' tags in common.tags when the document supports them.',
-    'Mix several DIMENSIONS (English camelCase, leading # only):',
-    '- Capability: #customerExperience, #dataAnalytics, #applicationModernization, #enterpriseIntegration, #cybersecurity',
-    '- Technology: #cloudComputing, #generativeAI, #machineLearning, #sap, #salesforce, #apiFirst, #microservices',
-    '- Aviation domain: #aviation, #airlines, #airports, #cargo, #groundHandling, #loyalty, #ancillaries, #ndc, #pss, #dcs, #revenueManagement',
-    '- Engagement: #staffAugmentation, #fixedPrice, #timeAndMaterials, #discovery, #mvp, #transformationProgram',
-    '- Outcome: #costReduction, #revenueGrowth, #timeToMarket, #operationalEfficiency, #customerSatisfaction, #automation',
-    '- Geography or segment (only if explicit): #latam, #emea, #enterprise, #lowCostCarrier',
-    'Rules:',
-    '- REUSE a FREQUENT CATALOG TAG when the meaning matches (keeps the cloud cohesive).',
-    '- Only add a NEW tag when no catalog/alias tag fits; prefer an existing tag over inventing a synonym.',
-    '- No duplicate synonyms (#analytics vs #dataAnalytics — pick the catalog one). No filler (#document, #pdf, #business).',
-    '- Scan logos, tech stacks, chapter titles, KPI callouts, and methodology boxes for tag ideas.',
-    ContentExtraction_getTagsHintForPrompt_(),
-  ]
-    .filter(function (line) {
-      return !!line;
-    })
-    .join('\n');
+  var tagStrategyBody = PromptCatalog_render('content.extract.tag_strategy', {
+    minTags: String(minTags),
+    maxTags: String(maxTags),
+    frequentTagsHint: ContentExtraction_getTagsHintForPrompt_(),
+  });
+  return PromptCatalog_render('content.extract.tags_block', { tagStrategyBody: tagStrategyBody });
 }
 
 /**
@@ -1239,22 +1224,17 @@ function ContentExtraction_promptForType_(contentType, hints) {
     throw new Error('content_type invalido');
   }
   commonInstructions.push('Prioritize accuracy and traceability over completeness.');
-  return commonInstructions.filter(function (line) {
+  var instructionsBody = commonInstructions.filter(function (line) {
     return !!line;
   }).join('\n');
+  return PromptCatalog_render('content.extract.single_pass.user', { instructionsBody: instructionsBody });
 }
 
 /**
  * @return {string}
  */
 function ContentExtraction_systemPrompt_() {
-  return [
-    'You are a metadata extraction specialist for Aviators, a B2B knowledge base for aviation, airlines, airports, logistics and related industries.',
-    'You receive business documents (often PDF) and extract structured catalog fields.',
-    'Be conservative: never invent client names, dates, or metrics not supported by the document.',
-    'For tags: be creative and specific — they power a tag cloud used for search and discovery across the portfolio.',
-    'Return ONLY valid JSON as requested. No markdown.',
-  ].join('\n');
+  return PromptCatalog_getTemplate('content.extract.system');
 }
 
 /**
@@ -1370,99 +1350,55 @@ function ContentExtraction_chatFilePass_(client, systemPrompt, userPrompt, blob,
  * @param {{fileName?:string, clientsHint?:string}=} hints
  * @return {string}
  */
-function ContentExtraction_promptSuccessCasePass_(passId, hints) {
+function ContentExtraction_buildPassHintParams_(hints) {
   hints = hints || {};
   var fileName = String(hints.fileName || '').trim();
   var clientsHint = String(hints.clientsHint || '').trim();
   var entryIndustry = String(hints.entryIndustry || '').trim();
-  var fileHint = fileName
-    ? 'Original file name: "' + fileName + '". Use as hint for title/client when unclear.\n'
-    : '';
-  var entryIndustryHint = entryIndustry
-    ? 'User pre-selected industry for this upload: "' +
-      entryIndustry +
-      '". Set common.industry to this exact value unless the document clearly contradicts it.\n'
-    : '';
+  return {
+    fileHint: fileName
+      ? 'Original file name: "' + fileName + '". Use as hint for title/client when unclear.\n'
+      : '',
+    entryIndustryHint: entryIndustry
+      ? 'User pre-selected industry for this upload: "' +
+        entryIndustry +
+        '". Set common.industry to this exact value unless the document clearly contradicts it.\n'
+      : '',
+    clientsHint: clientsHint,
+    tagBlock: ContentExtraction_buildTagPromptBlock_(hints.contentType || 'success_case'),
+    industries: CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
+    materialKindEnum:
+      'specific.material_kind MUST be one of: ' + CONTENT_PROPOSAL_MATERIAL_KINDS.join(', ') + '.',
+    enumsBlock:
+      'stage MUST be one of: ' +
+      CONTENT_PROPOSAL_STAGES.join(', ') +
+      '. pricing_model and offering MUST be one of: ' +
+      CONTENT_PRICING_MODELS.join(', ') +
+      ' when stated; otherwise empty string.',
+  };
+}
 
+/**
+ * @param {string} passId
+ * @param {{fileName?:string, clientsHint?:string}=} hints
+ * @return {string}
+ */
+function ContentExtraction_promptSuccessCasePass_(passId, hints) {
+  hints = hints || {};
+  hints.contentType = 'success_case';
+  var params = ContentExtraction_buildPassHintParams_(hints);
   if (passId === 'common') {
-    return [
-      'Extract COMMON catalog metadata from this success case / case study PDF.',
-      fileHint,
-      entryIndustryHint,
-      clientsHint,
-      'Read cover, headers, footers, logos, tables, and metadata blocks.',
-      'Return ONLY valid JSON. No markdown.',
-      ContentExtraction_buildTagPromptBlock_('success_case'),
-      'INDUSTRY must be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', '),
-      'Schema:',
-      '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"confidence":"high|medium|low","warnings":[]}',
-      'common.summary: 1-3 sentences — document purpose only (NOT challenge/solution detail).',
-      'common.tags: rich set for tag-cloud discovery (capabilities, tech, aviation domain, outcomes).',
-      'Do NOT extract challenge, solution, or impact here — other passes handle those.',
-    ]
-      .filter(function (line) {
-        return !!line;
-      })
-      .join('\n');
+    return PromptCatalog_render('content.sc.common.user', params);
   }
-
   if (passId === 'challenge') {
-    return [
-      'Extract ONLY the business CHALLENGE from this success case PDF.',
-      fileHint,
-      'Search the FULL document including slides, sidebars, callouts, and two-column layouts.',
-      'Section titles to look for (any language):',
-      'Challenge, Reto, Desafío, Desafio, Problem, Context, Contexto, Situation, Situación, Background,',
-      'Need, Pain points, Objetivo, Business challenge, The client faced, El cliente enfrentaba.',
-      'Return ONLY valid JSON:',
-      '{"challenge":"<2-6 sentences from the document>","confidence":"high|medium|low","warnings":[]}',
-      'Rules:',
-      '- challenge MUST describe the problem/context BEFORE the project — not the solution or results.',
-      '- Do NOT leave challenge empty if any section describes the client problem or pain points.',
-      '- Use the document language (Spanish or English). Quote or paraphrase faithfully; do not invent.',
-      '- If truly absent, use "" and explain in warnings[].',
-    ].join('\n');
+    return PromptCatalog_render('content.sc.challenge.user', params);
   }
-
   if (passId === 'solution') {
-    return [
-      'Extract ONLY the SOLUTION from this success case PDF.',
-      fileHint,
-      'Search the FULL document including slides, sidebars, callouts, and two-column layouts.',
-      'Section titles to look for (any language):',
-      'Solution, Solución, Solucion, Approach, What we did, Lo que hicimos, Our response,',
-      'Delivery, Implementation, Scope, How we helped, Services, Technologies, Equipo.',
-      'Return ONLY valid JSON:',
-      '{"solution":"<2-6 sentences from the document>","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
-      'Rules:',
-      '- solution MUST describe what Globant/the team delivered — approach, scope, technologies.',
-      '- tags (optional): 0-4 English #camelCase tags for tech stack, methods, or capabilities visible in this section only.',
-      '- Do NOT leave solution empty if any section describes the work done or approach.',
-      '- Do NOT repeat the challenge or impact/results here.',
-      '- Use the document language. Quote or paraphrase faithfully; do not invent.',
-      '- If truly absent, use "" and explain in warnings[].',
-    ].join('\n');
+    return PromptCatalog_render('content.sc.solution.user', params);
   }
-
   if (passId === 'impact') {
-    return [
-      'Extract IMPACT, RESULTS, and supplementary notes from this success case PDF.',
-      fileHint,
-      'Search for: Impact, Impacto, Results, Resultados, Outcomes, Benefits, Beneficios, KPI, Metrics,',
-      'Métricas, Value, ROI, testimonial quotes, awards, proof points.',
-      'Return ONLY valid JSON:',
-      '{"impact_metric":"","impact_value":"","evidence":"","notes":"","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
-      'Field rules:',
-      '- tags (optional): 0-3 #camelCase outcome or domain tags (e.g. #costReduction, #customerSatisfaction) if supported here.',
-      '- impact_metric: KPI name only (e.g. "cost reduction", "time to market", "NPS").',
-      '- impact_value: quantified outcome with numbers when present (e.g. "30%", "$2M", "6 months faster").',
-      '- evidence: client quotes, awards, testimonials, or proof points if stated.',
-      '- notes: other relevant facts not captured above.',
-      '- Prefer filling impact_value from bullet lists and stat callouts in the PDF.',
-      '- Use document language. Do not invent metrics.',
-    ].join('\n');
+    return PromptCatalog_render('content.sc.impact.user', params);
   }
-
   throw new Error('success_case pass invalido');
 }
 
@@ -1476,21 +1412,9 @@ function ContentExtraction_systemPromptForPass_(passId, contentType) {
     return ContentExtraction_systemPrompt_();
   }
   if (contentType === 'proposal') {
-    return [
-      'You are a precision extractor for Aviators commercial proposals (aviation, airlines, airports, logistics, Globant studios).',
-      'You receive a PDF and extract ONE focused field group only.',
-      'Read every page including tables, footers, and slide notes.',
-      'Return ONLY valid JSON as requested. No markdown.',
-      'Never invent facts not supported by the document.',
-    ].join('\n');
+    return PromptCatalog_getTemplate('content.extract.system.proposal_pass');
   }
-  return [
-    'You are a precision extractor for Aviators success case documents (aviation, airlines, airports, logistics).',
-    'You receive a PDF and extract ONE focused field group only.',
-    'Read every page. Follow section headers and visual layout.',
-    'Return ONLY valid JSON as requested. No markdown.',
-    'Never invent facts not supported by the document.',
-  ].join('\n');
+  return PromptCatalog_getTemplate('content.extract.system.success_pass');
 }
 
 /**
@@ -1565,80 +1489,17 @@ function ContentExtraction_mergeSuccessCasePass_(passId, parsed, draft, locale) 
  */
 function ContentExtraction_promptProposalPass_(passId, hints) {
   hints = hints || {};
-  var fileName = String(hints.fileName || '').trim();
-  var clientsHint = String(hints.clientsHint || '').trim();
-  var entryIndustry = String(hints.entryIndustry || '').trim();
-  var fileHint = fileName
-    ? 'Original file name: "' + fileName + '". Use as hint for title/client when unclear.\n'
-    : '';
-  var entryIndustryHint = entryIndustry
-    ? 'User pre-selected industry: "' +
-      entryIndustry +
-      '". Set common.industry to this exact value unless the document clearly contradicts it.\n'
-    : '';
-
+  hints.contentType = 'proposal';
+  var params = ContentExtraction_buildPassHintParams_(hints);
   if (passId === 'common') {
-    return [
-      'Extract COMMON catalog metadata from this commercial proposal / RFP / Globant sales PDF.',
-      fileHint,
-      entryIndustryHint,
-      clientsHint,
-      'Read cover, headers, footers, tables, staffing grids, SOW sections, and metadata blocks.',
-      'Return ONLY valid JSON. No markdown.',
-      ContentExtraction_buildTagPromptBlock_('proposal'),
-      ContentExtraction_getIndustryCatalogHint_(),
-      'INDUSTRY must be one of: ' + CONTENT_ALLOWED_CLIENT_INDUSTRIES.join(', ') + ' when material_kind is COMMERCIAL_PROPOSAL.',
-      'Schema:',
-      '{"common":{"title":"","summary":"","client_name":"","industry":"","tags":[]},"specific":{"material_kind":""},"confidence":"high|medium|low","warnings":[]}',
-      'common.summary: 4-6 sentences covering (1) document purpose, (2) client/context, (3) proposed scope or solution headline, (4) commercial model if visible, (5) key technologies or studios mentioned. Use document language.',
-      'common.client_name: legal or commercial customer/account name when present.',
-      'specific.material_kind MUST be one of: ' +
-        CONTENT_PROPOSAL_MATERIAL_KINDS.join(', ') +
-        '. COMMERCIAL_PROPOSAL for client RFP/deal decks; GLOBANT_STUDIO for Studio capability decks; GLOBANT_OFFERING for AI Pods/engagement models; CORPORATE for general commercial material; OTHER if none fit.',
-      'Do NOT extract stage, pricing, effort, timeline, or scope detail here — other passes handle those.',
-    ]
-      .filter(function (line) {
-        return !!line;
-      })
-      .join('\n');
+    return PromptCatalog_render('content.proposal.common.user', params);
   }
-
   if (passId === 'commercial') {
-    return [
-      'Extract ONLY commercial / deal metadata from this proposal PDF.',
-      fileHint,
-      'Search: pricing, commercial model, stage, win probability, effort, staffing, FTE, timeline, duration, SOW commercial tables.',
-      'Section titles (any language): Pricing, Commercial, Investment, Propuesta económica, Modelo comercial, Effort, Esfuerzo, Timeline, Cronograma, Duración, Staffing, Team, FTE.',
-      'Return ONLY valid JSON:',
-      '{"stage":"","pricing_model":"","offering":"","effort_estimate":"","timeline":"","win_probability":"","confidence":"high|medium|low","warnings":[]}',
-      'stage MUST be one of: ' +
-        CONTENT_PROPOSAL_STAGES.join(', ') +
-        '. Use PRESENTED when not a live deal artifact.',
-      'pricing_model and offering MUST be one of: ' +
-        CONTENT_PRICING_MODELS.join(', ') +
-        ' when stated; otherwise empty string.',
-      'effort_estimate: team size, FTEs, man-days, or effort range from tables (e.g. "12 FTE · 6 months").',
-      'timeline: project duration or calendar window (e.g. "Q2–Q4 2025", "18 weeks").',
-      'win_probability: percentage or qualitative win chance if stated; else empty.',
-      'Use document language. Do not invent numbers.',
-    ].join('\n');
+    return PromptCatalog_render('content.proposal.commercial.user', params);
   }
-
   if (passId === 'scope') {
-    return [
-      'Extract scope, studio, topic, and supplementary notes from this proposal PDF.',
-      fileHint,
-      'Search: scope, alcance, deliverables, entregables, our understanding, approach, solution overview, studio branding, technologies.',
-      'Return ONLY valid JSON:',
-      '{"topic":"","globant_studio":"","notes":"","tags":["#optionalCamelTag"],"confidence":"high|medium|low","warnings":[]}',
-      'topic: thematic subject (aviation, loyalty, cloud migration, AI transformation, etc.). Required for CORPORATE/OTHER material.',
-      'globant_studio: Globant Studio name when document is from/about a Studio (Aviation Studio, AI Studio, etc.).',
-      'notes: 4-8 sentences — scope items, deliverables, assumptions, tech stack, differentiators not captured elsewhere. Prefer bullet content merged into prose.',
-      'tags (optional): 0-6 English #camelCase tags for capabilities, tech, domain.',
-      'Do NOT repeat the full summary here; focus on operational scope and deliverables.',
-    ].join('\n');
+    return PromptCatalog_render('content.proposal.scope.user', params);
   }
-
   throw new Error('proposal pass invalido');
 }
 

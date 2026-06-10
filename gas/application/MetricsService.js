@@ -359,6 +359,176 @@ function MetricsService_buildUsageAggregates_(usageRows, topN) {
   };
 }
 
+/** @return {string[]} */
+function MetricsService_sectionKeys_() {
+  return ['home', 'onboarding', 'globant_offering', 'proposal_building', 'other'];
+}
+
+/**
+ * @param {Object} row
+ * @return {string}
+ */
+function MetricsService_classifySection_(row) {
+  var mode = String(row.mode || '').trim().toLowerCase();
+  var agentId = String(row.agent_id || '').trim().toLowerCase();
+  if (mode === 'onboarding' || agentId === 'onboarding') return 'onboarding';
+  if (mode === 'globant_offering') return 'globant_offering';
+  if (mode === 'proposal_building') return 'proposal_building';
+  if (
+    mode === 'globant_agent' ||
+    mode === 'globant_multi' ||
+    mode === 'globant_direct' ||
+    mode === 'chat'
+  ) {
+    return 'home';
+  }
+  return 'other';
+}
+
+/**
+ * @param {Array<Object>} usageRows
+ * @return {{bySection:Object<string,number>,trendBySection:Array<Object>,uniqueUsers:number}}
+ */
+function MetricsService_buildSectionAggregates_(usageRows) {
+  var bySection = {};
+  var keys = MetricsService_sectionKeys_();
+  var ki;
+  for (ki = 0; ki < keys.length; ki++) {
+    bySection[keys[ki]] = 0;
+  }
+
+  var trendMap = {};
+  var users = {};
+  for (var i = 0; i < usageRows.length; i++) {
+    var row = usageRows[i];
+    var section = MetricsService_classifySection_(row);
+    bySection[section] = (bySection[section] || 0) + 1;
+
+    var em = String(row.user_email || '').trim().toLowerCase();
+    if (em) users[em] = true;
+
+    var ms = Number(row.ts_ms || 0) || MetricsService_toMs_(row.ts_iso);
+    if (!ms) continue;
+    var dd = new Date(ms).toISOString().slice(0, 10);
+    if (!trendMap[dd]) {
+      trendMap[dd] = { date: dd };
+      for (ki = 0; ki < keys.length; ki++) {
+        trendMap[dd][keys[ki]] = 0;
+      }
+    }
+    trendMap[dd][section] = (trendMap[dd][section] || 0) + 1;
+  }
+
+  var trendBySection = [];
+  for (var day in trendMap) {
+    if (!Object.prototype.hasOwnProperty.call(trendMap, day)) continue;
+    trendBySection.push(trendMap[day]);
+  }
+  trendBySection.sort(function (a, b) {
+    return String(a.date).localeCompare(String(b.date));
+  });
+
+  return {
+    bySection: bySection,
+    trendBySection: trendBySection,
+    uniqueUsers: Object.keys(users).length,
+  };
+}
+
+/**
+ * @param {Array<Object>} feedbackRows
+ * @param {{startMs:number,endMs:number}} bounds
+ * @return {{up:number,down:number,total:number,satisfactionPct:number|null}}
+ */
+function MetricsService_buildFeedbackSummary_(feedbackRows, bounds) {
+  var up = 0;
+  var down = 0;
+  for (var i = 0; i < feedbackRows.length; i++) {
+    var row = feedbackRows[i] || {};
+    var ms = MetricsService_toMs_(row.ts_iso);
+    if (!ms || ms < bounds.startMs || ms > bounds.endMs) continue;
+    var rating = String(row.rating || '').trim();
+    if (rating === 'up') up++;
+    else if (rating === 'down') down++;
+  }
+  var total = up + down;
+  return {
+    up: up,
+    down: down,
+    total: total,
+    satisfactionPct: total ? Math.round((up / total) * 100) : null,
+  };
+}
+
+/**
+ * @param {Array<Object>} sessionRows
+ * @param {{startMs:number,endMs:number}} bounds
+ * @return {{total:number,completed:number,inProgress:number,failed:number,byUser:Array<{name:string,count:number}>}}
+ */
+function MetricsService_buildProposalBuildingSummary_(sessionRows, bounds) {
+  var total = 0;
+  var completed = 0;
+  var inProgress = 0;
+  var failed = 0;
+  var byUserMap = {};
+  for (var i = 0; i < sessionRows.length; i++) {
+    var row = sessionRows[i] || {};
+    var ms = MetricsService_toMs_(row.created_at || row.updated_at);
+    if (!ms || ms < bounds.startMs || ms > bounds.endMs) continue;
+    total++;
+    var st = String(row.status || 'in_progress').trim();
+    if (st === 'completed') completed++;
+    else if (st === 'failed') failed++;
+    else inProgress++;
+
+    var userLabel = String(row.user_email || '').trim();
+    if (userLabel) {
+      var local = userLabel.split('@')[0] || userLabel;
+      byUserMap[local] = (byUserMap[local] || 0) + 1;
+    }
+  }
+  return {
+    total: total,
+    completed: completed,
+    inProgress: inProgress,
+    failed: failed,
+    byUser: MetricsService_mapToRank_(byUserMap, 8),
+  };
+}
+
+/**
+ * @return {{successCases:number,proposals:number,onboarding:number,clients:number,kgNodes:number,kgEdges:number}}
+ */
+function MetricsService_buildCatalogStats_() {
+  var res = ContentCatalog_list({ skip: 0, limit: 0, skipReconcile: true });
+  var items = (res && res.items) || [];
+  var successCases = 0;
+  var proposals = 0;
+  var onboarding = 0;
+  var clients = 0;
+  for (var i = 0; i < items.length; i++) {
+    var type = String((items[i].common && items[i].common.content_type) || '').trim();
+    if (type === 'success_case') successCases++;
+    else if (type === 'proposal') proposals++;
+    else if (type === 'onboarding') onboarding++;
+    else if (type === 'client') clients++;
+  }
+  var kgNodes = 0;
+  var kgEdges = 0;
+  try {
+    kgNodes = KnowledgeGraphStore_countAllNodes();
+    kgEdges = KnowledgeGraphStore_countAllEdges();
+  } catch (ignoreKg) {}
+  return {
+    successCases: successCases,
+    proposals: proposals,
+    onboarding: onboarding,
+    clients: clients,
+    kgNodes: kgNodes,
+    kgEdges: kgEdges,
+  };
+}
+
 /**
  * @param {number} topN
  * @return {{successByClient:Array<{name:string,count:number}>,successByIndustry:Array<{name:string,count:number}>,proposalByClient:Array<{name:string,count:number}>,proposalByIndustry:Array<{name:string,count:number}>}}
@@ -439,18 +609,46 @@ function MetricsService_dashboard(range, topN) {
   var usageRows = MetricsStore_listUsageEvents().map(MetricsStore_usageToLegacyRow_);
   var filteredUsage = MetricsService_filterRowsByRange_(usageRows, bounds);
   var usageAgg = MetricsService_buildUsageAggregates_(filteredUsage, topN || 10);
+  var sectionAgg = MetricsService_buildSectionAggregates_(filteredUsage);
   var contentAgg = MetricsService_buildContentLeaderboards_(topN || 10);
+  var catalogStats = MetricsService_buildCatalogStats_();
+  var feedbackRows = MetricsStore_listFeedbackEvents();
+  var feedbackSummary = MetricsService_buildFeedbackSummary_(feedbackRows, bounds);
+  var proposalRows = ProposalBuildingStore_listAllForMetrics();
+  var proposalSummary = MetricsService_buildProposalBuildingSummary_(proposalRows, bounds);
+  var unansweredCount = filteredUsage.filter(function (r) {
+    return String(r.is_unanswered || '') === '1' || r.is_unanswered === true;
+  }).length;
+  var questionsCount = filteredUsage.length;
+  var answerRatePct =
+    questionsCount > 0
+      ? Math.round(((questionsCount - unansweredCount) / questionsCount) * 100)
+      : null;
 
   return {
     ok: true,
     range: String(range || '30d'),
     generatedAt: new Date().toISOString(),
     summary: {
-      questions: filteredUsage.length,
-      unanswered: filteredUsage.filter(function (r) {
-        return String(r.is_unanswered || '') === '1';
-      }).length,
+      questions: questionsCount,
+      unanswered: unansweredCount,
+      uniqueUsers: sectionAgg.uniqueUsers,
+      answerRatePct: answerRatePct,
+      homeQuestions: sectionAgg.bySection.home || 0,
+      onboardingQuestions: sectionAgg.bySection.onboarding || 0,
+      globantOfferingQuestions: sectionAgg.bySection.globant_offering || 0,
+      proposalBuildingQuestions: sectionAgg.bySection.proposal_building || 0,
+      proposalsBuilt: proposalSummary.completed,
+      proposalsInProgress: proposalSummary.inProgress,
+      feedbackUp: feedbackSummary.up,
+      feedbackDown: feedbackSummary.down,
+      feedbackSatisfactionPct: feedbackSummary.satisfactionPct,
+      chatConversations: MetricsStore_countChatConversations(),
     },
+    sections: sectionAgg.bySection,
+    catalog: catalogStats,
+    proposalBuilding: proposalSummary,
+    feedback: feedbackSummary,
     leaderboard: {
       users: usageAgg.byUser,
       agents: usageAgg.byAgent,
@@ -458,8 +656,10 @@ function MetricsService_dashboard(range, topN) {
       successByIndustry: contentAgg.successByIndustry,
       proposalByClient: contentAgg.proposalByClient,
       proposalByIndustry: contentAgg.proposalByIndustry,
+      proposalBuilders: proposalSummary.byUser,
     },
     trend: usageAgg.trend,
+    trendBySection: sectionAgg.trendBySection,
   };
 }
 
