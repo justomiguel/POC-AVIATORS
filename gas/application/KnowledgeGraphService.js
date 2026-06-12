@@ -697,7 +697,7 @@ function KnowledgeGraph_syncClient_(clientId) {
   KnowledgeGraph_syncClientMetadata_(cid);
   var name = String(row.client_name || '').trim();
   if (name) {
-    var dbRows = ContentCatalogStore_listAll();
+    var dbRows = ContentCatalogStore_listByClientName_(name, 100);
     var ri;
     for (ri = 0; ri < dbRows.length; ri++) {
       var cn = String(dbRows[ri].client_name || '').trim();
@@ -945,8 +945,11 @@ function KnowledgeGraph_nextRebuildPhase_(phase) {
  * @return {Object}
  */
 function KnowledgeGraph_getSyncStatusInternal_() {
-  var catalogRows = ContentCatalogStore_listAll();
-  var catalogCount = catalogRows.length;
+  var catalogCount = 0;
+  try {
+    catalogCount = ContentCatalogStore_countFiltered({});
+  } catch (ignoreCount) {}
+  var catalogRows = ContentCatalogStore_listAllPages_({}, 100, 10000);
   /** @type {Object<string, boolean>} */
   var catalogIds = {};
   /** @type {Object<string, boolean>} */
@@ -1831,8 +1834,179 @@ function KnowledgeGraph_resolveSeedIds_(filters) {
  * @param {Object} filters
  * @return {{ok:boolean,nodes:Array<Object>,edges:Array<Object>,truncated:boolean,stats:Object}}
  */
+function KnowledgeGraph_expandSubgraphBounded_(seedIds, filters) {
+  filters = filters || {};
+  var limits = KnowledgeGraphLimits_get();
+  var maxNodes = Math.min(
+    limits.maxNodesCap,
+    Math.max(50, Number(filters.maxNodes) || limits.maxNodesDefault),
+  );
+  var depth = Math.min(
+    limits.bfsDepthCap,
+    Math.max(1, Number(filters.depth) || limits.bfsDepthDefault),
+  );
+
+  /** @type {Object<string, Object>} */
+  var allNodesById = {};
+  /** @type {Object<string, Object>} */
+  var edgePool = {};
+  /** @type {Object<string, boolean>} */
+  var selected = {};
+  /** @type {Array<string>} */
+  var order = [];
+  var httpCalls = 0;
+
+  function loadNodesBatch_(ids) {
+    var unique = [];
+    var seen = {};
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var id = String(ids[i] || '').trim();
+      if (!id || seen[id] || allNodesById[id]) continue;
+      seen[id] = true;
+      unique.push(id);
+    }
+    if (!unique.length) return;
+    var rows = KnowledgeGraphStore_getNodesByIds(unique);
+    httpCalls += 1;
+    for (i = 0; i < rows.length; i++) {
+      allNodesById[String(rows[i].node_id || '')] = rows[i];
+    }
+  }
+
+  function tryAdd_(nid) {
+    if (!nid || selected[nid]) return false;
+    var row = allNodesById[nid];
+    if (!row) {
+      row = KnowledgeGraphStore_getNode(nid);
+      httpCalls += 1;
+      if (row) allNodesById[nid] = row;
+    }
+    if (!row) return false;
+    if (!KnowledgeGraph_nodePassesFilters_(row, filters)) return false;
+    if (order.length >= maxNodes) return false;
+    selected[nid] = true;
+    order.push(nid);
+    return true;
+  }
+
+  loadNodesBatch_(seedIds);
+  var si;
+  for (si = 0; si < seedIds.length; si++) {
+    tryAdd_(seedIds[si]);
+  }
+
+  var truncated = false;
+  var frontier = order.slice();
+  var d;
+  for (d = 0; d < depth; d++) {
+    if (!frontier.length || order.length >= maxNodes) break;
+    var nextFrontier = [];
+    var pendingNeighborIds = [];
+    var fi;
+    for (fi = 0; fi < frontier.length; fi++) {
+      if (order.length >= maxNodes) {
+        truncated = true;
+        break;
+      }
+      var fid = frontier[fi];
+      var srcEdges = KnowledgeGraphStore_listEdgesBySource(fid);
+      var tgtEdges = KnowledgeGraphStore_listEdgesByTarget(fid);
+      httpCalls += 2;
+      var neighbors = srcEdges.concat(tgtEdges);
+      var ei;
+      for (ei = 0; ei < neighbors.length; ei++) {
+        if (order.length >= maxNodes) {
+          truncated = true;
+          break;
+        }
+        var edge = neighbors[ei];
+        var eid = String(edge.edge_id || '');
+        if (eid) edgePool[eid] = edge;
+        var other =
+          String(edge.source_id || '') === fid
+            ? String(edge.target_id || '')
+            : String(edge.source_id || '');
+        if (!other || selected[other]) continue;
+        pendingNeighborIds.push(other);
+      }
+    }
+    loadNodesBatch_(pendingNeighborIds);
+    for (fi = 0; fi < pendingNeighborIds.length; fi++) {
+      if (order.length >= maxNodes) {
+        truncated = true;
+        break;
+      }
+      if (tryAdd_(pendingNeighborIds[fi])) nextFrontier.push(pendingNeighborIds[fi]);
+    }
+    frontier = nextFrontier;
+  }
+
+  if (order.length >= maxNodes) truncated = true;
+
+  var outNodes = [];
+  for (si = 0; si < order.length; si++) {
+    var onid = order[si];
+    if (allNodesById[onid]) outNodes.push(KnowledgeGraph_toApiNode_(allNodesById[onid]));
+  }
+
+  var edgeSeen = {};
+  var outEdges = [];
+  var ek;
+  for (ek in edgePool) {
+    if (!Object.prototype.hasOwnProperty.call(edgePool, ek)) continue;
+    var edgeRow = edgePool[ek];
+    var eSrc = String(edgeRow.source_id || '');
+    var eTgt = String(edgeRow.target_id || '');
+    if (!selected[eSrc] || !selected[eTgt]) continue;
+    if (edgeSeen[ek]) continue;
+    edgeSeen[ek] = true;
+    outEdges.push(KnowledgeGraph_toApiEdge_(edgeRow));
+  }
+
+  console.log(
+    '[KG-CHAT] nodes=' +
+      outNodes.length +
+      ' edges=' +
+      outEdges.length +
+      ' httpCalls=' +
+      httpCalls,
+  );
+
+  return {
+    ok: true,
+    nodes: outNodes,
+    edges: outEdges,
+    truncated: truncated,
+    stats: {
+      selectedNodes: outNodes.length,
+      selectedEdges: outEdges.length,
+      loadedNodes: Object.keys(allNodesById).length,
+      loadedEdges: outEdges.length,
+      depth: depth,
+      maxDepth: limits.bfsDepthCap,
+      maxNodes: maxNodes,
+      maxNodesCap: limits.maxNodesCap,
+      seedCount: seedIds.length,
+      httpCalls: httpCalls,
+      boundedBfs: true,
+    },
+  };
+}
+
+/**
+ * Expande subgrafo desde semillas.
+ * Con filters.useBoundedBfs=true (chat) evita bulk-load del grafo completo.
+ *
+ * @param {Array<string>} seedIds
+ * @param {Object} filters
+ * @return {{ok:boolean,nodes:Array<Object>,edges:Array<Object>,truncated:boolean,stats:Object}}
+ */
 function KnowledgeGraph_expandSubgraph_(seedIds, filters) {
   filters = filters || {};
+  if (filters.useBoundedBfs) {
+    return KnowledgeGraph_expandSubgraphBounded_(seedIds, filters);
+  }
   var limits = KnowledgeGraphLimits_get();
   var maxNodes = Math.min(
     limits.maxNodesCap,
@@ -2274,6 +2448,7 @@ function KnowledgeGraph_resolveContextForQuestion_(question, opts) {
   }
 
   var expanded = KnowledgeGraph_expandSubgraph_(seedIds, {
+    useBoundedBfs: true,
     depth: opts.depth || KNOWLEDGE_GRAPH_CHAT_DEPTH,
     maxNodes: opts.maxNodes || KNOWLEDGE_GRAPH_CHAT_MAX_NODES,
     contentType: detected.contentType,
