@@ -1,5 +1,5 @@
 /**
- * @fileoverview Sync diario del roster Salesforce (Google Sheets → Supabase + catálogo + clientes).
+ * @fileoverview Sync semanal del roster Salesforce (Google Sheets → Supabase + catálogo + clientes).
  */
 
 var SALESFORCE_ACCOUNTS_SHEET_DATA = 'Sheet1';
@@ -622,6 +622,8 @@ function SalesforceAccounts_runSyncData_(force) {
     accounts_inactivated: inactivated,
   });
 
+  SalesforceAccountsStore_invalidateOwnersCache_();
+
   try {
     var eki;
     for (eki = 0; eki < embeddingContentIds.length; eki++) {
@@ -956,13 +958,13 @@ function SalesforceAccounts_runAutomaticSync_(force) {
 }
 
 /**
- * Entrada del trigger diario (time-driven).
+ * Entrada del trigger semanal (time-driven).
  */
-function SalesforceAccounts_dailySyncJob_() {
+function SalesforceAccounts_weeklySyncJob_() {
   try {
     SalesforceAccounts_runAutomaticSync_(false);
   } catch (e) {
-    console.error('[SF-SYNC] daily job failed: ' + (e.message || e));
+    console.error('[SF-SYNC] weekly job failed: ' + (e.message || e));
     var state = SalesforceAccountsSyncStateStore_load_();
     state.last_sync_at = new Date().toISOString();
     state.last_sync_status = 'error';
@@ -970,6 +972,11 @@ function SalesforceAccounts_dailySyncJob_() {
     SalesforceAccountsSyncStateStore_save_(state);
     throw e;
   }
+}
+
+/** @deprecated Triggers diarios legacy; reinstalar con SalesforceAccounts_installWeeklyTrigger(). */
+function SalesforceAccounts_dailySyncJob_() {
+  SalesforceAccounts_weeklySyncJob_();
 }
 
 /**
@@ -1043,10 +1050,59 @@ function SalesforceAccounts_embeddingsContinuationJob_() {
   }
 }
 
-/** Hora local del proyecto Apps Script para el trigger diario (0–23). */
-var SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR = 6;
+/** Hora local del proyecto Apps Script para el trigger semanal (0–23). */
+var SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_HOUR = 6;
 
+/** Día de la semana del trigger semanal (zona horaria del proyecto Apps Script). */
+var SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY = ScriptApp.WeekDay.MONDAY;
+
+var SALESFORCE_ACCOUNTS_WEEKLY_HANDLER_ = 'SalesforceAccounts_weeklySyncJob_';
+
+/** @deprecated Solo triggers diarios no reinstalados. */
 var SALESFORCE_ACCOUNTS_DAILY_HANDLER_ = 'SalesforceAccounts_dailySyncJob_';
+
+/**
+ * @return {string[]}
+ */
+function SalesforceAccounts_scheduledSyncHandlerNames_() {
+  return [SALESFORCE_ACCOUNTS_WEEKLY_HANDLER_, SALESFORCE_ACCOUNTS_DAILY_HANDLER_];
+}
+
+/**
+ * @return {string}
+ */
+function SalesforceAccounts_scheduleWeekDayToken_() {
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.TUESDAY) {
+    return 'tuesday';
+  }
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.WEDNESDAY) {
+    return 'wednesday';
+  }
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.THURSDAY) {
+    return 'thursday';
+  }
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.FRIDAY) {
+    return 'friday';
+  }
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.SATURDAY) {
+    return 'saturday';
+  }
+  if (SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY === ScriptApp.WeekDay.SUNDAY) {
+    return 'sunday';
+  }
+  return 'monday';
+}
+
+/**
+ * @return {boolean}
+ */
+function SalesforceAccounts_triggerUsesHandler_(trigger, handlerName) {
+  try {
+    return trigger.getHandlerFunction() === handlerName;
+  } catch (ignore) {
+    return false;
+  }
+}
 
 /**
  * @return {{ok:boolean, triggers:Array, error:string}}
@@ -1064,16 +1120,25 @@ function SalesforceAccounts_listTriggersSafe_() {
 /**
  * @return {boolean}
  */
-function SalesforceAccounts_dailyTriggerInstalled_() {
+function SalesforceAccounts_weeklyTriggerInstalled_() {
   var listed = SalesforceAccounts_listTriggersSafe_();
   if (!listed.ok) return false;
+  var handlers = SalesforceAccounts_scheduledSyncHandlerNames_();
   var i;
+  var hi;
   for (i = 0; i < listed.triggers.length; i++) {
-    if (listed.triggers[i].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
-      return true;
+    for (hi = 0; hi < handlers.length; hi++) {
+      if (SalesforceAccounts_triggerUsesHandler_(listed.triggers[i], handlers[hi])) {
+        return true;
+      }
     }
   }
   return false;
+}
+
+/** @deprecated usar SalesforceAccounts_weeklyTriggerInstalled_ */
+function SalesforceAccounts_dailyTriggerInstalled_() {
+  return SalesforceAccounts_weeklyTriggerInstalled_();
 }
 
 /**
@@ -1083,23 +1148,15 @@ function SalesforceAccounts_dailyTriggerInstalled_() {
  *   triggerInstalled: boolean,
  *   triggerPermissionsOk: boolean,
  *   scheduleHour: number,
- *   scheduleEveryDays: number,
+ *   scheduleEveryWeeks: number,
+ *   scheduleWeekDay: string,
  *   spreadsheetConfigured: boolean,
  *   state: Object
  * }}
  */
 function SalesforceAccounts_getSyncStatus() {
   var listed = SalesforceAccounts_listTriggersSafe_();
-  var installed = false;
-  if (listed.ok) {
-    var ti;
-    for (ti = 0; ti < listed.triggers.length; ti++) {
-      if (listed.triggers[ti].getHandlerFunction() === SALESFORCE_ACCOUNTS_DAILY_HANDLER_) {
-        installed = true;
-        break;
-      }
-    }
-  }
+  var installed = SalesforceAccounts_weeklyTriggerInstalled_();
   var q = SalesforceAccounts_loadEmbeddingQueue_();
   var off = SalesforceAccounts_loadEmbeddingOffset_();
   var embPending = Math.max(0, q.length - off);
@@ -1107,8 +1164,9 @@ function SalesforceAccounts_getSyncStatus() {
     ok: true,
     triggerInstalled: installed,
     triggerPermissionsOk: listed.ok,
-    scheduleHour: SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR,
-    scheduleEveryDays: 1,
+    scheduleHour: SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_HOUR,
+    scheduleEveryWeeks: 1,
+    scheduleWeekDay: SalesforceAccounts_scheduleWeekDayToken_(),
     spreadsheetConfigured: !!AviatorsConfig_salesforceAccountsSpreadsheetId_(),
     embeddingsPending: embPending,
     embeddingsContinuationScheduled: SalesforceAccounts_embeddingsContinuationTriggerInstalled_(),
@@ -1119,31 +1177,43 @@ function SalesforceAccounts_getSyncStatus() {
 /**
  * @return {{ok:boolean, triggerCount:number}}
  */
-function SalesforceAccounts_installDailyTrigger() {
+function SalesforceAccounts_installWeeklyTrigger() {
   var listed = SalesforceAccounts_listTriggersSafe_();
   if (!listed.ok) {
-    AviatorsError_throw_('ERR_SCRIPTAPP_SCOPE', 'SalesforceAccounts_installDailyTrigger');
+    AviatorsError_throw_('ERR_SCRIPTAPP_SCOPE', 'SalesforceAccounts_installWeeklyTrigger');
   }
+  var scheduledHandlers = SalesforceAccounts_scheduledSyncHandlerNames_();
   var i;
+  var hi;
   for (i = 0; i < listed.triggers.length; i++) {
     var handler = listed.triggers[i].getHandlerFunction();
-    if (
-      handler === SALESFORCE_ACCOUNTS_DAILY_HANDLER_ ||
-      handler === SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_
-    ) {
+    var isScheduled = false;
+    for (hi = 0; hi < scheduledHandlers.length; hi++) {
+      if (handler === scheduledHandlers[hi]) {
+        isScheduled = true;
+        break;
+      }
+    }
+    if (isScheduled || handler === SALESFORCE_ACCOUNTS_EMB_CONT_HANDLER_) {
       ScriptApp.deleteTrigger(listed.triggers[i]);
     }
   }
-  ScriptApp.newTrigger(SALESFORCE_ACCOUNTS_DAILY_HANDLER_)
+  ScriptApp.newTrigger(SALESFORCE_ACCOUNTS_WEEKLY_HANDLER_)
     .timeBased()
-    .everyDays(1)
-    .atHour(SALESFORCE_ACCOUNTS_DAILY_TRIGGER_HOUR)
+    .everyWeeks(1)
+    .onWeekDay(SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_WEEKDAY)
+    .atHour(SALESFORCE_ACCOUNTS_WEEKLY_TRIGGER_HOUR)
     .create();
   var after = SalesforceAccounts_listTriggersSafe_();
   return {
     ok: true,
     triggerCount: after.ok ? after.triggers.length : 0,
   };
+}
+
+/** @deprecated alias · instala trigger semanal */
+function SalesforceAccounts_installDailyTrigger() {
+  return SalesforceAccounts_installWeeklyTrigger();
 }
 
 /**

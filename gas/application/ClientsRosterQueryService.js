@@ -127,10 +127,8 @@ var CLIENTS_ROSTER_AVIATION_INDUSTRIES_FALLBACK_ = ['Aerolineas'];
  */
 function ClientsRosterQuery_hasRosterData_() {
   try {
-    var sf = SalesforceAccountsStore_listAll();
-    if (sf && sf.length) return true;
-    var cm = ClientsMasterStore_listAll();
-    return !!(cm && cm.length);
+    if (SalesforceAccountsStore_hasAny_()) return true;
+    return ClientsMasterStore_countFiltered({}) > 0;
   } catch (e) {
     console.log('[CLIENTS-ROSTER] hasData error: ' + String(e.message || e));
     return false;
@@ -226,17 +224,17 @@ function ClientsRosterQuery_resolveOwnerFromQuestion_(question) {
     ClientsRosterQuery_norm_(question),
   );
   if (!qNorm) return '';
-  var rows;
+  var owners;
   try {
-    rows = SalesforceAccountsStore_listAll();
+    owners = SalesforceAccountsStore_listDistinctOwnersCached_();
   } catch (ignoreList) {
     return ClientsRosterQuery_extractOwnerHintFromQuestion_(qNorm);
   }
   var best = '';
   var bestLen = 0;
   var i;
-  for (i = 0; i < rows.length; i++) {
-    var owner = String(rows[i].account_owner || '').trim();
+  for (i = 0; i < owners.length; i++) {
+    var owner = String(owners[i] || '').trim();
     if (!owner) continue;
     var ownerNorm = ClientsRosterQuery_norm_(owner);
     if (ownerNorm.length < 3) continue;
@@ -338,7 +336,7 @@ function ClientsRosterQuery_resolveAccountFromQuestion_(question) {
   }
   var rows;
   try {
-    rows = SalesforceAccountsStore_listAll();
+    rows = SalesforceAccountsStore_listNameIndexPages_(10000);
   } catch (ignoreList) {
     return '';
   }
@@ -379,9 +377,9 @@ function ClientsRosterQuery_fetchSingleAccount_(accountNameHint, filters) {
   var hintNorm = ClientsRosterQuery_norm_(hint);
   var rows;
   try {
-    rows = SalesforceAccountsStore_listAll();
-  } catch (ignoreAll) {
-    return null;
+    rows = SalesforceAccountsStore_searchByName_(hint, 25);
+  } catch (ignoreSearch) {
+    rows = [];
   }
   var i;
   for (i = 0; i < rows.length; i++) {
@@ -838,11 +836,13 @@ function ClientsRosterQuery_fetch_(filters, question) {
       filters.industryGroup === 'aerospace' ||
       !!filters.subIndustry ||
       filters.activeOnly === true ||
-      filters.activeOnly === false;
+      filters.activeOnly === false ||
+      !!ownerHint;
     if (useDbFilter) {
       var dbFilters = {
         activeOnly: filters.activeOnly,
         subIndustry: '',
+        accountOwner: ownerHint,
       };
       var aviationScope = ClientsRosterQuery_isPassengerAirlinesSub_(
         filters.subIndustry,
@@ -873,7 +873,10 @@ function ClientsRosterQuery_fetch_(filters, question) {
         '[CLIENTS-ROSTER] salesforce filtered fetch rows=' + String(sfRows.length),
       );
     } else {
-      sfRows = SalesforceAccountsStore_listAll();
+      sfRows = SalesforceAccountsStore_listAllPages_({}, 100, 10000);
+      console.log(
+        '[CLIENTS-ROSTER] salesforce paginated fetch rows=' + String(sfRows.length),
+      );
     }
     var i;
     for (i = 0; i < sfRows.length; i++) {
