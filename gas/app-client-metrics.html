@@ -16,6 +16,7 @@
   var totalUnansweredEl = document.getElementById('metrics-total-unanswered');
   var answerRateEl = document.getElementById('metrics-answer-rate');
   var uniqueUsersEl = document.getElementById('metrics-unique-users');
+  var moduleVisitsEl = document.getElementById('metrics-module-visits');
   var onboardingQuestionsEl = document.getElementById('metrics-onboarding-questions');
   var offeringQuestionsEl = document.getElementById('metrics-offering-questions');
   var proposalsBuiltEl = document.getElementById('metrics-proposals-built');
@@ -23,6 +24,7 @@
 
   var trendSectionCanvas = document.getElementById('metrics-trend-section-chart');
   var sectionCanvas = document.getElementById('metrics-section-chart');
+  var moduleCanvas = document.getElementById('metrics-module-chart');
   var agentCanvas = document.getElementById('metrics-agent-chart');
   var catalogCanvas = document.getElementById('metrics-catalog-chart');
   var proposalStatusCanvas = document.getElementById('metrics-proposal-status-chart');
@@ -35,6 +37,12 @@
   var lbProposalClientEl = document.getElementById('metrics-lb-proposal-client');
   var lbProposalIndustryEl = document.getElementById('metrics-lb-proposal-industry');
   var lbProposalBuildersEl = document.getElementById('metrics-lb-proposal-builders');
+  var lbModulesEl = document.getElementById('metrics-lb-modules');
+  var lbModuleUsersEl = document.getElementById('metrics-lb-module-users');
+  var moduleUsersBody = document.getElementById('metrics-module-users-body');
+  var moduleUsersInfo = document.getElementById('metrics-module-users-page-info');
+  var moduleUsersPrevBtn = document.getElementById('metrics-module-users-prev');
+  var moduleUsersNextBtn = document.getElementById('metrics-module-users-next');
 
   var unansweredBody = document.getElementById('metrics-unanswered-body');
   var unansweredInfo = document.getElementById('metrics-unanswered-page-info');
@@ -43,11 +51,13 @@
   var queueFilterEl = document.getElementById('metrics-queue-filter');
 
   var unansweredPage = { skip: 0, limit: 10, total: 0, hasMore: false };
+  var moduleUsersPage = { skip: 0, limit: 15, total: 0, hasMore: false };
   var queueCanManage = false;
   var queueAssignees = [];
   var queueRowBusyId = '';
   var trendSectionChart = null;
   var sectionChart = null;
+  var moduleChart = null;
   var agentChart = null;
   var catalogChart = null;
   var proposalStatusChart = null;
@@ -64,6 +74,7 @@
   };
   var loadingDashboard = false;
   var loadingUnanswered = false;
+  var loadingModuleUsers = false;
   var metricsTabRoot = document.getElementById('metrics-tab-root');
   var metricsLbTabRoot = document.getElementById('metrics-lb-tab-root');
   var metricsMainTabs = metricsTabRoot ? A.initTabGroup(metricsTabRoot) : null;
@@ -74,6 +85,7 @@
       var charts = [
         trendSectionChart,
         sectionChart,
+        moduleChart,
         agentChart,
         catalogChart,
         proposalStatusChart,
@@ -88,6 +100,49 @@
   function metricsSectionLabel_(key) {
     return i18n('metrics_section_' + String(key || 'other'));
   }
+
+  function metricsModuleLabel_(key) {
+    var k = String(key || '').trim().replace(/-/g, '_');
+    return i18n('metrics_module_' + (k || 'other'));
+  }
+
+  function metricsEngagementLabel_(level) {
+    var lv = String(level || 'inactive').trim().toLowerCase();
+    var key = 'metrics_engage_' + lv;
+    var txt = i18n(key);
+    return txt === key ? i18n('metrics_engage_inactive') : txt;
+  }
+
+  function metricsEngagementBadgeClass_(level) {
+    var lv = String(level || 'inactive').trim().toLowerCase();
+    if (lv === 'high') {
+      return 'inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200';
+    }
+    if (lv === 'medium') {
+      return 'inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200';
+    }
+    if (lv === 'low') {
+      return 'inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200';
+    }
+    return 'inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-300';
+  }
+
+  var METRICS_MODULE_COLORS_ = [
+    '#0ea5e9',
+    '#8b5cf6',
+    '#14b8a6',
+    '#f59e0b',
+    '#ef4444',
+    '#6366f1',
+    '#22c55e',
+    '#ec4899',
+    '#06b6d4',
+    '#64748b',
+    '#a855f7',
+    '#84cc16',
+    '#f97316',
+    '#3b82f6',
+  ];
 
   function metricsFormatPct_(value) {
     if (value == null || isNaN(Number(value))) return '—';
@@ -107,7 +162,7 @@
   }
 
   function isMetricsBusy() {
-    return loadingDashboard || loadingUnanswered;
+    return loadingDashboard || loadingUnanswered || loadingModuleUsers;
   }
 
   function setStatus(text, busy, opts) {
@@ -166,6 +221,12 @@
     if (queueFilterEl) queueFilterEl.disabled = busy;
     if (unansweredPrevBtn) unansweredPrevBtn.disabled = busy || unansweredPage.skip <= 0;
     if (unansweredNextBtn) unansweredNextBtn.disabled = busy || !unansweredPage.hasMore;
+    if (moduleUsersPrevBtn) {
+      moduleUsersPrevBtn.disabled = busy || moduleUsersPage.skip <= 0;
+    }
+    if (moduleUsersNextBtn) {
+      moduleUsersNextBtn.disabled = busy || !moduleUsersPage.hasMore;
+    }
   }
 
   function metricsQueueStatusLabel(status) {
@@ -446,6 +507,145 @@
     }
   }
 
+  function renderModuleRankList(el, rows) {
+    var mapped = [];
+    var items = Array.isArray(rows) ? rows : [];
+    for (var mi = 0; mi < items.length; mi++) {
+      var row = items[mi] || {};
+      mapped.push({
+        name: metricsModuleLabel_(row.key),
+        count: Number(row.count || 0),
+      });
+    }
+    renderRankList(el, mapped);
+  }
+
+  function renderModuleUsersPageInfo() {
+    if (!moduleUsersInfo) return;
+    if (!moduleUsersPage.total) {
+      moduleUsersInfo.textContent = i18n('metrics_pagination_empty');
+      return;
+    }
+    var from = moduleUsersPage.skip + 1;
+    var to = Math.min(moduleUsersPage.skip + moduleUsersPage.limit, moduleUsersPage.total);
+    moduleUsersInfo.textContent = i18nFmt('metrics_pagination_info', {
+      from: from,
+      to: to,
+      total: moduleUsersPage.total,
+    });
+  }
+
+  function renderModuleUsersTable(rows) {
+    if (!moduleUsersBody) return;
+    moduleUsersBody.innerHTML = '';
+    var items = Array.isArray(rows) ? rows : [];
+    if (!items.length) {
+      var trEmpty = document.createElement('tr');
+      var tdEmpty = document.createElement('td');
+      tdEmpty.colSpan = 6;
+      tdEmpty.className =
+        'px-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400';
+      tdEmpty.textContent = i18n('metrics_empty');
+      trEmpty.appendChild(tdEmpty);
+      moduleUsersBody.appendChild(trEmpty);
+      renderModuleUsersPageInfo();
+      return;
+    }
+
+    for (var i = 0; i < items.length; i++) {
+      var row = items[i] || {};
+      var trRow = document.createElement('tr');
+      trRow.className =
+        'border-b border-slate-100 transition-colors hover:bg-slate-50/80 dark:border-slate-700 dark:hover:bg-slate-800/50';
+
+      function addCell(text, className) {
+        var tdCol = document.createElement('td');
+        tdCol.className =
+          className ||
+          'px-3 py-2 align-top text-sm text-slate-700 dark:text-slate-300';
+        tdCol.textContent = text;
+        trRow.appendChild(tdCol);
+      }
+
+      addCell(String(row.name || row.email || ''));
+      addCell(String(row.roleKey || '—'));
+      addCell(row.lastSeenAt ? formatDateTime(row.lastSeenAt) : '—');
+
+      var tdEngage = document.createElement('td');
+      tdEngage.className = 'px-3 py-2 align-top text-sm';
+      var engageBadge = document.createElement('span');
+      engageBadge.className = metricsEngagementBadgeClass_(row.engagementLevel);
+      engageBadge.textContent = metricsEngagementLabel_(row.engagementLevel);
+      engageBadge.title = i18nFmt('metrics_engage_score_hint', {
+        score: String(row.engagementScore || 0),
+        visits: String(row.count || 0),
+        modules: String(row.uniqueModules || 0),
+        questions: String(row.questions || 0),
+      });
+      tdEngage.appendChild(engageBadge);
+      trRow.appendChild(tdEngage);
+
+      var tdMods = document.createElement('td');
+      tdMods.className = 'px-3 py-2 align-top text-sm';
+      var modsWrap = document.createElement('div');
+      modsWrap.className = 'flex flex-wrap gap-1.5';
+      var mods = Array.isArray(row.modules) ? row.modules : [];
+      if (!mods.length) {
+        var noneSpan = document.createElement('span');
+        noneSpan.className = 'text-slate-400 dark:text-slate-500';
+        noneSpan.textContent = '—';
+        modsWrap.appendChild(noneSpan);
+      } else {
+        for (var mj = 0; mj < mods.length; mj++) {
+          var mod = mods[mj] || {};
+          var badge = document.createElement('span');
+          badge.className =
+            'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200';
+          badge.textContent =
+            metricsModuleLabel_(mod.key) + ' · ' + String(mod.count || 0);
+          modsWrap.appendChild(badge);
+        }
+      }
+      tdMods.appendChild(modsWrap);
+      trRow.appendChild(tdMods);
+
+      addCell(String(row.count || 0), 'px-3 py-2 align-top text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100');
+      moduleUsersBody.appendChild(trRow);
+    }
+    renderModuleUsersPageInfo();
+  }
+
+  function loadModuleUsers(reset) {
+    if (reset) moduleUsersPage.skip = 0;
+    loadingModuleUsers = true;
+    refreshMetricsStatus();
+    syncBusyControls();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loadingModuleUsers = false;
+        if (res && res.ok) {
+          moduleUsersPage.total = Number(res.total || 0);
+          moduleUsersPage.hasMore = !!res.hasMore;
+          renderModuleUsersTable(res.items || []);
+        } else {
+          renderModuleUsersTable([]);
+        }
+        refreshMetricsStatus();
+        syncBusyControls();
+      })
+      .withFailureHandler(function () {
+        loadingModuleUsers = false;
+        renderModuleUsersTable([]);
+        refreshMetricsStatus();
+        syncBusyControls();
+      })
+      .metricsModuleUserList({
+        range: activeRange(),
+        skip: moduleUsersPage.skip,
+        limit: moduleUsersPage.limit,
+      });
+  }
+
   function renderRankList(el, rows) {
     if (!el) return;
     el.innerHTML = '';
@@ -469,17 +669,36 @@
       pos.textContent = String(rank);
       pos.setAttribute('aria-hidden', 'true');
 
+      var nameWrap = document.createElement('span');
+      nameWrap.className = 'metrics-rank-name min-w-0';
+
       var name = document.createElement('span');
-      name.className = 'metrics-rank-name';
+      name.className = 'block truncate';
       name.textContent = String(row.name || '');
       name.title = String(row.name || '');
+      nameWrap.appendChild(name);
+
+      if (row.engagementLevel || row.lastSeenAt) {
+        var meta = document.createElement('span');
+        meta.className =
+          'mt-0.5 block truncate text-[11px] font-normal text-slate-500 dark:text-slate-400';
+        var metaParts = [];
+        if (row.engagementLevel) {
+          metaParts.push(metricsEngagementLabel_(row.engagementLevel));
+        }
+        if (row.lastSeenAt) {
+          metaParts.push(formatDateTime(row.lastSeenAt));
+        }
+        meta.textContent = metaParts.join(' · ');
+        nameWrap.appendChild(meta);
+      }
 
       var count = document.createElement('span');
       count.className = 'metrics-rank-count';
       count.textContent = String(row.count || 0);
 
       liRow.appendChild(pos);
-      liRow.appendChild(name);
+      liRow.appendChild(nameWrap);
       liRow.appendChild(count);
       el.appendChild(liRow);
     }
@@ -561,6 +780,7 @@
     var charts = [
       trendSectionChart,
       sectionChart,
+      moduleChart,
       agentChart,
       catalogChart,
       proposalStatusChart,
@@ -571,6 +791,7 @@
     }
     trendSectionChart = null;
     sectionChart = null;
+    moduleChart = null;
     agentChart = null;
     catalogChart = null;
     proposalStatusChart = null;
@@ -726,6 +947,44 @@
       }
     }
 
+    var byModule = (data && data.moduleUsage && data.moduleUsage.byModule) || [];
+    var moduleLabels = [];
+    var moduleCounts = [];
+    var moduleColors = [];
+    for (var mk = 0; mk < byModule.length; mk++) {
+      var modRow = byModule[mk] || {};
+      var modCount = Number(modRow.count || 0);
+      if (!modCount) continue;
+      moduleLabels.push(metricsModuleLabel_(modRow.key));
+      moduleCounts.push(modCount);
+      moduleColors.push(METRICS_MODULE_COLORS_[mk % METRICS_MODULE_COLORS_.length]);
+    }
+    if (moduleCanvas) {
+      moduleChart = new Chart(moduleCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: moduleLabels.length ? moduleLabels : [i18n('metrics_empty')],
+          datasets: [
+            {
+              data: moduleCounts.length ? moduleCounts : [1],
+              backgroundColor: moduleColors.length ? moduleColors : ['#cbd5e1'],
+              borderWidth: 2,
+              borderColor: metricsIsDark_() ? '#1e293b' : '#ffffff',
+              hoverOffset: 6,
+            },
+          ],
+        },
+        options: metricsChartOptions({
+          plugins: { legend: { position: 'bottom' } },
+          scales: false,
+          stacked: false,
+        }),
+      });
+      if (!moduleCounts.length) {
+        moduleChart.options.plugins.legend.display = false;
+      }
+    }
+
     var byAgent = (data && data.leaderboard && data.leaderboard.agents) || [];
     var agentLabels = [];
     var agentCounts = [];
@@ -860,6 +1119,7 @@
     if (totalUnansweredEl) totalUnansweredEl.textContent = String(summary.unanswered || 0);
     if (answerRateEl) answerRateEl.textContent = metricsFormatPct_(summary.answerRatePct);
     if (uniqueUsersEl) uniqueUsersEl.textContent = String(summary.uniqueUsers || 0);
+    if (moduleVisitsEl) moduleVisitsEl.textContent = String(summary.moduleVisits || 0);
     if (onboardingQuestionsEl) {
       onboardingQuestionsEl.textContent = String(summary.onboardingQuestions || 0);
     }
@@ -879,6 +1139,9 @@
     renderRankList(lbProposalClientEl, lb.proposalByClient);
     renderRankList(lbProposalIndustryEl, lb.proposalByIndustry);
     renderRankList(lbProposalBuildersEl, lb.proposalBuilders);
+    var moduleUsage = (data && data.moduleUsage) || {};
+    renderModuleRankList(lbModulesEl, moduleUsage.byModule);
+    renderRankList(lbModuleUsersEl, moduleUsage.topUsers);
     ensureChartJs()
       .then(function () {
         renderCharts(data);
@@ -911,8 +1174,12 @@
   }
 
   function loadAll(resetUnanswered) {
-    if (resetUnanswered) unansweredPage.skip = 0;
+    if (resetUnanswered) {
+      unansweredPage.skip = 0;
+      moduleUsersPage.skip = 0;
+    }
     loadDashboard();
+    loadModuleUsers(false);
   }
 
   if (refreshBtn) {
@@ -968,6 +1235,27 @@
       if (!unansweredPage.hasMore) return;
       unansweredPage.skip += unansweredPage.limit;
       loadUnanswered(false);
+    });
+  }
+  if (moduleUsersPrevBtn) {
+    moduleUsersPrevBtn.addEventListener('click', function () {
+      if (moduleUsersPage.skip <= 0) return;
+      moduleUsersPage.skip = Math.max(0, moduleUsersPage.skip - moduleUsersPage.limit);
+      loadModuleUsers(false);
+    });
+  }
+  if (moduleUsersNextBtn) {
+    moduleUsersNextBtn.addEventListener('click', function () {
+      if (!moduleUsersPage.hasMore) return;
+      moduleUsersPage.skip += moduleUsersPage.limit;
+      loadModuleUsers(false);
+    });
+  }
+  if (metricsLbTabRoot) {
+    metricsLbTabRoot.addEventListener('click', function (ev) {
+      var tab = ev.target && ev.target.closest ? ev.target.closest('[role="tab"]') : null;
+      if (!tab || tab.getAttribute('role') !== 'tab') return;
+      if (tab.id === 'metrics-lb-tab-modules') loadModuleUsers(false);
     });
   }
 

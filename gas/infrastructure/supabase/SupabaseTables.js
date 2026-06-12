@@ -18,7 +18,10 @@ var SUPABASE_TABLE = Object.freeze({
   SALESFORCE_ACCOUNTS: 'salesforce_accounts',
   KNOWLEDGE_GRAPH_NODES: 'knowledge_graph_nodes',
   KNOWLEDGE_GRAPH_EDGES: 'knowledge_graph_edges',
+  /** @deprecated Armado de propuestas usa Drive; no escribir en Supabase. */
   PROPOSAL_BUILDING_SESSIONS: 'proposal_building_sessions',
+  MODULE_VISITS: 'module_visits',
+  USER_PRESENCE: 'user_presence',
 });
 
 var SUPABASE_SETTINGS_KEY = Object.freeze({

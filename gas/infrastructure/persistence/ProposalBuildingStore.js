@@ -1,5 +1,6 @@
 /**
- * @fileoverview Persistencia de sesiones de armado de propuestas en Supabase.
+ * @fileoverview Sesiones de armado de propuestas en Drive (planilla índice por usuario + session.json).
+ * No usa Supabase: índice en Google Sheets bajo Propuestas/_Usuarios/{usuario}/ y payload en _Sesiones/{id}/session.json.
  */
 
 /** @type {number} */
@@ -8,6 +9,63 @@ var PROPOSAL_BUILDING_STORE_MAX_LIMIT_ = 100;
 /** @type {number} */
 var PROPOSAL_BUILDING_STORE_DEFAULT_LIMIT_ = 25;
 
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_USERS_SEGMENT_ = '_Usuarios';
+
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_SESSIONS_SEGMENT_ = '_Sesiones';
+
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_SESSION_JSON_ = 'session.json';
+
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_USER_META_ = '_user_meta.json';
+
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_INDEX_SHEET_ = 'Sesiones';
+
+/** @type {string} */
+var PROPOSAL_BUILDING_STORE_SPREADSHEET_TITLE_ = 'Aviators · Mis propuestas';
+
+/** @type {Array<string>} */
+var PROPOSAL_BUILDING_STORE_INDEX_HEADERS_ = [
+  'session_id',
+  'status',
+  'builder_step',
+  'title',
+  'client_name',
+  'industry_key',
+  'proposal_name',
+  'rfp_deadline',
+  'commercial_model',
+  'project_summary',
+  'deck_file_id',
+  'deck_file_url',
+  'deck_file_name',
+  'checklist_file_id',
+  'checklist_file_url',
+  'checklist_file_name',
+  'package_folder_id',
+  'package_folder_url',
+  'package_folder_name',
+  'created_at',
+  'updated_at',
+  'materials_count',
+  'studios_count',
+];
+
+/**
+ * @param {string} email
+ * @return {string}
+ */
+function ProposalBuildingStore_emailFolderName_(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase()
+    .replace(/@/g, '_at_')
+    .replace(/\./g, '_');
+}
+
 /**
  * @param {Object} row
  * @return {Object}
@@ -15,70 +73,377 @@ var PROPOSAL_BUILDING_STORE_DEFAULT_LIMIT_ = 25;
 function ProposalBuildingStore_rowToSession_(row) {
   row = row || {};
   return {
-    sessionId: String(row.session_id || ''),
-    userEmail: String(row.user_email || ''),
+    sessionId: String(row.sessionId || row.session_id || ''),
+    userEmail: String(row.userEmail || row.user_email || ''),
     status: String(row.status || 'in_progress'),
-    builderStep: String(row.builder_step || 'materials'),
+    builderStep: String(row.builderStep || row.builder_step || 'materials'),
     title: String(row.title || ''),
-    clientName: String(row.client_name || ''),
-    industryKey: String(row.industry_key || ''),
-    proposalName: String(row.proposal_name || ''),
-    rfpDeadline: String(row.rfp_deadline || ''),
-    commercialModel: String(row.commercial_model || ''),
-    projectSummary: String(row.project_summary || ''),
-    draftBrief: row.draft_brief_json && typeof row.draft_brief_json === 'object' ? row.draft_brief_json : {},
+    clientName: String(row.clientName || row.client_name || ''),
+    industryKey: String(row.industryKey || row.industry_key || ''),
+    proposalName: String(row.proposalName || row.proposal_name || ''),
+    rfpDeadline: String(row.rfpDeadline || row.rfp_deadline || ''),
+    commercialModel: String(row.commercialModel || row.commercial_model || ''),
+    projectSummary: String(row.projectSummary || row.project_summary || ''),
+    draftBrief:
+      row.draftBrief && typeof row.draftBrief === 'object'
+        ? row.draftBrief
+        : row.draft_brief_json && typeof row.draft_brief_json === 'object'
+          ? row.draft_brief_json
+          : {},
     validatedBrief:
-      row.validated_brief_json && typeof row.validated_brief_json === 'object'
-        ? row.validated_brief_json
-        : null,
-    materials: Array.isArray(row.materials_json) ? row.materials_json : [],
-    aiResponses: Array.isArray(row.ai_responses_json) ? row.ai_responses_json : [],
-    studioRecommendations: Array.isArray(row.studio_recommendations_json)
-      ? row.studio_recommendations_json
-      : [],
-    context: row.context_json && typeof row.context_json === 'object' ? row.context_json : {},
-    deckFileId: String(row.deck_file_id || ''),
-    deckFileUrl: String(row.deck_file_url || ''),
-    deckFileName: String(row.deck_file_name || ''),
-    checklistFileId: String(row.checklist_file_id || ''),
-    checklistFileUrl: String(row.checklist_file_url || ''),
-    checklistFileName: String(row.checklist_file_name || ''),
-    packageFolderId: String(row.package_folder_id || ''),
-    packageFolderUrl: String(row.package_folder_url || ''),
-    packageFolderName: String(row.package_folder_name || ''),
-    createdAt: String(row.created_at || ''),
-    updatedAt: String(row.updated_at || ''),
+      row.validatedBrief && typeof row.validatedBrief === 'object'
+        ? row.validatedBrief
+        : row.validated_brief_json && typeof row.validated_brief_json === 'object'
+          ? row.validated_brief_json
+          : null,
+    materials: Array.isArray(row.materials)
+      ? row.materials
+      : Array.isArray(row.materials_json)
+        ? row.materials_json
+        : [],
+    aiResponses: Array.isArray(row.aiResponses)
+      ? row.aiResponses
+      : Array.isArray(row.ai_responses_json)
+        ? row.ai_responses_json
+        : [],
+    studioRecommendations: Array.isArray(row.studioRecommendations)
+      ? row.studioRecommendations
+      : Array.isArray(row.studio_recommendations_json)
+        ? row.studio_recommendations_json
+        : [],
+    context:
+      row.context && typeof row.context === 'object'
+        ? row.context
+        : row.context_json && typeof row.context_json === 'object'
+          ? row.context_json
+          : {},
+    deckFileId: String(row.deckFileId || row.deck_file_id || ''),
+    deckFileUrl: String(row.deckFileUrl || row.deck_file_url || ''),
+    deckFileName: String(row.deckFileName || row.deck_file_name || ''),
+    checklistFileId: String(row.checklistFileId || row.checklist_file_id || ''),
+    checklistFileUrl: String(row.checklistFileUrl || row.checklist_file_url || ''),
+    checklistFileName: String(row.checklistFileName || row.checklist_file_name || ''),
+    packageFolderId: String(row.packageFolderId || row.package_folder_id || ''),
+    packageFolderUrl: String(row.packageFolderUrl || row.package_folder_url || ''),
+    packageFolderName: String(row.packageFolderName || row.package_folder_name || ''),
+    createdAt: String(row.createdAt || row.created_at || ''),
+    updatedAt: String(row.updatedAt || row.updated_at || ''),
   };
 }
 
 /**
- * Sesiones para métricas admin (sin messages_json pesado).
- * @return {Array<Object>}
+ * @param {Object} session
+ * @return {Array<string>}
  */
-function ProposalBuildingStore_listAllForMetrics() {
-  return SupabaseRest_select(
-    SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS,
-    SupabaseRest_query_([
-      'select=session_id,status,created_at,updated_at,user_email,client_name',
-      'order=created_at.desc',
-    ]),
-  );
+function ProposalBuildingStore_indexRowFromSession_(session) {
+  session = ProposalBuildingStore_rowToSession_(session);
+  var materials = Array.isArray(session.materials) ? session.materials : [];
+  var studios = Array.isArray(session.studioRecommendations) ? session.studioRecommendations : [];
+  return [
+    session.sessionId,
+    session.status,
+    session.builderStep,
+    session.title,
+    session.clientName,
+    session.industryKey,
+    session.proposalName,
+    session.rfpDeadline,
+    session.commercialModel,
+    String(session.projectSummary || '').slice(0, 500),
+    session.deckFileId,
+    session.deckFileUrl,
+    session.deckFileName,
+    session.checklistFileId,
+    session.checklistFileUrl,
+    session.checklistFileName,
+    session.packageFolderId,
+    session.packageFolderUrl,
+    session.packageFolderName,
+    session.createdAt,
+    session.updatedAt,
+    String(materials.length),
+    String(studios.length),
+  ];
+}
+
+/**
+ * @param {Array<*>} row
+ * @return {Object}
+ */
+function ProposalBuildingStore_indexRowToSummary_(row) {
+  row = row || [];
+  return {
+    sessionId: String(row[0] || ''),
+    status: String(row[1] || 'in_progress'),
+    builderStep: String(row[2] || 'materials'),
+    title: String(row[3] || ''),
+    clientName: String(row[4] || ''),
+    industryKey: String(row[5] || ''),
+    proposalName: String(row[6] || ''),
+    rfpDeadline: String(row[7] || ''),
+    commercialModel: String(row[8] || ''),
+    projectSummary: String(row[9] || ''),
+    deckFileId: String(row[10] || ''),
+    deckFileUrl: String(row[11] || ''),
+    deckFileName: String(row[12] || ''),
+    checklistFileId: String(row[13] || ''),
+    checklistFileUrl: String(row[14] || ''),
+    checklistFileName: String(row[15] || ''),
+    packageFolderId: String(row[16] || ''),
+    packageFolderUrl: String(row[17] || ''),
+    packageFolderName: String(row[18] || ''),
+    createdAt: String(row[19] || ''),
+    updatedAt: String(row[20] || ''),
+    materialsCount: Number(row[21] || 0),
+    studiosCount: Number(row[22] || 0),
+  };
 }
 
 /**
  * @param {string} email
- * @param {Object|string=} filters
- * @return {number}
+ * @return {GoogleAppsScript.Drive.Folder}
  */
-function ProposalBuildingStore_countByUser(email, filters) {
+function ProposalBuildingStore_getUserDriveFolder_(email) {
   var em = String(email || '').trim();
-  if (!em) return 0;
-  var q = SupabaseRest_query_(
-    ['select=session_id']
-      .concat(ProposalBuildingStore_userListFilters_(email, filters))
-      .concat(['limit=0']),
+  if (!em) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'err_proposal_building_forbidden'));
+  }
+  var proposalsRoot = ProposalBuilding_getProposalsDriveFolder_();
+  var usersRoot = ProposalBuilding_getOrCreateChildFolder_(
+    proposalsRoot,
+    PROPOSAL_BUILDING_STORE_USERS_SEGMENT_,
   );
-  return SupabaseRest_count(SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS, q);
+  return ProposalBuilding_getOrCreateChildFolder_(
+    usersRoot,
+    ProposalBuildingStore_emailFolderName_(em),
+  );
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} userFolder
+ * @return {Object|null}
+ */
+function ProposalBuildingStore_readUserMeta_(userFolder) {
+  if (!userFolder) return null;
+  var it = userFolder.getFilesByName(PROPOSAL_BUILDING_STORE_USER_META_);
+  if (!it.hasNext()) return null;
+  try {
+    return JSON.parse(it.next().getBlob().getDataAsString('UTF-8'));
+  } catch (ignore) {
+    return null;
+  }
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} userFolder
+ * @param {Object} meta
+ */
+function ProposalBuildingStore_writeUserMeta_(userFolder, meta) {
+  var json = JSON.stringify(meta || {});
+  var it = userFolder.getFilesByName(PROPOSAL_BUILDING_STORE_USER_META_);
+  while (it.hasNext()) {
+    it.next().setTrashed(true);
+  }
+  userFolder.createFile(PROPOSAL_BUILDING_STORE_USER_META_, json, MimeType.PLAIN_TEXT);
+}
+
+/**
+ * @param {string} email
+ * @return {GoogleAppsScript.Spreadsheet.Spreadsheet}
+ */
+function ProposalBuildingStore_ensureUserSpreadsheet_(email) {
+  var em = String(email || '').trim();
+  var userFolder = ProposalBuildingStore_getUserDriveFolder_(em);
+  var meta = ProposalBuildingStore_readUserMeta_(userFolder);
+  if (meta && meta.spreadsheetId) {
+    try {
+      return SpreadsheetApp.openById(String(meta.spreadsheetId));
+    } catch (ignoreOpen) {}
+  }
+
+  var ss = SpreadsheetApp.create(PROPOSAL_BUILDING_STORE_SPREADSHEET_TITLE_);
+  var ssId = String(ss.getId() || '');
+  var ssFile = DriveApp.getFileById(ssId);
+  ssFile.moveTo(userFolder);
+
+  var sheet = ss.getSheets()[0];
+  sheet.setName(PROPOSAL_BUILDING_STORE_INDEX_SHEET_);
+  sheet.getRange(1, 1, 1, PROPOSAL_BUILDING_STORE_INDEX_HEADERS_.length).setValues([
+    PROPOSAL_BUILDING_STORE_INDEX_HEADERS_,
+  ]);
+  sheet.getRange(1, 1, 1, PROPOSAL_BUILDING_STORE_INDEX_HEADERS_.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  SpreadsheetApp.flush();
+
+  ProposalBuildingStore_writeUserMeta_(userFolder, {
+    email: em,
+    spreadsheetId: ssId,
+    createdAt: new Date().toISOString(),
+  });
+  return ss;
+}
+
+/**
+ * @param {string} email
+ * @return {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ProposalBuildingStore_getIndexSheet_(email) {
+  var ss = ProposalBuildingStore_ensureUserSpreadsheet_(email);
+  var sheet = ss.getSheetByName(PROPOSAL_BUILDING_STORE_INDEX_SHEET_);
+  if (!sheet) {
+    sheet = ss.insertSheet(PROPOSAL_BUILDING_STORE_INDEX_SHEET_);
+    sheet.getRange(1, 1, 1, PROPOSAL_BUILDING_STORE_INDEX_HEADERS_.length).setValues([
+      PROPOSAL_BUILDING_STORE_INDEX_HEADERS_,
+    ]);
+    sheet.getRange(1, 1, 1, PROPOSAL_BUILDING_STORE_INDEX_HEADERS_.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * @param {string} email
+ * @return {Array<Array<*>>}
+ */
+function ProposalBuildingStore_readIndexDataRows_(email) {
+  var sheet = ProposalBuildingStore_getIndexSheet_(email);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var width = PROPOSAL_BUILDING_STORE_INDEX_HEADERS_.length;
+  return sheet.getRange(2, 1, lastRow, width).getValues();
+}
+
+/**
+ * @param {string} email
+ * @param {string} sessionId
+ * @return {number} 0 si no existe
+ */
+function ProposalBuildingStore_findIndexRowNumber_(email, sessionId) {
+  var sid = String(sessionId || '').trim();
+  if (!sid) return 0;
+  var rows = ProposalBuildingStore_readIndexDataRows_(email);
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim() === sid) return i + 2;
+  }
+  return 0;
+}
+
+/**
+ * @param {string} email
+ * @param {Object} session
+ */
+function ProposalBuildingStore_upsertIndexRow_(email, session) {
+  var sheet = ProposalBuildingStore_getIndexSheet_(email);
+  var rowValues = ProposalBuildingStore_indexRowFromSession_(session);
+  var rowNum = ProposalBuildingStore_findIndexRowNumber_(email, session.sessionId);
+  if (rowNum > 0) {
+    sheet.getRange(rowNum, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+  SpreadsheetApp.flush();
+}
+
+/**
+ * @param {string} email
+ * @param {string} sessionId
+ */
+function ProposalBuildingStore_removeIndexRow_(email, sessionId) {
+  var rowNum = ProposalBuildingStore_findIndexRowNumber_(email, sessionId);
+  if (rowNum <= 0) return;
+  ProposalBuildingStore_getIndexSheet_(email).deleteRow(rowNum);
+  SpreadsheetApp.flush();
+}
+
+/**
+ * @param {string} email
+ * @param {string} sessionId
+ * @return {GoogleAppsScript.Drive.Folder}
+ */
+function ProposalBuildingStore_getSessionFolder_(email, sessionId) {
+  var sid = String(sessionId || '').trim();
+  if (!sid) {
+    throw new Error(UiStrings_t(UiStrings_activeLocale_(), 'pb_err_session_missing'));
+  }
+  var userFolder = ProposalBuildingStore_getUserDriveFolder_(email);
+  var sessionsRoot = ProposalBuilding_getOrCreateChildFolder_(
+    userFolder,
+    PROPOSAL_BUILDING_STORE_SESSIONS_SEGMENT_,
+  );
+  return ProposalBuilding_getOrCreateChildFolder_(sessionsRoot, sid);
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} sessionFolder
+ * @return {Object|null}
+ */
+function ProposalBuildingStore_readSessionJson_(sessionFolder) {
+  if (!sessionFolder) return null;
+  var it = sessionFolder.getFilesByName(PROPOSAL_BUILDING_STORE_SESSION_JSON_);
+  if (!it.hasNext()) return null;
+  try {
+    var parsed = JSON.parse(it.next().getBlob().getDataAsString('UTF-8'));
+    return ProposalBuildingStore_rowToSession_(parsed);
+  } catch (ignore) {
+    return null;
+  }
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} sessionFolder
+ * @param {Object} session
+ */
+function ProposalBuildingStore_writeSessionJson_(sessionFolder, session) {
+  var payload = ProposalBuildingStore_rowToSession_(session);
+  var json = JSON.stringify(payload);
+  var it = sessionFolder.getFilesByName(PROPOSAL_BUILDING_STORE_SESSION_JSON_);
+  while (it.hasNext()) {
+    it.next().setTrashed(true);
+  }
+  sessionFolder.createFile(PROPOSAL_BUILDING_STORE_SESSION_JSON_, json, MimeType.PLAIN_TEXT);
+}
+
+/**
+ * Sesiones para métricas admin (lee índices en Drive de todos los usuarios).
+ * @return {Array<Object>}
+ */
+function ProposalBuildingStore_listAllForMetrics() {
+  var out = [];
+  try {
+    var proposalsRoot = ProposalBuilding_getProposalsDriveFolder_();
+    var usersRoot = ProposalBuilding_getOrCreateChildFolder_(
+      proposalsRoot,
+      PROPOSAL_BUILDING_STORE_USERS_SEGMENT_,
+    );
+    var userFolders = usersRoot.getFolders();
+    while (userFolders.hasNext()) {
+      var userFolder = userFolders.next();
+      var meta = ProposalBuildingStore_readUserMeta_(userFolder);
+      var email = meta && meta.email ? String(meta.email).trim() : '';
+      if (!email) continue;
+      var rows = ProposalBuildingStore_readIndexDataRows_(email);
+      var i;
+      for (i = 0; i < rows.length; i++) {
+        var summary = ProposalBuildingStore_indexRowToSummary_(rows[i]);
+        if (!summary.sessionId) continue;
+        out.push({
+          session_id: summary.sessionId,
+          status: summary.status,
+          created_at: summary.createdAt,
+          updated_at: summary.updatedAt,
+          user_email: email,
+          client_name: summary.clientName,
+        });
+      }
+    }
+  } catch (eMetrics) {
+    Logger.log(
+      '[ProposalBuildingStore_listAllForMetrics] ' +
+        (eMetrics && eMetrics.message ? eMetrics.message : eMetrics),
+    );
+  }
+  return out;
 }
 
 /** @const {Object<string, string>} */
@@ -146,7 +511,7 @@ function ProposalBuildingStore_normalizeListFilters_(statusFilter, filtersJson) 
   if (typeof filtersJson === 'string' && filtersJson) {
     try {
       raw = JSON.parse(filtersJson);
-    } catch (eParse) {
+    } catch (ignore) {
       raw = {};
     }
   } else if (filtersJson && typeof filtersJson === 'object') {
@@ -158,7 +523,8 @@ function ProposalBuildingStore_normalizeListFilters_(statusFilter, filtersJson) 
     .toLowerCase();
   var industry = PROPOSAL_BUILDING_STORE_INDUSTRY_FILTERS_[industryRaw] || '';
   if (industry !== 'Logistica' && industry !== 'Aerolineas') {
-    industry = raw.industry === 'Logistica' || raw.industry === 'Aerolineas' ? String(raw.industry) : '';
+    industry =
+      raw.industry === 'Logistica' || raw.industry === 'Aerolineas' ? String(raw.industry) : '';
   }
   var stepRaw = String(raw.builderStep || raw.step || '')
     .trim()
@@ -181,72 +547,62 @@ function ProposalBuildingStore_normalizeListFilters_(statusFilter, filtersJson) 
 }
 
 /**
- * @param {string} q
- * @return {string}
+ * @param {Object} summary
+ * @param {Object} filters
+ * @return {boolean}
  */
-function ProposalBuildingStore_searchOrPart_(q) {
-  var escaped = SupabaseRest_escapeFilterValue_(String(q || '').trim());
-  if (!escaped) return '';
-  var pattern = '*' + escaped + '*';
-  var fields = ['client_name', 'proposal_name', 'title', 'project_summary'];
-  var clauses = [];
-  var i;
-  for (i = 0; i < fields.length; i++) {
-    clauses.push(fields[i] + '.ilike.' + pattern);
-  }
-  return 'or=(' + clauses.join(',') + ')';
-}
+function ProposalBuildingStore_summaryMatchesFilters_(summary, filters) {
+  filters = filters || {};
+  var status = ProposalBuildingStore_resolveStatusFilter_(filters.status);
+  if (status && String(summary.status || '') !== status) return false;
+  if (filters.industry && String(summary.industryKey || '') !== filters.industry) return false;
+  if (filters.builderStep && String(summary.builderStep || '') !== filters.builderStep) return false;
 
-/**
- * @param {string} deliverablesKey
- * @return {string}
- */
-function ProposalBuildingStore_deliverablesFilterPart_(deliverablesKey) {
-  var key = String(deliverablesKey || '').trim().toLowerCase();
-  if (key === 'deck') return SupabaseRest_filter_('deck_file_id', 'neq', '');
-  if (key === 'package') return SupabaseRest_filter_('package_folder_id', 'neq', '');
-  if (key === 'any') return 'or=(deck_file_id.neq.,package_folder_id.neq.)';
-  if (key === 'none') return 'and=(deck_file_id.eq.,package_folder_id.eq.)';
-  return '';
-}
+  var deliverables = String(filters.deliverables || '').trim().toLowerCase();
+  if (deliverables === 'deck' && !String(summary.deckFileId || '').trim()) return false;
+  if (deliverables === 'package' && !String(summary.packageFolderId || '').trim()) return false;
+  if (deliverables === 'any') {
+    if (
+      !String(summary.deckFileId || '').trim() &&
+      !String(summary.packageFolderId || '').trim()
+    ) {
+      return false;
+    }
+  }
+  if (deliverables === 'none') {
+    if (
+      String(summary.deckFileId || '').trim() ||
+      String(summary.packageFolderId || '').trim()
+    ) {
+      return false;
+    }
+  }
 
-/**
- * @param {string} email
- * @param {Object|string=} filters
- * @return {Array<string>}
- */
-function ProposalBuildingStore_userListFilters_(email, filters) {
-  var em = String(email || '').trim();
-  var normalized =
-    typeof filters === 'string'
-      ? ProposalBuildingStore_normalizeListFilters_(filters, null)
-      : ProposalBuildingStore_normalizeListFilters_(filters && filters.status, filters);
-  var parts = [SupabaseRest_filter_('user_email', 'eq', em)];
-  var status = ProposalBuildingStore_resolveStatusFilter_(normalized.status);
-  if (status) parts.push(SupabaseRest_filter_('status', 'eq', status));
-  if (normalized.industry) {
-    parts.push(SupabaseRest_filter_('industry_key', 'eq', normalized.industry));
+  var q = String(filters.query || '')
+    .trim()
+    .toLowerCase();
+  if (q) {
+    var hay =
+      String(summary.clientName || '').toLowerCase() +
+      ' ' +
+      String(summary.proposalName || '').toLowerCase() +
+      ' ' +
+      String(summary.title || '').toLowerCase() +
+      ' ' +
+      String(summary.projectSummary || '').toLowerCase();
+    if (hay.indexOf(q) < 0) return false;
   }
-  if (normalized.builderStep) {
-    parts.push(SupabaseRest_filter_('builder_step', 'eq', normalized.builderStep));
-  }
-  if (normalized.query) {
-    var searchPart = ProposalBuildingStore_searchOrPart_(normalized.query);
-    if (searchPart) parts.push(searchPart);
-  }
-  var deliverablesPart = ProposalBuildingStore_deliverablesFilterPart_(normalized.deliverables);
-  if (deliverablesPart) parts.push(deliverablesPart);
-  return parts;
+  return true;
 }
 
 /** @const {Object<string, string>} */
 var PROPOSAL_BUILDING_STORE_SORT_COLUMNS_ = {
-  client: 'client_name',
-  proposal: 'proposal_name',
-  industry: 'industry_key',
+  client: 'clientName',
+  proposal: 'proposalName',
+  industry: 'industryKey',
   status: 'status',
-  deadline: 'rfp_deadline',
-  updated: 'updated_at',
+  deadline: 'rfpDeadline',
+  updated: 'updatedAt',
 };
 
 /**
@@ -267,6 +623,51 @@ function ProposalBuildingStore_resolveSortDirection_(sortDir) {
 }
 
 /**
+ * @param {Array<Object>} items
+ * @param {string} sortBy
+ * @param {string} sortDir
+ * @return {Array<Object>}
+ */
+function ProposalBuildingStore_sortSummaries_(items, sortBy, sortDir) {
+  var col = ProposalBuildingStore_resolveSortColumn_(sortBy);
+  var dir = ProposalBuildingStore_resolveSortDirection_(sortDir);
+  var sorted = (items || []).slice();
+  sorted.sort(function (a, b) {
+    var av = String((a && a[col]) || '');
+    var bv = String((b && b[col]) || '');
+    if (col === 'updatedAt' || col === 'rfpDeadline') {
+      var cmp = av.localeCompare(bv);
+      return dir === 'asc' ? cmp : -cmp;
+    }
+    var cmp2 = av.localeCompare(bv, undefined, { sensitivity: 'base' });
+    return dir === 'asc' ? cmp2 : -cmp2;
+  });
+  return sorted;
+}
+
+/**
+ * @param {string} email
+ * @param {Object|string=} filters
+ * @return {number}
+ */
+function ProposalBuildingStore_countByUser(email, filters) {
+  var em = String(email || '').trim();
+  if (!em) return 0;
+  var normalized =
+    typeof filters === 'string'
+      ? ProposalBuildingStore_normalizeListFilters_(filters, null)
+      : ProposalBuildingStore_normalizeListFilters_(filters && filters.status, filters);
+  var rows = ProposalBuildingStore_readIndexDataRows_(em);
+  var count = 0;
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var summary = ProposalBuildingStore_indexRowToSummary_(rows[i]);
+    if (ProposalBuildingStore_summaryMatchesFilters_(summary, normalized)) count++;
+  }
+  return count;
+}
+
+/**
  * @param {string} email
  * @param {number} skip
  * @param {number} limit
@@ -283,19 +684,55 @@ function ProposalBuildingStore_listByUser(email, skip, limit, sortBy, sortDir, f
     PROPOSAL_BUILDING_STORE_MAX_LIMIT_,
     Math.max(1, Number(limit) || PROPOSAL_BUILDING_STORE_DEFAULT_LIMIT_),
   );
-  var orderCol = ProposalBuildingStore_resolveSortColumn_(sortBy);
-  var orderDir = ProposalBuildingStore_resolveSortDirection_(sortDir);
-  var q = SupabaseRest_query_(
-    ['select=*']
-      .concat(ProposalBuildingStore_userListFilters_(email, filters))
-      .concat([
-        'order=' + orderCol + '.' + orderDir + ',session_id.asc',
-        'offset=' + s,
-        'limit=' + lim,
-      ]),
-  );
-  var rows = SupabaseRest_select(SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS, q);
-  return rows.map(ProposalBuildingStore_rowToSession_);
+  var normalized =
+    typeof filters === 'string'
+      ? ProposalBuildingStore_normalizeListFilters_(filters, null)
+      : ProposalBuildingStore_normalizeListFilters_(filters && filters.status, filters);
+  var rows = ProposalBuildingStore_readIndexDataRows_(em);
+  var summaries = [];
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    var summary = ProposalBuildingStore_indexRowToSummary_(rows[i]);
+    if (!summary.sessionId) continue;
+    if (!ProposalBuildingStore_summaryMatchesFilters_(summary, normalized)) continue;
+    summaries.push(summary);
+  }
+  summaries = ProposalBuildingStore_sortSummaries_(summaries, sortBy, sortDir);
+  var page = summaries.slice(s, s + lim);
+  var out = [];
+  for (i = 0; i < page.length; i++) {
+    var item = page[i];
+    var summarySession = ProposalBuildingStore_rowToSession_({
+      sessionId: item.sessionId,
+      userEmail: em,
+      status: item.status,
+      builderStep: item.builderStep,
+      title: item.title,
+      clientName: item.clientName,
+      industryKey: item.industryKey,
+      proposalName: item.proposalName,
+      rfpDeadline: item.rfpDeadline,
+      commercialModel: item.commercialModel,
+      projectSummary: item.projectSummary,
+      deckFileId: item.deckFileId,
+      deckFileUrl: item.deckFileUrl,
+      deckFileName: item.deckFileName,
+      checklistFileId: item.checklistFileId,
+      checklistFileUrl: item.checklistFileUrl,
+      checklistFileName: item.checklistFileName,
+      packageFolderId: item.packageFolderId,
+      packageFolderUrl: item.packageFolderUrl,
+      packageFolderName: item.packageFolderName,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      materials: [],
+      studioRecommendations: [],
+    });
+    summarySession.materialsCount = item.materialsCount;
+    summarySession.studiosCount = item.studiosCount;
+    out.push(summarySession);
+  }
+  return out;
 }
 
 /**
@@ -307,14 +744,8 @@ function ProposalBuildingStore_getByIdForUser(sessionId, email) {
   var sid = String(sessionId || '').trim();
   var em = String(email || '').trim();
   if (!sid || !em) return null;
-  var q = SupabaseRest_query_([
-    'select=*',
-    SupabaseRest_filter_('session_id', 'eq', sid),
-    SupabaseRest_filter_('user_email', 'eq', em),
-    'limit=1',
-  ]);
-  var rows = SupabaseRest_select(SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS, q);
-  return rows.length ? ProposalBuildingStore_rowToSession_(rows[0]) : null;
+  var sessionFolder = ProposalBuildingStore_getSessionFolder_(em, sid);
+  return ProposalBuildingStore_readSessionJson_(sessionFolder);
 }
 
 /**
@@ -328,41 +759,40 @@ function ProposalBuildingStore_create(email, seed) {
   seed = seed && typeof seed === 'object' ? seed : {};
   var nowIso = new Date().toISOString();
   var sessionId = Utilities.getUuid();
-  var row = {
-    session_id: sessionId,
-    user_email: em,
+  var session = ProposalBuildingStore_rowToSession_({
+    sessionId: sessionId,
+    userEmail: em,
     status: String(seed.status || 'in_progress'),
-    builder_step: String(seed.builderStep || 'materials'),
+    builderStep: String(seed.builderStep || 'materials'),
     title: String(seed.title || ''),
-    client_name: String(seed.clientName || ''),
-    industry_key: String(seed.industryKey || ''),
-    proposal_name: String(seed.proposalName || ''),
-    rfp_deadline: String(seed.rfpDeadline || ''),
-    commercial_model: String(seed.commercialModel || ''),
-    project_summary: String(seed.projectSummary || ''),
-    draft_brief_json: seed.draftBrief && typeof seed.draftBrief === 'object' ? seed.draftBrief : {},
-    validated_brief_json:
-      seed.validatedBrief && typeof seed.validatedBrief === 'object' ? seed.validatedBrief : null,
-    materials_json: Array.isArray(seed.materials) ? seed.materials : [],
-    ai_responses_json: Array.isArray(seed.aiResponses) ? seed.aiResponses : [],
-    studio_recommendations_json: Array.isArray(seed.studioRecommendations)
-      ? seed.studioRecommendations
-      : [],
-    context_json: seed.context && typeof seed.context === 'object' ? seed.context : {},
-    deck_file_id: String(seed.deckFileId || ''),
-    deck_file_url: String(seed.deckFileUrl || ''),
-    deck_file_name: String(seed.deckFileName || ''),
-    checklist_file_id: String(seed.checklistFileId || ''),
-    checklist_file_url: String(seed.checklistFileUrl || ''),
-    checklist_file_name: String(seed.checklistFileName || ''),
-    package_folder_id: String(seed.packageFolderId || ''),
-    package_folder_url: String(seed.packageFolderUrl || ''),
-    package_folder_name: String(seed.packageFolderName || ''),
-    created_at: nowIso,
-    updated_at: nowIso,
-  };
-  SupabaseRest_insert(SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS, row, { prefer: 'return=minimal' });
-  return ProposalBuildingStore_rowToSession_(row);
+    clientName: String(seed.clientName || ''),
+    industryKey: String(seed.industryKey || ''),
+    proposalName: String(seed.proposalName || ''),
+    rfpDeadline: String(seed.rfpDeadline || ''),
+    commercialModel: String(seed.commercialModel || ''),
+    projectSummary: String(seed.projectSummary || ''),
+    draftBrief: seed.draftBrief,
+    validatedBrief: seed.validatedBrief,
+    materials: seed.materials,
+    aiResponses: seed.aiResponses,
+    studioRecommendations: seed.studioRecommendations,
+    context: seed.context,
+    deckFileId: seed.deckFileId,
+    deckFileUrl: seed.deckFileUrl,
+    deckFileName: seed.deckFileName,
+    checklistFileId: seed.checklistFileId,
+    checklistFileUrl: seed.checklistFileUrl,
+    checklistFileName: seed.checklistFileName,
+    packageFolderId: seed.packageFolderId,
+    packageFolderUrl: seed.packageFolderUrl,
+    packageFolderName: seed.packageFolderName,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+  var sessionFolder = ProposalBuildingStore_getSessionFolder_(em, sessionId);
+  ProposalBuildingStore_writeSessionJson_(sessionFolder, session);
+  ProposalBuildingStore_upsertIndexRow_(em, session);
+  return session;
 }
 
 /**
@@ -376,41 +806,39 @@ function ProposalBuildingStore_updateForUser(sessionId, email, patch) {
   var em = String(email || '').trim();
   if (!sid || !em) return null;
   patch = patch && typeof patch === 'object' ? patch : {};
-  var row = { updated_at: new Date().toISOString() };
-  if (patch.status != null) row.status = String(patch.status || 'in_progress');
-  if (patch.builderStep != null) row.builder_step = String(patch.builderStep || 'materials');
-  if (patch.title != null) row.title = String(patch.title || '');
-  if (patch.clientName != null) row.client_name = String(patch.clientName || '');
-  if (patch.industryKey != null) row.industry_key = String(patch.industryKey || '');
-  if (patch.proposalName != null) row.proposal_name = String(patch.proposalName || '');
-  if (patch.rfpDeadline != null) row.rfp_deadline = String(patch.rfpDeadline || '');
-  if (patch.commercialModel != null) row.commercial_model = String(patch.commercialModel || '');
-  if (patch.projectSummary != null) row.project_summary = String(patch.projectSummary || '');
-  if (patch.draftBrief != null) row.draft_brief_json = patch.draftBrief;
-  if (patch.validatedBrief !== undefined) row.validated_brief_json = patch.validatedBrief;
-  if (patch.materials != null) row.materials_json = patch.materials;
-  if (patch.aiResponses != null) row.ai_responses_json = patch.aiResponses;
-  if (patch.studioRecommendations != null) row.studio_recommendations_json = patch.studioRecommendations;
-  if (patch.context != null) row.context_json = patch.context;
-  if (patch.deckFileId != null) row.deck_file_id = String(patch.deckFileId || '');
-  if (patch.deckFileUrl != null) row.deck_file_url = String(patch.deckFileUrl || '');
-  if (patch.deckFileName != null) row.deck_file_name = String(patch.deckFileName || '');
-  if (patch.checklistFileId != null) row.checklist_file_id = String(patch.checklistFileId || '');
-  if (patch.checklistFileUrl != null) row.checklist_file_url = String(patch.checklistFileUrl || '');
-  if (patch.checklistFileName != null) row.checklist_file_name = String(patch.checklistFileName || '');
-  if (patch.packageFolderId != null) row.package_folder_id = String(patch.packageFolderId || '');
-  if (patch.packageFolderUrl != null) row.package_folder_url = String(patch.packageFolderUrl || '');
-  if (patch.packageFolderName != null) row.package_folder_name = String(patch.packageFolderName || '');
+  var session = ProposalBuildingStore_getByIdForUser(sid, em);
+  if (!session) return null;
 
-  SupabaseRest_update(
-    SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS,
-    row,
-    SupabaseRest_query_([
-      SupabaseRest_filter_('session_id', 'eq', sid),
-      SupabaseRest_filter_('user_email', 'eq', em),
-    ]),
-  );
-  return ProposalBuildingStore_getByIdForUser(sid, em);
+  if (patch.status != null) session.status = String(patch.status || 'in_progress');
+  if (patch.builderStep != null) session.builderStep = String(patch.builderStep || 'materials');
+  if (patch.title != null) session.title = String(patch.title || '');
+  if (patch.clientName != null) session.clientName = String(patch.clientName || '');
+  if (patch.industryKey != null) session.industryKey = String(patch.industryKey || '');
+  if (patch.proposalName != null) session.proposalName = String(patch.proposalName || '');
+  if (patch.rfpDeadline != null) session.rfpDeadline = String(patch.rfpDeadline || '');
+  if (patch.commercialModel != null) session.commercialModel = String(patch.commercialModel || '');
+  if (patch.projectSummary != null) session.projectSummary = String(patch.projectSummary || '');
+  if (patch.draftBrief != null) session.draftBrief = patch.draftBrief;
+  if (patch.validatedBrief !== undefined) session.validatedBrief = patch.validatedBrief;
+  if (patch.materials != null) session.materials = patch.materials;
+  if (patch.aiResponses != null) session.aiResponses = patch.aiResponses;
+  if (patch.studioRecommendations != null) session.studioRecommendations = patch.studioRecommendations;
+  if (patch.context != null) session.context = patch.context;
+  if (patch.deckFileId != null) session.deckFileId = String(patch.deckFileId || '');
+  if (patch.deckFileUrl != null) session.deckFileUrl = String(patch.deckFileUrl || '');
+  if (patch.deckFileName != null) session.deckFileName = String(patch.deckFileName || '');
+  if (patch.checklistFileId != null) session.checklistFileId = String(patch.checklistFileId || '');
+  if (patch.checklistFileUrl != null) session.checklistFileUrl = String(patch.checklistFileUrl || '');
+  if (patch.checklistFileName != null) session.checklistFileName = String(patch.checklistFileName || '');
+  if (patch.packageFolderId != null) session.packageFolderId = String(patch.packageFolderId || '');
+  if (patch.packageFolderUrl != null) session.packageFolderUrl = String(patch.packageFolderUrl || '');
+  if (patch.packageFolderName != null) session.packageFolderName = String(patch.packageFolderName || '');
+  session.updatedAt = new Date().toISOString();
+
+  var sessionFolder = ProposalBuildingStore_getSessionFolder_(em, sid);
+  ProposalBuildingStore_writeSessionJson_(sessionFolder, session);
+  ProposalBuildingStore_upsertIndexRow_(em, session);
+  return session;
 }
 
 /**
@@ -422,31 +850,12 @@ function ProposalBuildingStore_deleteForUser(sessionId, email) {
   var sid = String(sessionId || '').trim();
   var em = String(email || '').trim();
   if (!sid || !em) return false;
-  SupabaseRest_delete(
-    SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS,
-    SupabaseRest_query_([
-      SupabaseRest_filter_('session_id', 'eq', sid),
-      SupabaseRest_filter_('user_email', 'eq', em),
-    ]),
-  );
-  return true;
-}
-
-/**
- * @param {string} sessionId
- * @param {string} email
- * @return {boolean}
- */
-function ProposalBuildingStore_deleteForUser(sessionId, email) {
-  var sid = String(sessionId || '').trim();
-  var em = String(email || '').trim();
-  if (!sid || !em) return false;
-  SupabaseRest_delete(
-    SUPABASE_TABLE.PROPOSAL_BUILDING_SESSIONS,
-    SupabaseRest_query_([
-      SupabaseRest_filter_('session_id', 'eq', sid),
-      SupabaseRest_filter_('user_email', 'eq', em),
-    ]),
-  );
+  try {
+    ProposalBuildingStore_removeIndexRow_(em, sid);
+    var sessionFolder = ProposalBuildingStore_getSessionFolder_(em, sid);
+    sessionFolder.setTrashed(true);
+  } catch (ignore) {
+    return false;
+  }
   return true;
 }

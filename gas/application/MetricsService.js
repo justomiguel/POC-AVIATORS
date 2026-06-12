@@ -364,6 +364,319 @@ function MetricsService_sectionKeys_() {
   return ['home', 'onboarding', 'globant_offering', 'proposal_building', 'other'];
 }
 
+/** @return {string[]} */
+function MetricsService_moduleKeys_() {
+  return [
+    'home',
+    'onboarding',
+    'globant-offering',
+    'proposal-building',
+    'my-proposals',
+    'proposal-view',
+    'contents',
+    'tags',
+    'clients',
+    'metrics',
+    'knowledge-graph',
+    'settings',
+    'request-access',
+    'faq',
+  ];
+}
+
+/**
+ * @param {string} moduleKey
+ * @return {boolean}
+ */
+function MetricsService_isValidModuleKey_(moduleKey) {
+  var mk = String(moduleKey || '').trim();
+  if (!mk) return false;
+  var keys = MetricsService_moduleKeys_();
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i] === mk) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {Array<Object>} visitRows
+ * @param {{startMs:number,endMs:number}} bounds
+ * @return {Array<Object>}
+ */
+function MetricsService_filterModuleVisitsByRange_(visitRows, bounds) {
+  var out = [];
+  for (var i = 0; i < visitRows.length; i++) {
+    var row = visitRows[i] || {};
+    var ms = Number(row.ts_ms || 0) || MetricsService_toMs_(row.ts_iso);
+    if (!ms || ms < bounds.startMs || ms > bounds.endMs) continue;
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * @param {Array<Object>} visitRows
+ * @param {number} topN
+ * @return {{totalVisits:number,uniqueUsers:number,byModule:Array<Object>,topUsers:Array<Object>,allUsers:Array<Object>}}
+ */
+function MetricsService_buildModuleAggregates_(visitRows, topN) {
+  var byModuleCount = {};
+  var byModuleUsers = {};
+  var byUser = {};
+  var users = {};
+  var n = Math.max(1, Number(topN) || 10);
+
+  for (var i = 0; i < visitRows.length; i++) {
+    var row = visitRows[i] || {};
+    var mk = String(row.module_key || '').trim();
+    if (!mk) continue;
+    byModuleCount[mk] = (byModuleCount[mk] || 0) + 1;
+
+    var em = String(row.user_email || '').trim().toLowerCase();
+    if (!em) continue;
+    if (!byModuleUsers[mk]) byModuleUsers[mk] = {};
+    byModuleUsers[mk][em] = true;
+    users[em] = true;
+
+    if (!byUser[em]) {
+      byUser[em] = {
+        email: String(row.user_email || '').trim(),
+        displayName:
+          String(row.user_display_name || '').trim() || em.split('@')[0] || em,
+        roleKey: String(row.role_key || '').trim(),
+        total: 0,
+        modules: {},
+      };
+    }
+    byUser[em].total += 1;
+    byUser[em].modules[mk] = (byUser[em].modules[mk] || 0) + 1;
+  }
+
+  var byModule = [];
+  for (var mod in byModuleCount) {
+    if (!Object.prototype.hasOwnProperty.call(byModuleCount, mod)) continue;
+    byModule.push({
+      key: mod,
+      count: byModuleCount[mod],
+      uniqueUsers: Object.keys(byModuleUsers[mod] || {}).length,
+    });
+  }
+  byModule.sort(function (a, b) {
+    return Number(b.count || 0) - Number(a.count || 0);
+  });
+
+  var userList = [];
+  for (var uem in byUser) {
+    if (!Object.prototype.hasOwnProperty.call(byUser, uem)) continue;
+    var u = byUser[uem];
+    var mods = [];
+    for (var mk2 in u.modules) {
+      if (!Object.prototype.hasOwnProperty.call(u.modules, mk2)) continue;
+      mods.push({ key: mk2, count: u.modules[mk2] });
+    }
+    mods.sort(function (a, b) {
+      return Number(b.count || 0) - Number(a.count || 0);
+    });
+    userList.push({
+      name: u.displayName,
+      email: u.email,
+      roleKey: u.roleKey,
+      count: u.total,
+      modules: mods,
+    });
+  }
+  userList.sort(function (a, b) {
+    return Number(b.count || 0) - Number(a.count || 0);
+  });
+
+  return {
+    totalVisits: visitRows.length,
+    uniqueUsers: Object.keys(users).length,
+    byModule: byModule.slice(0, n),
+    topUsers: userList.slice(0, n),
+    allUsers: userList,
+  };
+}
+
+/**
+ * @param {string} moduleKey
+ * @return {{ok:boolean,visitId:string}}
+ */
+function MetricsService_trackModuleVisit(moduleKey) {
+  var mk = String(moduleKey || '').trim();
+  if (!MetricsService_isValidModuleKey_(mk)) return { ok: false, visitId: '' };
+
+  var email = ('' + Session.getActiveUser().getEmail()).trim();
+  if (!email) return { ok: false, visitId: '' };
+
+  var nowMs = Date.now();
+  var nowIso = new Date(nowMs).toISOString();
+  var visitId = Utilities.getUuid();
+  var roleRec = null;
+  try {
+    roleRec = RoleDirectory_lookupRole(email);
+  } catch (ignoreRole) {}
+  var roleKey = roleRec && roleRec.key ? String(roleRec.key) : 'visitante';
+  var displayName = email.split('@')[0] || email;
+
+  MetricsStore_insertModuleVisit({
+    visit_id: visitId,
+    ts_iso: nowIso,
+    ts_ms: nowMs,
+    year_month: MetricsService_toYearMonth_(nowMs),
+    user_email: email,
+    user_display_name: displayName,
+    role_key: roleKey,
+    module_key: mk,
+  });
+  return { ok: true, visitId: visitId };
+}
+
+/**
+ * @param {string} email
+ * @param {string} [displayName]
+ */
+function MetricsService_touchUserPresence_(email, displayName) {
+  var em = String(email || '').trim();
+  if (!em) return;
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    UserPresenceStore_touchSession(em, displayName);
+  } catch (eTouch) {
+    Logger.log(
+      '[MetricsService] touchUserPresence: ' +
+        (eTouch && eTouch.message ? eTouch.message : eTouch),
+    );
+  }
+}
+
+/**
+ * Mapa email → presencia (user_presence + visitantes como respaldo).
+ * @return {Object<string, Object>}
+ */
+function MetricsService_presenceMap_() {
+  var map = {};
+  try {
+    AviatorsDataBackend_requireSupabase_();
+    map = UserPresenceStore_lookupMap_();
+  } catch (ignorePresence) {}
+  try {
+    var visitors = VisitorsStore_listRecent(500);
+    var i;
+    for (i = 0; i < visitors.length; i++) {
+      var em = String(visitors[i].email || '').trim().toLowerCase();
+      if (!em || map[em]) continue;
+      map[em] = {
+        email: em,
+        last_seen_at: visitors[i].last_seen_at,
+        session_count: visitors[i].visit_count,
+      };
+    }
+  } catch (ignoreVisitors) {}
+  return map;
+}
+
+/**
+ * @param {number} moduleVisits
+ * @param {number} uniqueModules
+ * @param {number} questions
+ * @return {{level:string,score:number}}
+ */
+function MetricsService_computeEngagement_(moduleVisits, uniqueModules, questions) {
+  var visits = Math.max(0, Number(moduleVisits) || 0);
+  var mods = Math.max(0, Number(uniqueModules) || 0);
+  var qs = Math.max(0, Number(questions) || 0);
+  var score = visits + mods * 2 + qs * 3;
+  if (score <= 0) return { level: 'inactive', score: 0 };
+  if (score <= 5) return { level: 'low', score: score };
+  if (score <= 18) return { level: 'medium', score: score };
+  return { level: 'high', score: score };
+}
+
+/**
+ * Usuarios con actividad en el período + último acceso global + engagement.
+ * @param {Array<Object>} moduleVisitRows
+ * @param {Array<Object>} usageRows
+ * @param {Object<string, Object>} presenceMap
+ * @return {Array<Object>}
+ */
+function MetricsService_buildUserEngagementRows_(moduleVisitRows, usageRows, presenceMap) {
+  var moduleAgg = MetricsService_buildModuleAggregates_(moduleVisitRows, 9999);
+  var byEmail = {};
+  var i;
+
+  for (i = 0; i < moduleAgg.allUsers.length; i++) {
+    var u = moduleAgg.allUsers[i];
+    var em = String(u.email || '').trim().toLowerCase();
+    if (!em) continue;
+    byEmail[em] = {
+      name: u.name,
+      email: u.email,
+      roleKey: u.roleKey,
+      count: u.count,
+      modules: u.modules,
+      questions: 0,
+    };
+  }
+
+  var seenQuestions = {};
+  for (i = 0; i < usageRows.length; i++) {
+    var row = usageRows[i] || {};
+    var em2 = String(row.user_email || '').trim().toLowerCase();
+    if (!em2) continue;
+    var qid = String(row.question_id || '').trim();
+    var dedupeKey = qid ? qid + '|' + em2 : 'row|' + i;
+    if (seenQuestions[dedupeKey]) continue;
+    seenQuestions[dedupeKey] = true;
+    if (!byEmail[em2]) {
+      byEmail[em2] = {
+        name:
+          String(row.user_display_name || '').trim() ||
+          em2.split('@')[0] ||
+          em2,
+        email: String(row.user_email || '').trim(),
+        roleKey: String(row.role_key || '').trim(),
+        count: 0,
+        modules: [],
+        questions: 0,
+      };
+    }
+    byEmail[em2].questions += 1;
+  }
+
+  var out = [];
+  for (var key in byEmail) {
+    if (!Object.prototype.hasOwnProperty.call(byEmail, key)) continue;
+    var item = byEmail[key];
+    var uniqueModules = Array.isArray(item.modules) ? item.modules.length : 0;
+    var engagement = MetricsService_computeEngagement_(
+      item.count,
+      uniqueModules,
+      item.questions,
+    );
+    var pres = presenceMap[key];
+    out.push({
+      name: item.name,
+      email: item.email,
+      roleKey: item.roleKey,
+      count: item.count,
+      modules: item.modules,
+      questions: item.questions,
+      uniqueModules: uniqueModules,
+      lastSeenAt: pres ? String(pres.last_seen_at || '') : '',
+      sessionCount: pres ? Number(pres.session_count || 0) : 0,
+      engagementLevel: engagement.level,
+      engagementScore: engagement.score,
+    });
+  }
+  out.sort(function (a, b) {
+    var scoreDiff = Number(b.engagementScore || 0) - Number(a.engagementScore || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return Number(b.count || 0) - Number(a.count || 0);
+  });
+  return out;
+}
+
 /**
  * @param {Object} row
  * @return {string}
@@ -500,19 +813,16 @@ function MetricsService_buildProposalBuildingSummary_(sessionRows, bounds) {
  * @return {{successCases:number,proposals:number,onboarding:number,clients:number,kgNodes:number,kgEdges:number}}
  */
 function MetricsService_buildCatalogStats_() {
-  var res = ContentCatalog_list({ skip: 0, limit: 0, skipReconcile: true });
-  var items = (res && res.items) || [];
   var successCases = 0;
   var proposals = 0;
   var onboarding = 0;
   var clients = 0;
-  for (var i = 0; i < items.length; i++) {
-    var type = String((items[i].common && items[i].common.content_type) || '').trim();
-    if (type === 'success_case') successCases++;
-    else if (type === 'proposal') proposals++;
-    else if (type === 'onboarding') onboarding++;
-    else if (type === 'client') clients++;
-  }
+  try {
+    successCases = ContentCatalogStore_countFiltered({ contentType: 'success_case' });
+    proposals = ContentCatalogStore_countFiltered({ contentType: 'proposal' });
+    onboarding = ContentCatalogStore_countFiltered({ contentType: 'onboarding' });
+    clients = ContentCatalogStore_countFiltered({ contentType: 'client' });
+  } catch (ignoreCounts) {}
   var kgNodes = 0;
   var kgEdges = 0;
   try {
@@ -534,8 +844,27 @@ function MetricsService_buildCatalogStats_() {
  * @return {{successByClient:Array<{name:string,count:number}>,successByIndustry:Array<{name:string,count:number}>,proposalByClient:Array<{name:string,count:number}>,proposalByIndustry:Array<{name:string,count:number}>}}
  */
 function MetricsService_buildContentLeaderboards_(topN) {
-  var res = ContentCatalog_list({ skip: 0, limit: 0, skipReconcile: true });
-  var items = (res && res.items) || [];
+  var items = [];
+  var typeIdx;
+  var types = ['proposal', 'success_case'];
+  for (typeIdx = 0; typeIdx < types.length; typeIdx++) {
+    var batch = ContentCatalogStore_listAllPages_(
+      { contentType: types[typeIdx] },
+      100,
+      5000,
+    );
+    var bi;
+    for (bi = 0; bi < batch.length; bi++) {
+      var row = batch[bi];
+      items.push({
+        common: {
+          content_type: String(row.content_type || ''),
+          client_name: String(row.client_name || ''),
+          industry: String(row.industry || ''),
+        },
+      });
+    }
+  }
   var clients = ClientsMaster_list({});
   var clientRows = (clients && clients.items) || [];
   var industryByClient = {};
@@ -606,16 +935,30 @@ function MetricsService_page_(items, skip, limit) {
 function MetricsService_dashboard(range, topN) {
   MetricsAuth_requireView();
   var bounds = MetricsService_resolveRange_(range);
-  var usageRows = MetricsStore_listUsageEvents().map(MetricsStore_usageToLegacyRow_);
-  var filteredUsage = MetricsService_filterRowsByRange_(usageRows, bounds);
+  var startIso = new Date(bounds.startMs).toISOString();
+  var endIso = new Date(bounds.endMs).toISOString();
+  var usageRows = MetricsStore_listUsageEventsInRangeAll_(bounds.startMs, bounds.endMs).map(
+    MetricsStore_usageToLegacyRow_,
+  );
+  var filteredUsage = usageRows;
   var usageAgg = MetricsService_buildUsageAggregates_(filteredUsage, topN || 10);
   var sectionAgg = MetricsService_buildSectionAggregates_(filteredUsage);
   var contentAgg = MetricsService_buildContentLeaderboards_(topN || 10);
   var catalogStats = MetricsService_buildCatalogStats_();
-  var feedbackRows = MetricsStore_listFeedbackEvents();
+  var feedbackRows = MetricsStore_listFeedbackEventsInRangeAll_(startIso, endIso);
   var feedbackSummary = MetricsService_buildFeedbackSummary_(feedbackRows, bounds);
   var proposalRows = ProposalBuildingStore_listAllForMetrics();
   var proposalSummary = MetricsService_buildProposalBuildingSummary_(proposalRows, bounds);
+  var moduleVisitRows = MetricsStore_listModuleVisitsInRangeAll_(bounds.startMs, bounds.endMs);
+  var filteredModuleVisits = moduleVisitRows;
+  var moduleAgg = MetricsService_buildModuleAggregates_(filteredModuleVisits, topN || 10);
+  var presenceMap = MetricsService_presenceMap_();
+  var engagementRows = MetricsService_buildUserEngagementRows_(
+    filteredModuleVisits,
+    filteredUsage,
+    presenceMap,
+  );
+  moduleAgg.topUsers = engagementRows.slice(0, topN || 10);
   var unansweredCount = filteredUsage.filter(function (r) {
     return String(r.is_unanswered || '') === '1' || r.is_unanswered === true;
   }).length;
@@ -644,6 +987,12 @@ function MetricsService_dashboard(range, topN) {
       feedbackDown: feedbackSummary.down,
       feedbackSatisfactionPct: feedbackSummary.satisfactionPct,
       chatConversations: MetricsStore_countChatConversations(),
+      moduleVisits: moduleAgg.totalVisits,
+      moduleUniqueUsers: moduleAgg.uniqueUsers,
+    },
+    moduleUsage: {
+      byModule: moduleAgg.byModule,
+      topUsers: moduleAgg.topUsers,
     },
     sections: sectionAgg.bySection,
     catalog: catalogStats,
@@ -781,8 +1130,10 @@ function MetricsService_leaderboardList(kind, filters) {
 
   if (k === 'users' || k === 'agents') {
     var bounds = MetricsService_resolveRange_(f.range || '30d');
-    var usageRowsLb = MetricsStore_listUsageEvents().map(MetricsStore_usageToLegacyRow_);
-    var filteredUsage = MetricsService_filterRowsByRange_(usageRowsLb, bounds);
+    var usageRowsLb = MetricsStore_listUsageEventsInRangeAll_(bounds.startMs, bounds.endMs).map(
+      MetricsStore_usageToLegacyRow_,
+    );
+    var filteredUsage = usageRowsLb;
     var agg = MetricsService_buildUsageAggregates_(filteredUsage, 9999);
     data = k === 'users' ? agg.byUser : agg.byAgent;
   } else {
@@ -794,6 +1145,30 @@ function MetricsService_leaderboardList(kind, filters) {
   }
 
   return MetricsService_page_(data, f.skip, f.limit);
+}
+
+/**
+ * Lista paginada de usuarios con desglose de módulos visitados.
+ * @param {Object=} filters
+ * @return {{ok:boolean,items:Array<Object>,total:number,skip:number,limit:number,hasMore:boolean}}
+ */
+function MetricsService_moduleUserList(filters) {
+  MetricsAuth_requireView();
+  var f = filters || {};
+  var bounds = MetricsService_resolveRange_(f.range || '30d');
+  var moduleVisitRows = MetricsStore_listModuleVisitsInRangeAll_(bounds.startMs, bounds.endMs);
+  var usageRows = MetricsStore_listUsageEventsInRangeAll_(bounds.startMs, bounds.endMs).map(
+    MetricsStore_usageToLegacyRow_,
+  );
+  var filteredModuleVisits = moduleVisitRows;
+  var filteredUsage = usageRows;
+  var presenceMap = MetricsService_presenceMap_();
+  var rows = MetricsService_buildUserEngagementRows_(
+    filteredModuleVisits,
+    filteredUsage,
+    presenceMap,
+  );
+  return MetricsService_page_(rows, f.skip, f.limit);
 }
 
 /**

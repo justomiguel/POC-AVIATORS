@@ -2,24 +2,162 @@
  * @fileoverview Persistencia de métricas en Supabase.
  */
 
+var METRICS_STORE_PAGE_SIZE_ = 500;
+
+var METRICS_STORE_FETCH_MAX_ROWS_ = 20000;
+
+var METRICS_USAGE_DASHBOARD_COLUMNS_ =
+  'event_id,question_id,ts_iso,ts_ms,year_month,user_email,user_display_name,role_key,' +
+  'mode,agent_id,agent_name,is_unanswered,unanswered_code';
+
+var METRICS_MODULE_VISIT_COLUMNS_ =
+  'visit_id,ts_iso,ts_ms,year_month,user_email,user_display_name,role_key,module_key';
+
+var METRICS_FEEDBACK_DASHBOARD_COLUMNS_ =
+  'feedback_id,event_id,ts_iso,user_email,role_key,rating,agent_id,agent_name';
+
+/**
+ * @param {function(number,number):Array<Object>} fetchPageFn
+ * @param {number} maxRows
+ * @return {Array<Object>}
+ */
+function MetricsStore_fetchAllPages_(fetchPageFn, maxRows) {
+  var cap = Math.max(METRICS_STORE_PAGE_SIZE_, Number(maxRows) || METRICS_STORE_FETCH_MAX_ROWS_);
+  /** @type {Array<Object>} */
+  var out = [];
+  var skip = 0;
+  while (out.length < cap) {
+    var page = fetchPageFn(skip, METRICS_STORE_PAGE_SIZE_);
+    if (!page || !page.length) break;
+    out = out.concat(page);
+    if (page.length < METRICS_STORE_PAGE_SIZE_) break;
+    skip += METRICS_STORE_PAGE_SIZE_;
+  }
+  if (out.length > cap) out = out.slice(0, cap);
+  return out;
+}
+
+/**
+ * @param {number} startMs
+ * @param {number} endMs
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function MetricsStore_listUsageEventsInRange(startMs, endMs, skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(METRICS_STORE_PAGE_SIZE_, Math.max(1, Number(limit) || METRICS_STORE_PAGE_SIZE_));
+  var start = Math.max(0, Number(startMs) || 0);
+  var end = Math.max(start, Number(endMs) || 0);
+  var q = SupabaseRest_query_([
+    'select=' + METRICS_USAGE_DASHBOARD_COLUMNS_,
+    SupabaseRest_filter_('ts_ms', 'gte', start),
+    SupabaseRest_filter_('ts_ms', 'lte', end),
+    'order=ts_ms.desc',
+    'offset=' + s,
+    'limit=' + lim,
+  ]);
+  return SupabaseRest_select(SUPABASE_TABLE.USAGE_EVENTS, q);
+}
+
+/**
+ * @param {number} startMs
+ * @param {number} endMs
+ * @return {Array<Object>}
+ */
+function MetricsStore_listUsageEventsInRangeAll_(startMs, endMs) {
+  return MetricsStore_fetchAllPages_(function (skip, limit) {
+    return MetricsStore_listUsageEventsInRange(startMs, endMs, skip, limit);
+  }, METRICS_STORE_FETCH_MAX_ROWS_);
+}
+
 /**
  * @return {Array<Object>}
  */
 function MetricsStore_listUsageEvents() {
-  return SupabaseRest_select(
-    SUPABASE_TABLE.USAGE_EVENTS,
-    'select=*&order=ts_ms.desc',
-  );
+  return MetricsStore_listUsageEventsInRangeAll_(0, Date.now() + 86400000);
+}
+
+/**
+ * @param {number} startMs
+ * @param {number} endMs
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function MetricsStore_listModuleVisitsInRange(startMs, endMs, skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(METRICS_STORE_PAGE_SIZE_, Math.max(1, Number(limit) || METRICS_STORE_PAGE_SIZE_));
+  var start = Math.max(0, Number(startMs) || 0);
+  var end = Math.max(start, Number(endMs) || 0);
+  var q = SupabaseRest_query_([
+    'select=' + METRICS_MODULE_VISIT_COLUMNS_,
+    SupabaseRest_filter_('ts_ms', 'gte', start),
+    SupabaseRest_filter_('ts_ms', 'lte', end),
+    'order=ts_ms.desc',
+    'offset=' + s,
+    'limit=' + lim,
+  ]);
+  return SupabaseRest_select(SUPABASE_TABLE.MODULE_VISITS, q);
+}
+
+/**
+ * @param {number} startMs
+ * @param {number} endMs
+ * @return {Array<Object>}
+ */
+function MetricsStore_listModuleVisitsInRangeAll_(startMs, endMs) {
+  return MetricsStore_fetchAllPages_(function (skip, limit) {
+    return MetricsStore_listModuleVisitsInRange(startMs, endMs, skip, limit);
+  }, METRICS_STORE_FETCH_MAX_ROWS_);
+}
+
+/**
+ * @return {Array<Object>}
+ */
+function MetricsStore_listModuleVisits() {
+  return MetricsStore_listModuleVisitsInRangeAll_(0, Date.now() + 86400000);
+}
+
+/**
+ * @param {string} startIso
+ * @param {string} endIso
+ * @param {number} skip
+ * @param {number} limit
+ * @return {Array<Object>}
+ */
+function MetricsStore_listFeedbackEventsInRange(startIso, endIso, skip, limit) {
+  var s = Math.max(0, Number(skip) || 0);
+  var lim = Math.min(METRICS_STORE_PAGE_SIZE_, Math.max(1, Number(limit) || METRICS_STORE_PAGE_SIZE_));
+  var qParts = [
+    'select=' + METRICS_FEEDBACK_DASHBOARD_COLUMNS_,
+    SupabaseRest_filter_('ts_iso', 'gte', String(startIso || '')),
+    SupabaseRest_filter_('ts_iso', 'lte', String(endIso || '')),
+    'order=ts_iso.desc',
+    'offset=' + s,
+    'limit=' + lim,
+  ];
+  return SupabaseRest_select(SUPABASE_TABLE.FEEDBACK_EVENTS, SupabaseRest_query_(qParts));
+}
+
+/**
+ * @param {string} startIso
+ * @param {string} endIso
+ * @return {Array<Object>}
+ */
+function MetricsStore_listFeedbackEventsInRangeAll_(startIso, endIso) {
+  return MetricsStore_fetchAllPages_(function (skip, limit) {
+    return MetricsStore_listFeedbackEventsInRange(startIso, endIso, skip, limit);
+  }, METRICS_STORE_FETCH_MAX_ROWS_);
 }
 
 /**
  * @return {Array<Object>}
  */
 function MetricsStore_listFeedbackEvents() {
-  return SupabaseRest_select(
-    SUPABASE_TABLE.FEEDBACK_EVENTS,
-    'select=*&order=ts_iso.desc',
-  );
+  var end = new Date().toISOString();
+  var start = new Date(Date.now() - 365 * 86400000).toISOString();
+  return MetricsStore_listFeedbackEventsInRangeAll_(start, end);
 }
 
 /**
@@ -104,6 +242,25 @@ function MetricsStore_updateUnansweredQueue(eventId, patch) {
  */
 function MetricsStore_insertUsageEvent(row) {
   MetricsStore_insertUsageEvent_(row);
+}
+/**
+ * @param {Object} row
+ */
+function MetricsStore_insertModuleVisit(row) {
+  SupabaseRest_insert(
+    SUPABASE_TABLE.MODULE_VISITS,
+    {
+      visit_id: row.visit_id,
+      ts_iso: row.ts_iso,
+      ts_ms: Number(row.ts_ms),
+      year_month: row.year_month,
+      user_email: row.user_email,
+      user_display_name: row.user_display_name || '',
+      role_key: row.role_key || '',
+      module_key: row.module_key,
+    },
+    { prefer: 'return=minimal' },
+  );
 }
 
 /**
@@ -444,12 +601,14 @@ function MetricsStore_clearAll() {
   var feedback = SupabaseRest_select(SUPABASE_TABLE.FEEDBACK_EVENTS, 'select=feedback_id').length;
   var chat = SupabaseRest_select(SUPABASE_TABLE.CHAT_CONVERSATIONS, 'select=conv_id').length;
   var prompts = MetricsStore_quickPromptsList().length;
+  var moduleVisits = MetricsStore_listModuleVisits().length;
 
   SupabaseRest_delete(SUPABASE_TABLE.USAGE_EVENTS, 'event_id=not.is.null');
   SupabaseRest_delete(SUPABASE_TABLE.UNANSWERED_QUERIES, 'event_id=not.is.null');
   SupabaseRest_delete(SUPABASE_TABLE.FEEDBACK_EVENTS, 'feedback_id=not.is.null');
   SupabaseRest_delete(SUPABASE_TABLE.CHAT_CONVERSATIONS, 'conv_id=not.is.null');
   SupabaseRest_delete(SUPABASE_TABLE.QUICK_PROMPTS, 'id=not.is.null');
+  SupabaseRest_delete(SUPABASE_TABLE.MODULE_VISITS, 'visit_id=not.is.null');
 
   return {
     usage: usage,
@@ -458,5 +617,6 @@ function MetricsStore_clearAll() {
     feedback: feedback,
     chatHistory: chat,
     quickPrompts: prompts,
+    moduleVisits: moduleVisits,
   };
 }

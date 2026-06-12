@@ -3,13 +3,26 @@
  */
 
 /**
+ * @param {number} [limit]
+ * @return {Array<Object>}
+ */
+function VisitorsStore_listRecent(limit) {
+  var lim = Math.min(1000, Math.max(1, Number(limit) || 500));
+  return SupabaseRest_select(
+    SUPABASE_TABLE.VISITORS,
+    SupabaseRest_query_([
+      'select=email,display_name,first_seen_at,last_seen_at,visit_count',
+      'order=last_seen_at.desc',
+      'limit=' + lim,
+    ]),
+  );
+}
+
+/**
  * @return {Array<Object>}
  */
 function VisitorsStore_listAll() {
-  return SupabaseRest_select(
-    SUPABASE_TABLE.VISITORS,
-    'select=email,display_name,first_seen_at,last_seen_at,visit_count&order=last_seen_at.desc',
-  );
+  return VisitorsStore_listRecent(1000);
 }
 
 /**

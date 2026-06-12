@@ -1,0 +1,4 @@
+-- Armado de propuestas: persistencia movida a Drive (planilla por usuario + session.json).
+-- La tabla proposal_building_sessions ya no se usa en runtime.
+-- Opcional: liberar espacio en Supabase tras respaldar datos si hace falta.
+-- drop table if exists proposal_building_sessions;
