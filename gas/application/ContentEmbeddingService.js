@@ -139,21 +139,22 @@ function ContentEmbedding_rebuildBatch_(skip, limit) {
   ContentCatalog_requireContributor_();
   var s = Math.max(0, Number(skip) || 0);
   var lim = Math.min(25, Math.max(1, Number(limit) || 10));
-  var rows = ContentCatalogStore_listAll();
-  var slice = rows.slice(s, s + lim);
+  var total = ContentCatalogStore_countFiltered({});
+  var rows = ContentCatalogStore_listPage(s, lim + 1);
+  if (rows.length > lim) rows = rows.slice(0, lim);
   var done = 0;
   var failed = 0;
   /** @type {Array<string>} */
   var errors = [];
 
-  for (var i = 0; i < slice.length; i++) {
+  for (var i = 0; i < rows.length; i++) {
     try {
-      ContentEmbedding_refreshForRow_(slice[i]);
+      ContentEmbedding_refreshForRow_(rows[i]);
       done += 1;
     } catch (eRow) {
       failed += 1;
       errors.push(
-        String(slice[i].content_id || '') +
+        String(rows[i].content_id || '') +
           ': ' +
           String(eRow.message || eRow).slice(0, 120),
       );
@@ -162,13 +163,13 @@ function ContentEmbedding_rebuildBatch_(skip, limit) {
 
   return {
     ok: true,
-    processed: slice.length,
+    processed: rows.length,
     done: done,
     failed: failed,
     skip: s,
     limit: lim,
-    total: rows.length,
-    hasMore: s + lim < rows.length,
+    total: total,
+    hasMore: s + lim < total,
     errors: errors.slice(0, 5),
   };
 }

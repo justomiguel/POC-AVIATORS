@@ -2,6 +2,18 @@
  * @fileoverview Persistencia del catálogo de contenidos en Supabase.
  */
 
+/** Columnas de listado sin embedding (reduce egress). */
+var CONTENT_CATALOG_LIST_COLUMNS_ =
+  'content_id,content_type,title,summary,client_name,industry,tags_csv,search_text,' +
+  'file_name,mime_type,drive_file_id,drive_file_url,globant_profile_name,globant_document_id,' +
+  'uploaded_by,created_at,updated_at,specific';
+
+/** Tope de candidatos léxicos por búsqueda en chat. */
+var CONTENT_CATALOG_LEXICAL_SEARCH_MAX_ = 60;
+
+/** Candidatos por token en búsqueda léxica. */
+var CONTENT_CATALOG_LEXICAL_PER_TOKEN_LIMIT_ = 25;
+
 /**
  * @param {Object} row
  * @return {Object}
@@ -21,13 +33,124 @@ function ContentCatalogStore_rowToSpecific_(row) {
 }
 
 /**
+ * @deprecated Evitar en runtime caliente; usar listFiltered/listPage/searchLexical.
  * @return {Array<Object>}
  */
 function ContentCatalogStore_listAll() {
   return SupabaseRest_select(
     SUPABASE_TABLE.CONTENTS,
-    'select=*&order=updated_at.desc',
+    'select=' + CONTENT_CATALOG_LIST_COLUMNS_ + '&order=updated_at.desc',
   );
+}
+
+/**
+ * Recorre el catálogo paginado (sin embedding).
+ * @param {{contentType?:string,q?:string,tag?:string}} filters
+ * @param {number} pageSize
+ * @param {number} maxRows
+ * @return {Array<Object>}
+ */
+function ContentCatalogStore_listAllPages_(filters, pageSize, maxRows) {
+  var lim = Math.min(100, Math.max(1, Number(pageSize) || 50));
+  var cap = Math.max(lim, Number(maxRows) || 5000);
+  /** @type {Array<Object>} */
+  var out = [];
+  var skip = 0;
+  while (out.length < cap) {
+    var page = ContentCatalogStore_listFiltered(filters, skip, lim);
+    if (!page || !page.length) break;
+    out = out.concat(page);
+    if (page.length < lim) break;
+    skip += lim;
+  }
+  if (out.length > cap) out = out.slice(0, cap);
+  return out;
+}
+
+/**
+ * Búsqueda léxica acotada por tokens (PostgREST ilike, sin embedding).
+ * @param {Array<string>} tokens
+ * @param {{limit?:number,contentType?:string}} [opts]
+ * @return {Array<Object>}
+ */
+function ContentCatalogStore_searchLexical_(tokens, opts) {
+  opts = opts || {};
+  var cap = Math.min(
+    CONTENT_CATALOG_LEXICAL_SEARCH_MAX_,
+    Math.max(1, Number(opts.limit) || CONTENT_CATALOG_LEXICAL_SEARCH_MAX_),
+  );
+  var perToken = Math.min(
+    CONTENT_CATALOG_LEXICAL_PER_TOKEN_LIMIT_,
+    Math.max(5, Math.ceil(cap / 2)),
+  );
+  var type = String(opts.contentType || '').trim();
+  /** @type {Object<string, Object>} */
+  var byId = {};
+  var ti;
+  for (ti = 0; ti < tokens.length && ti < 4; ti++) {
+    var tok = String(tokens[ti] || '').trim();
+    if (!tok || tok.length < 2) continue;
+    var escaped = SupabaseRest_escapeFilterValue_(tok);
+    var pattern = '*' + escaped + '*';
+    var orPart =
+      'or=(title.ilike.' +
+      pattern +
+      ',summary.ilike.' +
+      pattern +
+      ',client_name.ilike.' +
+      pattern +
+      ',search_text.ilike.' +
+      pattern +
+      ',tags_csv.ilike.' +
+      pattern +
+      ')';
+    var parts = [orPart];
+    if (type) parts.unshift(SupabaseRest_filter_('content_type', 'eq', type));
+    parts.push('order=updated_at.desc');
+    parts.push('limit=' + perToken);
+    var q = SupabaseRest_query_(['select=' + CONTENT_CATALOG_LIST_COLUMNS_].concat(parts));
+    var rows = SupabaseRest_select(SUPABASE_TABLE.CONTENTS, q);
+    var ri;
+    for (ri = 0; ri < rows.length; ri++) {
+      var id = String(rows[ri].content_id || '');
+      if (!id || byId[id]) continue;
+      byId[id] = rows[ri];
+      if (Object.keys(byId).length >= cap) break;
+    }
+    if (Object.keys(byId).length >= cap) break;
+  }
+  var out = [];
+  var k;
+  for (k in byId) {
+    if (Object.prototype.hasOwnProperty.call(byId, k)) out.push(byId[k]);
+  }
+  return out;
+}
+
+/**
+ * Filas cuyo client_name coincide (ilike).
+ * @param {string} clientQuery
+ * @param {number} limit
+ * @param {{contentType?:string}} [opts]
+ * @return {Array<Object>}
+ */
+function ContentCatalogStore_listByClientName_(clientQuery, limit, opts) {
+  var q = String(clientQuery || '').trim();
+  if (!q) return [];
+  opts = opts || {};
+  var lim = Math.min(100, Math.max(1, Number(limit) || 50));
+  var escaped = SupabaseRest_escapeFilterValue_(q);
+  var parts = [
+    SupabaseRest_filter_('client_name', 'ilike', '*' + escaped + '*'),
+  ];
+  var type = String(opts.contentType || '').trim();
+  if (type) parts.unshift(SupabaseRest_filter_('content_type', 'eq', type));
+  var query = SupabaseRest_query_(
+    ['select=' + CONTENT_CATALOG_LIST_COLUMNS_, 'order=updated_at.desc']
+      .concat(parts)
+      .concat(['limit=' + lim]),
+  );
+  return SupabaseRest_select(SUPABASE_TABLE.CONTENTS, query);
 }
 
 /**
@@ -87,7 +210,7 @@ function ContentCatalogStore_listFiltered(filters, skip, limit) {
   var lim = Math.min(100, Math.max(1, Number(limit) || 25));
   var filterParts = ContentCatalogStore_buildFilterParts_(filters);
   var q = SupabaseRest_query_(
-    ['select=*', 'order=updated_at.desc'].concat(filterParts).concat([
+    ['select=' + CONTENT_CATALOG_LIST_COLUMNS_, 'order=updated_at.desc'].concat(filterParts).concat([
       'offset=' + s,
       'limit=' + lim,
     ]),

@@ -153,7 +153,7 @@ function ContentDuplicateCheck_findSimilarSuccessCases_(input) {
     cur.similarity = Math.max(cur.similarity, combined);
   }
 
-  var rows = ContentCatalogStore_listAll();
+  var rows = ContentCatalogStore_listAllPages_({ contentType: 'success_case' }, 100, 1500);
   var ri;
   for (ri = 0; ri < rows.length; ri++) {
     var row = rows[ri];

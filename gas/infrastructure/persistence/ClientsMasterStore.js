@@ -2,14 +2,44 @@
  * @fileoverview Persistencia del maestro de clientes en Supabase.
  */
 
+/** Columnas para listados operativos (sin notas/logo largos si no hace falta). */
+var CLIENTS_LIST_COLUMNS_ =
+  'client_id,client_name,normalized_name,industry,sub_industry,country,' +
+  'main_contact_name,main_contact_email,created_at,updated_at';
+
 /**
+ * @deprecated Evitar en runtime caliente; usar listFiltered/listAllPages_.
  * @return {Array<Object>}
  */
 function ClientsMasterStore_listAll() {
   return SupabaseRest_select(
     SUPABASE_TABLE.CLIENTS,
-    'select=*&order=client_name.asc',
+    'select=' + CLIENTS_LIST_COLUMNS_ + '&order=client_name.asc',
   );
+}
+
+/**
+ * Recorre el maestro paginado con columnas ligeras.
+ * @param {{q?:string,industry?:string,sub_industry?:string}} filters
+ * @param {number} pageSize
+ * @param {number} maxRows
+ * @return {Array<Object>}
+ */
+function ClientsMasterStore_listAllPages_(filters, pageSize, maxRows) {
+  var lim = Math.min(100, Math.max(1, Number(pageSize) || 50));
+  var cap = Math.max(lim, Number(maxRows) || 5000);
+  /** @type {Array<Object>} */
+  var out = [];
+  var skip = 0;
+  while (out.length < cap) {
+    var page = ClientsMasterStore_listFiltered(filters, skip, lim);
+    if (!page || !page.length) break;
+    out = out.concat(page);
+    if (page.length < lim) break;
+    skip += lim;
+  }
+  if (out.length > cap) out = out.slice(0, cap);
+  return out;
 }
 
 /**
@@ -88,7 +118,7 @@ function ClientsMasterStore_listFiltered(filters, skip, limit) {
   var lim = Math.min(100, Math.max(1, Number(limit) || 25));
   var filterParts = ClientsMasterStore_buildFilterParts_(filters);
   var q = SupabaseRest_query_(
-    ['select=*', 'order=client_name.asc'].concat(filterParts).concat([
+    ['select=' + CLIENTS_LIST_COLUMNS_, 'order=client_name.asc'].concat(filterParts).concat([
       'offset=' + s,
       'limit=' + lim,
     ]),

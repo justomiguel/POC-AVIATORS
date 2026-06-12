@@ -260,8 +260,8 @@ function ContentCatalog_listSupabase_(filters) {
     total = ContentCatalogStore_countFiltered(storeFilters);
     dbRows = ContentCatalogStore_listFiltered(storeFilters, skip, limit);
   } else {
-    dbRows = ContentCatalogStore_listAll();
-    total = dbRows.length;
+    total = ContentCatalogStore_countFiltered(storeFilters);
+    dbRows = ContentCatalogStore_listAllPages_(storeFilters, 100, 10000);
   }
 
   var items = ContentCatalog_mapRowsToApiItems_(dbRows, shouldReconcile);
@@ -741,7 +741,7 @@ function ContentCatalog_getTagsCloud() {
  * @return {Object<string,{count:number,displays:Object<string,number>}>}
  */
 function ContentCatalog_aggregateTagBuckets_() {
-  var dbRows = ContentCatalogStore_listAll();
+  var dbRows = ContentCatalogStore_listAllPages_({}, 100, 10000);
   var bucket = {};
   var di;
   var ti;
@@ -903,7 +903,7 @@ function ContentCatalog_findDocsByClient(clientQuery) {
   var q = String(clientQuery || '').trim().toLowerCase();
   if (!q) return { docs: [] };
 
-  var commonRows = ContentCatalogStore_listAll();
+  var commonRows = ContentCatalogStore_listByClientName_(q, 80);
   var results = [];
   for (var i = 0; i < commonRows.length; i++) {
     var row = commonRows[i];
@@ -931,7 +931,10 @@ function ContentCatalog_findDocsByQuestion_(question) {
   var q = String(question || '').trim().toLowerCase();
   if (!q) return { docs: [], clientName: '' };
 
-  var commonRows = ContentCatalogStore_listAll();
+  var tokens = ContentCatalog_questionSearchTokens_(question);
+  var commonRows = tokens.length
+    ? ContentCatalogStore_searchLexical_(tokens, { limit: 80 })
+    : ContentCatalogStore_listByClientName_(q, 40);
   var clientNames = {};
   var i;
   for (i = 0; i < commonRows.length; i++) {
@@ -1196,7 +1199,12 @@ function ContentCatalog_findRowsMatchingQuestion_(question, opts) {
 
   /** @type {Object<string, {score:number, doc:Object}>} */
   var byKey = {};
-  var commonRows = ContentCatalogStore_listAll();
+  var commonRows = [];
+  if (tokens.length) {
+    commonRows = ContentCatalogStore_searchLexical_(tokens, {
+      limit: CONTENT_CATALOG_LEXICAL_SEARCH_MAX_,
+    });
+  }
   var i;
 
   if (tokens.length) {
@@ -1252,6 +1260,8 @@ function ContentCatalog_findRowsMatchingQuestion_(question, opts) {
   console.log(
     '[CATALOG-MATCH] tokens=' +
       tokens.join(',') +
+      ' candidates=' +
+      commonRows.length +
       ' sem=' +
       semHits.length +
       ' hits=' +
@@ -1272,7 +1282,7 @@ function ContentCatalog_listIndustryOptions() {
     var base = String(CLIENTS_ALLOWED_INDUSTRIES[i] || '').trim();
     if (base) industrySet[base] = true;
   }
-  var rows = ClientsMasterStore_listAll();
+  var rows = ClientsMasterStore_listAllPages_({}, 100, 5000);
   for (i = 0; i < rows.length; i++) {
     var item = ClientsMasterStore_toApiItem_(rows[i]);
     if (!item.client_id) continue;
@@ -1437,7 +1447,7 @@ function ContentCatalog_mergeTags(sources) {
   aliasesAdded = Math.max(0, aliasesAdded - aliasesBefore);
   ContentCatalogStore_setTagAliases(aliasMap);
 
-  var dbRows = ContentCatalogStore_listAll();
+  var dbRows = ContentCatalogStore_listAllPages_({}, 100, 10000);
   var updated = 0;
   var ri;
   for (ri = 0; ri < dbRows.length; ri++) {

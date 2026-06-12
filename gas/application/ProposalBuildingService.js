@@ -2,7 +2,7 @@
  * @fileoverview Armado de propuestas: extracción de brief (RFP/chat) y construcción asistida.
  *
  * Decks: copia plantilla Slides → Propuestas/{cliente}/{propuesta}/ en DRIVE_ROOT_FOLDER_ID.
- * Sesiones por usuario en Supabase (proposal_building_sessions).
+ * Sesiones por usuario en Drive (planilla índice + session.json por sesión).
  * Propiedades: PROPOSAL_DECK_AIRLINES_ID, PROPOSAL_DECK_LOGISTICS_ID.
  * Ver docs/PROPOSAL_BUILDING.md (placeholders, slide 17, permisos).
  */
@@ -1639,7 +1639,7 @@ function ProposalBuilding_enrichBriefWithClientMatch_(brief, sourceFileNames) {
  * @return {Array<Object>}
  */
 function ProposalBuilding_listStudiosFromCatalog_() {
-  var rows = ContentCatalogStore_listAll();
+  var rows = ContentCatalogStore_listAllPages_({ contentType: 'proposal' }, 100, 5000);
   var byStudio = {};
   var i;
   for (i = 0; i < rows.length; i++) {
@@ -2448,6 +2448,42 @@ function ProposalBuilding_splitStudiosIntoLanes_(studios) {
  * @param {string=} industryKey
  * @return {Array<Object>}
  */
+/**
+ * Combina lanes del cliente con borradores persistidos en la sesión (finalize liviano).
+ * @param {string=} sessionId
+ * @param {Object<string, Array<Object>>} clientLanes
+ * @return {Object<string, Array<Object>>}
+ */
+function ProposalBuilding_resolveStudioLanesPayload_(sessionId, clientLanes) {
+  clientLanes = clientLanes && typeof clientLanes === 'object' ? clientLanes : {};
+  var sid = String(sessionId || '').trim();
+  var draft = {};
+  if (sid) {
+    try {
+      var email = ProposalBuildingPersistence_requireEmail_();
+      var row = ProposalBuildingStore_getByIdForUser(sid, email);
+      if (row && row.context && row.context.studioLaneDraft) {
+        draft = row.context.studioLaneDraft;
+      }
+    } catch (eDraft) {
+      AviatorsError_log_('ProposalBuilding_studio_lane_draft', String(eDraft && eDraft.message));
+    }
+  }
+  var out = {};
+  var li;
+  for (li = 0; li < PROPOSAL_BUILDING_STUDIO_LANE_ORDER_.length; li++) {
+    var lane = PROPOSAL_BUILDING_STUDIO_LANE_ORDER_[li];
+    if (Array.isArray(clientLanes[lane]) && clientLanes[lane].length) {
+      out[lane] = clientLanes[lane];
+    } else if (Array.isArray(draft[lane]) && draft[lane].length) {
+      out[lane] = draft[lane];
+    } else {
+      out[lane] = Array.isArray(clientLanes[lane]) ? clientLanes[lane] : [];
+    }
+  }
+  return out;
+}
+
 function ProposalBuilding_mergeStudioLanes_(lanesPayload, brief, industryKey) {
   lanesPayload = lanesPayload && typeof lanesPayload === 'object' ? lanesPayload : {};
   var seen = {};
@@ -2531,35 +2567,38 @@ function ProposalBuilding_finalizeStudioRecommendations_(
   opts = opts || {};
   brief = ProposalBuilding_normalizeBrief_(brief || {});
   var industry = String(industryKey || '').trim();
+  var sid = String(sessionId || '').trim();
+  lanesPayload = ProposalBuilding_resolveStudioLanesPayload_(sid, lanesPayload);
   var merged = ProposalBuilding_mergeStudioLanes_(lanesPayload, brief, industry);
   var catalogStudios = ProposalBuilding_listStudiosFromCatalog_();
   merged = ProposalBuilding_enrichStudioRecommendations_(merged, catalogStudios);
   merged = ProposalBuildingPersistence_normalizeStudiosPatch_(merged);
-  var result = { ok: true, studios: merged, catalogStudios: catalogStudios };
-  var sid = String(sessionId || '').trim();
+  var result = { ok: true, studios: merged, sessionId: sid };
   var shouldPersist = opts.persist !== false;
   if (!shouldPersist) return result;
 
   var aiEvent = String(opts.aiEvent || 'studios_lanes_finalize').trim();
   try {
-    if (sid && AviatorsDataBackend_supabaseConfigured_()) {
+    if (sid) {
       var email = ProposalBuildingPersistence_requireEmail_();
       var row = ProposalBuildingStore_getByIdForUser(sid, email) || {};
+      ProposalBuildingPersistence_beginStep_(sid, { builderStep: 'studios' });
+      var ctx =
+        row.context && typeof row.context === 'object' ? Object.assign({}, row.context) : {};
+      delete ctx.studioLaneDraft;
       ProposalBuildingPersistence_patchSession_(sid, {
         validatedBrief: brief,
         industryKey: industry,
         studioRecommendations: merged,
+        context: ctx,
         aiResponses: ProposalBuildingPersistence_appendAiEvent_(row.aiResponses, aiEvent, {
           industry: industry,
-          lanes: lanesPayload,
-          studios: merged,
+          studioCount: merged.length,
         }),
       });
-      if (opts.returnSession) {
-        result.session = ProposalBuildingStore_getByIdForUser(sid, email);
-      }
+      result.builderStep = 'studios';
     } else {
-      ProposalBuildingPersistence_recordStudiosStep_(sid, brief, industry, result);
+      ProposalBuildingPersistence_recordStudiosStep_(sid, brief, industry, { studios: merged });
     }
   } catch (ePersist) {
     AviatorsError_log_('ProposalBuilding_studios_finalize', String(ePersist && ePersist.message));
@@ -2572,9 +2611,10 @@ function ProposalBuilding_finalizeStudioRecommendations_(
  * @param {string} lane ai_pods|digital|ai_vertical|enterprise
  * @param {string} briefJson
  * @param {string=} industryKey
+ * @param {string=} sessionId
  * @return {{ok:boolean, lane:string, studios:Array<Object>}}
  */
-function ProposalBuilding_recommendStudiosLane(lane, briefJson, industryKey) {
+function ProposalBuilding_recommendStudiosLane(lane, briefJson, industryKey, sessionId) {
   AdminAuth_requireProposalBuildingBuild();
   var brief = {};
   try {
@@ -2583,11 +2623,18 @@ function ProposalBuilding_recommendStudiosLane(lane, briefJson, industryKey) {
     brief = {};
   }
   brief = ProposalBuilding_normalizeBrief_(brief);
+  var laneKey = String(lane || '').trim().toLowerCase();
   var laneResult = ProposalBuilding_runStudioRecommendationLane_(lane, brief, industryKey);
+  var studios = laneResult.studios || [];
+  try {
+    ProposalBuildingPersistence_storeStudioLaneDraft_(sessionId, laneKey, studios);
+  } catch (eStoreLane) {
+    AviatorsError_log_('ProposalBuilding_studio_lane_store', String(eStoreLane && eStoreLane.message));
+  }
   return {
     ok: true,
-    lane: String(lane || '').trim().toLowerCase(),
-    studios: laneResult.studios || [],
+    lane: laneKey,
+    studios: studios,
   };
 }
 
@@ -2635,7 +2682,6 @@ function ProposalBuilding_finalizeStudioRecommendations(briefJson, industryKey, 
  */
 function ProposalBuilding_refreshStudiosLane(sessionId, lane, briefJson, studiosJson) {
   AdminAuth_requireProposalBuildingSave();
-  AviatorsDataBackend_requireSupabase_();
   var email = ProposalBuildingPersistence_requireEmail_();
   var sid = String(sessionId || '').trim();
   if (!sid) {
@@ -2672,17 +2718,22 @@ function ProposalBuilding_refreshStudiosLane(sessionId, lane, briefJson, studios
   var laneKey = String(lane || '').trim().toLowerCase();
   var laneResult = ProposalBuilding_runStudioRecommendationLane_(laneKey, brief, industry);
   lanesPayload[laneKey] = laneResult.studios || [];
+  try {
+    ProposalBuildingPersistence_storeStudioLaneDraft_(sid, laneKey, laneResult.studios || []);
+  } catch (eStoreLane) {
+    AviatorsError_log_('ProposalBuilding_studio_lane_store', String(eStoreLane && eStoreLane.message));
+  }
 
   var finalized = ProposalBuilding_finalizeStudioRecommendations_(brief, industry, lanesPayload, sid, {
     persist: true,
-    returnSession: true,
     aiEvent: 'studios_lane_refresh_' + laneKey,
   });
   return {
     ok: true,
     lane: laneKey,
     studios: finalized.studios || [],
-    session: finalized.session,
+    sessionId: sid,
+    builderStep: finalized.builderStep || 'studios',
   };
 }
 
@@ -2710,7 +2761,6 @@ function ProposalBuilding_recommendStudios(briefJson, industryKey, sessionId) {
   }
   return ProposalBuilding_finalizeStudioRecommendations_(brief, industry, lanesPayload, sessionId, {
     persist: true,
-    returnSession: false,
     aiEvent: 'studios',
   });
 }
@@ -3346,11 +3396,10 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
     cur.similarity = Math.max(cur.lexical, cur.semantic);
   }
 
-  var rows = ContentCatalogStore_listAll();
+  var rows = ContentCatalogStore_listAllPages_({ contentType: 'success_case' }, 100, 2000);
   var ri;
   for (ri = 0; ri < rows.length; ri++) {
     var row = rows[ri];
-    if (String(row.content_type || '').trim() !== 'success_case') continue;
     var rid = String(row.content_id || '').trim();
     if (!rid) continue;
 
@@ -3453,7 +3502,7 @@ function ProposalBuilding_padSuccessCaseCandidates_(ranked, allow, minCount, max
   }
 
   if (ranked.length < minCount) {
-    var rows = ContentCatalogStore_listAll();
+    var rows = ContentCatalogStore_listAllPages_({ contentType: 'success_case' }, 100, 500);
     var ri;
     for (ri = 0; ri < rows.length && ranked.length < minCount; ri++) {
       var row = rows[ri];
@@ -3761,7 +3810,6 @@ function ProposalBuilding_recommendSuccessCases(briefJson, industryKey, sessionI
  */
 function ProposalBuilding_saveSuccessCaseSelections(sessionId, selectionsJson) {
   AdminAuth_requireProposalBuildingBuild();
-  AviatorsDataBackend_requireSupabase_();
   var email = ProposalBuildingPersistence_requireEmail_();
   var sid = String(sessionId || '').trim();
   if (!sid) {
