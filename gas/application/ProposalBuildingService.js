@@ -217,11 +217,13 @@ var PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_ = 8;
 /** @type {number} Máximo de casos de éxito insertados en el deck. */
 var PROPOSAL_BUILDING_SUCCESS_CASE_MAX_ = 8;
 
-/** @type {number} Umbral semántico para casos de éxito en propuestas. */
-var PROPOSAL_BUILDING_SUCCESS_CASE_SEMANTIC_MIN_ = 0.62;
+/** @type {number} Umbral semántico para casos de éxito en propuestas.
+ *  0.45 admite matches cross-idioma (catálogo en inglés vs brief en español),
+ *  donde la similitud de embeddings cae respecto a un match same-language. */
+var PROPOSAL_BUILDING_SUCCESS_CASE_SEMANTIC_MIN_ = 0.45;
 
-/** @type {number} Umbral combinado lexical/semántico. */
-var PROPOSAL_BUILDING_SUCCESS_CASE_COMBINED_MIN_ = 0.32;
+/** @type {number} Umbral combinado lexical/semántico/grafo. */
+var PROPOSAL_BUILDING_SUCCESS_CASE_COMBINED_MIN_ = 0.15;
 
 /** @type {number} Penalización de score por cada caso del mismo client_name ya seleccionado. */
 var PROPOSAL_BUILDING_DIVERSITY_CLIENT_PENALTY_ = 0.15;
@@ -3138,6 +3140,7 @@ function ProposalBuilding_successCaseIndustryAllowlist_(industryKey) {
     return { Logistica: true };
   }
   return {
+    Aerolineas: true,
     'Agencias de Turismo': true,
     'Agencias AeroEspaciales': true,
     Aeropuertos: true,
