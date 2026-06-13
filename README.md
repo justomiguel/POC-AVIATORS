@@ -19,6 +19,7 @@ El runtime es **Google Apps Script** servido con **HtmlService**; el código fue
 ## Funcionalidades principales
 
 - **Chat** con agentes especializados (orquestador, propuestas, success cases, clientes, onboarding).
+- **Armado de propuestas con Knowledge Graph**: recomendación de casos de éxito usando el grafo como tercera señal de scoring (lexical + semántico + grafo), con expansión BFS depth-2 sobre entidades del brief y re-ranking por diversidad (cliente/industria). La UI muestra las etiquetas KG que matchearon (chips), el desglose de score, un indicador de conexión al grafo y filtro por etiqueta. Falla de forma segura si el grafo está vacío.
 - **Catálogo de contenidos**: ingesta de PDFs, extracción asistida por IA y sincronización con perfiles RAG.
 - **Maestro de clientes** con metadata e industria.
 - **Métricas**: preguntas, no respondidas, leaderboards y feedback.
