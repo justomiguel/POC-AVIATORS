@@ -68,6 +68,37 @@ var KNOWLEDGE_GRAPH_BFS_DEPTH_CAP = 4;
 /** @type {number} */
 var KNOWLEDGE_GRAPH_HUB_SEED_LIMIT = 30;
 
+/** @type {number} Máximo de nodos candidatos que se consultan al hacer query desde un brief. */
+var KG_BRIEF_MAX_ENTITY_CANDIDATES_ = 15;
+
+/** @type {number} Factor de descuento para el graph_score frente a lexical/semantic (0–1). */
+var KG_BRIEF_GRAPH_SCORE_WEIGHT_ = 0.85;
+
+/** @type {number} Decaimiento aplicado al graph_score de contenidos alcanzados en el hop 2 del BFS. */
+var KG_BFS_DEPTH2_DECAY_ = 0.5;
+
+/** @type {number} Máximo de contenidos retornados por el BFS desde las entidades del brief. */
+var KG_BFS_MAX_HITS_ = 40;
+
+/** @type {number} Máximo de nodos entidad intermedios expandidos en el hop 2 (control de cuota HTTP). */
+var KG_BFS_DEPTH2_ENTITY_FANOUT_ = 20;
+
+/**
+ * Slide types válidos en la ontología v2.0.
+ * @type {Array<string>}
+ */
+var KG_SLIDE_TYPE_KEYS_ = [
+  'executive_summary',
+  'challenge_diagnosis',
+  'proposed_solution',
+  'success_case',
+  'team_credentials',
+  'commercial_proposal',
+];
+
+/** @type {number} Máximo de nodos content a cargar al buscar por slide type. */
+var KG_SLIDE_TYPE_CONTENT_PAGE_MAX_ = 200;
+
 /** @type {Array<string>} */
 var KNOWLEDGE_GRAPH_ENTITY_NODE_TYPES_ = [
   'content',
@@ -348,6 +379,45 @@ function KnowledgeGraph_linkStudioOffering_(studioNodeId, offeringNodeId, conten
 }
 
 /**
+ * Infiere los slide types aplicables a un contenido según su content_type.
+ * No realiza llamadas HTTP — inferencia estructural pura.
+ *
+ * @param {string} contentType
+ * @return {Array<string>}
+ */
+function KnowledgeGraph_inferSlideTypes_(contentType) {
+  var ctype = String(contentType || '').trim().toLowerCase();
+  /** @type {Object<string, Array<string>>} */
+  var mapping = {
+    success_case: ['success_case'],
+    proposal: ['executive_summary', 'challenge_diagnosis', 'proposed_solution', 'commercial_proposal'],
+    presale: ['executive_summary', 'proposed_solution', 'team_credentials'],
+    onboarding: ['team_credentials'],
+  };
+  return mapping[ctype] || [];
+}
+
+/**
+ * Combina slide_types estructurales con los inferidos por LLM (sin duplicados).
+ *
+ * @param {Array<string>} structural — tipos inferidos desde content_type
+ * @param {Array<string>} llm — tipos sugeridos por el LLM
+ * @return {Array<string>}
+ */
+function KnowledgeGraph_mergeSlideTypes_(structural, llm) {
+  var merged = structural.slice();
+  var valid = KG_SLIDE_TYPE_KEYS_;
+  var li;
+  for (li = 0; li < llm.length; li++) {
+    var candidate = String(llm[li] || '').trim();
+    if (!candidate) continue;
+    if (valid.indexOf(candidate) < 0) continue;
+    if (merged.indexOf(candidate) < 0) merged.push(candidate);
+  }
+  return merged;
+}
+
+/**
  * @param {string} raw
  * @return {Array<string>}
  */
@@ -395,6 +465,7 @@ function KnowledgeGraph_syncContent_(contentId) {
   var studioMeta = String(specific.globant_studio || '').trim();
 
   var contentNodeId = KnowledgeGraph_nodeId_('content', id);
+  var structuralSlideTypes = KnowledgeGraph_inferSlideTypes_(ctype);
   KnowledgeGraphStore_upsertNode({
     node_id: contentNodeId,
     node_type: 'content',
@@ -408,6 +479,7 @@ function KnowledgeGraph_syncContent_(contentId) {
       material_kind: materialKind,
       offering: offeringMeta,
       globant_studio: studioMeta,
+      slide_types: structuralSlideTypes,
       updated_at: String(row.updated_at || now),
     },
     updated_at: now,
@@ -633,6 +705,452 @@ function KnowledgeGraph_syncEntitiesForContent_(contentId) {
   if (!id) return;
   if (typeof KnowledgeGraphExtraction_syncForContentId_ !== 'function') return;
   KnowledgeGraphExtraction_syncForContentId_(id);
+}
+
+/**
+ * Extrae candidatos de entidades del grafo a partir de un brief normalizado.
+ * No realiza llamadas HTTP: construye nodeIds determinísticamente desde slugs.
+ *
+ * @param {Object} brief — brief normalizado (ProposalBuilding_normalizeBrief_)
+ * @param {string} industryKey — clave de industria del wizard (ej. "Aerolineas")
+ * @return {Array<{nodeId:string,label:string,type:string}>}
+ */
+function KnowledgeGraph_briefToEntityCandidates_(brief, industryKey) {
+  brief = brief && typeof brief === 'object' ? brief : {};
+  /** @type {Array<{nodeId:string,label:string,type:string}>} */
+  var candidates = [];
+  /** @type {Object<string,boolean>} */
+  var seen = {};
+
+  /**
+   * @param {string} type
+   * @param {string} rawLabel
+   */
+  function addCandidate_(type, rawLabel) {
+    var lbl = String(rawLabel || '').trim();
+    if (!lbl || lbl.length < 2) return;
+    var key;
+    if (type === 'offering') {
+      key = lbl.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    } else {
+      key = KnowledgeGraph_slug_(lbl);
+    }
+    if (!key || key === 'unknown') return;
+    var nodeId = KnowledgeGraph_nodeId_(type, key);
+    if (seen[nodeId]) return;
+    seen[nodeId] = true;
+    candidates.push({ nodeId: nodeId, label: lbl, type: type });
+  }
+
+  // Tecnologías explícitas mencionadas en el brief
+  var techHints = Array.isArray(brief.technologyHints) ? brief.technologyHints : [];
+  var ti;
+  for (ti = 0; ti < techHints.length && candidates.length < KG_BRIEF_MAX_ENTITY_CANDIDATES_; ti++) {
+    addCandidate_('technology', techHints[ti]);
+  }
+
+  // Industria del wizard de propuesta
+  if (industryKey && candidates.length < KG_BRIEF_MAX_ENTITY_CANDIDATES_) {
+    addCandidate_('industry', industryKey);
+  }
+
+  // Modelo comercial del brief
+  if (brief.commercialModel && candidates.length < KG_BRIEF_MAX_ENTITY_CANDIDATES_) {
+    addCandidate_('offering', brief.commercialModel);
+  }
+
+  // Objetivos de negocio → candidatos outcome y theme via slug de cada objetivo completo
+  var objectives = Array.isArray(brief.businessObjectives) ? brief.businessObjectives : [];
+  var oi;
+  for (oi = 0; oi < objectives.length && candidates.length < KG_BRIEF_MAX_ENTITY_CANDIDATES_; oi++) {
+    var objText = String(objectives[oi] || '').trim();
+    if (!objText) continue;
+    // Intentar el objetivo completo como nodo outcome/theme (slug multi-palabra)
+    addCandidate_('outcome', objText);
+    addCandidate_('theme', objText);
+    // También los tokens individuales de 4+ caracteres
+    var tokens = objText.split(/\s+/);
+    var tk;
+    for (tk = 0; tk < tokens.length && candidates.length < KG_BRIEF_MAX_ENTITY_CANDIDATES_; tk++) {
+      var token = String(tokens[tk] || '').replace(/[^a-zA-ZÀ-ÿ0-9]/g, '').trim();
+      if (token.length >= 4) {
+        addCandidate_('outcome', token);
+        addCandidate_('theme', token);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Consulta el grafo para encontrar contenidos relacionados al brief via nodos entidad compartidos.
+ * Úsalo como tercera señal de scoring junto a lexical y semántico.
+ * Falla silenciosamente: si el KG no está poblado o hay error de red, retorna [].
+ *
+ * @param {Object} brief — brief normalizado (ProposalBuilding_normalizeBrief_)
+ * @param {string} industryKey — clave de industria del wizard
+ * @return {Array<{contentId:string,graphScore:number,matchedLabels:Array<string>}>}
+ */
+function KnowledgeGraph_queryBriefForSuccessCases_(brief, industryKey) {
+  try {
+    var candidates = KnowledgeGraph_briefToEntityCandidates_(brief, String(industryKey || ''));
+    if (!candidates.length) return [];
+
+    /** @type {Object<string,{count:number,labels:Array<string>}>} */
+    var hitsByContentId = {};
+    var totalCandidates = candidates.length;
+    var ci;
+
+    for (ci = 0; ci < candidates.length; ci++) {
+      var cand = candidates[ci];
+      var inEdges = [];
+      try {
+        inEdges = KnowledgeGraphStore_listEdgesByTarget(cand.nodeId);
+      } catch (eEdge) {
+        console.log(
+          '[KG-brief] listEdgesByTarget error for ' +
+            cand.nodeId +
+            ': ' +
+            String(eEdge.message || eEdge).slice(0, 80),
+        );
+        continue;
+      }
+      var ei;
+      for (ei = 0; ei < inEdges.length; ei++) {
+        var srcId = String(inEdges[ei].source_id || '').trim();
+        if (!srcId || srcId.indexOf('content:') !== 0) continue;
+        var contentId = srcId.slice('content:'.length);
+        if (!contentId) continue;
+        if (!hitsByContentId[contentId]) {
+          hitsByContentId[contentId] = { count: 0, labels: [] };
+        }
+        hitsByContentId[contentId].count++;
+        hitsByContentId[contentId].labels.push(cand.label);
+      }
+    }
+
+    /** @type {Array<{contentId:string,graphScore:number,matchedLabels:Array<string>}>} */
+    var results = [];
+    var key;
+    for (key in hitsByContentId) {
+      if (!Object.prototype.hasOwnProperty.call(hitsByContentId, key)) continue;
+      var hit = hitsByContentId[key];
+      var graphScore = totalCandidates > 0 ? (hit.count / totalCandidates) * KG_BRIEF_GRAPH_SCORE_WEIGHT_ : 0;
+      results.push({
+        contentId: key,
+        graphScore: graphScore,
+        matchedLabels: hit.labels,
+      });
+    }
+
+    results.sort(function (resultA, resultB) {
+      return resultB.graphScore - resultA.graphScore;
+    });
+
+    console.log(
+      '[KG-brief] query brief: candidates=' +
+        totalCandidates +
+        ' hits=' +
+        results.length,
+    );
+    return results;
+  } catch (eQuery) {
+    console.log(
+      '[KG-brief] queryBriefForSuccessCases failed: ' +
+        String(eQuery.message || eQuery).slice(0, 120),
+    );
+    return [];
+  }
+}
+
+/**
+ * BFS de profundidad 2 desde los nodos entidad del brief hacia contenidos.
+ *
+ * - Hop 1 (directo): entidad candidata → contenidos que la referencian (peso completo).
+ * - Hop 2 (vecindario): por cada contenido directo, se expanden sus *otras* entidades
+ *   y se alcanzan otros contenidos que las comparten (peso atenuado por `KG_BFS_DEPTH2_DECAY_`).
+ *
+ * Amplía la cobertura de `KnowledgeGraph_queryBriefForSuccessCases_` (solo hop 1) sin
+ * reemplazarla. Falla silenciosamente: si el KG está vacío o hay error de red, retorna [].
+ *
+ * Control de cuota: dedupe de nodos visitados, fan-out de entidades del hop 2 acotado por
+ * `KG_BFS_DEPTH2_ENTITY_FANOUT_` y resultado total acotado por `maxHits`.
+ *
+ * @param {Object} brief — brief normalizado (ProposalBuilding_normalizeBrief_)
+ * @param {string} industryKey — clave de industria del wizard
+ * @param {number=} depth — profundidad máxima (1 o 2). Default 2, cap `KNOWLEDGE_GRAPH_BFS_DEPTH_CAP`.
+ * @param {number=} maxHits — máximo de contenidos a retornar. Default `KG_BFS_MAX_HITS_`.
+ * @return {Array<{contentId:string,graphScore:number,matchedLabels:Array<string>,hop:number}>}
+ */
+function KnowledgeGraph_bfsFromBriefEntities_(brief, industryKey, depth, maxHits) {
+  try {
+    var maxDepth = Math.max(1, Math.min(KNOWLEDGE_GRAPH_BFS_DEPTH_CAP, Number(depth) || 2));
+    var hitCap = Math.max(1, Number(maxHits) || KG_BFS_MAX_HITS_);
+
+    var candidates = KnowledgeGraph_briefToEntityCandidates_(brief, String(industryKey || ''));
+    if (!candidates.length) return [];
+    var totalCandidates = candidates.length;
+
+    /** @type {Object<string,{score:number,labels:Array<string>,hop:number}>} */
+    var hitsByContentId = {};
+    /** @type {Object<string,boolean>} */
+    var visitedEntity = {};
+    /** @type {Object<string,boolean>} */
+    var visitedContent = {};
+
+    /**
+     * Registra un contenido alcanzado, acumulando score y etiquetas.
+     * @param {string} contentId
+     * @param {number} scoreDelta
+     * @param {string} label
+     * @param {number} hop
+     */
+    function recordContentHit_(contentId, scoreDelta, label, hop) {
+      if (!contentId) return;
+      if (!hitsByContentId[contentId]) {
+        hitsByContentId[contentId] = { score: 0, labels: [], hop: hop };
+      }
+      var entry = hitsByContentId[contentId];
+      entry.score += scoreDelta;
+      if (hop < entry.hop) entry.hop = hop;
+      if (label && entry.labels.indexOf(label) < 0) entry.labels.push(label);
+    }
+
+    /**
+     * Lista los contenidos que referencian a un nodo entidad (aristas entrantes content:*).
+     * @param {string} entityNodeId
+     * @return {Array<string>}
+     */
+    function contentsReferencingEntity_(entityNodeId) {
+      var out = [];
+      var inEdges;
+      try {
+        inEdges = KnowledgeGraphStore_listEdgesByTarget(entityNodeId);
+      } catch (eEdge) {
+        console.log(
+          '[KG-bfs] listEdgesByTarget error for ' +
+            entityNodeId +
+            ': ' +
+            String(eEdge.message || eEdge).slice(0, 80),
+        );
+        return out;
+      }
+      var ei;
+      for (ei = 0; ei < inEdges.length; ei++) {
+        var srcId = String(inEdges[ei].source_id || '').trim();
+        if (!srcId || srcId.indexOf('content:') !== 0) continue;
+        var contentId = srcId.slice('content:'.length);
+        if (contentId) out.push(contentId);
+      }
+      return out;
+    }
+
+    // ── Hop 1: entidad del brief → contenidos directos (peso completo) ──────────
+    /** @type {Array<string>} contentIds alcanzados directamente, para expandir en hop 2. */
+    var hop1ContentIds = [];
+    var ci;
+    for (ci = 0; ci < candidates.length; ci++) {
+      var cand = candidates[ci];
+      visitedEntity[cand.nodeId] = true;
+      var directContents = contentsReferencingEntity_(cand.nodeId);
+      var di;
+      for (di = 0; di < directContents.length; di++) {
+        var directId = directContents[di];
+        recordContentHit_(directId, KG_BRIEF_GRAPH_SCORE_WEIGHT_ / totalCandidates, cand.label, 1);
+        if (!visitedContent[directId]) {
+          visitedContent[directId] = true;
+          hop1ContentIds.push(directId);
+        }
+      }
+    }
+
+    // ── Hop 2: contenido directo → sus otras entidades → otros contenidos ───────
+    if (maxDepth >= 2 && hop1ContentIds.length) {
+      var decayWeight = (KG_BRIEF_GRAPH_SCORE_WEIGHT_ * KG_BFS_DEPTH2_DECAY_) / totalCandidates;
+      var entitiesExpanded = 0;
+      var hi;
+      for (hi = 0; hi < hop1ContentIds.length && entitiesExpanded < KG_BFS_DEPTH2_ENTITY_FANOUT_; hi++) {
+        var bridgeContentNodeId = KnowledgeGraph_nodeId_('content', hop1ContentIds[hi]);
+        var outEdges;
+        try {
+          outEdges = KnowledgeGraphStore_listEdgesBySource(bridgeContentNodeId);
+        } catch (eOut) {
+          console.log(
+            '[KG-bfs] listEdgesBySource error for ' +
+              bridgeContentNodeId +
+              ': ' +
+              String(eOut.message || eOut).slice(0, 80),
+          );
+          continue;
+        }
+        var oi;
+        for (
+          oi = 0;
+          oi < outEdges.length && entitiesExpanded < KG_BFS_DEPTH2_ENTITY_FANOUT_;
+          oi++
+        ) {
+          var entityNodeId = String(outEdges[oi].target_id || '').trim();
+          if (!entityNodeId || visitedEntity[entityNodeId]) continue;
+          // Solo expandir hacia nodos entidad (no otros contenidos: ya cubiertos por aristas inversas)
+          if (entityNodeId.indexOf('content:') === 0) continue;
+          visitedEntity[entityNodeId] = true;
+          entitiesExpanded++;
+          var neighborLabel = KnowledgeGraph_bfsEntityLabel_(entityNodeId);
+          var neighborContents = contentsReferencingEntity_(entityNodeId);
+          var ni;
+          for (ni = 0; ni < neighborContents.length; ni++) {
+            var neighborId = neighborContents[ni];
+            // No re-puntear los contenidos ya alcanzados en hop 1 con peso atenuado
+            if (hitsByContentId[neighborId] && hitsByContentId[neighborId].hop === 1) continue;
+            recordContentHit_(neighborId, decayWeight, neighborLabel, 2);
+          }
+        }
+      }
+    }
+
+    /** @type {Array<{contentId:string,graphScore:number,matchedLabels:Array<string>,hop:number}>} */
+    var results = [];
+    var key;
+    for (key in hitsByContentId) {
+      if (!Object.prototype.hasOwnProperty.call(hitsByContentId, key)) continue;
+      var hit = hitsByContentId[key];
+      results.push({
+        contentId: key,
+        graphScore: Math.min(KG_BRIEF_GRAPH_SCORE_WEIGHT_, hit.score),
+        matchedLabels: hit.labels,
+        hop: hit.hop,
+      });
+    }
+
+    results.sort(function (resultA, resultB) {
+      return resultB.graphScore - resultA.graphScore;
+    });
+    if (results.length > hitCap) results = results.slice(0, hitCap);
+
+    console.log(
+      '[KG-bfs] bfs depth=' +
+        maxDepth +
+        ' candidates=' +
+        totalCandidates +
+        ' hop1Contents=' +
+        hop1ContentIds.length +
+        ' hits=' +
+        results.length,
+    );
+    return results;
+  } catch (eBfs) {
+    console.log(
+      '[KG-bfs] bfsFromBriefEntities failed: ' +
+        String(eBfs.message || eBfs).slice(0, 120),
+    );
+    return [];
+  }
+}
+
+/**
+ * Etiqueta legible para un nodo entidad a partir de su nodeId (`type:slug`).
+ * Evita una llamada HTTP de getNode: usa el slug como fallback humanizado.
+ *
+ * @param {string} entityNodeId
+ * @return {string}
+ */
+function KnowledgeGraph_bfsEntityLabel_(entityNodeId) {
+  var id = String(entityNodeId || '').trim();
+  var sep = id.indexOf(':');
+  if (sep < 0) return id;
+  var slug = id.slice(sep + 1);
+  if (!slug) return id;
+  return slug.replace(/[_]+/g, ' ').trim();
+}
+
+/**
+ * Actualiza el campo `slide_types` del nodo content:* mergeando los tipos estructurales
+ * con los inferidos por LLM. Solo hace upsert si hay tipos LLM nuevos.
+ *
+ * @param {string} contentId
+ * @param {Array<string>} llmSlideTypes — slide_types devueltos por el LLM
+ */
+function KnowledgeGraph_updateSlideTypesForContent_(contentId, llmSlideTypes) {
+  var id = String(contentId || '').trim();
+  if (!id || !Array.isArray(llmSlideTypes) || !llmSlideTypes.length) return;
+  var row = ContentCatalogStore_getById(id);
+  if (!row) return;
+  var ctype = String(row.content_type || '').trim();
+  var structural = KnowledgeGraph_inferSlideTypes_(ctype);
+  var merged = KnowledgeGraph_mergeSlideTypes_(structural, llmSlideTypes);
+  // Only upsert if LLM added something beyond structural inference
+  if (merged.length <= structural.length) return;
+  var contentNodeId = KnowledgeGraph_nodeId_('content', id);
+  var now = new Date().toISOString();
+  var title = String(row.title || '').trim() || String(row.file_name || '').trim() || id;
+  var specific = ContentCatalogStore_rowToSpecific_(row);
+  KnowledgeGraphStore_upsertNode({
+    node_id: contentNodeId,
+    node_type: 'content',
+    label: title,
+    payload: {
+      content_id: id,
+      content_type: ctype,
+      title: title,
+      client_name: String(row.client_name || '').trim(),
+      industry: String(row.industry || '').trim(),
+      material_kind: String(specific.material_kind || '').trim(),
+      offering: String(specific.offering || specific.pricing_model || '').trim(),
+      globant_studio: String(specific.globant_studio || '').trim(),
+      slide_types: merged,
+      updated_at: String(row.updated_at || now),
+    },
+    updated_at: now,
+  });
+}
+
+/**
+ * Retorna todos los nodos content del grafo que tienen el slide type indicado.
+ * Útil para construir propuestas slide a slide seleccionando el contenido correcto.
+ * Falla silenciosamente si el KG está vacío o hay error de red.
+ *
+ * @param {string} slideType — uno de KG_SLIDE_TYPE_KEYS_ (ej. 'success_case', 'proposed_solution')
+ * @param {Object} [brief] — brief normalizado (opcional, para futuro filtrado por score)
+ * @return {Array<{contentId:string,slideTypes:Array<string>,label:string,contentType:string}>}
+ */
+function KnowledgeGraph_findContentForSlideType_(slideType, brief) {
+  var typeKey = String(slideType || '').trim();
+  if (!typeKey || KG_SLIDE_TYPE_KEYS_.indexOf(typeKey) < 0) return [];
+  try {
+    var nodes = KnowledgeGraphStore_listNodesByType('content', KG_SLIDE_TYPE_CONTENT_PAGE_MAX_);
+    /** @type {Array<{contentId:string,slideTypes:Array<string>,label:string,contentType:string}>} */
+    var results = [];
+    var ni;
+    for (ni = 0; ni < nodes.length; ni++) {
+      var node = nodes[ni];
+      var payload = node.payload && typeof node.payload === 'object' ? node.payload : {};
+      var nodeSlideTypes = Array.isArray(payload.slide_types) ? payload.slide_types : [];
+      if (nodeSlideTypes.indexOf(typeKey) < 0) continue;
+      var contentId = String(payload.content_id || '').trim();
+      if (!contentId) {
+        var rawNodeId = String(node.node_id || '');
+        contentId = rawNodeId.indexOf('content:') === 0 ? rawNodeId.slice('content:'.length) : '';
+      }
+      if (!contentId) continue;
+      results.push({
+        contentId: contentId,
+        slideTypes: nodeSlideTypes,
+        label: String(node.label || ''),
+        contentType: String(payload.content_type || ''),
+      });
+    }
+    console.log(
+      '[KG-slide] findContentForSlideType: type=' + typeKey + ' found=' + results.length,
+    );
+    return results;
+  } catch (eFind) {
+    console.log(
+      '[KG-slide] findContentForSlideType failed: ' +
+        String(eFind.message || eFind).slice(0, 120),
+    );
+    return [];
+  }
 }
 
 /**

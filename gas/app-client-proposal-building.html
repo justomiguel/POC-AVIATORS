@@ -196,6 +196,8 @@
   var pbStudiosPhaseTimer_ = null;
   var pbLoaderHintIdx_ = 0;
   var pbDeckCreateStepIndex_ = 0;
+  /** @type {Array<string>} Etiquetas KG activas para filtrar casos de éxito (AND multiselect). */
+  var pbActiveKgLabelFilters_ = [];
   var pbDeckCreateStepKey_ = '';
   var studiosBusyTitle = document.getElementById('pb-studios-busy-title');
   var studiosBusySubtitle = document.getElementById('pb-studios-busy-subtitle');
@@ -1757,10 +1759,29 @@
 
   function pbAppendSuccessCaseCard_(container, row) {
     row = row || {};
+    var kgLabels = Array.isArray(row.matchedKgLabels) ? row.matchedKgLabels : [];
+    var graphScore = Number(row.graph || 0);
+    var hasKg = kgLabels.length > 0 || graphScore > 0;
+
     var article = document.createElement('article');
     article.className = 'pb-success-case-card' + (row.included === false ? ' pb-success-case-card--excluded' : '');
     article.setAttribute('data-pb-success-case-row', '1');
     article.setAttribute('data-content-id', String(row.contentId || ''));
+    article.setAttribute('data-kg-labels', kgLabels.join('|'));
+
+    // Score tooltip text
+    var tooltipText = i18nFmt('pb_success_case_score_tooltip', {
+      lexical: String(Number((row.lexical || 0) * 100).toFixed(0)) + '%',
+      semantic: String(Number((row.semantic || 0) * 100).toFixed(0)) + '%',
+      graph: String(Number(graphScore * 100).toFixed(0)) + '%',
+      similarity: String(Number((row.similarity || 0) * 100).toFixed(0)) + '%',
+    });
+
+    // KG icon HTML (conditionally rendered)
+    var kgIconHtml = hasKg
+      ? '<span class="pb-success-case-kg-icon" title="Knowledge Graph" aria-label="Knowledge Graph match"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i></span>'
+      : '';
+
     article.innerHTML =
       '<header class="pb-success-case-card-head">' +
       '<label class="pb-success-case-toggle inline-flex items-center gap-2 text-sm font-semibold">' +
@@ -1768,7 +1789,9 @@
       (row.included !== false ? 'checked' : '') +
       ' />' +
       '<span></span></label>' +
+      '<div class="flex items-center gap-1">' + kgIconHtml +
       '<span class="pb-success-case-badge" aria-hidden="true"><i class="fa-solid fa-trophy"></i></span>' +
+      '</div>' +
       '</header>' +
       '<div class="pb-success-case-body">' +
       '<h3 class="pb-success-case-title"></h3>' +
@@ -1777,8 +1800,15 @@
       '<p class="pb-success-case-rationale"></p>' +
       '</div>' +
       '<div class="pb-success-case-actions flex flex-wrap gap-2"></div>';
+
     article.querySelector('.pb-success-case-toggle span').textContent = i18n('pb_success_cases_include_label');
-    article.querySelector('.pb-success-case-title').textContent = String(row.title || i18n('label_em_dash'));
+
+    // Title with score tooltip
+    var titleEl = article.querySelector('.pb-success-case-title');
+    titleEl.textContent = String(row.title || i18n('label_em_dash'));
+    titleEl.title = tooltipText;
+    titleEl.style.cursor = 'help';
+
     var metaParts = [];
     if (row.client_name) metaParts.push(String(row.client_name));
     if (row.industry) metaParts.push(String(row.industry));
@@ -1789,6 +1819,26 @@
       row.summary || row.challenge || '',
     );
     article.querySelector('.pb-success-case-rationale').textContent = String(row.rationale || '');
+
+    // KG label chips
+    if (kgLabels.length) {
+      var chipsWrap = document.createElement('div');
+      chipsWrap.className = 'pb-success-case-kg-chips';
+      var prefixSpan = document.createElement('span');
+      prefixSpan.className = 'text-xs font-medium text-violet-600 dark:text-violet-400 self-center';
+      prefixSpan.textContent = i18n('pb_success_cases_kg_match_prefix');
+      chipsWrap.appendChild(prefixSpan);
+      for (var ci = 0; ci < kgLabels.length; ci++) {
+        var chip = document.createElement('span');
+        chip.className = 'pb-success-case-kg-chip';
+        chip.innerHTML = '<i class="fa-solid fa-tag" aria-hidden="true"></i>';
+        chip.appendChild(document.createTextNode(String(kgLabels[ci])));
+        chipsWrap.appendChild(chip);
+      }
+      var bodyEl = article.querySelector('.pb-success-case-body');
+      if (bodyEl) bodyEl.appendChild(chipsWrap);
+    }
+
     var toggle = article.querySelector('[data-pb-success-case-include]');
     if (toggle) {
       toggle.addEventListener('change', function () {
@@ -1813,9 +1863,127 @@
     container.appendChild(article);
   }
 
+  /**
+   * Recopila etiquetas KG únicas de la lista de casos y construye la barra de filtro.
+   * @param {Array<Object>} cases
+   */
+  function pbBuildKgFilterBar_(cases) {
+    // Remove existing filter bar if any
+    var existing = document.getElementById('pb-kg-filter-bar');
+    if (existing) existing.remove();
+    if (!successCasesList) return;
+
+    var allLabels = {};
+    for (var ci = 0; ci < cases.length; ci++) {
+      var labels = Array.isArray(cases[ci].matchedKgLabels) ? cases[ci].matchedKgLabels : [];
+      for (var li = 0; li < labels.length; li++) {
+        var lbl = String(labels[li] || '').trim();
+        if (lbl) allLabels[lbl] = true;
+      }
+    }
+    var uniqueLabels = Object.keys(allLabels).sort();
+    if (!uniqueLabels.length) return; // No KG labels — skip filter bar
+
+    var bar = document.createElement('div');
+    bar.id = 'pb-kg-filter-bar';
+    bar.className = 'pb-success-cases-kg-filter';
+
+    var labelEl = document.createElement('div');
+    labelEl.className = 'pb-success-cases-kg-filter-label';
+    labelEl.textContent = i18n('pb_success_cases_filter_label');
+    bar.appendChild(labelEl);
+
+    var chipsRow = document.createElement('div');
+    chipsRow.className = 'pb-success-cases-kg-filter-chips';
+
+    for (var ki = 0; ki < uniqueLabels.length; ki++) {
+      (function (label) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pb-success-cases-kg-filter-chip';
+        btn.setAttribute('data-kg-filter-label', label);
+        btn.innerHTML = '<i class="fa-solid fa-tag" aria-hidden="true"></i>';
+        btn.appendChild(document.createTextNode(label));
+        btn.addEventListener('click', function () {
+          var idx = pbActiveKgLabelFilters_.indexOf(label);
+          if (idx >= 0) {
+            pbActiveKgLabelFilters_.splice(idx, 1);
+            btn.classList.remove('pb-success-cases-kg-filter-chip--active');
+          } else {
+            pbActiveKgLabelFilters_.push(label);
+            btn.classList.add('pb-success-cases-kg-filter-chip--active');
+          }
+          pbApplyKgFilter_();
+        });
+        chipsRow.appendChild(btn);
+      })(uniqueLabels[ki]);
+    }
+    bar.appendChild(chipsRow);
+
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'pb-success-cases-kg-filter-clear';
+    clearBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    clearBtn.appendChild(document.createTextNode(i18n('pb_success_cases_filter_clear')));
+    clearBtn.addEventListener('click', function () {
+      pbActiveKgLabelFilters_ = [];
+      var chips = bar.querySelectorAll('.pb-success-cases-kg-filter-chip');
+      for (var i = 0; i < chips.length; i++) {
+        chips[i].classList.remove('pb-success-cases-kg-filter-chip--active');
+      }
+      pbApplyKgFilter_();
+    });
+    bar.appendChild(clearBtn);
+
+    successCasesList.parentNode.insertBefore(bar, successCasesList);
+  }
+
+  /**
+   * Muestra/oculta tarjetas según los filtros activos (AND: la tarjeta debe tener TODOS los labels activos).
+   * Si no hay filtros activos, muestra todas.
+   */
+  function pbApplyKgFilter_() {
+    var cards = document.querySelectorAll('[data-pb-success-case-row]');
+    var noMatchNotice = document.getElementById('pb-kg-filter-no-match');
+    var activeLabels = pbActiveKgLabelFilters_;
+    var visibleCount = 0;
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      if (!activeLabels.length) {
+        card.style.display = '';
+        visibleCount++;
+        continue;
+      }
+      var rawLabels = String(card.getAttribute('data-kg-labels') || '');
+      var cardLabels = rawLabels.length ? rawLabels.split('|') : [];
+      var allMatch = true;
+      for (var ai = 0; ai < activeLabels.length; ai++) {
+        if (cardLabels.indexOf(activeLabels[ai]) < 0) {
+          allMatch = false;
+          break;
+        }
+      }
+      card.style.display = allMatch ? '' : 'none';
+      if (allMatch) visibleCount++;
+    }
+    // Show / hide "no match" notice
+    if (!noMatchNotice && !visibleCount && activeLabels.length) {
+      var notice = document.createElement('p');
+      notice.id = 'pb-kg-filter-no-match';
+      notice.className = 'text-sm text-slate-500 dark:text-slate-400 py-2';
+      notice.textContent = i18n('pb_success_cases_filter_no_match');
+      if (successCasesList) successCasesList.appendChild(notice);
+    } else if (noMatchNotice) {
+      noMatchNotice.style.display = visibleCount ? 'none' : '';
+    }
+  }
+
   function pbRenderSuccessCases_(cases) {
     if (!successCasesList) return;
+    pbActiveKgLabelFilters_ = [];
     successCasesList.innerHTML = '';
+    var existing = document.getElementById('pb-kg-filter-bar');
+    if (existing) existing.remove();
     var list = Array.isArray(cases) ? cases : [];
     S.set('proposalBuildingSuccessCaseSelections', list);
     if (!list.length) {
@@ -1826,6 +1994,7 @@
       pbUpdateSuccessCasesSummary_();
       return;
     }
+    pbBuildKgFilterBar_(list);
     var i;
     for (i = 0; i < list.length; i++) {
       pbAppendSuccessCaseCard_(successCasesList, list[i]);

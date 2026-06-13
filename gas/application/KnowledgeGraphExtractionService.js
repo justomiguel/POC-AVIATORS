@@ -3,7 +3,15 @@
  */
 
 /** @type {Array<string>} */
-var KG_EXTRACTION_ENTITY_TYPES_ = ['offering', 'technology', 'outcome', 'theme'];
+var KG_EXTRACTION_ENTITY_TYPES_ = [
+  'offering',
+  'technology',
+  'outcome',
+  'theme',
+  'challenge',
+  'metric',
+  'globant_product',
+];
 
 /** @type {Object<string, boolean>} */
 var KG_EXTRACTION_RELATIONS_ = {
@@ -11,6 +19,9 @@ var KG_EXTRACTION_RELATIONS_ = {
   uses_technology: true,
   achieved: true,
   addresses_theme: true,
+  had_challenge: true,
+  measured_by: true,
+  leveraged_product: true,
 };
 
 /** @type {number} */
@@ -133,6 +144,9 @@ function KnowledgeGraphExtraction_canonicalizeEntity_(entityType, label, row) {
     if (techKeys.indexOf(slug) >= 0) return null;
   }
 
+  // globant_product: minimum length of 3 chars to avoid generic slugs
+  if (type === 'globant_product' && slug.length < 3) return null;
+
   var nodeId = KnowledgeGraph_nodeId_(type, slug);
   return { nodeId: nodeId, label: lbl, slug: slug, type: type };
 }
@@ -209,7 +223,7 @@ function KnowledgeGraphExtraction_userPrompt_(row) {
  * @param {Object} parsed
  * @param {string} contentNodeId
  * @param {Object} row
- * @return {{nodes:Array<Object>,edges:Array<Object>}}
+ * @return {{nodes:Array<Object>,edges:Array<Object>,slideTypes:Array<string>}}
  */
 function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId, row) {
   parsed = parsed && typeof parsed === 'object' ? parsed : {};
@@ -228,8 +242,18 @@ function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId, row) {
     if (seenNode[hit.nodeId]) continue;
     seenNode[hit.nodeId] = true;
     var payload = { slug: hit.slug, source: 'llm' };
+    // Legacy inline metric field (kept for backward compat)
     if (String(ent.metric || '').trim()) payload.metric = String(ent.metric).trim();
     if (ent.value != null && ent.value !== '') payload.value = ent.value;
+    // Enrich metric nodes with structured value/unit from LLM response
+    if (hit.type === 'metric') {
+      if (ent.value != null && ent.value !== '') payload.value = String(ent.value).trim();
+      if (String(ent.unit || '').trim()) payload.unit = String(ent.unit).trim();
+    }
+    // Enrich globant_product nodes with optional category
+    if (hit.type === 'globant_product' && String(ent.category || '').trim()) {
+      payload.category = String(ent.category).trim();
+    }
     nodes.push({
       nodeId: hit.nodeId,
       label: hit.label,
@@ -259,17 +283,30 @@ function KnowledgeGraphExtraction_materialize_(parsed, contentNodeId, row) {
     });
   }
 
-  return { nodes: nodes, edges: edges };
+  // Extract slide_types suggested by LLM (validated against allowed keys)
+  var rawSlideTypes = Array.isArray(parsed.slide_types) ? parsed.slide_types : [];
+  /** @type {Array<string>} */
+  var slideTypes = [];
+  var KG_SLIDE_KEYS = typeof KG_SLIDE_TYPE_KEYS_ !== 'undefined' ? KG_SLIDE_TYPE_KEYS_ : [];
+  var si;
+  for (si = 0; si < rawSlideTypes.length; si++) {
+    var st = String(rawSlideTypes[si] || '').trim();
+    if (st && KG_SLIDE_KEYS.indexOf(st) >= 0 && slideTypes.indexOf(st) < 0) {
+      slideTypes.push(st);
+    }
+  }
+
+  return { nodes: nodes, edges: edges, slideTypes: slideTypes };
 }
 
 /**
  * @param {Object} row
- * @return {{nodes:Array<Object>,edges:Array<Object>}}
+ * @return {{nodes:Array<Object>,edges:Array<Object>,slideTypes:Array<string>}}
  */
 function KnowledgeGraphExtraction_extractFromRow_(row) {
   var ctx = KnowledgeGraphExtraction_buildContextText_(row);
   if (ctx.length < KG_EXTRACTION_MIN_TEXT_CHARS_) {
-    return { nodes: [], edges: [] };
+    return { nodes: [], edges: [], slideTypes: [] };
   }
   var client = KnowledgeGraphExtraction_createClient_();
   var out = client.chatSimple(
@@ -315,4 +352,19 @@ function KnowledgeGraphExtraction_syncForContentId_(contentId) {
     'llm',
     extracted.edges || [],
   );
+
+  // Merge LLM-inferred slide_types into the content node payload
+  if (
+    extracted.slideTypes &&
+    extracted.slideTypes.length &&
+    typeof KnowledgeGraph_updateSlideTypesForContent_ === 'function'
+  ) {
+    try {
+      KnowledgeGraph_updateSlideTypesForContent_(id, extracted.slideTypes);
+    } catch (eSlide) {
+      console.log(
+        '[KG-extract] updateSlideTypes failed: ' + String(eSlide.message || eSlide).slice(0, 120),
+      );
+    }
+  }
 }

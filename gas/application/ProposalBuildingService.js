@@ -223,6 +223,12 @@ var PROPOSAL_BUILDING_SUCCESS_CASE_SEMANTIC_MIN_ = 0.62;
 /** @type {number} Umbral combinado lexical/semántico. */
 var PROPOSAL_BUILDING_SUCCESS_CASE_COMBINED_MIN_ = 0.32;
 
+/** @type {number} Penalización de score por cada caso del mismo client_name ya seleccionado. */
+var PROPOSAL_BUILDING_DIVERSITY_CLIENT_PENALTY_ = 0.15;
+
+/** @type {number} Bonus de score la primera vez que aparece una industria nueva en el ranking. */
+var PROPOSAL_BUILDING_DIVERSITY_INDUSTRY_BONUS_ = 0.05;
+
 /**
  * @return {GlobantAssistantApiClient}
  */
@@ -3388,12 +3394,25 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
         similarity: 0,
         lexical: 0,
         semantic: 0,
+        graph: 0,
+        matchedKgLabels: [],
       };
     }
     var cur = byId[id];
     if (patch.lexical != null) cur.lexical = Math.max(cur.lexical, patch.lexical);
     if (patch.semantic != null) cur.semantic = Math.max(cur.semantic, patch.semantic);
-    cur.similarity = Math.max(cur.lexical, cur.semantic);
+    if (patch.graph != null) {
+      cur.graph = Math.max(cur.graph, patch.graph);
+      if (Array.isArray(patch.matchedKgLabels)) {
+        var li;
+        for (li = 0; li < patch.matchedKgLabels.length; li++) {
+          if (cur.matchedKgLabels.indexOf(patch.matchedKgLabels[li]) < 0) {
+            cur.matchedKgLabels.push(patch.matchedKgLabels[li]);
+          }
+        }
+      }
+    }
+    cur.similarity = Math.max(cur.lexical, cur.semantic, cur.graph);
   }
 
   var rows = ContentCatalogStore_listAllPages_({ contentType: 'success_case' }, 100, 2000);
@@ -3442,6 +3461,26 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
     mergeHit_(semId, { semantic: Number(semHits[si].similarity || 0) });
   }
 
+  // Señal del grafo de conocimiento: BFS depth-2 desde las entidades del brief.
+  // Cubre matches directos (hop 1) y contenidos vecinos vía entidades intermedias (hop 2).
+  // Fallback a la consulta depth-1 si el BFS no está disponible.
+  var graphHits = [];
+  if (typeof KnowledgeGraph_bfsFromBriefEntities_ === 'function') {
+    graphHits = KnowledgeGraph_bfsFromBriefEntities_(brief, industryKey, 2);
+  } else if (typeof KnowledgeGraph_queryBriefForSuccessCases_ === 'function') {
+    graphHits = KnowledgeGraph_queryBriefForSuccessCases_(brief, industryKey);
+  }
+  var gi;
+  for (gi = 0; gi < graphHits.length; gi++) {
+    var ghit = graphHits[gi];
+    var gid = String(ghit.contentId || '').trim();
+    if (!gid) continue;
+    mergeHit_(gid, {
+      graph: Number(ghit.graphScore || 0),
+      matchedKgLabels: Array.isArray(ghit.matchedLabels) ? ghit.matchedLabels : [],
+    });
+  }
+
   var ranked = [];
   var key;
   for (key in byId) {
@@ -3451,14 +3490,16 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
     var card = ProposalBuilding_loadSuccessCaseForDeck_(key);
     if (!card) continue;
     card.similarity = hit.similarity;
+    card.lexical = Number(hit.lexical || 0);
+    card.semantic = Number(hit.semantic || 0);
+    card.graph = Number(hit.graph || 0);
+    card.matchedKgLabels = hit.matchedKgLabels || [];
     ranked.push(card);
   }
-  ranked.sort(function (a, b) {
-    return Number(b.similarity || 0) - Number(a.similarity || 0);
-  });
-  if (ranked.length > PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_) {
-    ranked = ranked.slice(0, PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_);
-  }
+  ranked = ProposalBuilding_applyDiversityRanking_(
+    ranked,
+    PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_,
+  );
 
   if (!ranked.length) {
     var fallback = [];
@@ -3479,6 +3520,66 @@ function ProposalBuilding_findRelevantSuccessCases_(brief, industryKey) {
     PROPOSAL_BUILDING_SUCCESS_CASE_MIN_CANDIDATES_,
     PROPOSAL_BUILDING_SUCCESS_CASE_CANDIDATE_MAX_,
   );
+}
+
+/**
+ * Re-rankeo greedy con penalización por diversidad para evitar que el top-N
+ * sea monocliente o monoindustria.
+ *
+ * Por cada caso ya seleccionado, se penaliza el score efectivo de los candidatos
+ * restantes que comparten `client_name` (penalización acumulativa), y se da un
+ * bonus la primera vez que aparece una industria nueva. La penalización reordena,
+ * nunca elimina candidatos: el resultado conserva todos los elementos (truncados a maxCount).
+ *
+ * @param {Array<Object>} ranked — candidatos con `similarity`, `client_name`, `industry`
+ * @param {number} maxCount — tamaño máximo del resultado
+ * @return {Array<Object>}
+ */
+function ProposalBuilding_applyDiversityRanking_(ranked, maxCount) {
+  var pool = Array.isArray(ranked) ? ranked.slice() : [];
+  var limit = Math.max(0, Number(maxCount) || 0) || pool.length;
+  if (pool.length <= 1) return pool.slice(0, limit);
+
+  /** @type {Object<string, number>} cuántas veces ya se eligió cada client_name */
+  var clientCounts = {};
+  /** @type {Object<string, boolean>} industrias ya presentes en la selección */
+  var industrySeen = {};
+  var selected = [];
+
+  function clientKey_(card) {
+    return String((card && card.client_name) || '').trim().toLowerCase();
+  }
+  function industryKey_(card) {
+    return String((card && card.industry) || '').trim().toLowerCase();
+  }
+
+  while (pool.length && selected.length < limit) {
+    var bestIndex = -1;
+    var bestScore = -Infinity;
+    var pi;
+    for (pi = 0; pi < pool.length; pi++) {
+      var card = pool[pi];
+      var base = Number(card.similarity || 0);
+      var ck = clientKey_(card);
+      var ik = industryKey_(card);
+      var penalty = ck ? (clientCounts[ck] || 0) * PROPOSAL_BUILDING_DIVERSITY_CLIENT_PENALTY_ : 0;
+      var bonus = ik && !industrySeen[ik] ? PROPOSAL_BUILDING_DIVERSITY_INDUSTRY_BONUS_ : 0;
+      var effective = base - penalty + bonus;
+      if (effective > bestScore) {
+        bestScore = effective;
+        bestIndex = pi;
+      }
+    }
+    if (bestIndex < 0) break;
+    var chosen = pool.splice(bestIndex, 1)[0];
+    var chosenClient = clientKey_(chosen);
+    var chosenIndustry = industryKey_(chosen);
+    if (chosenClient) clientCounts[chosenClient] = (clientCounts[chosenClient] || 0) + 1;
+    if (chosenIndustry) industrySeen[chosenIndustry] = true;
+    selected.push(chosen);
+  }
+
+  return selected;
 }
 
 /**
@@ -3570,6 +3671,10 @@ function ProposalBuilding_mergeSuccessCaseRationales_(cases, parsed, brief) {
       industry: c.industry,
       client_name: c.client_name,
       similarity: c.similarity,
+      lexical: Number(c.lexical || 0),
+      semantic: Number(c.semantic || 0),
+      graph: Number(c.graph || 0),
+      matchedKgLabels: Array.isArray(c.matchedKgLabels) ? c.matchedKgLabels : [],
       rationale: rationale,
       included: c.included !== false,
     });
@@ -3790,6 +3895,10 @@ function ProposalBuilding_recommendSuccessCases(briefJson, industryKey, sessionI
       industry: row.industry,
       client_name: row.client_name,
       similarity: row.similarity,
+      lexical: Number(row.lexical || 0),
+      semantic: Number(row.semantic || 0),
+      graph: Number(row.graph || 0),
+      matchedKgLabels: Array.isArray(row.matchedKgLabels) ? row.matchedKgLabels : [],
       rationale: row.rationale,
       included: true,
     });
